@@ -667,3 +667,136 @@ class TestOfflineEndpoints:
         )
         assert res.status_code == 200
         assert res.json()["counted_for_day"] == when.date().isoformat()
+
+
+class TestQualityEndpoints:
+    def _quality_session(self, client, headers, count=120, seed=5, offhand_penalty=0.0):
+        """Submit a session carrying per-rep shape data."""
+        import random
+
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "lax_wall_ball"}, headers=headers
+        ).json()
+        rng = random.Random(seed)
+        t, reps = 0, []
+        for i in range(count):
+            hand = "left" if i % 2 else "right"
+            rom = 0.47 * (1 + rng.gauss(0, 0.07))
+            if hand == "left":
+                rom *= 1 - offhand_penalty
+            t += max(150, int(rng.gauss(880, 190)))
+            reps.append({
+                "t_ms": t, "hand": hand, "confidence": 0.9,
+                "rom": round(max(0.01, rom), 3), "peak": round(rom * 0.7, 3),
+                "cycle_ms": max(100, int(rng.gauss(880, 150))),
+            })
+        return client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": started["session_id"], "nonce": started["nonce"],
+                "duration_ms": t + 700, "reps": reps, "mean_confidence": 0.9,
+            },
+            headers=headers,
+        )
+
+    def test_submit_returns_a_form_score(self, client, program):
+        res = self._quality_session(client, program["athletes"][0]["headers"]).json()
+        assert res["status"] == "counted"
+        quality = res["quality"]
+        assert 0 <= quality["score"] <= 100
+        assert len(quality["components"]) == 4
+        assert quality["coaching_note"]
+
+    def test_good_form_earns_a_bonus_and_bad_form_never_a_penalty(self, client, program):
+        """The whole point of the bonus model: nobody loses XP for poor form."""
+        res = self._quality_session(client, program["athletes"][0]["headers"]).json()
+        labels = [line["label"] for line in res["xp_breakdown"]]
+        assert any("form" in label.lower() for label in labels)
+        assert all(line["amount"] >= 0 or "cap" in line["label"].lower()
+                   for line in res["xp_breakdown"])
+
+    def test_a_session_without_shape_data_still_counts(self, client, program):
+        """Older clients report no range of motion; they must not be broken."""
+        res = do_session(client, program["athletes"][0]["headers"]).json()
+        assert res["status"] == "counted"
+        assert res["xp_awarded"] > 0
+        assert res["quality"]["score"] is None
+
+    def test_the_off_hand_gap_reaches_the_athlete(self, client, program):
+        res = self._quality_session(
+            client, program["athletes"][0]["headers"], offhand_penalty=0.35
+        ).json()
+        assert "less range" in res["quality"]["coaching_note"]
+        assert res["quality"]["offhand_rom_ratio"] < 0.8
+
+    def test_session_quality_endpoint_returns_the_breakdown(self, client, program):
+        athlete = program["athletes"][0]
+        sid = self._quality_session(client, athlete["headers"]).json()["session_id"]
+        res = client.get(f"/api/sessions/{sid}/quality", headers=athlete["headers"])
+        assert res.status_code == 200
+        assert res.json()["quality"]["score"] is not None
+
+    def test_another_athlete_cannot_read_a_form_breakdown(self, client, program):
+        a, b = program["athletes"]
+        sid = self._quality_session(client, a["headers"]).json()["session_id"]
+        assert client.get(f"/api/sessions/{sid}/quality", headers=b["headers"]).status_code == 403
+
+    def test_a_coach_can_read_any_form_breakdown(self, client, program):
+        sid = self._quality_session(
+            client, program["athletes"][0]["headers"]
+        ).json()["session_id"]
+        res = client.get(f"/api/sessions/{sid}/quality", headers=program["director"])
+        assert res.status_code == 200
+
+    def test_the_profile_carries_a_form_trend(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        for seed in range(3):
+            self._quality_session(client, headers, seed=seed)
+        profile = client.get("/api/me", headers=headers).json()
+        assert profile["quality"]["current"] is not None
+        assert profile["quality"]["samples"] == 3
+
+    def test_the_form_leaderboard_needs_enough_sessions_to_qualify(self, client, program):
+        """One tidy session must not out-rank a month of consistent work."""
+        headers = program["athletes"][0]["headers"]
+        self._quality_session(client, headers, seed=1)
+        rows = client.get(
+            "/api/leaderboard?board=quality&window=all", headers=program["director"]
+        ).json()["rows"]
+        assert rows == []
+
+        for seed in (2, 3):
+            self._quality_session(client, headers, seed=seed)
+        rows = client.get(
+            "/api/leaderboard?board=quality&window=all", headers=program["director"]
+        ).json()["rows"]
+        assert len(rows) == 1
+        assert 0 < rows[0]["value"] <= 100
+
+    def test_the_coach_roster_carries_a_form_column(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        for seed in range(3):
+            self._quality_session(client, headers, seed=seed)
+        roster = client.get("/api/coach/roster", headers=program["director"]).json()["athletes"]
+        scored = [a for a in roster if a["quality"] is not None]
+        assert scored and 0 <= scored[0]["quality"] <= 100
+
+    def test_fabricated_shape_data_is_held_for_review(self, client, program):
+        """Identical range on every rep is a generated payload, not an athlete."""
+        headers = program["athletes"][0]["headers"]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "lax_wall_ball"}, headers=headers
+        ).json()
+        reps = [
+            {"t_ms": i * 900 + (i % 7) * 40, "hand": "right", "confidence": 0.9,
+             "rom": 0.47, "peak": 0.33, "cycle_ms": 880}
+            for i in range(1, 80)
+        ]
+        res = client.post(
+            "/api/sessions/submit",
+            json={"session_id": started["session_id"], "nonce": started["nonce"],
+                  "duration_ms": 80 * 900, "reps": reps, "mean_confidence": 0.9},
+            headers=headers,
+        ).json()
+        assert res["status"] in ("review", "rejected")
+        assert any("identical range" in note for note in res["notes"])

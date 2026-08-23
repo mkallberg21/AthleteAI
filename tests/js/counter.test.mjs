@@ -182,3 +182,91 @@ test('plank: hold time accrues only inside the valid body-line band', () => {
   assert.ok(counter.holdMs > 7000 && counter.holdMs < 12000,
     `expected ~10s of valid hold, got ${counter.holdMs}ms`);
 });
+
+test('reps carry the shape data form scoring needs', () => {
+  const drill = spec('lax_wall_ball');
+  const counter = new RepCounter(drill);
+  const CYCLES = 20, FPS = 30, CYCLE_MS = 900;
+  const framesPerCycle = Math.round((CYCLE_MS / 1000) * FPS);
+
+  let t = 0;
+  for (let c = 0; c < CYCLES; c += 1) {
+    for (let f = 0; f < framesPerCycle; f += 1) {
+      const phase = f / framesPerCycle;
+      const h = 0.125 - 0.275 * Math.cos(2 * Math.PI * phase);
+      const pts = baseSkeleton();
+      pts[IDX.right_wrist] = { x: 0.58, y: 0.35 - h * TORSO, z: 0, visibility: 0.95 };
+      pts[IDX.left_wrist] = { x: 0.42, y: 0.35 - (h - 0.5) * TORSO, z: 0, visibility: 0.95 };
+      counter.push(pts, t);
+      t += 1000 / FPS;
+    }
+  }
+
+  assert.ok(counter.reps.length >= 15, `expected reps, got ${counter.reps.length}`);
+  for (const rep of counter.reps) {
+    assert.ok(typeof rep.rom === 'number' && rep.rom > 0, `rep has no range of motion: ${JSON.stringify(rep)}`);
+    assert.ok(typeof rep.cycle_ms === 'number' && rep.cycle_ms > 0, 'rep has no cycle duration');
+    assert.ok(typeof rep.peak === 'number', 'rep has no peak');
+  }
+
+  // The synthetic motion swings a fixed distance, so measured range of motion
+  // must be stable across reps -- this is what a consistency score reads.
+  const roms = counter.reps.map((r) => r.rom);
+  const mean = roms.reduce((a, b) => a + b, 0) / roms.length;
+  const spread = Math.sqrt(roms.reduce((a, b) => a + (b - mean) ** 2, 0) / roms.length) / mean;
+  assert.ok(spread < 0.15, `constant motion should give consistent ROM, got spread ${spread.toFixed(3)}`);
+});
+
+test('a shallower movement reports a smaller range of motion', () => {
+  const drill = spec('lax_wall_ball');
+
+  function run(amplitude) {
+    const counter = new RepCounter(drill);
+    let t = 0;
+    for (let c = 0; c < 20; c += 1) {
+      for (let f = 0; f < 27; f += 1) {
+        const phase = f / 27;
+        // Centre stays put; only the swing size changes.
+        const h = 0.125 - amplitude * Math.cos(2 * Math.PI * phase);
+        const pts = baseSkeleton();
+        pts[IDX.right_wrist] = { x: 0.58, y: 0.35 - h * TORSO, z: 0, visibility: 0.95 };
+        pts[IDX.left_wrist] = { x: 0.42, y: 0.35 - (h - 0.5) * TORSO, z: 0, visibility: 0.95 };
+        counter.push(pts, t);
+        t += 1000 / 30;
+      }
+    }
+    const roms = counter.reps.map((r) => r.rom).filter((r) => r > 0);
+    return {
+      reps: counter.reps.length,
+      rom: roms.length ? roms.reduce((a, b) => a + b, 0) / roms.length : 0,
+    };
+  }
+
+  const full = run(0.275);
+  const shallow = run(0.235);
+
+  // Both movements have to actually count, or this is comparing nothing.
+  assert.ok(full.reps >= 15 && shallow.reps >= 15,
+    `both amplitudes must count: full=${full.reps} shallow=${shallow.reps}`);
+  assert.ok(full.rom > shallow.rom * 1.08,
+    `shallower reps must report less range: full=${full.rom.toFixed(3)} shallow=${shallow.rom.toFixed(3)}`);
+});
+
+test('a movement too small to cross the thresholds is not a rep', () => {
+  // Hysteresis is what makes range of motion meaningful: anything counted has
+  // crossed the full span, so a twitch cannot register as a shallow rep.
+  const drill = spec('lax_wall_ball');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let c = 0; c < 20; c += 1) {
+    for (let f = 0; f < 27; f += 1) {
+      const h = 0.125 - 0.05 * Math.cos((2 * Math.PI * f) / 27);
+      const pts = baseSkeleton();
+      pts[IDX.right_wrist] = { x: 0.58, y: 0.35 - h * TORSO, z: 0, visibility: 0.95 };
+      pts[IDX.left_wrist] = { x: 0.42, y: 0.50, z: 0, visibility: 0.95 };
+      counter.push(pts, t);
+      t += 1000 / 30;
+    }
+  }
+  assert.strictEqual(counter.count, 0, 'a small twitch must not count as a rep');
+});

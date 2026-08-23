@@ -52,6 +52,7 @@
         <div class="stat"><b id="s-xp">0</b><span>Total XP</span></div>
         <div class="stat"><b id="s-today">0</b><span>XP today</span></div>
         <div class="stat"><b id="s-offhand">0</b><span>Off-hand reps</span></div>
+        <div class="stat"><b id="s-quality">&mdash;</b><span>Form score</span></div>
       </div>
       <div id="streak-warn" class="banner warn hidden" style="position:static;margin-top:12px"></div>
     </div>
@@ -111,6 +112,7 @@
         <div class="stat"><b id="r-right">0</b><span>Right</span></div>
         <div class="stat"><b id="r-xp">0</b><span>XP earned</span></div>
       </div>
+      <div id="r-quality"></div>
       <table style="margin-top:14px"><tbody id="r-breakdown"></tbody></table>
       <div id="r-notes" class="small muted" style="margin-top:12px"></div>
       <div id="r-badges" class="badge-grid" style="margin-top:14px"></div>
@@ -176,6 +178,15 @@ async function loadHome() {
   $('s-xp').textContent = profile.total_xp.toLocaleString();
   $('s-today').textContent = `${profile.xp_today}`;
   $('s-offhand').textContent = profile.stats.offhand_reps.toLocaleString();
+
+  const q = profile.quality || {};
+  if (q.current === null || q.current === undefined) {
+    $('s-quality').textContent = '—';
+  } else {
+    const arrow = q.trend > 2 ? ' <span class="trend-up">&#9650;</span>'
+      : q.trend < -2 ? ' <span class="trend-down">&#9660;</span>' : '';
+    $('s-quality').innerHTML = `${q.current}${arrow}`;
+  }
 
   const warn = $('streak-warn');
   if (profile.streak_at_risk && profile.streak > 0) {
@@ -579,6 +590,43 @@ function stopCamera() {
 
 // ---------------------------------------------------------------- result
 
+function qualityClass(score) {
+  return score >= 80 ? 'good' : score >= 60 ? 'mid' : 'low';
+}
+
+function renderQuality(quality) {
+  if (!quality || quality.score === null || quality.score === undefined) {
+    // Say why rather than showing a blank panel or a misleading zero.
+    return quality && quality.coaching_note
+      ? `<div class="quality"><p class="small muted" style="margin:0">${esc(quality.coaching_note)}</p></div>`
+      : '';
+  }
+
+  const cls = qualityClass(quality.score);
+  const bars = (quality.components || []).map((c) => `
+    <div class="qbar-row">
+      <span>${esc(c.label)}</span>
+      <span class="qbar"><i class="${qualityClass(c.percent)}" style="width:${c.percent}%"></i></span>
+      <span>${c.percent}</span>
+    </div>`).join('');
+
+  const hands = quality.per_hand && Object.keys(quality.per_hand).length === 2
+    ? `<div class="hand-split">
+         <div><b class="${qualityClass(quality.per_hand.left)}">${quality.per_hand.left}</b><span>Left hand</span></div>
+         <div><b class="${qualityClass(quality.per_hand.right)}">${quality.per_hand.right}</b><span>Right hand</span></div>
+       </div>`
+    : '';
+
+  return `<div class="quality">
+    <div class="quality-top">
+      <div class="qscore ${cls}">${quality.score}<small>Form score</small></div>
+      <div class="qbars" style="flex:1">${bars}</div>
+    </div>
+    ${hands}
+    ${quality.coaching_note ? `<div class="coach-note">${esc(quality.coaching_note)}</div>` : ''}
+  </div>`;
+}
+
 function showResult(result) {
   show('result');
   const titles = {
@@ -597,7 +645,10 @@ function showResult(result) {
     .map((l) => `<tr><td>${esc(l.label)}</td><td class="num">${l.amount >= 0 ? '+' : ''}${l.amount}</td></tr>`)
     .join('');
 
+  $('r-quality').innerHTML = result.status === 'counted' ? renderQuality(result.quality) : '';
+
   if (result.status === 'queued') {
+    $('r-quality').innerHTML = '';
     $('r-notes').innerHTML =
       'You are offline, so this is stored on your phone. It uploads automatically '
       + 'the next time you have a connection, and it still counts for today.';

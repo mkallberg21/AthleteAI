@@ -28,6 +28,10 @@ class RepEvent:
     t_ms: int
     hand: str = "none"       # 'left' | 'right' | 'none'
     confidence: float = 0.0  # mean pose landmark visibility over the rep
+    # Shape of the rep, used for form scoring. None from older clients.
+    peak: float | None = None
+    rom: float | None = None
+    cycle_ms: int | None = None
 
 
 @dataclass
@@ -171,6 +175,22 @@ def evaluate(
                 "detector may have missed reps."
             )
             score -= 0.15
+
+        # Shape regularity. Real movement varies in range as well as timing,
+        # so identical range of motion on every rep is the same fabrication
+        # signature as a metronomic cadence -- and now worth checking, because
+        # these numbers feed the form score and the quality leaderboard.
+        roms = [r.rom for r in reps if r.rom is not None and r.rom > 0]
+        if len(roms) >= 8:
+            mean_rom = statistics.fmean(roms)
+            if mean_rom > 0:
+                rom_cv = statistics.pstdev(roms) / mean_rom
+                if rom_cv < cfg.min_rom_cv:
+                    notes.append(
+                        f"Every rep covered an identical range (variation "
+                        f"{rom_cv:.4f}), which real movement does not."
+                    )
+                    score -= 0.55
 
         # Cadence regularity, only meaningful with enough reps to measure.
         if reps_total >= 8:

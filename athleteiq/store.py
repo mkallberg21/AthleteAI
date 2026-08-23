@@ -18,6 +18,7 @@ from .db import connect, hash_token, init_db, new_join_code, new_token, transact
 from .drills import DRILLS_BY_KEY, get_drill
 from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
+from .quality import RepFeature, analyze as analyze_quality
 from .scoring import (
     AthleteStats,
     BADGES_BY_KEY,
@@ -34,6 +35,22 @@ def _now() -> datetime:
 
 def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _opt_float(value: Any) -> float | None:
+    """Coerce a client-supplied number, treating anything unusable as absent."""
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if result == result and abs(result) != float("inf") else None
+
+
+def _opt_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -303,6 +320,9 @@ class Store:
                     t_ms=int(r.get("t_ms", 0)),
                     hand=str(r.get("hand", "none")),
                     confidence=float(r.get("confidence", 0.0)),
+                    peak=_opt_float(r.get("peak")),
+                    rom=_opt_float(r.get("rom")),
+                    cycle_ms=_opt_int(r.get("cycle_ms")),
                 )
                 for r in reps
             ],
@@ -312,14 +332,34 @@ class Store:
         )
         verdict = evaluate(claim, drill)
 
+        hand = self._dominant_hand(athlete_id)
+
+        # Form quality reads the same rep stream the counting did, so it costs
+        # nothing extra to collect and is the half of the signal a rep count
+        # throws away.
+        report = analyze_quality(
+            drill,
+            [
+                RepFeature(
+                    t_ms=r.t_ms, hand=r.hand, confidence=r.confidence,
+                    peak=r.peak, rom=r.rom, cycle_ms=r.cycle_ms,
+                )
+                for r in claim.reps
+            ],
+            dominant_hand=hand,
+            hold_ms=claim.hold_ms,
+            duration_ms=claim.duration_ms,
+        )
+
         today, effective_at = self._effective_day(completed_at)
         already = self._xp_on_day(athlete_id, today)
         breakdown = score_session(
             drill,
             verdict,
             hold_ms=claim.hold_ms,
-            dominant_hand=self._dominant_hand(athlete_id),
+            dominant_hand=hand,
             xp_already_today=already,
+            quality_score=report.score,
         )
         awarded = breakdown.total
 
@@ -328,21 +368,28 @@ class Store:
                 "UPDATE sessions SET submitted_at=?, completed_at=?, duration_ms=?, "
                 "reps_total=?, reps_left=?, reps_right=?, hold_ms=?, mean_confidence=?, "
                 "cadence_cv=?, integrity_score=?, integrity_notes=?, xp_awarded=?, "
-                "status=?, client_version=?, device_label=? WHERE id=?",
+                "status=?, client_version=?, device_label=?, quality_score=?, "
+                "quality_json=? WHERE id=?",
                 (
                     _iso(_now()), effective_at, claim.duration_ms, verdict.reps_total,
                     verdict.reps_left, verdict.reps_right, claim.hold_ms,
                     claim.mean_confidence, verdict.cadence_cv, verdict.score,
                     json.dumps(verdict.notes), awarded, verdict.status,
-                    client_version, device_label, session_id,
+                    client_version, device_label, report.score,
+                    json.dumps(report.to_dict()), session_id,
                 ),
             )
             # Per-rep timings are kept only for integrity review and pruned by
             # `prune_rep_events`. They are timings, never imagery.
             c.executemany(
-                "INSERT INTO rep_events(session_id, t_ms, hand, confidence) VALUES (?,?,?,?)",
+                "INSERT INTO rep_events(session_id, t_ms, hand, confidence, peak, rom, cycle_ms) "
+                "VALUES (?,?,?,?,?,?,?)",
                 [
-                    (session_id, r.t_ms, r.hand if r.hand in ("left", "right") else "none", r.confidence)
+                    (
+                        session_id, r.t_ms,
+                        r.hand if r.hand in ("left", "right") else "none",
+                        r.confidence, r.peak, r.rom, r.cycle_ms,
+                    )
                     for r in claim.reps
                 ],
             )
@@ -371,6 +418,7 @@ class Store:
                 for k in new_badges
             ],
             "counted_for_day": today,
+            "quality": report.to_dict(),
         }
         # Stored so a duplicate delivery replays this exact response.
         with transaction(self.conn) as c:
@@ -575,7 +623,7 @@ class Store:
             dict(r)
             for r in self.conn.execute(
                 "SELECT id, drill_key, submitted_at, duration_ms, reps_total, reps_left, "
-                "reps_right, xp_awarded, status FROM sessions "
+                "reps_right, xp_awarded, status, quality_score FROM sessions "
                 "WHERE athlete_id=? AND status != 'open' "
                 "ORDER BY submitted_at DESC LIMIT 20",
                 (athlete_id,),
@@ -598,6 +646,7 @@ class Store:
             "streak_at_risk": streak.at_risk,
             "xp_today": self._xp_on_day(athlete_id, _now().date().isoformat()),
             "daily_cap": CONFIG.scoring.daily_xp_cap,
+            "quality": self.quality_trend(athlete_id),
             "stats": {
                 "sessions": stats.session_count,
                 "wall_ball_reps": stats.wall_ball_reps,
@@ -607,6 +656,41 @@ class Store:
             },
             "badges": badges,
             "recent_sessions": recent,
+        }
+
+    def quality_trend(self, athlete_id: int, window: int = 10) -> dict[str, Any]:
+        """Recent form scores, and whether they are moving.
+
+        Trend is the point: a single session's quality is noisy, and what an
+        athlete or a coach can act on is whether it is climbing or slipping.
+        """
+        rows = self.conn.execute(
+            "SELECT quality_score, drill_key, COALESCE(completed_at, submitted_at) AS at "
+            "FROM sessions WHERE athlete_id = ? AND status = 'counted' "
+            "AND quality_score IS NOT NULL ORDER BY at DESC LIMIT ?",
+            (athlete_id, window * 2),
+        ).fetchall()
+        if not rows:
+            return {"current": None, "trend": None, "samples": 0, "recent": []}
+
+        scores = [int(r["quality_score"]) for r in rows]
+        recent = scores[:window]
+        current = round(sum(recent) / len(recent))
+
+        trend = None
+        if len(scores) >= 6:
+            older = scores[window:]
+            if older:
+                trend = current - round(sum(older) / len(older))
+
+        return {
+            "current": current,
+            "trend": trend,
+            "samples": len(scores),
+            "recent": [
+                {"score": int(r["quality_score"]), "drill_key": r["drill_key"], "at": r["at"]}
+                for r in rows[:window]
+            ],
         }
 
     # ------------------------------------------------------------------

@@ -144,6 +144,57 @@ class ScoringSpec:
 
 
 @dataclass(frozen=True)
+class QualitySpec:
+    """What a *well executed* rep of this drill looks like.
+
+    Counting reps is the easy half of the pose data. This is the half a coach
+    cannot get from a stopwatch: whether the reps were any good, whether they
+    stayed good, and whether the weak side looks like the strong one.
+
+    Every threshold is expressed in the same units as the drill's signal, so a
+    degree-based drill and a torso-normalized one both work without special
+    cases.
+    """
+
+    # Range of motion a fully-executed rep produces. A half rep reads as a
+    # fraction of this.
+    target_rom: float
+
+    # Rep-to-rep variability of that range. Below `consistency_target` the
+    # movement is repeatable; at or above `consistency_ceiling` it is erratic.
+    # Between them the score slides linearly.
+    consistency_target: float = 0.14
+    consistency_ceiling: float = 0.45
+
+    # Controlled tempo band, in milliseconds per rep.
+    tempo_min_ms: int = 500
+    tempo_max_ms: int = 3_000
+
+    # Component weights. Validated to sum to 1 so a drill cannot silently
+    # under- or over-count part of its own score.
+    w_consistency: float = 0.35
+    w_depth: float = 0.35
+    w_tempo: float = 0.10
+    w_endurance: float = 0.20
+
+    # Below this many reps there is not enough signal to say anything
+    # trustworthy, and a confident-looking score from six reps is worse than
+    # no score at all.
+    min_reps: int = 8
+
+    def __post_init__(self) -> None:
+        if self.target_rom <= 0:
+            raise ValueError("target_rom must be positive")
+        if self.consistency_target >= self.consistency_ceiling:
+            raise ValueError("consistency_target must be below consistency_ceiling")
+        if self.tempo_min_ms >= self.tempo_max_ms:
+            raise ValueError("tempo_min_ms must be below tempo_max_ms")
+        total = self.w_consistency + self.w_depth + self.w_tempo + self.w_endurance
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"quality weights must sum to 1.0, got {total}")
+
+
+@dataclass(frozen=True)
 class ValidationSpec:
     """Plausibility envelope, enforced server-side."""
 
@@ -168,6 +219,8 @@ class DrillSpec:
     counter: CounterSpec
     scoring: ScoringSpec = field(default_factory=ScoringSpec)
     validation: ValidationSpec = field(default_factory=ValidationSpec)
+    # Absent for drills where per-rep form cannot be read from pose alone.
+    quality: QualitySpec | None = None
 
     # Whether left/right attribution is meaningful. True for wall ball and
     # single-arm lifts; false for squats.
@@ -184,3 +237,7 @@ class DrillSpec:
         data["signal"]["kind"] = self.signal.kind.value
         data["signal"]["joints"] = list(self.signal.joints)
         return data
+
+    @property
+    def scores_quality(self) -> bool:
+        return self.quality is not None

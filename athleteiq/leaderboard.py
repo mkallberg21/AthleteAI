@@ -22,7 +22,7 @@ from .config import CONFIG
 from .scoring import compute_streak, level_for_xp
 
 Window = Literal["week", "month", "season", "all"]
-Board = Literal["xp", "offhand", "streak", "reps", "improvement"]
+Board = Literal["xp", "offhand", "streak", "reps", "improvement", "quality"]
 
 
 # Length of each window in days. `all` is unbounded, hence None -- which is
@@ -33,6 +33,12 @@ WINDOW_DAYS: dict[str, int | None] = {
     "season": 181,
     "all": None,
 }
+
+
+# Sessions required before an athlete is ranked on form. Without a floor, one
+# tidy session beats a month of consistent work, which is the opposite of what
+# the board is for.
+QUALITY_MIN_SESSIONS = 3
 
 
 def window_start(window: Window, today: date | None = None) -> str:
@@ -154,6 +160,20 @@ def leaderboard(
         )
         params = [start, org_id, *scope_params]
 
+    elif board == "quality":
+        # Mean form score over the window, for athletes with enough sessions
+        # to have earned a place on it.
+        sql = (
+            base_select
+            + "COALESCE((SELECT CAST(ROUND(AVG(s.quality_score)) AS INTEGER) "
+            "  FROM sessions s WHERE s.athlete_id = u.id AND s.status = 'counted' "
+            "  AND s.quality_score IS NOT NULL "
+            "  AND date(COALESCE(s.completed_at, s.submitted_at)) >= ? "
+            "  HAVING COUNT(*) >= ?), 0) AS value "
+            + base_from
+        )
+        params = [start, QUALITY_MIN_SESSIONS, org_id, *scope_params]
+
     elif board == "improvement":
         # This window's XP minus the previous equal-length window's. Rewards
         # the athlete who went from nothing to something, which is the one a
@@ -222,6 +242,11 @@ def leaderboard(
     if board == "streak":
         results.sort(key=lambda r: (-r.value, r.display_name))
         results = results[:limit]
+
+    if board == "quality":
+        # A zero here means "not enough sessions to rank", not "terrible form".
+        # Showing it as a score would be both wrong and discouraging.
+        results = [r for r in results if r.value > 0]
 
     # Competition ranking: equal values share a rank, and the next distinct
     # value skips accordingly (1,2,2,4).
@@ -318,14 +343,18 @@ def coach_roster(
                          WHERE s.athlete_id = u.id AND s.status='counted'
                          AND date(s.submitted_at) >= ?), 0) AS right_reps,
                (SELECT COUNT(*) FROM sessions s
-                WHERE s.athlete_id = u.id AND s.status = 'review') AS pending_review
+                WHERE s.athlete_id = u.id AND s.status = 'review') AS pending_review,
+               (SELECT CAST(ROUND(AVG(s.quality_score)) AS INTEGER) FROM sessions s
+                WHERE s.athlete_id = u.id AND s.status = 'counted'
+                AND s.quality_score IS NOT NULL
+                AND date(COALESCE(s.completed_at, s.submitted_at)) >= ?) AS quality
         FROM users u {join}
         LEFT JOIN teams t ON t.id = tm.team_id
         WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1
         GROUP BY u.id
         ORDER BY window_xp DESC, u.display_name
         """,
-        (start, start, start, start, org_id, *scope_params),
+        (start, start, start, start, start, org_id, *scope_params),
     ).fetchall()
 
     today = datetime.now(timezone.utc).date()
@@ -360,16 +389,25 @@ def coach_roster(
                 "last_session": last,
                 "days_since_session": days_since,
                 "offhand_share": offhand_share,
+                "quality": int(r["quality"]) if r["quality"] is not None else None,
                 "pending_review": int(r["pending_review"]),
                 # Flags are what makes this actionable rather than another
                 # table to read: they say who to text tonight.
-                "flags": _flags(int(r["window_sessions"]), days_since, offhand_share),
+                "flags": _flags(
+                    int(r["window_sessions"]), days_since, offhand_share,
+                    int(r["quality"]) if r["quality"] is not None else None,
+                ),
             }
         )
     return out
 
 
-def _flags(window_sessions: int, days_since: int | None, offhand_share: float | None) -> list[str]:
+def _flags(
+    window_sessions: int,
+    days_since: int | None,
+    offhand_share: float | None,
+    quality: int | None = None,
+) -> list[str]:
     flags: list[str] = []
     if days_since is None:
         flags.append("never_trained")
@@ -381,4 +419,8 @@ def _flags(window_sessions: int, days_since: int | None, offhand_share: float | 
         flags.append("no_sessions_this_week")
     if offhand_share is not None and offhand_share < 0.20:
         flags.append("neglecting_offhand")
+    # Volume without form is the pattern worth catching: an athlete grinding
+    # out sloppy reps is banking fatigue rather than skill.
+    if quality is not None and quality < 55 and window_sessions >= 2:
+        flags.append("form_slipping")
     return flags

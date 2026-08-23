@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -105,7 +105,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- original result rather than an error or a second score.
     result_json      TEXT,
     -- True when the nonce was handed out ahead of time for offline use.
-    reserved         INTEGER NOT NULL DEFAULT 0
+    reserved         INTEGER NOT NULL DEFAULT 0,
+    -- Form quality, 0-100. NULL when the session was too short to judge or the
+    -- client reported no per-rep shape data.
+    quality_score    INTEGER,
+    quality_json     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_athlete ON sessions(athlete_id, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
@@ -116,7 +120,12 @@ CREATE TABLE IF NOT EXISTS rep_events (
     session_id  INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     t_ms        INTEGER NOT NULL,
     hand        TEXT CHECK (hand IN ('left','right','none')),
-    confidence  REAL NOT NULL DEFAULT 0.0
+    confidence  REAL NOT NULL DEFAULT 0.0,
+    -- Shape of the rep: the signal's extreme, the range of motion covered,
+    -- and how long the cycle took. This is what form scoring reads.
+    peak        REAL,
+    rom         REAL,
+    cycle_ms    INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_rep_events_session ON rep_events(session_id);
 

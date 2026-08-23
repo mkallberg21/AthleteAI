@@ -50,6 +50,17 @@ class ScoringConfig:
     level_base: int = 300
     level_exponent: float = 1.45
 
+    # Form quality pays a bonus and never a penalty.
+    #
+    # Docking XP for poor form would punish hardest exactly the athlete who
+    # most needs to improve, and a 13-year-old who loses points for a bad rep
+    # stops filming. Rewarding good form points at the same behaviour without
+    # taking anything away from anyone.
+    quality_good: int = 70
+    quality_excellent: int = 85
+    quality_good_bonus: float = 0.08
+    quality_excellent_bonus: float = 0.15
+
 
 @dataclass(frozen=True)
 class IntegrityConfig:
@@ -83,6 +94,11 @@ class IntegrityConfig:
     # Above this, the "reps" are more likely to be detector noise than a
     # consistent drill.
     max_cadence_cv: float = 1.10
+
+    # Same idea applied to the shape of each rep. Identical range of motion on
+    # every rep is a generated payload, not an athlete -- and it matters more
+    # than it used to, since these values drive the form score.
+    min_rom_cv: float = 0.012
 
     # Sessions scoring at or below this are held for coach review instead of
     # silently hitting the leaderboard.

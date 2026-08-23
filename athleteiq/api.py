@@ -201,6 +201,12 @@ class RepPayload(BaseModel):
     t_ms: int = Field(ge=0)
     hand: Literal["left", "right", "none"] = "none"
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Shape of the rep, used for form scoring. Optional so older clients keep
+    # working -- they simply get no form score rather than an error.
+    # Bounded because these are client-supplied and feed a public leaderboard.
+    peak: float | None = Field(default=None, ge=-1000.0, le=1000.0)
+    rom: float | None = Field(default=None, ge=0.0, le=1000.0)
+    cycle_ms: int | None = Field(default=None, ge=0, le=600_000)
 
 
 class SubmitSessionRequest(BaseModel):
@@ -475,7 +481,7 @@ def coach_broadcast(
 
 @app.get("/api/leaderboard")
 def get_leaderboard(
-    board: Literal["xp", "offhand", "streak", "reps", "improvement"] = "xp",
+    board: Literal["xp", "offhand", "streak", "reps", "improvement", "quality"] = "xp",
     window: Literal["week", "month", "season", "all"] = "week",
     team_id: int | None = None,
     limit: int = Query(default=50, ge=1, le=200),
@@ -491,6 +497,31 @@ def get_leaderboard(
         limit=limit,
     )
     return {"board": board, "window": window, "team_id": team_id, "rows": rows}
+
+
+@app.get("/api/sessions/{session_id}/quality")
+def session_quality(
+    session_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The full form breakdown for one session."""
+    import json as _json
+
+    row = store.conn.execute(
+        "SELECT athlete_id, drill_key, quality_score, quality_json FROM sessions WHERE id = ?",
+        (session_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="unknown session")
+    if row["athlete_id"] != principal.id and not principal.is_staff:
+        raise HTTPException(status_code=403, detail="not permitted")
+
+    try:
+        report = _json.loads(row["quality_json"]) if row["quality_json"] else None
+    except (ValueError, TypeError):
+        report = None
+    return {"session_id": session_id, "drill_key": row["drill_key"], "quality": report}
 
 
 @app.get("/api/standings")

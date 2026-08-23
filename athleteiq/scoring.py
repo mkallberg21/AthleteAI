@@ -87,12 +87,13 @@ class XpBreakdown:
     base: int = 0
     offhand_bonus: int = 0
     balance_bonus: int = 0
+    quality_bonus: int = 0
     capped_by_daily_limit: int = 0
     lines: list[tuple[str, int]] = field(default_factory=list)
 
     @property
     def total(self) -> int:
-        raw = self.base + self.offhand_bonus + self.balance_bonus
+        raw = self.base + self.offhand_bonus + self.balance_bonus + self.quality_bonus
         return max(0, raw - self.capped_by_daily_limit)
 
 
@@ -113,6 +114,7 @@ def score_session(
     hold_ms: int = 0,
     dominant_hand: str | None = "right",
     xp_already_today: int = 0,
+    quality_score: int | None = None,
     config: ScoringConfig | None = None,
 ) -> XpBreakdown:
     """Compute XP for one submitted session.
@@ -173,8 +175,28 @@ def score_session(
                     )
                 )
 
+    # Form quality bonus. Strictly additive -- see ScoringConfig for why this
+    # never subtracts.
+    if quality_score is not None:
+        earned = breakdown.base + breakdown.offhand_bonus
+        if quality_score >= cfg.quality_excellent:
+            breakdown.quality_bonus = int(round(earned * cfg.quality_excellent_bonus))
+            breakdown.lines.append(
+                (f"Excellent form ({quality_score}/100)", breakdown.quality_bonus)
+            )
+        elif quality_score >= cfg.quality_good:
+            breakdown.quality_bonus = int(round(earned * cfg.quality_good_bonus))
+            breakdown.lines.append(
+                (f"Good form ({quality_score}/100)", breakdown.quality_bonus)
+            )
+
     # Daily cap, applied last so the athlete sees what they would have earned.
-    raw = breakdown.base + breakdown.offhand_bonus + breakdown.balance_bonus
+    raw = (
+        breakdown.base
+        + breakdown.offhand_bonus
+        + breakdown.balance_bonus
+        + breakdown.quality_bonus
+    )
     remaining = max(0, cfg.daily_xp_cap - xp_already_today)
     if raw > remaining:
         breakdown.capped_by_daily_limit = raw - remaining

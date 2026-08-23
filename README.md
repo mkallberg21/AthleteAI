@@ -13,8 +13,9 @@ but the drill system is sport-agnostic and ships with general strength, speed,
 agility, and conditioning exercises.
 
 Coaches assign work and see who did it. Athletes get nudged when a streak is on
-the line. The whole capture flow works with no signal, because youth athletes
-train in driveways.
+the line. Every session is scored for **form quality**, not just rep count. The
+whole capture flow works with no signal, because youth athletes train in
+driveways.
 
 ---
 
@@ -60,10 +61,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 296 tests
+python -m pytest tests/ -q          # 344 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/counter.test.mjs   # 7 tests
+  node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -82,6 +83,7 @@ athleteiq/
     catalog.py      The 12 shipped drills
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
+  quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -149,6 +151,74 @@ Two safeguards make it usable in a driveway:
 
 Both are covered by tests (`counter.test.mjs`), including a case that parks the
 signal on the threshold with noise and asserts zero reps.
+
+---
+
+## Form quality
+
+Counting reps is the easy half of the pose stream. The counter already computed
+each rep's peak, range of motion, and cycle duration and then threw them away;
+keeping them is what turns a rep counter into something a coach can't get from a
+stopwatch.
+
+Four components, combined into a 0-100 score:
+
+| Component | What it reads | Why it matters |
+|---|---|---|
+| **Consistency** | Rep-to-rep variability of range | A repeatable movement is the precondition for a coachable one |
+| **Range of motion** | How much of the drill's full range each rep covers | Half reps count toward volume; they shouldn't count toward quality |
+| **Tempo** | Whether reps land in a controlled band, and how evenly | Rushing builds nothing |
+| **Held up** | Whether the last third looks like the first | Form collapsing under fatigue is exactly when to stop |
+
+Three decisions that shape how this behaves:
+
+**Components combine geometrically, not as a weighted average.** A movement with
+textbook consistency and half the range is not a good movement, and an
+arithmetic mean lets three strong components hide one bad one — a session of 99%
+half reps scored 79/100 under that model, and 65 under this one.
+
+**Statistics are robust throughout.** Medians and trimmed spreads, because one
+glitched rep from the detector should not tank an honest session.
+
+**Quality never subtracts.** It earns an XP bonus (8% at 70+, 15% at 85+) and
+ranks on its own leaderboard, but it never reduces XP. Docking points for poor
+form punishes hardest exactly the athlete who most needs to improve, and a
+13-year-old who loses XP for a bad rep stops filming.
+
+### The off-hand gap
+
+For lacrosse this is the whole point, so it gets its own treatment: each hand is
+scored separately, and the deficit is measured on the **range-of-motion ratio**
+between them rather than the composite score gap — the scoring ramps compress a
+genuine 20% deficit into about 11 composite points, which is under any threshold
+loose enough to also reject noise.
+
+The claim threshold scales with the noise *within* each hand, not the pooled
+spread: a real gap pushes the two hands apart, which inflates the pooled figure
+and would hide exactly the deficit this exists to find. Measured across repeated
+runs, that gives zero false positives below an 8% deficit on a clean session,
+reliable detection from 15%, and appropriate silence on a session too jittery to
+tell.
+
+In the demo data it reads an athlete's weak hand at 32% less range and says so
+in one sentence, rather than reporting four numbers and leaving the coaching to
+someone else.
+
+### Calibration
+
+`target_rom` on each drill is **measured, not guessed**. `tests/js/calibration.test.mjs`
+drives every drill with a synthetic textbook rep and asserts both that the drill
+counts it and that the reported range lands within 15% of the target its spec
+claims.
+
+That test exists because it caught a real bug: squat jumps were smoothed so
+heavily (α=0.20) that a one-second cycle lost 27% of its amplitude, the signal
+never fell back to the arming threshold, and the drill counted **one rep in
+twenty-four** — in real use, not just in the harness. Nothing else in the suite
+noticed, because every other test drives a drill whose thresholds already worked.
+
+Hold drills score differently: a plank's quality is the share of the session
+actually spent inside the body-line tolerance, so sagging costs you.
 
 ---
 
@@ -318,10 +388,12 @@ the main compliance gap between this and a shippable product.
 Stated plainly, because these are the things that decide whether this survives
 contact with a real driveway:
 
-1. **Thresholds are uncalibrated.** Every number in `catalog.py` is a reasoned
-   starting point, not a measured one. They need tuning against real footage of
-   real athletes — that is the highest-value next task, and the reason the specs
-   are data rather than code.
+1. **Thresholds are calibrated against synthetic motion, not real athletes.**
+   The calibration harness makes every drill self-consistent — a textbook rep
+   counts and measures what its spec claims — but "textbook" is still a
+   sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
+   the calibration against hand-counted ground truth remains the
+   highest-value next task, and the reason the specs are data rather than code.
 2. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
@@ -339,3 +411,6 @@ contact with a real driveway:
    plainly rather than failing silently.
 8. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
+9. **Form quality is pose-only.** It reads how the body moved, not where the
+   ball went. A wall-ball rep with perfect mechanics and a bad release still
+   scores well, and stick position is invisible to it.

@@ -121,7 +121,7 @@
       <table>
         <thead><tr>
           <th>Athlete</th><th class="num">XP</th><th class="num">Sessions</th>
-          <th class="num">Off-hand</th><th>Last active</th><th>Status</th>
+          <th class="num">Off-hand</th><th class="num">Form</th><th>Last active</th><th>Status</th>
         </tr></thead>
         <tbody id="roster"></tbody>
       </table>
@@ -199,6 +199,7 @@ const FLAG_LABELS = {
   quiet_5d: ['warn', 'quiet 5+ days'],
   no_sessions_this_week: ['warn', 'nothing this week'],
   neglecting_offhand: ['warn', 'off-hand neglected'],
+  form_slipping: ['bad', 'form slipping'],
 };
 
 function showError(message) {
@@ -342,6 +343,9 @@ function renderRoster(athletes) {
       <td class="num">${a.window_xp.toLocaleString()}</td>
       <td class="num">${a.window_sessions}</td>
       <td class="num" ${shareCls}>${share}</td>
+      <td class="num">${a.quality === null ? '&mdash;'
+        : `<b style="color:${a.quality >= 80 ? 'var(--accent)'
+          : a.quality >= 60 ? 'var(--warn)' : 'var(--danger)'}">${a.quality}</b>`}</td>
       <td>${fmtDate(a.last_session)}</td>
       <td>${status}${review}</td>
     </tr>`;

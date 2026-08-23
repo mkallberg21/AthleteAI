@@ -25,16 +25,26 @@ from athleteiq.db import connect, transaction  # noqa: E402
 from athleteiq.drills import get_drill  # noqa: E402
 from athleteiq.store import Store  # noqa: E402
 
-# name, dominant hand, sessions/week, off-hand appetite, days since they stopped
+# name, dominant hand, sessions/week, off-hand appetite, days quiet, form profile
+#
+# The form profile drives the synthetic per-rep shape data, so the demo shows
+# genuinely different athletes rather than the same session eight times:
+#   rom_cv          -- rep-to-rep variability (lower is more repeatable)
+#   rom_scale       -- how much of full range they actually cover
+#   decay           -- how much range they keep by the end of a session
+#   offhand_deficit -- how much shorter the weak hand's range is
 ROSTER = [
-    ("Jordan Pierce",   "right", 6.0, 0.48, 0),
-    ("Sam Rivera",      "left",  5.0, 0.42, 0),
-    ("Alex Kowalczyk",  "right", 4.0, 0.15, 0),
-    ("Bailey Nguyen",   "right", 3.0, 0.30, 1),
-    ("Casey Donnelly",  "left",  2.0, 0.22, 12),
-    ("Drew Halloran",   "right", 5.5, 0.45, 0),
-    ("Emerson Vance",   "right", 1.0, 0.10, 21),
-    ("Frankie Osei",    "right", 4.5, 0.38, 0),
+    ("Jordan Pierce",   "right", 6.0, 0.48, 0,  dict(rom_cv=0.06, rom_scale=1.00, decay=0.97, offhand_deficit=0.05)),
+    ("Sam Rivera",      "left",  5.0, 0.42, 0,  dict(rom_cv=0.08, rom_scale=0.98, decay=0.94, offhand_deficit=0.10)),
+    # Grinds out volume with a badly neglected weak hand -- the case the
+    # off-hand detector exists for.
+    ("Alex Kowalczyk",  "right", 4.0, 0.15, 0,  dict(rom_cv=0.11, rom_scale=0.95, decay=0.90, offhand_deficit=0.34)),
+    ("Bailey Nguyen",   "right", 3.0, 0.30, 1,  dict(rom_cv=0.10, rom_scale=0.92, decay=0.93, offhand_deficit=0.14)),
+    ("Casey Donnelly",  "left",  2.0, 0.22, 12, dict(rom_cv=0.14, rom_scale=0.86, decay=0.88, offhand_deficit=0.18)),
+    ("Drew Halloran",   "right", 5.5, 0.45, 0,  dict(rom_cv=0.07, rom_scale=1.00, decay=0.96, offhand_deficit=0.06)),
+    # Half reps and form that falls apart -- volume without quality.
+    ("Emerson Vance",   "right", 1.0, 0.10, 21, dict(rom_cv=0.22, rom_scale=0.62, decay=0.74, offhand_deficit=0.22)),
+    ("Frankie Osei",    "right", 4.5, 0.38, 0,  dict(rom_cv=0.09, rom_scale=0.96, decay=0.92, offhand_deficit=0.12)),
 ]
 
 DRILL_MIX = [
@@ -56,7 +66,8 @@ def pick_drill(rng: random.Random) -> str:
     return DRILL_MIX[0][0]
 
 
-def synth_reps(rng: random.Random, drill_key: str, offhand_bias: float, sloppy: bool):
+def synth_reps(rng: random.Random, drill_key: str, offhand_bias: float, sloppy: bool,
+               form: dict | None = None, dominant: str = "right"):
     """Build a rep stream with human timing jitter.
 
     Rep pacing is derived from the drill's own validation envelope rather than
@@ -78,16 +89,39 @@ def synth_reps(rng: random.Random, drill_key: str, offhand_bias: float, sloppy: 
     gap = rng.uniform(fastest_gap * 1.35, fastest_gap * 2.2)
 
     jitter = gap * (0.30 if sloppy else 0.20)
+    form = form or {}
+    rom_cv = form.get("rom_cv", 0.10)
+    rom_scale = form.get("rom_scale", 0.95)
+    decay = form.get("decay", 0.93)
+    deficit = form.get("offhand_deficit", 0.12)
+    target = drill.quality.target_rom if drill.quality else 1.0
+    offhand = "left" if dominant == "right" else "right"
+
     t = 0
     reps = []
-    for _ in range(count):
+    for i in range(count):
+        frac = i / max(1, count - 1)
         t += max(150, int(rng.gauss(gap, jitter)))
         if drill.tracks_handedness:
             hand = "left" if rng.random() < offhand_bias else "right"
         else:
             hand = "none"
-        reps.append({"t_ms": t, "hand": hand, "confidence": rng.uniform(0.28, 0.48) if sloppy
-                     else rng.uniform(0.80, 0.95)})
+
+        # Range of motion: full-range baseline, shrinking through the session,
+        # with the weak hand covering less ground.
+        rom = target * rom_scale * (1.0 - (1.0 - decay) * frac)
+        if hand == offhand:
+            rom *= 1.0 - deficit
+        rom *= 1 + rng.gauss(0, rom_cv * (1.6 if sloppy else 1.0))
+
+        reps.append({
+            "t_ms": t,
+            "hand": hand,
+            "confidence": rng.uniform(0.28, 0.48) if sloppy else rng.uniform(0.80, 0.95),
+            "rom": round(max(0.01, rom), 3),
+            "peak": round(max(0.01, rom) * 0.7, 3),
+            "cycle_ms": max(120, int(rng.gauss(gap * 0.85, gap * 0.2))),
+        })
     return reps, t + int(rng.uniform(400, 1200))
 
 
@@ -113,7 +147,7 @@ def main() -> int:
     now = datetime.now(timezone.utc)
     athletes = []
 
-    for i, (name, hand, per_week, offhand, quiet_days) in enumerate(ROSTER):
+    for i, (name, hand, per_week, offhand, quiet_days, form) in enumerate(ROSTER):
         team = varsity if i < 4 else jv
         athlete = store.create_user(
             org_id, "athlete", name,
@@ -124,10 +158,10 @@ def main() -> int:
             guardian_consent=(name != "Alex Kowalczyk"),
         )
         store.join_team(team["join_code"], athlete["id"], jersey=str(10 + i), position="Midfield")
-        athletes.append((athlete, name, hand, per_week, offhand, quiet_days))
+        athletes.append((athlete, name, hand, per_week, offhand, quiet_days, form))
 
     total_sessions = 0
-    for athlete, name, hand, per_week, offhand, quiet_days in athletes:
+    for athlete, name, hand, per_week, offhand, quiet_days, form in athletes:
         # Alex trains hard but frames badly -- populates the review queue.
         sloppy_athlete = name == "Alex Kowalczyk"
 
@@ -137,7 +171,10 @@ def main() -> int:
             when = now - timedelta(days=day_offset, hours=rng.uniform(0, 14))
             drill_key = pick_drill(rng)
             sloppy = sloppy_athlete and rng.random() < 0.4
-            reps, duration = synth_reps(rng, drill_key, offhand if hand == "right" else 1 - offhand, sloppy)
+            reps, duration = synth_reps(
+                rng, drill_key, offhand if hand == "right" else 1 - offhand,
+                sloppy, form=form, dominant=hand,
+            )
 
             started = store.start_session(athlete["id"], drill_key)
             store.submit_session(
@@ -194,7 +231,11 @@ def main() -> int:
 
     print(f"\nSeeded {db_path} with {total_sessions} sessions over {args.weeks} weeks.")
     print(f"  by status: {counts}")
+    scored = store.conn.execute(
+        "SELECT COUNT(*) FROM sessions WHERE quality_score IS NOT NULL"
+    ).fetchone()[0]
     print(f"  assignments: {len(assignments_mod.list_for_org(store.conn, org_id))}")
+    print(f"  form-scored: {scored} sessions")
     print(f"  notifications: {sum(generated.values())} scheduled + new-assignment alerts")
     print(f"\n  Join codes: Varsity={varsity['join_code']}  JV={jv['join_code']}")
     print("\n  Sign-in tokens")

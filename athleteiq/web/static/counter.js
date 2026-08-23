@@ -178,6 +178,10 @@ export function wallBallSignal(landmarks) {
  * hovering at the boundary sprays dozens of phantom reps in a second. The
  * signal must cross *all the way* down and *all the way* back up to count once.
  */
+function round3(value) {
+  return Math.round(value * 1000) / 1000;
+}
+
 export class RepCounter {
   constructor(spec) {
     this.spec = spec;
@@ -198,6 +202,18 @@ export class RepCounter {
     this.lastFrameAt = null;
     this.pendingHand = 'none';
     this.peakValue = null;
+    // Per-cycle extremes. The span between them is the rep's range of motion,
+    // which is what form quality is measured from -- counting reps throws this
+    // away, and it is the more interesting half of the signal.
+    //
+    // Tracking continues *past* the point the rep fires, because the rep fires
+    // when the signal crosses a threshold, not when the movement finishes. A
+    // wall-ball throw crosses the firing line on the way up and keeps going;
+    // stopping at the crossing would measure every rep as the same minimum
+    // span and make range of motion useless for scoring form.
+    this.cycleMin = null;
+    this.cycleMax = null;
+    this.lastRep = null;
   }
 
   get count() { return this.reps.length; }
@@ -213,6 +229,12 @@ export class RepCounter {
       else if (r.hand === 'right') right += 1;
     }
     return { left, right };
+  }
+
+  /** Widen the current cycle's excursion to include this sample. */
+  extendSpan(value) {
+    if (this.cycleMin === null || value < this.cycleMin) this.cycleMin = value;
+    if (this.cycleMax === null || value > this.cycleMax) this.cycleMax = value;
   }
 
   /**
@@ -255,10 +277,24 @@ export class RepCounter {
         this.armed = true;
         this.armedAt = tMs;
         this.peakValue = s;
+        // The excursion restarts here, which is also what finalizes the
+        // previous rep's measurement.
+        this.cycleMin = s;
+        this.cycleMax = s;
         this.pendingHand = hand;
+        this.lastRep = null;
+      } else if (this.lastRep) {
+        // Still following through on the rep just emitted. Extend its span so
+        // the peak of the movement is captured, not the threshold crossing.
+        this.extendSpan(s);
+        this.lastRep.rom = round3(Math.abs(this.cycleMax - this.cycleMin));
+        this.lastRep.peak = round3(rising ? this.cycleMax : this.cycleMin);
       }
       return null;
     }
+
+    // Track the full excursion of this cycle, not just the firing direction.
+    this.extendSpan(s);
 
     // Track the extreme of the cycle so handedness is read at the peak of the
     // throw rather than wherever the threshold happened to be crossed.
@@ -275,16 +311,28 @@ export class RepCounter {
     }
 
     if (reachedFire && tMs - this.lastRepAt >= min_rep_ms) {
+      const rom = (this.cycleMax === null || this.cycleMin === null)
+        ? null
+        : Math.abs(this.cycleMax - this.cycleMin);
       const rep = {
         t_ms: Math.round(tMs),
         hand: this.spec.tracks_handedness ? this.pendingHand : 'none',
         confidence: Math.round(conf * 1000) / 1000,
+        // Shape of the rep, for server-side form scoring. Rounded hard: the
+        // server only needs the distribution, and full float precision would
+        // triple the payload for no gain.
+        peak: this.peakValue === null ? null : round3(this.peakValue),
+        rom: rom === null ? null : round3(rom),
+        cycle_ms: this.armedAt === null ? null : Math.round(tMs - this.armedAt),
       };
       this.reps.push(rep);
       this.lastRepAt = tMs;
       this.armed = false;
       this.armedAt = null;
       this.pendingHand = 'none';
+      // Deliberately not clearing the span: the follow-through after this
+      // point still belongs to this rep.
+      this.lastRep = rep;
       return rep;
     }
     return null;

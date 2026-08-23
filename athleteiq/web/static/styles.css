@@ -223,3 +223,42 @@ tbody tr:hover { background: var(--surface-2); }
 .dots { font-family: ui-monospace, monospace; letter-spacing: .12em; }
 .dots .on { color: var(--accent); }
 .dots .off { color: var(--muted); opacity: .5; }
+
+/* ---- Form quality ---- */
+
+.quality {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 11px; padding: 14px; margin-top: 14px;
+}
+.quality-top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.qscore {
+  font-size: 2.4rem; font-weight: 800; line-height: 1;
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums;
+}
+.qscore small { font-size: .8rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.qscore.good { color: var(--accent); }
+.qscore.mid  { color: var(--warn); }
+.qscore.low  { color: var(--danger); }
+
+.qbars { display: flex; flex-direction: column; gap: 7px; }
+.qbar-row { display: grid; grid-template-columns: 96px 1fr 34px; gap: 9px; align-items: center; font-size: .78rem; }
+.qbar { height: 7px; background: var(--surface); border-radius: 99px; overflow: hidden; }
+.qbar > i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.qbar > i.mid { background: var(--warn); }
+.qbar > i.low { background: var(--danger); }
+.qbar-row span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+.coach-note {
+  margin-top: 12px; padding: 11px 12px; border-radius: 9px;
+  background: var(--surface); border-left: 3px solid var(--accent);
+  font-size: .86rem; line-height: 1.5;
+}
+.hand-split { display: flex; gap: 10px; margin-top: 11px; }
+.hand-split > div {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 9px; padding: 9px 11px; text-align: center;
+}
+.hand-split b { display: block; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.hand-split span { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.trend-up { color: var(--accent); }
+.trend-down { color: var(--warn); }
