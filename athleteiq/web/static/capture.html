@@ -25,6 +25,16 @@
   <section id="view-home">
     <div class="conn" id="conn"><i></i><span id="conn-text">Online</span></div>
 
+    <div class="card hidden" id="load-card">
+      <div class="load-top">
+        <h2 style="margin:0">Training load</h2>
+        <span class="load-zone" id="load-zone"></span>
+      </div>
+      <div class="gauge" id="load-gauge"></div>
+      <div id="load-advisories"></div>
+      <div id="load-action"></div>
+    </div>
+
     <div class="card hidden" id="assign-card">
       <h2>From your coach</h2>
       <div id="assignments"></div>
@@ -229,6 +239,76 @@ async function loadDrills() {
   $('drill-list').querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => openCapture(drills[Number(btn.dataset.i)]));
   });
+}
+
+// ------------------------------------------------------------ training load
+
+function renderGauge(acwr) {
+  if (acwr === null || acwr === undefined) return '';
+  // Scale runs 0 to 2; the shaded band is the steady range (0.8-1.3).
+  const pos = Math.max(0, Math.min(1, acwr / 2)) * 100;
+  const cls = acwr > 1.5 ? 'high' : acwr > 1.3 ? 'elevated' : '';
+  return `
+    <div class="gauge-track">
+      <span class="gauge-safe" style="left:40%;width:25%"></span>
+    </div>
+    <span class="gauge-mark ${cls}" style="left:${pos}%"></span>
+    <div class="gauge-scale" style="position:absolute;inset:auto 0 -2px 0">
+      <span>easier</span><span>steady</span><span>sharp jump</span>
+    </div>`;
+}
+
+async function loadTrainingLoad() {
+  let state;
+  try {
+    state = await api('/api/load');
+  } catch { return; }
+
+  const card = $('load-card');
+  const advisories = state.advisories || [];
+
+  // Nothing to say and nothing at risk: don't take up space on the home screen.
+  const worthShowing = state.acwr !== null || advisories.some((a) => a.level !== 'info');
+  card.classList.toggle('hidden', !worthShowing);
+  if (!worthShowing) return;
+
+  const worst = advisories.some((a) => a.level === 'warning') ? 'warning'
+    : advisories.some((a) => a.level === 'caution') ? 'caution' : '';
+  card.className = `card load-card ${worst}`;
+
+  $('load-zone').className = `load-zone ${esc(state.zone)}`;
+  $('load-zone').textContent = state.zone_label;
+  $('load-gauge').innerHTML = renderGauge(state.acwr);
+  $('load-gauge').style.display = state.acwr === null ? 'none' : '';
+
+  $('load-advisories').innerHTML = advisories.map((a) => `
+    <div class="advisory ${esc(a.level)}">
+      <span class="dotmark"></span>
+      <div>${esc(a.message)}${a.evidence ? `<em>${esc(a.evidence)}</em>` : ''}</div>
+    </div>`).join('');
+
+  // The recovery button is the whole point: it removes the reason to train
+  // through fatigue, because resting no longer costs the streak.
+  $('load-action').innerHTML = state.rest_recommended
+    ? `<button class="secondary rest-cta" id="take-rest">Take a recovery day &mdash; keeps your streak</button>`
+    : '';
+
+  const btn = $('take-rest');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api('/api/recovery', { method: 'POST' });
+        $('load-action').innerHTML =
+          '<div class="rest-done">Recovery day logged. Your streak is safe &mdash; '
+          + 'rest is when the work actually turns into progress.</div>';
+        await loadHome();
+      } catch (e) {
+        btn.disabled = false;
+        $('load-action').innerHTML += `<div class="err">${esc(e.message)}</div>`;
+      }
+    });
+  }
 }
 
 // ---------------------------------------------------------- assignments
@@ -674,7 +754,9 @@ function showResult(result) {
 $('startstop').addEventListener('click', () => (running ? finishSession() : startSession()));
 $('back').addEventListener('click', () => { stopCamera(); show('home'); });
 $('done').addEventListener('click', async () => {
-  await Promise.all([loadHome(), loadAssignments(), loadNotifications()]);
+  await Promise.all([
+    loadHome(), loadAssignments(), loadNotifications(), loadTrainingLoad(),
+  ]);
   show('home');
 });
 $('signout').addEventListener('click', logout);
@@ -728,6 +810,7 @@ window.addEventListener('pagehide', stopCamera);
     syncQueue();
     loadAssignments();
     loadNotifications();
+    loadTrainingLoad();
     refreshConnBanner();
   } catch (e) {
     document.body.innerHTML = `<div class="wrap"><div class="card"><h2>Could not load</h2><p>${esc(e.message)}</p><a href="index.html">Sign in again</a></div></div>`;

@@ -185,11 +185,19 @@ def main() -> int:
             )
             # Backdate so the history spreads across the window instead of
             # landing entirely on today.
+            #
+            # completed_at has to move too: it takes precedence over
+            # submitted_at everywhere downstream (streaks, assignment windows,
+            # training load), so patching only submitted_at silently collapses
+            # six weeks of history onto a single day. Done here rather than by
+            # passing completed_at into submit_session because that path
+            # deliberately clamps backdating to two weeks.
             iso = when.isoformat(timespec="seconds")
             with transaction(store.conn) as conn:
                 conn.execute(
-                    "UPDATE sessions SET started_at=?, submitted_at=? WHERE id=?",
-                    (iso, iso, started["session_id"]),
+                    "UPDATE sessions SET started_at=?, submitted_at=?, completed_at=? "
+                    "WHERE id=?",
+                    (iso, iso, iso, started["session_id"]),
                 )
                 conn.execute(
                     "UPDATE xp_ledger SET day=?, created_at=? WHERE session_id=?",

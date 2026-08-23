@@ -13,9 +13,10 @@ but the drill system is sport-agnostic and ships with general strength, speed,
 agility, and conditioning exercises.
 
 Coaches assign work and see who did it. Athletes get nudged when a streak is on
-the line. Every session is scored for **form quality**, not just rep count. The
-whole capture flow works with no signal, because youth athletes train in
-driveways.
+the line. Every session is scored for **form quality**, not just rep count, and
+**training load is monitored** so the gamification cannot quietly push an
+athlete into an overuse injury. The whole capture flow works with no signal,
+because youth athletes train in driveways.
 
 ---
 
@@ -61,7 +62,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 344 tests
+python -m pytest tests/ -q          # 384 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -84,6 +85,7 @@ athleteiq/
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
+  load.py           Workload ratio, throwing volume, rest days, advisories
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -219,6 +221,76 @@ noticed, because every other test drives a drill whose thresholds already worked
 
 Hold drills score differently: a plank's quality is the share of the session
 actually spent inside the body-line tolerance, so sagging costs you.
+
+---
+
+## Load management and overuse protection
+
+Stated plainly, because it is the reason this exists: **everything else in this
+codebase rewards volume.** XP scales with reps, leaderboards rank on totals, and
+streaks reward training every single day. Those mechanics work — which is the
+problem, because what they are good at driving is exactly what causes overuse
+injury in young athletes. A product that gamifies youth training volume without
+a counterweight is not neutral; it is a risk factor.
+
+Four things are watched:
+
+- **Acute:chronic workload ratio** — this week's load against the trailing
+  four-week average. Load is per-drill, not per-rep, so 200 wall balls and 200
+  burpees don't read as the same week's work.
+- **Throwing volume**, tracked separately. Youth baseball has decades of
+  evidence behind pitch counts; lacrosse involves the same repetitive overhead
+  motion and essentially nobody counts it.
+- **Consecutive days without rest**, against standard youth guidance of at least
+  one full day off per week.
+- **Monotony** — training the same amount every day with no hard/easy variation.
+
+In the demo data this immediately surfaces the athlete who tops every
+leaderboard: Jordan Pierce, first on XP and form, 17 days straight without a
+rest day. That is the whole point — the leaderboard was never going to tell you
+that.
+
+### The recovery day
+
+The important design piece. A streak that breaks when you rest makes the athlete
+with the most to protect the one most pressured to train through fatigue, so a
+**recovery day counts toward the streak**:
+
+```
+5-day streak → take a recovery day → 6-day streak
+```
+
+It has to be earned (three consecutive training days, and the run must still be
+live), so it isn't just a button that keeps a streak alive without training. A
+notification offers it when load is high. This turns the gamification from a
+risk factor into a protective one, without taking XP away from anyone.
+
+### Honesty about the evidence
+
+The acute:chronic ratio is a **useful heuristic, not settled science.** The
+rolling-average form used here has been criticised in the literature on
+methodological grounds — spurious correlation, arbitrary thresholds, sensitivity
+to the chosen windows. It is deliberately used to raise a question with a coach,
+never to diagnose anything or to lock an athlete out of training. A test asserts
+that no advisory is phrased as a medical claim.
+
+Two things the model deliberately refuses to do:
+
+**It stays quiet when it doesn't know.** No ratio at all until there is enough
+history, because comparing a first week against nothing produces alarming
+numbers for an athlete who simply just started. The chronic baseline is averaged
+over days actually trained rather than the full 28-day window — padding with
+pre-history zeros deflated the baseline and made three weeks of perfectly
+consistent training score 1.33 and trip an "elevated" warning, a false alarm
+that would have fired for every new athlete in weeks three and four.
+
+**It doesn't nag someone already resting.** A rest suggestion only fires while
+the training run is still live.
+
+**It only sees what is logged here.** Team practices, games, and other sports
+are invisible to it, so a quiet reading is not evidence that an athlete is
+fresh. The age-based volume advisory says so explicitly rather than implying the
+app knows the athlete's whole week.
 
 ---
 
@@ -414,3 +486,8 @@ contact with a real driveway:
 9. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
+10. **Load coefficients are reasoned estimates, not measured values.** The
+    per-drill numbers in `catalog.py` are a defensible ordering rather than
+    validated physiology, and the app sees only self-directed work — so the
+    workload picture is directionally useful and absolutely not a clinical
+    assessment.

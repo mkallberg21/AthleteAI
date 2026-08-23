@@ -20,7 +20,7 @@ from . import assignments as assignments_mod
 from . import notifications as notify
 from .assignments import AssignmentError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
-from .leaderboard import coach_roster, leaderboard, team_standings
+from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError
 
 app = FastAPI(
@@ -524,6 +524,65 @@ def session_quality(
     return {"session_id": session_id, "drill_key": row["drill_key"], "quality": report}
 
 
+@app.post("/api/recovery", status_code=201)
+def log_recovery(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Log today as a deliberate rest day.
+
+    Counts toward the streak, so an athlete carrying high load is not forced to
+    choose between resting and losing six weeks of consistency.
+    """
+    try:
+        return store.log_recovery_day(principal.id)
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/load")
+def my_load(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return store.load_state(principal.id).to_dict()
+
+
+@app.get("/api/coach/load")
+def team_load(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Workload across the roster, athletes needing attention first."""
+    rows = store.conn.execute(
+        "SELECT u.id, u.display_name FROM users u "
+        + ("JOIN team_members tm ON tm.user_id = u.id AND tm.team_id = ? " if team_id else "")
+        + "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1",
+        ([team_id, principal.org_id] if team_id else [principal.org_id]),
+    ).fetchall()
+
+    out = []
+    for row in rows:
+        state = store.load_state(row["id"])
+        out.append({
+            "athlete_id": row["id"],
+            "display_name": row["display_name"],
+            **state.to_dict(),
+        })
+
+    severity = {"warning": 0, "caution": 1, "info": 2, None: 3}
+    out.sort(key=lambda a: (
+        severity.get(
+            next((x["level"] for x in a["advisories"] if x["level"] == "warning"), None)
+            or next((x["level"] for x in a["advisories"] if x["level"] == "caution"), None),
+            3,
+        ),
+        -(a["acwr"] or 0),
+    ))
+    return {"athletes": out}
+
+
 @app.get("/api/standings")
 def get_standings(
     window: Literal["week", "month", "season", "all"] = "week",
@@ -544,10 +603,12 @@ def get_roster(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    athletes = coach_roster(store.conn, principal.org_id, team_id, window)
+    states = {a["athlete_id"]: store.load_state(a["athlete_id"]).to_dict() for a in athletes}
     return {
         "window": window,
         "team_id": team_id,
-        "athletes": coach_roster(store.conn, principal.org_id, team_id, window),
+        "athletes": attach_load(athletes, states),
     }
 
 

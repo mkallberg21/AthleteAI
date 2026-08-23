@@ -800,3 +800,127 @@ class TestQualityEndpoints:
         ).json()
         assert res["status"] in ("review", "rejected")
         assert any("identical range" in note for note in res["notes"])
+
+
+class TestLoadEndpoints:
+    def _train_on(self, client, headers, days_ago, seed=1, drill="lax_wall_ball", count=150):
+        """Log a session dated `days_ago` days back."""
+        import random
+        from datetime import datetime, timedelta, timezone
+
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": drill}, headers=headers
+        ).json()
+        rng = random.Random(seed)
+        t, reps = 0, []
+        for i in range(count):
+            rom = 0.47 * (1 + rng.gauss(0, 0.08))
+            t += max(150, int(rng.gauss(880, 180)))
+            reps.append({
+                "t_ms": t, "hand": "left" if i % 2 else "right", "confidence": 0.9,
+                "rom": round(max(0.01, rom), 3), "peak": round(rom * 0.7, 3),
+                "cycle_ms": max(120, int(rng.gauss(880, 150))),
+            })
+        when = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+        return client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": started["session_id"], "nonce": started["nonce"],
+                "duration_ms": t + 700, "reps": reps, "mean_confidence": 0.9,
+                "completed_at": when,
+            },
+            headers=headers,
+        )
+
+    def test_load_endpoint_reports_a_state(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        self._train_on(client, headers, 1)
+        state = client.get("/api/load", headers=headers).json()
+        assert "zone" in state and "advisories" in state
+
+    def test_submit_returns_the_updated_load_state(self, client, program):
+        res = self._train_on(client, program["athletes"][0]["headers"], 0).json()
+        assert "load" in res
+        assert res["load"]["zone"] in (
+            "unknown", "detraining", "building", "optimal", "elevated", "high"
+        )
+
+    def test_a_new_athlete_is_not_alarmed(self, client, program):
+        """Weeks one to four are when a false alarm does the most damage."""
+        headers = program["athletes"][0]["headers"]
+        for day in range(5, 0, -1):
+            self._train_on(client, headers, day, seed=day)
+        state = client.get("/api/load", headers=headers).json()
+        assert state["acwr"] is None
+        assert all(a["level"] == "info" for a in state["advisories"])
+
+    def test_a_recovery_day_cannot_be_claimed_without_earning_it(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        res = client.post("/api/recovery", headers=headers)
+        assert res.status_code == 400
+        assert "in a row" in res.json()["detail"]
+
+    def test_a_recovery_day_preserves_the_streak(self, client, program):
+        """The counterweight: resting must not cost six weeks of consistency."""
+        headers = program["athletes"][0]["headers"]
+        for day in range(5, 0, -1):
+            self._train_on(client, headers, day, seed=day)
+
+        before = client.get("/api/me", headers=headers).json()["streak"]
+        assert client.post("/api/recovery", headers=headers).status_code == 201
+        after = client.get("/api/me", headers=headers).json()["streak"]
+        assert after == before + 1
+
+    def test_a_recovery_day_is_idempotent(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        for day in range(5, 0, -1):
+            self._train_on(client, headers, day, seed=day)
+        client.post("/api/recovery", headers=headers)
+        client.post("/api/recovery", headers=headers)
+        rows = api_module._store.conn.execute(
+            "SELECT COUNT(*) AS n FROM recovery_days"
+        ).fetchone()["n"]
+        assert rows == 1
+
+    def test_the_coach_load_view_puts_the_worst_first(self, client, program):
+        a, b = program["athletes"]
+        for day in range(12, 0, -1):
+            self._train_on(client, a["headers"], day, seed=day, count=260)
+        self._train_on(client, b["headers"], 1, seed=99, count=40)
+
+        rows = client.get("/api/coach/load", headers=program["director"]).json()["athletes"]
+        assert len(rows) >= 2
+        levels = [
+            next((x["level"] for x in r["advisories"] if x["level"] != "info"), None)
+            for r in rows
+        ]
+        # Anything needing attention sorts above anything that does not.
+        first_none = next((i for i, lv in enumerate(levels) if lv is None), len(levels))
+        assert all(lv is not None for lv in levels[:first_none])
+
+    def test_athletes_cannot_read_the_team_load_view(self, client, program):
+        res = client.get("/api/coach/load", headers=program["athletes"][0]["headers"])
+        assert res.status_code == 403
+
+    def test_the_roster_carries_workload_and_flags(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        for day in range(12, 0, -1):
+            self._train_on(client, headers, day, seed=day, count=200)
+        roster = client.get("/api/coach/roster", headers=program["director"]).json()["athletes"]
+        row = next(a for a in roster if a["athlete_id"] == program["athletes"][0]["id"])
+        assert row["load"] is not None
+        assert "needs_rest" in row["flags"]
+
+    def test_a_rest_nudge_is_generated_and_deduped(self, client, program):
+        from athleteiq import notifications as notify
+
+        headers = program["athletes"][0]["headers"]
+        for day in range(12, 0, -1):
+            self._train_on(client, headers, day, seed=day, count=200)
+
+        made = notify.generate_rest_nudges(api_module._store.conn)
+        assert made >= 1
+        assert notify.generate_rest_nudges(api_module._store.conn) == 0
+
+        titles = [n["title"] for n in notify.feed(api_module._store.conn, program["athletes"][0]["id"])]
+        assert any("recovery" in t.lower() for t in titles)

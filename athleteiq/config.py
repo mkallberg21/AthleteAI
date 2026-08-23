@@ -109,6 +109,60 @@ class IntegrityConfig:
 
 
 @dataclass(frozen=True)
+class LoadConfig:
+    """Overuse-protection thresholds.
+
+    The acute:chronic ratio is a heuristic, not settled science -- the
+    rolling-average form used here has been criticised on methodological
+    grounds. These numbers exist to raise a question with a coach, never to
+    diagnose an athlete or block them from training.
+    """
+
+    acute_days: int = 7
+    chronic_days: int = 28
+
+    # Below this much history the ratio compares a week against almost nothing
+    # and produces alarming numbers for an athlete who simply just started.
+    min_history_days: int = 14
+
+    detraining_below: float = 0.60
+    optimal_low: float = 0.80
+    optimal_high: float = 1.30
+    elevated_high: float = 1.50
+
+    # Consecutive training days before a rest day is suggested, and before the
+    # suggestion is escalated.
+    rest_day_after: int = 6
+    rest_day_urgent: int = 10
+
+    # Week-on-week throwing increase worth flagging, and the baseline below
+    # which a percentage change is just noise.
+    throw_spike_change: float = 0.50
+    throw_trend_min_baseline: int = 150
+
+    # Mean daily load divided by its spread. High values mean no hard/easy
+    # variation at all.
+    monotony_threshold: float = 2.0
+    # Reported when every day carries identical load, where the usual formula
+    # would divide by zero.
+    monotony_ceiling: float = 99.0
+
+    # Rough hours per logged session, used only for the age-based guideline.
+    # Crude on purpose: the app cannot see how long a driveway session really
+    # ran, and the advisory says so.
+    assumed_session_hours: float = 0.4
+    age_hours_warn_fraction: float = 0.7
+
+    # A recovery day still counts toward a streak when the athlete is carrying
+    # high load. Without this the streak mechanic actively punishes resting,
+    # which makes the gamification a risk factor rather than a motivator.
+    recovery_day_protects_streak: bool = True
+    # Consecutive training days before a recovery day can be claimed. Without a
+    # floor this is just a button that keeps a streak alive without training.
+    recovery_min_streak: int = 3
+
+
+@dataclass(frozen=True)
 class Config:
     db_path: Path = field(
         default_factory=lambda: Path(
@@ -119,6 +173,7 @@ class Config:
 
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     integrity: IntegrityConfig = field(default_factory=IntegrityConfig)
+    load: LoadConfig = field(default_factory=LoadConfig)
 
     # Retention for per-rep timing rows. The aggregate session record is kept
     # indefinitely; the granular event stream is only needed for integrity

@@ -262,3 +262,49 @@ tbody tr:hover { background: var(--surface-2); }
 .hand-split span { font-size: .66rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .trend-up { color: var(--accent); }
 .trend-down { color: var(--warn); }
+
+/* ---- Training load ---- */
+
+.load-card { border-left: 3px solid var(--accent); }
+.load-card.caution { border-left-color: var(--warn); }
+.load-card.warning { border-left-color: var(--danger); }
+
+.load-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.load-zone { font-size: 1.05rem; font-weight: 700; }
+.load-zone.optimal { color: var(--accent); }
+.load-zone.elevated { color: var(--warn); }
+.load-zone.high { color: var(--danger); }
+.load-zone.detraining, .load-zone.unknown, .load-zone.building { color: var(--muted); }
+
+/* Workload ratio gauge: the shaded band is the steady range. */
+.gauge { position: relative; height: 26px; margin: 14px 0 6px; }
+.gauge-track {
+  position: absolute; inset: 9px 0 auto 0; height: 8px;
+  background: var(--surface-2); border-radius: 99px; overflow: hidden;
+}
+.gauge-safe { position: absolute; top: 0; bottom: 0; background: rgba(57,217,138,.28); }
+.gauge-mark {
+  position: absolute; top: 2px; width: 3px; height: 22px;
+  background: var(--text); border-radius: 2px; transform: translateX(-1.5px);
+}
+.gauge-mark.high { background: var(--danger); }
+.gauge-mark.elevated { background: var(--warn); }
+.gauge-scale { display: flex; justify-content: space-between; font-size: .66rem; color: var(--muted); }
+
+.advisory {
+  display: flex; gap: 9px; padding: 10px 0;
+  border-bottom: 1px solid var(--border); font-size: .85rem; line-height: 1.5;
+}
+.advisory:last-child { border-bottom: none; }
+.advisory .dotmark { width: 7px; height: 7px; border-radius: 99px; margin-top: 7px; flex: none; }
+.advisory.info .dotmark { background: var(--muted); }
+.advisory.caution .dotmark { background: var(--warn); }
+.advisory.warning .dotmark { background: var(--danger); }
+.advisory em { display: block; font-style: normal; color: var(--muted); font-size: .76rem; margin-top: 3px; }
+
+.rest-cta { margin-top: 12px; }
+.rest-done {
+  margin-top: 12px; padding: 11px 12px; border-radius: 9px;
+  background: rgba(57,217,138,.10); border: 1px solid var(--accent);
+  color: var(--accent); font-size: .85rem;
+}

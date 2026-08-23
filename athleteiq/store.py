@@ -16,6 +16,7 @@ from typing import Any
 from .config import CONFIG
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
+from . import load as load_mod
 from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
 from .quality import RepFeature, analyze as analyze_quality
@@ -419,6 +420,7 @@ class Store:
             ],
             "counted_for_day": today,
             "quality": report.to_dict(),
+            "load": self.load_state(athlete_id).to_dict(),
         }
         # Stored so a duplicate delivery replays this exact response.
         with transaction(self.conn) as c:
@@ -543,15 +545,7 @@ class Store:
             (athlete_id,),
         ).fetchone()["n"]
 
-        days = [
-            date.fromisoformat(r["day"])
-            for r in c.execute(
-                "SELECT DISTINCT day FROM xp_ledger WHERE athlete_id=? "
-                "GROUP BY day HAVING SUM(amount) >= ? ORDER BY day",
-                (athlete_id, CONFIG.scoring.streak_min_xp),
-            )
-        ]
-        streak = compute_streak(days, _now().date())
+        streak = compute_streak(self._streak_days(athlete_id), _now().date())
 
         return AthleteStats(
             total_xp=total_xp,
@@ -594,15 +588,7 @@ class Store:
 
         stats = self.athlete_stats(athlete_id)
         prog = level_progress(stats.total_xp)
-        days = [
-            date.fromisoformat(r["day"])
-            for r in self.conn.execute(
-                "SELECT DISTINCT day FROM xp_ledger WHERE athlete_id=? "
-                "GROUP BY day HAVING SUM(amount) >= ? ORDER BY day",
-                (athlete_id, CONFIG.scoring.streak_min_xp),
-            )
-        ]
-        streak = compute_streak(days, _now().date())
+        streak = compute_streak(self._streak_days(athlete_id), _now().date())
 
         badges = [
             {
@@ -647,6 +633,7 @@ class Store:
             "xp_today": self._xp_on_day(athlete_id, _now().date().isoformat()),
             "daily_cap": CONFIG.scoring.daily_xp_cap,
             "quality": self.quality_trend(athlete_id),
+            "load": self.load_state(athlete_id).to_dict(),
             "stats": {
                 "sessions": stats.session_count,
                 "wall_ball_reps": stats.wall_ball_reps,
@@ -657,6 +644,103 @@ class Store:
             "badges": badges,
             "recent_sessions": recent,
         }
+
+    def load_history(self, athlete_id: int, days: int = 28) -> list[load_mod.DayLoad]:
+        """Daily training load, derived from counted sessions."""
+        cutoff = (_now().date() - timedelta(days=days - 1)).isoformat()
+        rows = self.conn.execute(
+            "SELECT date(COALESCE(completed_at, submitted_at)) AS day, drill_key, "
+            "       reps_total, hold_ms "
+            "FROM sessions WHERE athlete_id = ? AND status = 'counted' "
+            "AND date(COALESCE(completed_at, submitted_at)) >= ?",
+            (athlete_id, cutoff),
+        ).fetchall()
+
+        by_day: dict[str, load_mod.DayLoad] = {}
+        for row in rows:
+            day = row["day"]
+            if day is None:
+                continue
+            entry = by_day.setdefault(day, load_mod.DayLoad(day=date.fromisoformat(day)))
+            units, throws = load_mod.session_load(
+                row["drill_key"], int(row["reps_total"]), int(row["hold_ms"])
+            )
+            entry.load += units
+            entry.throws += throws
+            entry.sessions += 1
+        return sorted(by_day.values(), key=lambda d: d.day)
+
+    def load_state(self, athlete_id: int) -> load_mod.LoadState:
+        """Current workload assessment for one athlete."""
+        row = self.conn.execute(
+            "SELECT birth_year FROM users WHERE id = ?", (athlete_id,)
+        ).fetchone()
+        age = None
+        if row and row["birth_year"]:
+            age = _now().year - int(row["birth_year"])
+        return load_mod.analyze(
+            self.load_history(athlete_id, CONFIG.load.chronic_days),
+            today=_now().date(),
+            age=age,
+        )
+
+    def log_recovery_day(self, athlete_id: int, day: date | None = None) -> dict[str, Any]:
+        """Record a deliberate rest day, which counts toward the streak.
+
+        Only granted when the athlete has actually earned it -- otherwise this
+        is just a button that keeps a streak alive without training, which
+        would make the streak meaningless.
+        """
+        day = day or _now().date()
+        state = self.load_state(athlete_id)
+        cfg = CONFIG.load
+
+        # Live run only: a recovery day is credit for stopping, not something
+        # to claim a week after they last trained.
+        recent = state.days_since_training is not None and state.days_since_training <= 1
+        earned = recent and (
+            state.rest_recommended or state.consecutive_days >= cfg.recovery_min_streak
+        )
+        if not earned:
+            raise StoreError(
+                "A recovery day counts once you have trained "
+                f"{cfg.recovery_min_streak} days in a row. Keep going today."
+            )
+
+        reason = (
+            "load spike" if state.zone == load_mod.Zone.HIGH
+            else f"{state.consecutive_days} consecutive training days"
+        )
+        with transaction(self.conn) as c:
+            c.execute(
+                "INSERT OR IGNORE INTO recovery_days(athlete_id, day, reason, created_at) "
+                "VALUES (?,?,?,?)",
+                (athlete_id, day.isoformat(), reason, _iso(_now())),
+            )
+        return {"day": day.isoformat(), "reason": reason, "counts_toward_streak": True}
+
+    def _recovery_days(self, athlete_id: int) -> list[date]:
+        return [
+            date.fromisoformat(r["day"])
+            for r in self.conn.execute(
+                "SELECT day FROM recovery_days WHERE athlete_id = ? ORDER BY day",
+                (athlete_id,),
+            )
+        ]
+
+    def _streak_days(self, athlete_id: int) -> list[date]:
+        """Days that count toward a streak: trained, or deliberately rested."""
+        trained = [
+            date.fromisoformat(r["day"])
+            for r in self.conn.execute(
+                "SELECT DISTINCT day FROM xp_ledger WHERE athlete_id = ? "
+                "GROUP BY day HAVING SUM(amount) >= ? ORDER BY day",
+                (athlete_id, CONFIG.scoring.streak_min_xp),
+            )
+        ]
+        if not CONFIG.load.recovery_day_protects_streak:
+            return trained
+        return sorted(set(trained) | set(self._recovery_days(athlete_id)))
 
     def quality_trend(self, athlete_id: int, window: int = 10) -> dict[str, Any]:
         """Recent form scores, and whether they are moving.

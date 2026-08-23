@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -212,6 +212,22 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     failed_at   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+
+-- A day the athlete deliberately rested while carrying enough load to warrant
+-- it. These count toward a streak.
+--
+-- Without this the streak mechanic punishes resting, which turns the whole
+-- gamification layer into a risk factor: the athlete most in need of a day off
+-- is exactly the one with the longest streak to protect.
+CREATE TABLE IF NOT EXISTS recovery_days (
+    id          INTEGER PRIMARY KEY,
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day         TEXT NOT NULL,
+    reason      TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    UNIQUE (athlete_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_recovery_athlete ON recovery_days(athlete_id, day);
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,

@@ -143,6 +143,52 @@ class ScoringSpec:
     diminishing_rate: float = 0.35
 
 
+class Tissue(str, Enum):
+    """What a drill mostly stresses.
+
+    Overuse is tissue-specific: a week of heavy throwing and a week of heavy
+    squatting are both "high load" and injure completely different things, so
+    an advisory that cannot tell them apart is not much use to a coach.
+    """
+
+    THROWING = "throwing"       # shoulder / elbow -- the lacrosse risk axis
+    LOWER_BODY = "lower_body"   # knees, ankles, hips
+    UPPER_BODY = "upper_body"
+    WHOLE_BODY = "whole_body"
+    CORE = "core"
+
+
+@dataclass(frozen=True)
+class LoadSpec:
+    """How much physical load one rep of this drill represents.
+
+    Units are arbitrary and only meaningful relative to each other: 1.0 is
+    roughly "one moderate bodyweight rep". They exist so that 200 wall balls
+    and 200 burpees do not read as the same week's work, which is exactly the
+    mistake a rep count makes.
+
+    These are reasoned estimates, not measured values. Nothing here is a
+    substitute for a clinician, and the advisories built on them are worded as
+    prompts to a coach rather than diagnoses.
+    """
+
+    load_per_rep: float = 1.0
+    load_per_minute: float = 0.0
+
+    # Throws are counted separately from general load. Youth baseball has
+    # decades of evidence behind pitch counts; lacrosse has the same repetitive
+    # overhead motion and nobody counting it.
+    throws_per_rep: float = 0.0
+
+    tissue: Tissue = Tissue.WHOLE_BODY
+
+    def __post_init__(self) -> None:
+        if self.load_per_rep < 0 or self.load_per_minute < 0:
+            raise ValueError("load values cannot be negative")
+        if self.throws_per_rep < 0:
+            raise ValueError("throws_per_rep cannot be negative")
+
+
 @dataclass(frozen=True)
 class QualitySpec:
     """What a *well executed* rep of this drill looks like.
@@ -221,6 +267,7 @@ class DrillSpec:
     validation: ValidationSpec = field(default_factory=ValidationSpec)
     # Absent for drills where per-rep form cannot be read from pose alone.
     quality: QualitySpec | None = None
+    load: LoadSpec = field(default_factory=LoadSpec)
 
     # Whether left/right attribution is meaningful. True for wall ball and
     # single-arm lifts; false for squats.
@@ -236,6 +283,7 @@ class DrillSpec:
         data["metric"] = self.metric.value
         data["signal"]["kind"] = self.signal.kind.value
         data["signal"]["joints"] = list(self.signal.joints)
+        data["load"]["tissue"] = self.load.tissue.value
         return data
 
     @property

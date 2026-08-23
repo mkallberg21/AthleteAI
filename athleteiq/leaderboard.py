@@ -390,6 +390,8 @@ def coach_roster(
                 "days_since_session": days_since,
                 "offhand_share": offhand_share,
                 "quality": int(r["quality"]) if r["quality"] is not None else None,
+                # Attached by `attach_load`; the roster query stays pure SQL.
+                "load": None,
                 "pending_review": int(r["pending_review"]),
                 # Flags are what makes this actionable rather than another
                 # table to read: they say who to text tonight.
@@ -400,6 +402,27 @@ def coach_roster(
             }
         )
     return out
+
+
+def attach_load(
+    athletes: list[dict[str, Any]], states: dict[int, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Fold workload into an already-built roster.
+
+    Kept separate because load analysis needs a month of per-day history per
+    athlete -- expressing that in the roster query would turn one readable
+    statement into an unreadable one for no gain.
+    """
+    for athlete in athletes:
+        state = states.get(athlete["athlete_id"])
+        if not state:
+            continue
+        athlete["load"] = state
+        if state.get("zone") == "high":
+            athlete["flags"].append("load_spike")
+        if state.get("rest_recommended"):
+            athlete["flags"].append("needs_rest")
+    return athletes
 
 
 def _flags(

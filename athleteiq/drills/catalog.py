@@ -19,11 +19,13 @@ from __future__ import annotations
 
 from .base import (
     Category,
+    LoadSpec,
     CounterSpec,
     DrillSpec,
     Metric,
     QualitySpec,
     ScoringSpec,
+    Tissue,
     SignalKind,
     SignalSpec,
     ValidationSpec,
@@ -93,6 +95,13 @@ WALL_BALL = DrillSpec(
         w_endurance=0.20,
         min_reps=12,
     ),
+    load=LoadSpec(
+        # Low mechanical load per rep, but every rep is an overhead throw and
+        # throwing volume is the thing that hurts young shoulders and elbows.
+        load_per_rep=0.35,
+        throws_per_rep=1.0,
+        tissue=Tissue.THROWING,
+    ),
 )
 
 QUICK_STICK = DrillSpec(
@@ -135,6 +144,7 @@ QUICK_STICK = DrillSpec(
         w_endurance=0.15,
         min_reps=12,
     ),
+    load=LoadSpec(load_per_rep=0.30, throws_per_rep=1.0, tissue=Tissue.THROWING),
 )
 
 # --------------------------------------------------------------------------
@@ -174,6 +184,7 @@ PUSH_UP = DrillSpec(
         w_tempo=0.10,
         w_endurance=0.20,
     ),
+    load=LoadSpec(load_per_rep=1.2, tissue=Tissue.UPPER_BODY),
 )
 
 SQUAT = DrillSpec(
@@ -206,6 +217,7 @@ SQUAT = DrillSpec(
         w_tempo=0.10,
         w_endurance=0.20,
     ),
+    load=LoadSpec(load_per_rep=1.0, tissue=Tissue.LOWER_BODY),
 )
 
 SIT_UP = DrillSpec(
@@ -239,6 +251,7 @@ SIT_UP = DrillSpec(
         w_tempo=0.10,
         w_endurance=0.25,
     ),
+    load=LoadSpec(load_per_rep=0.6, tissue=Tissue.CORE),
 )
 
 PULL_UP = DrillSpec(
@@ -276,6 +289,7 @@ PULL_UP = DrillSpec(
         w_endurance=0.35,
         min_reps=5,
     ),
+    load=LoadSpec(load_per_rep=3.0, tissue=Tissue.UPPER_BODY),
 )
 
 # --------------------------------------------------------------------------
@@ -314,6 +328,7 @@ JUMPING_JACK = DrillSpec(
         w_tempo=0.15,
         w_endurance=0.20,
     ),
+    load=LoadSpec(load_per_rep=0.25, tissue=Tissue.WHOLE_BODY),
 )
 
 HIGH_KNEES = DrillSpec(
@@ -351,6 +366,7 @@ HIGH_KNEES = DrillSpec(
         w_endurance=0.15,
         min_reps=20,
     ),
+    load=LoadSpec(load_per_rep=0.20, tissue=Tissue.LOWER_BODY),
 )
 
 BURPEE = DrillSpec(
@@ -381,6 +397,7 @@ BURPEE = DrillSpec(
         w_endurance=0.30,
         min_reps=5,
     ),
+    load=LoadSpec(load_per_rep=2.5, tissue=Tissue.WHOLE_BODY),
 )
 
 SQUAT_JUMP = DrillSpec(
@@ -414,6 +431,12 @@ SQUAT_JUMP = DrillSpec(
         w_depth=0.35,
         w_tempo=0.10,
         w_endurance=0.30,
+    ),
+    load=LoadSpec(
+        # Plyometrics are the highest impact-per-rep work here, and the drill
+        # most worth capping when an athlete is already in a heavy week.
+        load_per_rep=2.2,
+        tissue=Tissue.LOWER_BODY,
     ),
 )
 
@@ -454,6 +477,7 @@ LATERAL_BOUND = DrillSpec(
         w_endurance=0.20,
         min_reps=12,
     ),
+    load=LoadSpec(load_per_rep=1.4, tissue=Tissue.LOWER_BODY),
 )
 
 PLANK = DrillSpec(
@@ -490,6 +514,7 @@ PLANK = DrillSpec(
         # range of motion, so target_rom is nominal.
         target_rom=1.0,
     ),
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=6.0, tissue=Tissue.CORE),
 )
 
 

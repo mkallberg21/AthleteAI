@@ -39,6 +39,7 @@ class Kind:
     BADGE = "badge"
     COACH_MESSAGE = "coach_message"
     INACTIVE = "inactive"
+    REST_DAY = "rest_day"
 
 
 def _now() -> datetime:
@@ -446,10 +447,47 @@ def notify_inactive(conn: sqlite3.Connection, quiet_days: int = 7, today: date |
     return made
 
 
+def generate_rest_nudges(conn: sqlite3.Connection, today: date | None = None) -> int:
+    """Tell athletes carrying high load to take a day, and that it is free.
+
+    This is the counterweight to everything else in the app. Streaks, XP, and
+    leaderboards all push training every day; without this the athlete with the
+    most to protect is the one most pressured to train through fatigue.
+    """
+    from .store import Store
+
+    today = today or _now().date()
+    store = Store(conn)
+    made = 0
+    for row in conn.execute(
+        "SELECT id FROM users WHERE role = 'athlete' AND active = 1"
+    ).fetchall():
+        state = store.load_state(row["id"])
+        if not (state.rest_recommended or state.zone == "high"):
+            continue
+
+        body = (
+            f"{state.consecutive_days} days straight. Take today off -- "
+            "it still counts toward your streak."
+        )
+        if enqueue(
+            conn,
+            row["id"],
+            Kind.REST_DAY,
+            "Time for a recovery day",
+            body,
+            link="/app/capture.html",
+            dedupe_key=f"{Kind.REST_DAY}:{today.isoformat()}",
+        ):
+            made += 1
+    return made
+
+
 def run_all(conn: sqlite3.Connection, today: date | None = None) -> dict[str, int]:
     """Every scheduled generator. Safe to run repeatedly."""
     return {
         "streak_warnings": generate_streak_warnings(conn, today),
         "assignment_reminders": generate_assignment_reminders(conn, today),
+        "rest_nudges": generate_rest_nudges(conn, today),
         "inactive": notify_inactive(conn, today=today),
     }

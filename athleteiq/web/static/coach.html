@@ -46,6 +46,16 @@
     <div id="attention"></div>
   </div>
 
+  <div class="card hidden" id="load-card">
+    <h2>Workload watch</h2>
+    <p class="small muted">
+      Athletes whose training has jumped sharply or who have not taken a rest
+      day. These are prompts to check in, not diagnoses &mdash; and this only
+      counts work logged here, so team practices are on top.
+    </p>
+    <div id="load-watch"></div>
+  </div>
+
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h2 style="margin:0">Assignments</h2>
@@ -121,7 +131,8 @@
       <table>
         <thead><tr>
           <th>Athlete</th><th class="num">XP</th><th class="num">Sessions</th>
-          <th class="num">Off-hand</th><th class="num">Form</th><th>Last active</th><th>Status</th>
+          <th class="num">Off-hand</th><th class="num">Form</th><th class="num">Load</th>
+          <th>Last active</th><th>Status</th>
         </tr></thead>
         <tbody id="roster"></tbody>
       </table>
@@ -200,6 +211,8 @@ const FLAG_LABELS = {
   no_sessions_this_week: ['warn', 'nothing this week'],
   neglecting_offhand: ['warn', 'off-hand neglected'],
   form_slipping: ['bad', 'form slipping'],
+  load_spike: ['bad', 'load spike'],
+  needs_rest: ['warn', 'needs a rest day'],
 };
 
 function showError(message) {
@@ -289,7 +302,35 @@ async function loadAll() {
   renderRoster(rosterData.athletes);
   renderStandings(standingsData.teams);
   renderReview(reviewData.sessions);
+  renderLoadWatch(rosterData.athletes);
   await loadAssignments();
+}
+
+function renderLoadWatch(athletes) {
+  const flagged = athletes
+    .filter((a) => a.load && a.load.needs_attention)
+    .sort((a, b) => (b.load.acwr || 0) - (a.load.acwr || 0));
+
+  $('load-card').classList.toggle('hidden', flagged.length === 0);
+  $('load-watch').innerHTML = flagged.map((a) => {
+    const items = a.load.advisories
+      .filter((x) => x.level !== 'info')
+      .map((x) => `<div class="advisory ${esc(x.level)}">
+          <span class="dotmark"></span>
+          <div>${esc(x.message)}${x.evidence ? `<em>${esc(x.evidence)}</em>` : ''}</div>
+        </div>`).join('');
+    return `<div style="padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <b>${esc(a.display_name)}</b>
+        <span class="small muted">
+          ${a.load.acwr === null ? '' : `ratio ${a.load.acwr.toFixed(2)} &middot; `}
+          ${a.load.consecutive_days}d straight
+          ${a.load.weekly_throws ? ` &middot; ${a.load.weekly_throws} throws` : ''}
+        </span>
+      </div>
+      ${items}
+    </div>`;
+  }).join('');
 }
 
 function renderSummary(athletes) {
@@ -346,6 +387,10 @@ function renderRoster(athletes) {
       <td class="num">${a.quality === null ? '&mdash;'
         : `<b style="color:${a.quality >= 80 ? 'var(--accent)'
           : a.quality >= 60 ? 'var(--warn)' : 'var(--danger)'}">${a.quality}</b>`}</td>
+      <td class="num">${!a.load || a.load.acwr === null ? '&mdash;'
+        : `<b style="color:${a.load.zone === 'high' ? 'var(--danger)'
+          : a.load.zone === 'elevated' ? 'var(--warn)' : 'var(--accent)'}"
+          title="${esc(a.load.zone_label)}">${a.load.acwr.toFixed(2)}</b>`}</td>
       <td>${fmtDate(a.last_session)}</td>
       <td>${status}${review}</td>
     </tr>`;
