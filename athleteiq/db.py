@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_teams_org ON teams(org_id);
 CREATE TABLE IF NOT EXISTS users (
     id               INTEGER PRIMARY KEY,
     org_id           INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    role             TEXT NOT NULL CHECK (role IN ('athlete','coach','director')),
+    role             TEXT NOT NULL CHECK (role IN ('athlete','coach','director','guardian')),
     display_name     TEXT NOT NULL,
     email            TEXT,
     birth_year       INTEGER,
@@ -229,6 +229,62 @@ CREATE TABLE IF NOT EXISTS recovery_days (
 );
 CREATE INDEX IF NOT EXISTS idx_recovery_athlete ON recovery_days(athlete_id, day);
 
+-- Who is responsible for a minor. Many-to-many on purpose: a child can have
+-- two parents, and a parent can have three kids in the program.
+CREATE TABLE IF NOT EXISTS guardians (
+    guardian_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    athlete_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    relationship  TEXT NOT NULL DEFAULT 'parent',
+    linked_at     TEXT NOT NULL,
+    PRIMARY KEY (guardian_id, athlete_id)
+);
+CREATE INDEX IF NOT EXISTS idx_guardians_athlete ON guardians(athlete_id);
+
+-- Single-use, expiring invitations. A code that reaches the wrong person grants
+-- access to a child's data, so these are short-lived, revocable, and stored
+-- hashed like any other credential.
+CREATE TABLE IF NOT EXISTS guardian_invites (
+    id          INTEGER PRIMARY KEY,
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash   TEXT NOT NULL UNIQUE,
+    email       TEXT,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    redeemed_at TEXT,
+    redeemed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    revoked_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_invites_athlete ON guardian_invites(athlete_id);
+
+-- Granular, revocable consent. Replaces a single boolean a coach ticked, which
+-- was never a consent record -- it recorded that an adult clicked something,
+-- not who agreed to what, or when, or whether they later changed their mind.
+CREATE TABLE IF NOT EXISTS consents (
+    id           INTEGER PRIMARY KEY,
+    athlete_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    guardian_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    scope        TEXT NOT NULL,
+    granted      INTEGER NOT NULL DEFAULT 1,
+    granted_at   TEXT NOT NULL,
+    -- What they actually agreed to, so a later policy change cannot be applied
+    -- retroactively to a consent given under different terms.
+    policy_version TEXT NOT NULL DEFAULT '1',
+    method       TEXT NOT NULL DEFAULT 'guardian_portal'
+);
+CREATE INDEX IF NOT EXISTS idx_consents_athlete ON consents(athlete_id, scope);
+
+-- Deletion leaves the data gone but the fact recorded, so a program can show
+-- an auditor that a request was honoured without retaining what was deleted.
+CREATE TABLE IF NOT EXISTS erasure_log (
+    id            INTEGER PRIMARY KEY,
+    athlete_ref   TEXT NOT NULL,
+    requested_by  TEXT NOT NULL,
+    scope         TEXT NOT NULL,
+    rows_removed  INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -266,8 +322,91 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     return conn
 
 
+# Columns added to existing tables after their initial release. `CREATE TABLE
+# IF NOT EXISTS` silently skips these on a database that already exists, so
+# they have to be applied explicitly or an upgraded deployment reads a schema it
+# does not have.
+ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "sessions": [
+        ("completed_at", "TEXT"),
+        ("result_json", "TEXT"),
+        ("reserved", "INTEGER NOT NULL DEFAULT 0"),
+        ("quality_score", "INTEGER"),
+        ("quality_json", "TEXT"),
+    ],
+    "rep_events": [
+        ("peak", "REAL"),
+        ("rom", "REAL"),
+        ("cycle_ms", "INTEGER"),
+    ],
+}
+
+
+def _existing_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    for table, columns in ADDED_COLUMNS.items():
+        if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone():
+            continue
+        present = _existing_columns(conn, table)
+        for name, decl in columns:
+            if name not in present:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
+def _widen_user_roles(conn: sqlite3.Connection) -> None:
+    """Allow the 'guardian' role on a database created before it existed.
+
+    SQLite cannot alter a CHECK constraint, so this is the documented
+    rebuild-and-rename dance. Guarded by an actual probe rather than a version
+    number, so it is safe to run against any vintage of the schema.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+    ).fetchone()
+    if row is None or "guardian" in (row[0] or ""):
+        return
+
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        columns = ", ".join(sorted(_existing_columns(conn, "users")))
+        conn.executescript(
+            SCHEMA[SCHEMA.index("CREATE TABLE IF NOT EXISTS users ("):]
+            .split(");", 1)[0]
+            .replace("CREATE TABLE IF NOT EXISTS users (", "CREATE TABLE users_migrated (")
+            + ");"
+        )
+        conn.execute(f"INSERT INTO users_migrated ({columns}) SELECT {columns} FROM users")
+        conn.execute("DROP TABLE users")
+        conn.execute("ALTER TABLE users_migrated RENAME TO users")
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+
+def migrate(conn: sqlite3.Connection) -> int:
+    """Bring an existing database up to the current schema.
+
+    Idempotent and probe-driven rather than version-driven, because the version
+    counter was being bumped for several releases before this runner existed
+    and cannot be trusted to describe what is actually on disk.
+    """
+    before = conn.execute(
+        "SELECT value FROM meta WHERE key = 'schema_version'"
+    ).fetchone()
+    _widen_user_roles(conn)
+    _add_missing_columns(conn)
+    conn.commit()
+    return int(before[0]) if before else 0
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    migrate(conn)
     conn.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)",
         (str(SCHEMA_VERSION),),

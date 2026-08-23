@@ -17,8 +17,10 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
+from . import guardians as guardians_mod
 from . import notifications as notify
 from .assignments import AssignmentError
+from .guardians import GuardianError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
 from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError
@@ -70,6 +72,46 @@ async def _store_error_handler(_request, exc: StoreError) -> JSONResponse:
 @app.exception_handler(AssignmentError)
 async def _assignment_error_handler(_request, exc: AssignmentError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(GuardianError)
+async def _guardian_error_handler(_request, exc: GuardianError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+def _guardian(principal: Principal = Depends(_principal)) -> Principal:
+    if principal.role != "guardian":
+        raise HTTPException(status_code=403, detail="guardian account required")
+    return principal
+
+
+def _athlete(principal: Principal = Depends(_principal)) -> Principal:
+    """Endpoints that record or report an athlete's own training.
+
+    Guardians and coaches are authenticated users, but they are not athletes:
+    without this a parent account could log sessions, earn XP, and appear on a
+    leaderboard alongside the children.
+    """
+    if principal.role != "athlete":
+        raise HTTPException(status_code=403, detail="athlete account required")
+    return principal
+
+
+def _competitor(principal: Principal = Depends(_principal)) -> Principal:
+    """Who may see a leaderboard.
+
+    Athletes and their coaches, not guardians. A ranked list of other people's
+    children, for adults to scroll, is the mechanism behind the worst behaviour
+    in youth sports -- so the parent portal has no leaderboard, and neither does
+    the API for a parent's token.
+    """
+    if principal.role == "guardian":
+        raise HTTPException(
+            status_code=403,
+            detail="Leaderboards are for athletes and coaches. Your portal shows "
+                   "your own athlete's progress.",
+        )
+    return principal
 
 
 # ----------------------------------------------------------------------
@@ -191,7 +233,7 @@ class StartSessionRequest(BaseModel):
 @app.post("/api/sessions/start", status_code=201)
 def start_session(
     body: StartSessionRequest,
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     return store.start_session(principal.id, body.drill_key)
@@ -228,7 +270,7 @@ class SubmitSessionRequest(BaseModel):
 @app.post("/api/sessions/submit")
 def submit_session(
     body: SubmitSessionRequest,
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     """Submit a finished session. Counts only -- no imagery is accepted."""
@@ -283,7 +325,7 @@ class ReserveRequest(BaseModel):
 @app.post("/api/sessions/reserve", status_code=201)
 def reserve_sessions(
     body: ReserveRequest,
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     """Hand out session slots the athlete can spend with no connection."""
@@ -383,7 +425,7 @@ def deactivate_assignment(
 @app.get("/api/assignments")
 def my_assignments(
     include_closed: bool = False,
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     """The athlete's own assignments with live progress."""
@@ -485,7 +527,7 @@ def get_leaderboard(
     window: Literal["week", "month", "season", "all"] = "week",
     team_id: int | None = None,
     limit: int = Query(default=50, ge=1, le=200),
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_competitor),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     rows = leaderboard(
@@ -526,7 +568,7 @@ def session_quality(
 
 @app.post("/api/recovery", status_code=201)
 def log_recovery(
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     """Log today as a deliberate rest day.
@@ -542,7 +584,7 @@ def log_recovery(
 
 @app.get("/api/load")
 def my_load(
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     return store.load_state(principal.id).to_dict()
@@ -583,10 +625,175 @@ def team_load(
     return {"athletes": out}
 
 
+# ----------------------------------------------------------------------
+# Guardians
+# ----------------------------------------------------------------------
+
+class InviteRequest(BaseModel):
+    athlete_id: int
+    email: str | None = Field(default=None, max_length=200)
+
+
+@app.post("/api/coach/guardian-invites", status_code=201)
+def create_guardian_invite(
+    body: InviteRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Issue an invite code for a guardian. Shown once, stored hashed."""
+    owner = store.conn.execute(
+        "SELECT org_id FROM users WHERE id = ?", (body.athlete_id,)
+    ).fetchone()
+    if owner is None:
+        raise HTTPException(status_code=404, detail="unknown athlete")
+    if owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=403, detail="athlete belongs to another program")
+    return guardians_mod.create_invite(
+        store.conn, body.athlete_id, principal.id, body.email
+    )
+
+
+@app.get("/api/coach/guardian-invites")
+def list_guardian_invites(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    rows = store.conn.execute(
+        "SELECT i.id, i.athlete_id, u.display_name, i.email, i.created_at, "
+        "       i.expires_at, i.redeemed_at, i.revoked_at "
+        "FROM guardian_invites i JOIN users u ON u.id = i.athlete_id "
+        "WHERE u.org_id = ? ORDER BY i.created_at DESC LIMIT 100",
+        (principal.org_id,),
+    ).fetchall()
+    return {"invites": [dict(r) for r in rows]}
+
+
+@app.delete("/api/coach/guardian-invites/{invite_id}")
+def revoke_guardian_invite(
+    invite_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    owner = store.conn.execute(
+        "SELECT u.org_id FROM guardian_invites i JOIN users u ON u.id = i.athlete_id "
+        "WHERE i.id = ?",
+        (invite_id,),
+    ).fetchone()
+    if owner is None:
+        raise HTTPException(status_code=404, detail="unknown invite")
+    if owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=403, detail="invite belongs to another program")
+    guardians_mod.revoke_invite(store.conn, invite_id)
+    return {"invite_id": invite_id, "revoked": True}
+
+
+class RedeemRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=40)
+    display_name: str = Field(min_length=1, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+    relationship: str = Field(default="parent", max_length=40)
+
+
+@app.post("/api/guardians/redeem", status_code=201)
+def redeem_guardian_invite(
+    body: RedeemRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Create a guardian account from an invite code. Unauthenticated by design."""
+    return guardians_mod.redeem_invite(
+        store.conn, body.code, body.display_name, body.email, body.relationship
+    )
+
+
+class LinkRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=40)
+    relationship: str = Field(default="parent", max_length=40)
+
+
+@app.post("/api/guardians/link")
+def link_another_athlete(
+    body: LinkRequest,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Attach a second child to an existing guardian account."""
+    athlete_id = guardians_mod.link_existing(
+        store.conn, body.code, principal.id, body.relationship
+    )
+    return {"athlete_id": athlete_id, "linked": True}
+
+
+@app.get("/api/guardians/me")
+def guardian_home(
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {
+        "display_name": principal.display_name,
+        **store.guardian_summary(principal.id),
+    }
+
+
+class ConsentRequest(BaseModel):
+    athlete_id: int
+    scope: str = Field(max_length=60)
+    granted: bool
+
+
+@app.post("/api/guardians/consent")
+def set_consent(
+    body: ConsentRequest,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    guardians_mod.require_guardianship(store.conn, principal.id, body.athlete_id)
+    result = guardians_mod.set_consent(
+        store.conn, body.athlete_id, principal.id, body.scope, body.granted
+    )
+    purged = 0
+    if body.scope == guardians_mod.Scope.DATA_RETENTION and not body.granted:
+        # Applied now, not at the next scheduled prune.
+        purged = store.purge_rep_detail(body.athlete_id)
+    return {**result, "rep_rows_removed": purged}
+
+
+@app.get("/api/guardians/export/{athlete_id}")
+def export_athlete_data(
+    athlete_id: int,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Everything held about one athlete."""
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    return guardians_mod.export_athlete(store.conn, athlete_id)
+
+
+class EraseRequest(BaseModel):
+    athlete_id: int
+    scope: Literal["training_data", "all"] = "training_data"
+    # Typed to guard against a misrouted click deleting a child's history.
+    confirm: str = Field(max_length=40)
+
+
+@app.post("/api/guardians/erase")
+def erase_athlete_data(
+    body: EraseRequest,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    guardians_mod.require_guardianship(store.conn, principal.id, body.athlete_id)
+    if body.confirm.strip().upper() != "DELETE":
+        raise HTTPException(
+            status_code=400, detail="type DELETE to confirm this cannot be undone"
+        )
+    return guardians_mod.erase_athlete(
+        store.conn, body.athlete_id, body.scope, requested_by="guardian"
+    )
+
+
 @app.get("/api/standings")
 def get_standings(
     window: Literal["week", "month", "season", "all"] = "week",
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_competitor),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     return {"window": window, "teams": team_standings(store.conn, principal.org_id, window)}

@@ -31,6 +31,22 @@
     <button id="go">Continue</button>
   </div>
 
+  <div class="card">
+    <h2>Parent or guardian?</h2>
+    <p class="small muted">
+      If a coach sent you an invite code, set up your account here. You will be
+      able to see your athlete's training and choose what they share.
+    </p>
+    <label for="invite">Invite code</label>
+    <input id="invite" placeholder="ABCD-EFGH-JKLM" autocomplete="off">
+    <label for="pname">Your name</label>
+    <input id="pname" placeholder="Dana Pierce" autocomplete="name">
+    <label for="pemail">Email (optional)</label>
+    <input id="pemail" type="email" placeholder="you@example.com" autocomplete="email">
+    <div id="perr" class="err hidden"></div>
+    <button class="secondary" id="redeem">Create parent account</button>
+  </div>
+
   <p class="small muted" style="text-align:center">
     Coaches and directors sign in with the same code and land on the dashboard.
   </p>
@@ -57,8 +73,9 @@ async function signIn() {
   setToken(token);
   try {
     const me = await api('/api/me');
-    // Coaches and athletes share a sign-in but want different screens.
-    location.href = me.role === 'athlete' ? 'capture.html' : 'coach.html';
+    // One sign-in, three destinations.
+    const home = { athlete: 'capture.html', guardian: 'parent.html' };
+    location.href = home[me.role] || 'coach.html';
   } catch (e) {
     setToken(null);
     showError(e.message);
@@ -68,6 +85,40 @@ async function signIn() {
 
 goBtn.addEventListener('click', signIn);
 tokenInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+
+const redeemBtn = document.getElementById('redeem');
+const perr = document.getElementById('perr');
+
+redeemBtn.addEventListener('click', async () => {
+  const code = document.getElementById('invite').value.trim();
+  const name = document.getElementById('pname').value.trim();
+  if (!code || !name) {
+    perr.textContent = 'Enter the invite code and your name.';
+    perr.classList.remove('hidden');
+    return;
+  }
+  redeemBtn.disabled = true;
+  perr.classList.add('hidden');
+  try {
+    const res = await fetch('/api/guardians/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        display_name: name,
+        email: document.getElementById('pemail').value.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not use that code.');
+    setToken(data.token);
+    location.href = 'parent.html';
+  } catch (e) {
+    perr.textContent = e.message;
+    perr.classList.remove('hidden');
+    redeemBtn.disabled = false;
+  }
+});
 </script>
 </body>
 </html>

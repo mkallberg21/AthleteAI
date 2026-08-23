@@ -16,6 +16,8 @@ from typing import Any
 from .config import CONFIG
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
+from . import assignments as assignments_mod
+from . import guardians as guardians_mod
 from . import load as load_mod
 from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
@@ -197,10 +199,33 @@ class Store:
     # Sessions
     # ------------------------------------------------------------------
 
+    def _require_participation_consent(self, athlete_id: int) -> None:
+        """Block recording when a guardian has withdrawn consent.
+
+        Only enforced once a guardian is actually linked. Athletes onboarded
+        before parent accounts existed have no consent rows, and defaulting
+        those to "denied" would lock out every existing user on deploy -- so
+        enforcement begins when a parent joins, which is also the point at
+        which their decision is the one that counts.
+        """
+        row = self.conn.execute(
+            "SELECT 1 FROM guardians WHERE athlete_id = ? LIMIT 1", (athlete_id,)
+        ).fetchone()
+        if row is None:
+            return
+        if not guardians_mod.has_consent(
+            self.conn, athlete_id, guardians_mod.Scope.PARTICIPATION
+        ):
+            raise StoreError(
+                "Training is paused for this account until a parent or guardian "
+                "gives consent in their AthleteIQ portal."
+            )
+
     def start_session(self, athlete_id: int, drill_key: str) -> dict[str, Any]:
         """Open a session and hand back the nonce required to submit it."""
         if drill_key not in DRILLS_BY_KEY:
             raise StoreError(f"unknown drill: {drill_key!r}")
+        self._require_participation_consent(athlete_id)
         nonce = new_token()
         with transaction(self.conn) as c:
             cur = c.execute(
@@ -222,6 +247,7 @@ class Store:
         """
         if drill_key not in DRILLS_BY_KEY:
             raise StoreError(f"unknown drill: {drill_key!r}")
+        self._require_participation_consent(athlete_id)
         count = max(1, min(int(count), 10))
 
         issued = []
@@ -776,6 +802,88 @@ class Store:
                 for r in rows[:window]
             ],
         }
+
+    # ------------------------------------------------------------------
+    # Guardian view
+    # ------------------------------------------------------------------
+
+    def guardian_summary(self, guardian_id: int) -> dict[str, Any]:
+        """What a parent sees: their own children, and nothing else.
+
+        Deliberately excludes two things the athlete and coach views carry.
+        There is no leaderboard, because a ranked list of other people's
+        children for adults to scroll is the mechanism behind the worst
+        behaviour in youth sports. And there is no integrity or review status,
+        because "your child's session was held for review" reads as an
+        accusation and is a coach's conversation to have.
+        """
+        athletes = []
+        for row in guardians_mod.athletes_for(self.conn, guardian_id):
+            athlete_id = row["id"]
+            profile = self.athlete_profile(athlete_id)
+            state = self.load_state(athlete_id)
+
+            week_start = (_now().date() - timedelta(days=6)).isoformat()
+            week = self.conn.execute(
+                "SELECT COUNT(*) AS sessions, COALESCE(SUM(reps_total),0) AS reps "
+                "FROM sessions WHERE athlete_id = ? AND status = 'counted' "
+                "AND date(COALESCE(completed_at, submitted_at)) >= ?",
+                (athlete_id, week_start),
+            ).fetchone()
+            week_xp = self.conn.execute(
+                "SELECT COALESCE(SUM(amount),0) AS t FROM xp_ledger "
+                "WHERE athlete_id = ? AND day >= ?",
+                (athlete_id, week_start),
+            ).fetchone()["t"]
+
+            athletes.append({
+                "athlete_id": athlete_id,
+                "display_name": row["display_name"],
+                "relationship": row["relationship"],
+                "level": profile["level"],
+                "streak": profile["streak"],
+                "week_sessions": int(week["sessions"]),
+                "week_reps": int(week["reps"]),
+                "week_xp": int(week_xp),
+                "quality": profile["quality"],
+                # Only the advisories that are actually about wellbeing. A
+                # parent does not need a monotony note; they do need to know if
+                # their child has not rested in two weeks.
+                "load_advisories": [
+                    a.to_dict() for a in state.advisories if a.level != "info"
+                ],
+                "rest_recommended": state.rest_recommended,
+                "consecutive_days": state.consecutive_days,
+                "badges": profile["badges"][-4:],
+                "assignments": [
+                    {
+                        "title": a["title"],
+                        "drill_name": a["drill_name"],
+                        "due_on": a["due_on"],
+                        "days_remaining": a["days_remaining"],
+                        "complete": a["progress"]["complete"],
+                    }
+                    for a in assignments_mod.for_athlete(self.conn, athlete_id)
+                ],
+                "consents": guardians_mod.consent_detail(self.conn, athlete_id),
+            })
+
+        return {"athletes": athletes}
+
+    def purge_rep_detail(self, athlete_id: int) -> int:
+        """Drop granular rep timings for one athlete.
+
+        Called when a guardian withdraws retention consent. Applied immediately
+        rather than at the next scheduled prune, because a consent decision that
+        takes effect tomorrow is not really a decision.
+        """
+        with transaction(self.conn) as c:
+            cur = c.execute(
+                "DELETE FROM rep_events WHERE session_id IN "
+                "(SELECT id FROM sessions WHERE athlete_id = ?)",
+                (athlete_id,),
+            )
+        return cur.rowcount
 
     # ------------------------------------------------------------------
     # Maintenance

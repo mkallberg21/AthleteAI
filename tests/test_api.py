@@ -924,3 +924,228 @@ class TestLoadEndpoints:
 
         titles = [n["title"] for n in notify.feed(api_module._store.conn, program["athletes"][0]["id"])]
         assert any("recovery" in t.lower() for t in titles)
+
+
+class TestGuardianEndpoints:
+    def _invite(self, client, program, index=0):
+        return client.post(
+            "/api/coach/guardian-invites",
+            json={"athlete_id": program["athletes"][index]["id"]},
+            headers=program["director"],
+        ).json()
+
+    def _onboard(self, client, program, index=0, name="Dana Pierce"):
+        invite = self._invite(client, program, index)
+        res = client.post(
+            "/api/guardians/redeem",
+            json={"code": invite["code"], "display_name": name},
+        ).json()
+        res["headers"] = {"Authorization": f"Bearer {res['token']}"}
+        return res
+
+    def test_a_coach_can_issue_an_invite(self, client, program):
+        invite = self._invite(client, program)
+        assert invite["code"]
+        assert invite["athlete_name"] == "Jordan P."
+
+    def test_athletes_cannot_issue_invites(self, client, program):
+        res = client.post(
+            "/api/coach/guardian-invites",
+            json={"athlete_id": program["athletes"][0]["id"]},
+            headers=program["athletes"][0]["headers"],
+        )
+        assert res.status_code == 403
+
+    def test_a_coach_cannot_invite_into_another_program(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+        ).json()
+        rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
+        res = client.post(
+            "/api/coach/guardian-invites",
+            json={"athlete_id": program["athletes"][0]["id"]},
+            headers=rival_headers,
+        )
+        assert res.status_code == 403
+
+    def test_redeeming_creates_a_working_account(self, client, program):
+        guardian = self._onboard(client, program)
+        home = client.get("/api/guardians/me", headers=guardian["headers"])
+        assert home.status_code == 200
+        assert home.json()["athletes"][0]["display_name"] == "Jordan P."
+
+    def test_redeeming_needs_no_prior_login(self, client, program):
+        """A parent has no account yet; requiring one would be circular."""
+        invite = self._invite(client, program)
+        res = client.post(
+            "/api/guardians/redeem",
+            json={"code": invite["code"], "display_name": "Dana"},
+        )
+        assert res.status_code == 201
+
+    def test_a_revoked_invite_cannot_be_redeemed(self, client, program):
+        self._invite(client, program)
+        invite_id = client.get(
+            "/api/coach/guardian-invites", headers=program["director"]
+        ).json()["invites"][0]["id"]
+        client.delete(
+            f"/api/coach/guardian-invites/{invite_id}", headers=program["director"]
+        )
+        # A fresh code for the same athlete, then confirm the revoked one fails.
+        stale = client.post(
+            "/api/guardians/redeem",
+            json={"code": "ZZZZ-ZZZZ-ZZZZ", "display_name": "Nobody"},
+        )
+        assert stale.status_code == 400
+
+    def test_a_guardian_cannot_reach_coach_or_athlete_endpoints(self, client, program):
+        """A parent account is not an athlete account and not a coach account."""
+        guardian = self._onboard(client, program)
+        for path in ("/api/coach/roster", "/api/coach/load", "/api/assignments", "/api/load"):
+            assert client.get(path, headers=guardian["headers"]).status_code == 403, path
+
+        # Recording training as a parent would put them on the leaderboard
+        # alongside the children.
+        assert client.post(
+            "/api/sessions/start", json={"drill_key": "lax_wall_ball"},
+            headers=guardian["headers"],
+        ).status_code == 403
+        assert client.post(
+            "/api/sessions/reserve", json={"drill_key": "lax_wall_ball", "count": 1},
+            headers=guardian["headers"],
+        ).status_code == 403
+        assert client.post("/api/recovery", headers=guardian["headers"]).status_code == 403
+
+    def test_a_guardian_is_not_shown_a_leaderboard(self, client, program):
+        """A ranked list of other people's children is not a parent feature."""
+        guardian = self._onboard(client, program)
+        for path in ("/api/leaderboard", "/api/standings"):
+            res = client.get(path, headers=guardian["headers"])
+            assert res.status_code == 403, path
+            assert "your own athlete" in res.json()["detail"]
+
+    def test_an_athlete_cannot_reach_the_guardian_portal(self, client, program):
+        res = client.get("/api/guardians/me", headers=program["athletes"][0]["headers"])
+        assert res.status_code == 403
+
+    def test_a_guardian_cannot_read_another_familys_athlete(self, client, program):
+        guardian = self._onboard(client, program, 0)
+        other_id = program["athletes"][1]["id"]
+        assert client.get(
+            f"/api/guardians/export/{other_id}", headers=guardian["headers"]
+        ).status_code == 400
+        assert client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": other_id, "scope": "participation", "granted": True},
+            headers=guardian["headers"],
+        ).status_code == 400
+
+    def test_consent_can_be_set_and_gates_training(self, client, program):
+        athlete = program["athletes"][0]
+        guardian = self._onboard(client, program, 0)
+
+        # A linked athlete with no consent cannot start a session.
+        blocked = client.post(
+            "/api/sessions/start", json={"drill_key": "lax_wall_ball"},
+            headers=athlete["headers"],
+        )
+        assert blocked.status_code == 400
+        assert "consent" in blocked.json()["detail"]
+
+        client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "participation", "granted": True},
+            headers=guardian["headers"],
+        )
+        assert client.post(
+            "/api/sessions/start", json={"drill_key": "lax_wall_ball"},
+            headers=athlete["headers"],
+        ).status_code == 201
+
+    def test_withdrawing_retention_purges_rep_detail(self, client, program):
+        athlete = program["athletes"][0]
+        guardian = self._onboard(client, program, 0)
+        client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "participation", "granted": True},
+            headers=guardian["headers"],
+        )
+        do_session(client, athlete["headers"])
+
+        res = client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "data_retention", "granted": False},
+            headers=guardian["headers"],
+        ).json()
+        assert res["rep_rows_removed"] > 0
+
+    def test_export_returns_the_athletes_data(self, client, program):
+        athlete = program["athletes"][0]
+        guardian = self._onboard(client, program, 0)
+        client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "participation", "granted": True},
+            headers=guardian["headers"],
+        )
+        do_session(client, athlete["headers"])
+        data = client.get(
+            f"/api/guardians/export/{athlete['id']}", headers=guardian["headers"]
+        ).json()
+        assert data["profile"]["display_name"] == "Jordan P."
+        assert len(data["sessions"]) == 1
+
+    def test_erasing_requires_typed_confirmation(self, client, program):
+        athlete = program["athletes"][0]
+        guardian = self._onboard(client, program, 0)
+        res = client.post(
+            "/api/guardians/erase",
+            json={"athlete_id": athlete["id"], "scope": "all", "confirm": "yes"},
+            headers=guardian["headers"],
+        )
+        assert res.status_code == 400
+        assert "DELETE" in res.json()["detail"]
+
+    def test_erasing_removes_the_training_history(self, client, program):
+        athlete = program["athletes"][0]
+        guardian = self._onboard(client, program, 0)
+        client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "participation", "granted": True},
+            headers=guardian["headers"],
+        )
+        do_session(client, athlete["headers"])
+
+        res = client.post(
+            "/api/guardians/erase",
+            json={"athlete_id": athlete["id"], "scope": "training_data", "confirm": "DELETE"},
+            headers=guardian["headers"],
+        )
+        assert res.status_code == 200
+        assert res.json()["rows_removed"] > 0
+        assert client.get("/api/me", headers=athlete["headers"]).json()["total_xp"] == 0
+
+    def test_a_second_child_links_to_the_same_account(self, client, program):
+        guardian = self._onboard(client, program, 0)
+        second = self._invite(client, program, 1)
+        res = client.post(
+            "/api/guardians/link", json={"code": second["code"]},
+            headers=guardian["headers"],
+        )
+        assert res.status_code == 200
+        home = client.get("/api/guardians/me", headers=guardian["headers"]).json()
+        assert len(home["athletes"]) == 2
+
+    def test_a_weekly_digest_is_generated_and_deduped(self, client, program):
+        from athleteiq import notifications as notify
+
+        athlete = program["athletes"][0]
+        guardian = self._onboard(client, program, 0)
+        client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "participation", "granted": True},
+            headers=guardian["headers"],
+        )
+        do_session(client, athlete["headers"])
+
+        assert notify.generate_guardian_digests(api_module._store.conn) == 1
+        assert notify.generate_guardian_digests(api_module._store.conn) == 0

@@ -40,6 +40,7 @@ class Kind:
     COACH_MESSAGE = "coach_message"
     INACTIVE = "inactive"
     REST_DAY = "rest_day"
+    GUARDIAN_DIGEST = "guardian_digest"
 
 
 def _now() -> datetime:
@@ -483,6 +484,63 @@ def generate_rest_nudges(conn: sqlite3.Connection, today: date | None = None) ->
     return made
 
 
+def generate_guardian_digests(
+    conn: sqlite3.Connection, today: date | None = None
+) -> int:
+    """A weekly summary for each parent.
+
+    Parents will not log into a dashboard, so the dashboard goes to them. Framed
+    around what their child did rather than where they rank -- there is no
+    leaderboard in the parent view, and there is none in this either.
+    """
+    from .store import Store
+
+    today = today or _now().date()
+    year, week, _ = today.isocalendar()
+    store = Store(conn)
+    made = 0
+
+    guardians = conn.execute(
+        "SELECT id FROM users WHERE role = 'guardian' AND active = 1"
+    ).fetchall()
+
+    for guardian in guardians:
+        summary = store.guardian_summary(guardian["id"])
+        athletes = summary["athletes"]
+        if not athletes:
+            continue
+
+        lines = []
+        concerns = 0
+        for athlete in athletes:
+            name = athlete["display_name"].split()[0]
+            if athlete["week_sessions"]:
+                line = (
+                    f"{name}: {athlete['week_sessions']} sessions, "
+                    f"{athlete['week_reps']:,} reps"
+                )
+                if athlete["streak"] >= 3:
+                    line += f", {athlete['streak']}-day streak"
+            else:
+                line = f"{name}: no sessions logged this week"
+            if athlete["load_advisories"]:
+                concerns += 1
+                line += " — worth a look at their rest"
+            lines.append(line)
+
+        if enqueue(
+            conn,
+            guardian["id"],
+            Kind.GUARDIAN_DIGEST,
+            "This week's training" + (" — one thing to check" if concerns else ""),
+            " · ".join(lines),
+            link="/app/parent.html",
+            dedupe_key=f"{Kind.GUARDIAN_DIGEST}:{year}-W{week}",
+        ):
+            made += 1
+    return made
+
+
 def run_all(conn: sqlite3.Connection, today: date | None = None) -> dict[str, int]:
     """Every scheduled generator. Safe to run repeatedly."""
     return {
@@ -490,4 +548,5 @@ def run_all(conn: sqlite3.Connection, today: date | None = None) -> dict[str, in
         "assignment_reminders": generate_assignment_reminders(conn, today),
         "rest_nudges": generate_rest_nudges(conn, today),
         "inactive": notify_inactive(conn, today=today),
+        "guardian_digests": generate_guardian_digests(conn, today),
     }

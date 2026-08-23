@@ -132,7 +132,7 @@
         <thead><tr>
           <th>Athlete</th><th class="num">XP</th><th class="num">Sessions</th>
           <th class="num">Off-hand</th><th class="num">Form</th><th class="num">Load</th>
-          <th>Last active</th><th>Status</th>
+          <th>Last active</th><th>Status</th><th></th>
         </tr></thead>
         <tbody id="roster"></tbody>
       </table>
@@ -393,6 +393,8 @@ function renderRoster(athletes) {
           title="${esc(a.load.zone_label)}">${a.load.acwr.toFixed(2)}</b>`}</td>
       <td>${fmtDate(a.last_session)}</td>
       <td>${status}${review}</td>
+      <td><button class="inline secondary" data-invite="${a.athlete_id}"
+            title="Invite a parent or guardian">Invite parent</button></td>
     </tr>`;
   }).join('') : '<tr><td colspan="6" class="muted small">No athletes yet. Add one below.</td></tr>';
 }

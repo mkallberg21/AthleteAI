@@ -15,8 +15,10 @@ agility, and conditioning exercises.
 Coaches assign work and see who did it. Athletes get nudged when a streak is on
 the line. Every session is scored for **form quality**, not just rep count, and
 **training load is monitored** so the gamification cannot quietly push an
-athlete into an overuse injury. The whole capture flow works with no signal,
-because youth athletes train in driveways.
+athlete into an overuse injury. Parents get their own portal, where consent is
+granular and revocable and their child's data can be exported or erased. The
+whole capture flow works with no signal, because youth athletes train in
+driveways.
 
 ---
 
@@ -62,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 384 tests
+python -m pytest tests/ -q          # 433 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -86,6 +88,7 @@ athleteiq/
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
   load.py           Workload ratio, throwing volume, rest days, advisories
+  guardians.py      Parent accounts, invites, consent, export and erasure
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -97,6 +100,7 @@ athleteiq/
     sw.js           Service worker: app-shell cache and push delivery
     capture.html    Athlete capture app
     coach.html      Coach dashboard
+    parent.html     Guardian portal
     leaderboard.html
 scripts/
   seed_demo.py            Demo program with six weeks of history
@@ -153,6 +157,71 @@ Two safeguards make it usable in a driveway:
 
 Both are covered by tests (`counter.test.mjs`), including a case that parks the
 signal on the threshold with noise and asserts zero reps.
+
+---
+
+## Parent accounts
+
+Parents consent, parents pay, and parents decide whether a product that films
+their child is allowed in the house.
+
+**A coach issues an invite code** for a specific athlete. The parent redeems it
+to create their account — redemption *is* the identity proof, so the code is
+treated as a credential: single-use, expiring after 14 days, revocable, and
+stored only as a hash. Failure messages are deliberately identical for expired,
+revoked, and unknown codes, because distinguishing them would let someone probe
+for valid ones.
+
+### Consent that actually means something
+
+`guardian_consent` used to be a boolean a coach ticked. That records that an
+adult clicked something — not who agreed, to what, when, or whether they later
+changed their mind. It is now an append-only, revocable record, granted by the
+guardian themselves, across three separate scopes:
+
+| Scope | Effect when withdrawn |
+|---|---|
+| Training in the app | The athlete cannot start or reserve sessions |
+| Full name on leaderboards | They still compete, under an initial and jersey number |
+| Keep detailed rep timings | Rep-by-rep detail is purged immediately; totals remain |
+
+Two things make this real rather than decorative. **Withdrawal takes effect
+now** — revoking retention purges the rep detail on the spot, not at the next
+scheduled prune, because a consent decision that applies tomorrow is not a
+decision. And **participation consent is enforced at the point of capture**, on
+both the online and offline paths, so banked offline slots aren't a way around
+it.
+
+Enforcement only begins once a guardian is actually linked. Athletes onboarded
+before parent accounts existed have no consent rows, and defaulting those to
+"denied" would lock out every existing user on deploy.
+
+### Data rights
+
+A guardian can export everything held about their child — profile, sessions, rep
+timings, XP, badges, consent history — and can erase it, choosing between
+removing the training history and removing the account entirely. Deletion is
+real: rows are gone, not flagged. Only the *fact* of the erasure is kept, keyed
+by a hash, so a program can show an auditor that a request was honoured without
+retaining what it deleted.
+
+### What the parent portal deliberately does not have
+
+**No leaderboard.** Not in the UI and not reachable with a parent's token — the
+API returns 403 and says why. A ranked list of other people's children for
+adults to scroll is the mechanism behind the worst behaviour in youth sports,
+and building one would be a choice, not an accident.
+
+**No integrity or review status.** "Your child's session was held for review"
+reads as an accusation, and it is a coach's conversation to have, not a push
+notification's.
+
+What a parent *does* see, above the numbers, is wellbeing: if their child has
+trained seventeen days without a rest day, that is the first thing on the page.
+
+Parents also get a **weekly digest**, because parents will not log into a
+dashboard — so the dashboard goes to them, framed around what their child did
+rather than where they rank.
 
 ---
 
@@ -445,8 +514,9 @@ just ranks teams by roster size and a small squad can never win.
   Assigning jersey numbers keeps those handles distinct.
 - **Coaches always see real names** on the roster. They are the responsible
   adult; the masking is about broadcast, not supervision.
-- **Per-rep timings are pruned** after 45 days (`prune_rep_events`). Aggregate
-  session records persist; the granular stream exists only for integrity review.
+- **Per-rep timings are pruned** after 45 days (`prune_rep_events`), and
+  immediately if a guardian withdraws retention consent. Aggregate session
+  records persist; the granular stream exists only for integrity review.
 
 `guardian_consent` is currently a boolean an adult sets. A production deployment
 needs a real consent record — who consented, when, and to what — plus the
@@ -475,7 +545,9 @@ contact with a real driveway:
 4. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
 5. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
-   wants Postgres. `store.py` is the only module to change.
+   wants Postgres. `store.py` is the only module to change. Schema upgrades run
+   automatically on connect (`db.migrate`), probing the actual database rather
+   than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
 7. **Offline slots are per-drill.** A drill you have never opened online has no
@@ -486,7 +558,11 @@ contact with a real driveway:
 9. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-10. **Load coefficients are reasoned estimates, not measured values.** The
+10. **Guardian identity is proven by the invite code alone.** There is no email
+    verification, so a code handed to the wrong adult creates a valid account.
+    Short expiry, single use, and revocation limit the window; real
+    verification is a launch requirement.
+11. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

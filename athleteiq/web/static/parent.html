@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AthleteIQ &mdash; Parent</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0f14">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">Athlete<span>IQ</span> <span class="small muted" style="font-weight:400">Parent</span></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="small muted" id="whoami"></span>
+    <button class="secondary inline" id="signout">Sign out</button>
+  </div>
+</div>
+
+<div class="wrap wrap--narrow">
+  <div class="card">
+    <p class="privacy-note" style="margin:0">
+      <b>Your athlete's video never leaves their phone.</b> The app analyses it
+      on the device and uploads only counts &mdash; reps, which hand, how long.
+      Nobody at the club can watch footage, because none is ever sent.
+    </p>
+  </div>
+
+  <div id="athletes"></div>
+
+  <div class="card">
+    <h2>Add another athlete</h2>
+    <p class="small muted">If you have a second child in the program, paste their invite code.</p>
+    <input id="link-code" placeholder="ABCD-EFGH-JKLM" autocomplete="off">
+    <button class="secondary" id="link-btn">Link athlete</button>
+    <div id="link-note" class="small hidden" style="margin-top:8px"></div>
+  </div>
+
+  <div id="err" class="err hidden"></div>
+</div>
+
+<script type="module">
+import { api, esc, getToken, logout } from './api.js';
+
+if (!getToken()) location.href = 'index.html';
+const $ = (id) => document.getElementById(id);
+
+function showError(message) {
+  $('err').textContent = message;
+  $('err').classList.remove('hidden');
+}
+
+function qualityClass(score) {
+  return score >= 80 ? 'good' : score >= 60 ? 'mid' : 'low';
+}
+
+function renderAthlete(a) {
+  const q = a.quality || {};
+  const trend = q.trend > 2 ? ' <span class="trend-up">&#9650;</span>'
+    : q.trend < -2 ? ' <span class="trend-down">&#9660;</span>' : '';
+
+  // Wellbeing first. If something needs attention, it goes above the numbers.
+  const advisories = (a.load_advisories || []).map((x) => `
+    <div class="advisory ${esc(x.level)}">
+      <span class="dotmark"></span>
+      <div>${esc(x.message)}${x.evidence ? `<em>${esc(x.evidence)}</em>` : ''}</div>
+    </div>`).join('');
+
+  const assignments = (a.assignments || []).map((x) => `
+    <div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;
+                border-bottom:1px solid var(--border);font-size:.86rem">
+      <span>${esc(x.title)} <span class="muted small">${esc(x.drill_name)}</span></span>
+      <span>${x.complete ? '<span class="pill ok">done</span>'
+        : `<span class="pill warn">${x.days_remaining < 0 ? 'overdue'
+          : `${x.days_remaining}d left`}</span>`}</span>
+    </div>`).join('');
+
+  const badges = (a.badges || []).map((b) => `
+    <div class="badge ${esc(b.tier)}" title="${esc(b.description)}">
+      <span class="ico">&#127894;</span>${esc(b.name)}
+    </div>`).join('');
+
+  const consents = (a.consents || []).map((c) => `
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;
+                  border-bottom:1px solid var(--border);cursor:pointer">
+      <input type="checkbox" data-consent="${esc(c.scope)}" data-athlete="${a.athlete_id}"
+             ${c.granted ? 'checked' : ''}
+             style="width:auto;min-height:auto;margin:3px 0 0">
+      <span>
+        <b style="font-size:.88rem">${esc(c.label)}</b>
+        <span class="small muted" style="display:block;margin-top:2px">${esc(c.description)}</span>
+      </span>
+    </label>`).join('');
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+      <h2 style="margin:0">${esc(a.display_name)}</h2>
+      <span class="pill ok">Level ${a.level}</span>
+    </div>
+
+    ${advisories ? `<div style="margin-top:10px">${advisories}</div>` : ''}
+
+    <div class="stat-row" style="margin-top:14px">
+      <div class="stat"><b>${a.week_sessions}</b><span>Sessions this week</span></div>
+      <div class="stat"><b>${a.week_reps.toLocaleString()}</b><span>Reps this week</span></div>
+      <div class="stat"><b>${a.streak}</b><span>Day streak</span></div>
+      <div class="stat"><b class="${q.current ? qualityClass(q.current) : ''}">${
+        q.current === null || q.current === undefined ? '&mdash;' : q.current
+      }${trend}</b><span>Form score</span></div>
+    </div>
+
+    ${assignments ? `<h3 style="margin:18px 0 4px;font-size:.95rem">From their coach</h3>${assignments}` : ''}
+    ${badges ? `<h3 style="margin:18px 0 8px;font-size:.95rem">Recent badges</h3>
+                <div class="badge-grid">${badges}</div>` : ''}
+
+    <details style="margin-top:18px">
+      <summary class="small muted" style="cursor:pointer">Permissions &amp; data</summary>
+      <div style="margin-top:10px">
+        ${consents}
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <button class="secondary inline" data-export="${a.athlete_id}">Download their data</button>
+          <button class="danger inline" data-erase="${a.athlete_id}">Delete their data</button>
+        </div>
+        <p class="small muted" style="margin-top:10px">
+          You can withdraw any permission at any time. Deleting is permanent and
+          removes their training history from the coach's dashboard too.
+        </p>
+      </div>
+    </details>
+  </div>`;
+}
+
+async function load() {
+  $('err').classList.add('hidden');
+  const data = await api('/api/guardians/me');
+  $('whoami').textContent = data.display_name;
+
+  $('athletes').innerHTML = data.athletes.length
+    ? data.athletes.map(renderAthlete).join('')
+    : '<div class="card"><p class="muted">No athletes linked yet. '
+      + 'Use an invite code from your coach below.</p></div>';
+
+  wire();
+}
+
+function wire() {
+  document.querySelectorAll('[data-consent]').forEach((box) => {
+    box.addEventListener('change', async () => {
+      box.disabled = true;
+      try {
+        await api('/api/guardians/consent', {
+          method: 'POST',
+          body: {
+            athlete_id: Number(box.dataset.athlete),
+            scope: box.dataset.consent,
+            granted: box.checked,
+          },
+        });
+      } catch (e) {
+        box.checked = !box.checked;
+        showError(e.message);
+      }
+      box.disabled = false;
+    });
+  });
+
+  document.querySelectorAll('[data-export]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const data = await api(`/api/guardians/export/${btn.dataset.export}`);
+        // Rendered in a new window rather than downloaded: the artifact
+        // sandbox blocks page-initiated downloads, and a readable page is
+        // more use to a parent than a file they cannot open anyway.
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(
+            '<pre style="white-space:pre-wrap;font:13px ui-monospace,monospace;'
+            + 'background:#0b0f14;color:#e8eef5;padding:20px;margin:0">'
+            + esc(JSON.stringify(data, null, 2)) + '</pre>'
+          );
+          win.document.close();
+        } else {
+          showError('Allow pop-ups to view the export.');
+        }
+      } catch (e) { showError(e.message); }
+      btn.disabled = false;
+    });
+  });
+
+  document.querySelectorAll('[data-erase]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const scope = window.confirm(
+        'Delete the account as well as the training history?\n\n'
+        + 'OK = remove everything, including their login.\n'
+        + 'Cancel = remove training history only, keep the account.'
+      ) ? 'all' : 'training_data';
+
+      const typed = window.prompt(
+        'This cannot be undone. Type DELETE to confirm.'
+      );
+      if (!typed) return;
+
+      btn.disabled = true;
+      try {
+        const res = await api('/api/guardians/erase', {
+          method: 'POST',
+          body: { athlete_id: Number(btn.dataset.erase), scope, confirm: typed },
+        });
+        alert(`Deleted. ${res.rows_removed} records removed.`);
+        await load();
+      } catch (e) { showError(e.message); btn.disabled = false; }
+    });
+  });
+}
+
+$('link-btn').addEventListener('click', async () => {
+  const note = $('link-note');
+  try {
+    await api('/api/guardians/link', {
+      method: 'POST',
+      body: { code: $('link-code').value.trim() },
+    });
+    $('link-code').value = '';
+    note.textContent = 'Linked.';
+    note.classList.remove('hidden');
+    await load();
+  } catch (e) {
+    note.textContent = e.message;
+    note.classList.remove('hidden');
+  }
+});
+
+$('signout').addEventListener('click', logout);
+
+load().catch((e) => showError(e.message));
+</script>
+</body>
+</html>

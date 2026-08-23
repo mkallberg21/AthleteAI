@@ -14,6 +14,7 @@ const SHELL = [
   'index.html',
   'capture.html',
   'coach.html',
+  'parent.html',
   'leaderboard.html',
   'styles.css',
   'api.js',

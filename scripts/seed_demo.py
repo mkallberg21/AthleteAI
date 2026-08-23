@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from athleteiq import assignments as assignments_mod  # noqa: E402
+from athleteiq import guardians as guardians_mod  # noqa: E402
 from athleteiq import notifications as notify  # noqa: E402
 from athleteiq.db import connect, transaction  # noqa: E402
 from athleteiq.drills import get_drill  # noqa: E402
@@ -229,6 +230,25 @@ def main() -> int:
 
     for assignment in assignments_mod.list_for_org(store.conn, org_id):
         notify.notify_new_assignment(store.conn, assignment.id)
+
+    # A guardian for the first athlete, with consent already granted so the
+    # demo shows a working parent portal rather than a blocked one.
+    first_athlete = athletes[0][0]
+    invite = guardians_mod.create_invite(
+        store.conn, first_athlete["id"], director["id"], email="parent@example.com"
+    )
+    guardian = guardians_mod.redeem_invite(
+        store.conn, invite["code"], "Dana Pierce", "parent@example.com"
+    )
+    for scope in (guardians_mod.Scope.PARTICIPATION, guardians_mod.Scope.DATA_RETENTION):
+        guardians_mod.set_consent(
+            store.conn, first_athlete["id"], guardian["guardian_id"], scope, True
+        )
+    # A second, unredeemed invite so the coach view has a pending one.
+    pending = guardians_mod.create_invite(
+        store.conn, athletes[1][0]["id"], director["id"]
+    )
+
     generated = notify.run_all(store.conn)
 
     counts = dict(
@@ -246,8 +266,10 @@ def main() -> int:
     print(f"  form-scored: {scored} sessions")
     print(f"  notifications: {sum(generated.values())} scheduled + new-assignment alerts")
     print(f"\n  Join codes: Varsity={varsity['join_code']}  JV={jv['join_code']}")
+    print(f"\n  Guardian invite (unredeemed, for {athletes[1][1]}): {pending['code']}")
     print("\n  Sign-in tokens")
     print(f"    {'Coach Rivera (director)':<26} {director['token']}")
+    print(f"    {'Dana Pierce (parent)':<26} {guardian['token']}")
     for athlete, name, *_ in athletes:
         print(f"    {name:<26} {athlete['token']}")
     print(f"\n  Run:  ATHLETEIQ_DB_PATH={db_path} uvicorn athleteiq.api:app --reload")
