@@ -19,6 +19,7 @@ from .drills import DRILLS_BY_KEY, get_drill
 from . import assignments as assignments_mod
 from . import guardians as guardians_mod
 from . import load as load_mod
+from . import roster as roster_mod
 from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
 from .quality import RepFeature, analyze as analyze_quality
@@ -801,6 +802,204 @@ class Store:
                 {"score": int(r["quality_score"]), "drill_key": r["drill_key"], "at": r["at"]}
                 for r in rows[:window]
             ],
+        }
+
+    # ------------------------------------------------------------------
+    # Roster import
+    # ------------------------------------------------------------------
+
+    def resolve_import(self, org_id: int, plan: "roster_mod.ImportPlan") -> "roster_mod.ImportPlan":
+        """Decide, per row, whether this is a new athlete or an existing one.
+
+        Matched on the external id when the file carried one, otherwise on a
+        normalized name within the program. Getting this right is what makes
+        re-uploading a corrected file safe -- and coaches always re-upload.
+        """
+        existing = self.conn.execute(
+            "SELECT id, display_name, external_id FROM users "
+            "WHERE org_id = ? AND role = 'athlete' AND active = 1",
+            (org_id,),
+        ).fetchall()
+
+        by_external = {
+            r["external_id"]: r["id"] for r in existing if r["external_id"]
+        }
+        by_name: dict[str, list[int]] = {}
+        for row in existing:
+            by_name.setdefault(roster_mod.match_key(row["display_name"]), []).append(row["id"])
+
+        for athlete in plan.athletes:
+            if athlete.problems:
+                continue
+
+            if athlete.external_id and athlete.external_id in by_external:
+                athlete.action = "update"
+                athlete.existing_id = by_external[athlete.external_id]
+                continue
+
+            candidates = by_name.get(roster_mod.match_key(athlete.display_name), [])
+            if len(candidates) == 1:
+                athlete.action = "update"
+                athlete.existing_id = candidates[0]
+            elif len(candidates) > 1:
+                # Two athletes already share this name. Guessing which one the
+                # row means could overwrite the wrong child's record.
+                athlete.action = "skip"
+                athlete.problems.append(
+                    "More than one athlete in this program has that name. "
+                    "Add an ID column, or rename them, and import again."
+                )
+        return plan
+
+    def apply_import(
+        self,
+        org_id: int,
+        team_id: int,
+        plan: "roster_mod.ImportPlan",
+        created_by: int,
+        *,
+        issue_guardian_invites: bool = True,
+    ) -> dict[str, Any]:
+        """Create and update athletes from a resolved plan.
+
+        Each new athlete gets a short claim code rather than a token: a bulk
+        import mints hundreds of logins at once, and a token shown once on
+        screen cannot be handed to two hundred kids. The coach prints the codes.
+        """
+        team = self.conn.execute(
+            "SELECT id, org_id FROM teams WHERE id = ?", (team_id,)
+        ).fetchone()
+        if team is None:
+            raise StoreError("unknown team")
+        if team["org_id"] != org_id:
+            raise StoreError("that team belongs to a different program")
+
+        created: list[dict[str, Any]] = []
+        updated: list[dict[str, Any]] = []
+        invites: list[dict[str, Any]] = []
+        now = _iso(_now())
+
+        for athlete in plan.athletes:
+            if not athlete.ok:
+                continue
+
+            if athlete.action == "create":
+                claim = roster_mod.new_claim_code()
+                with transaction(self.conn) as c:
+                    cur = c.execute(
+                        "INSERT INTO users(org_id, role, display_name, email, birth_year, "
+                        "dominant_hand, token_hash, created_at, external_id, "
+                        "claim_code_hash, claim_expires_at, birth_year_estimated) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            org_id, "athlete", athlete.display_name, athlete.email,
+                            athlete.birth_year, athlete.dominant_hand,
+                            # A placeholder token nobody holds. The account is
+                            # unusable until the claim code is redeemed, which
+                            # is what replaces it.
+                            hash_token(new_token()), now, athlete.external_id,
+                            roster_mod.hash_claim(claim), roster_mod.claim_expiry(),
+                            1 if athlete.birth_year_estimated else 0,
+                        ),
+                    )
+                    athlete_id = int(cur.lastrowid)
+                    c.execute(
+                        "INSERT OR REPLACE INTO team_members(team_id, user_id, jersey, "
+                        "position, joined_at) VALUES (?,?,?,?,?)",
+                        (team_id, athlete_id, athlete.jersey, athlete.position, now),
+                    )
+                created.append({
+                    "athlete_id": athlete_id,
+                    "display_name": athlete.display_name,
+                    "jersey": athlete.jersey,
+                    "claim_code": claim,
+                })
+
+            else:
+                athlete_id = athlete.existing_id
+                with transaction(self.conn) as c:
+                    # Only overwrite fields the file actually supplied, so a
+                    # partial roster does not blank out good data.
+                    c.execute(
+                        "UPDATE users SET "
+                        "  dominant_hand = COALESCE(?, dominant_hand), "
+                        "  birth_year = COALESCE(?, birth_year), "
+                        "  external_id = COALESCE(?, external_id), "
+                        "  email = COALESCE(?, email) "
+                        "WHERE id = ?",
+                        (
+                            athlete.dominant_hand, athlete.birth_year,
+                            athlete.external_id, athlete.email, athlete_id,
+                        ),
+                    )
+                    c.execute(
+                        "INSERT OR REPLACE INTO team_members(team_id, user_id, jersey, "
+                        "position, joined_at) VALUES (?,?,?,?,?)",
+                        (team_id, athlete_id, athlete.jersey, athlete.position, now),
+                    )
+                updated.append({
+                    "athlete_id": athlete_id,
+                    "display_name": athlete.display_name,
+                    "jersey": athlete.jersey,
+                })
+
+            if issue_guardian_invites and athlete.guardian_email:
+                try:
+                    invite = guardians_mod.create_invite(
+                        self.conn, athlete_id, created_by, athlete.guardian_email
+                    )
+                    invites.append({
+                        "athlete_id": athlete_id,
+                        "athlete_name": athlete.display_name,
+                        "email": athlete.guardian_email,
+                        "code": invite["code"],
+                    })
+                except guardians_mod.GuardianError:
+                    # A bad invite must not lose the athlete who was just
+                    # imported successfully.
+                    pass
+
+        return {
+            "created": created,
+            "updated": updated,
+            "guardian_invites": invites,
+            "skipped": [a.to_dict() for a in plan.athletes if not a.ok],
+        }
+
+    def claim_account(self, code: str) -> dict[str, Any]:
+        """Exchange a printed claim code for a login token.
+
+        Single use: the code is cleared on redemption, so a slip picked up off
+        a locker room floor after the fact is worthless.
+        """
+        row = self.conn.execute(
+            "SELECT id, display_name, claim_expires_at FROM users "
+            "WHERE claim_code_hash = ? AND active = 1",
+            (roster_mod.hash_claim(code),),
+        ).fetchone()
+
+        expired = (
+            row is not None
+            and row["claim_expires_at"]
+            and _parse(row["claim_expires_at"]) is not None
+            and _parse(row["claim_expires_at"]) < _now()
+        )
+        if row is None or expired:
+            raise StoreError(
+                "That code is not valid. Ask your coach for a new one."
+            )
+
+        token = new_token()
+        with transaction(self.conn) as c:
+            c.execute(
+                "UPDATE users SET token_hash = ?, claim_code_hash = NULL, "
+                "claim_expires_at = NULL WHERE id = ?",
+                (hash_token(token), row["id"]),
+            )
+        return {
+            "athlete_id": row["id"],
+            "display_name": row["display_name"],
+            "token": token,
         }
 
     # ------------------------------------------------------------------

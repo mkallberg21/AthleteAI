@@ -18,9 +18,11 @@ from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
 from . import guardians as guardians_mod
+from . import roster as roster_mod
 from . import notifications as notify
 from .assignments import AssignmentError
 from .guardians import GuardianError
+from .roster import RosterError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
 from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError
@@ -76,6 +78,11 @@ async def _assignment_error_handler(_request, exc: AssignmentError) -> JSONRespo
 
 @app.exception_handler(GuardianError)
 async def _guardian_error_handler(_request, exc: GuardianError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(RosterError)
+async def _roster_error_handler(_request, exc: RosterError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -623,6 +630,91 @@ def team_load(
         -(a["acwr"] or 0),
     ))
     return {"athletes": out}
+
+
+# ----------------------------------------------------------------------
+# Roster import
+# ----------------------------------------------------------------------
+
+# The file arrives as text inside a JSON body rather than as a multipart
+# upload. That keeps the invariant that every request body on this API is
+# application/json, which is what makes "no endpoint accepts a file" checkable
+# rather than merely stated.
+class RosterFile(BaseModel):
+    content: str = Field(min_length=1, max_length=2_000_000)
+
+
+@app.post("/api/coach/roster/preview")
+def preview_roster(
+    body: RosterFile,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Parse a roster file and say exactly what importing it would do.
+
+    Nothing is written. Applying is a separate, explicit call.
+    """
+    plan = store.resolve_import(principal.org_id, roster_mod.parse(body.content))
+    return plan.to_dict()
+
+
+class RosterImport(BaseModel):
+    content: str = Field(min_length=1, max_length=2_000_000)
+    team_id: int
+    invite_guardians: bool = True
+
+
+@app.post("/api/coach/roster/import", status_code=201)
+def import_roster(
+    body: RosterImport,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Create and update athletes from a roster file.
+
+    Re-parsed here rather than trusting a plan echoed back by the client: a
+    plan is a preview, not an instruction, and accepting one would let a
+    modified payload create athletes the file never contained.
+    """
+    plan = store.resolve_import(principal.org_id, roster_mod.parse(body.content))
+    result = store.apply_import(
+        principal.org_id, body.team_id, plan, principal.id,
+        issue_guardian_invites=body.invite_guardians,
+    )
+    return {"summary": plan.to_dict()["summary"], **result}
+
+
+@app.get("/api/coach/roster/template")
+def roster_template() -> dict[str, Any]:
+    """A sample file, for a coach who has no export to start from."""
+    return {
+        "filename": "athleteiq-roster-template.csv",
+        "content": (
+            "First Name,Last Name,#,Position,Birth Year,Shoots,Parent Email\n"
+            "Jordan,Pierce,14,Midfield,2011,Right,parent1@example.com\n"
+            "Sam,Rivera,7,Attack,2010,Left,parent2@example.com\n"
+        ),
+        "notes": [
+            "Column names are matched loosely -- Jersey #, No., and Number all work.",
+            "Only a name column is required. Everything else is optional.",
+            "Grade or Class Of works instead of Birth Year, but ages from those "
+            "are estimates and the athlete is treated as a minor.",
+            "A parent email issues a guardian invite automatically.",
+        ],
+    }
+
+
+class ClaimRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=40)
+
+
+@app.post("/api/claim")
+def claim_account(body: ClaimRequest, store: Store = Depends(get_store)) -> dict[str, Any]:
+    """Exchange a printed claim code for a login token. Unauthenticated by design."""
+    try:
+        return store.claim_account(body.code)
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ----------------------------------------------------------------------

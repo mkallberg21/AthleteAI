@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 433 tests
+python -m pytest tests/ -q          # 505 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -89,6 +89,7 @@ athleteiq/
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
   load.py           Workload ratio, throwing volume, rest days, advisories
   guardians.py      Parent accounts, invites, consent, export and erasure
+  roster.py         Bulk import: header detection, parsing, claim codes
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -157,6 +158,57 @@ Two safeguards make it usable in a driveway:
 
 Both are covered by tests (`counter.test.mjs`), including a case that parks the
 signal on the threshold with noise and asserts zero reps.
+
+---
+
+## Roster import
+
+Nobody hand-creates two hundred athletes, and a coach who has to will not
+finish. In practice this kills more pilots than any missing feature, so the
+parser is forgiving of the files people actually have rather than demanding one
+they would have to build.
+
+**Headers are matched, not dictated.** A TeamSnap export, a school SIS dump, and
+a spreadsheet an assistant coach typed will not agree on what the jersey column
+is called. `Jersey #`, `No.`, `Number`, `Uniform Number`, and bare `#` all
+resolve — that last one matters because it is the most common of the lot and
+normalizes to an empty string, so it needs handling that generic fuzzy matching
+misses entirely. Same for names: `First`/`Last` columns, a single `Name` column,
+and `Pierce, Jordan` in either arrangement all come out as `Jordan Pierce`.
+
+**Nothing happens without a preview.** Every import is planned first and shows
+per row what it will create, update, and skip. Applying is a separate call, and
+it re-parses the file rather than trusting a plan echoed back by the client — a
+plan is a preview, not an instruction.
+
+**Blocking problems are separated from warnings.** A row with no name cannot be
+imported. A malformed parent email is no reason to leave a kid off the roster,
+so that athlete imports and the warning says the invite was skipped.
+
+**Re-importing an edited file updates rather than duplicates.** Matched on an
+external ID when the file carries one, otherwise on a normalized name within the
+program. Coaches always upload again after fixing a spelling, and an import that
+doubles the roster on the second pass is worse than one that never ran. A file
+with fewer columns will not blank out data it does not mention, and a name that
+already belongs to two athletes is skipped rather than guessed — guessing could
+overwrite the wrong child's record.
+
+**Ages default to minor.** A grade or graduation year gives an estimate, not a
+birth year, and both an estimate and a missing age are treated as a minor.
+Erring the other way puts a child's full name on a shared leaderboard.
+
+### Claim codes
+
+A bulk import mints hundreds of logins at once, and the existing "token shown
+once on screen" flow cannot be handed to two hundred kids. Each imported athlete
+instead gets a short claim code — printable, single-use, expiring in 30 days,
+stored only as a hash. The coach prints a sheet of slips and hands them out; the
+athlete types theirs once and gets a real token. Until it is claimed the account
+holds a placeholder token nobody has, so an imported account is not a login
+waiting to be guessed.
+
+A parent email column issues guardian invites in the same pass, so importing a
+roster also onboards the parents.
 
 ---
 
@@ -562,7 +614,10 @@ contact with a real driveway:
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-11. **Load coefficients are reasoned estimates, not measured values.** The
+11. **Roster import reads delimited text only.** CSV, TSV, and
+    semicolon-separated files work; a native `.xlsx` has to be exported to CSV
+    first. Direct TeamSnap/SportsEngine API sync is a separate integration.
+12. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -57,8 +57,22 @@ CREATE TABLE IF NOT EXISTS users (
     dominant_hand    TEXT CHECK (dominant_hand IN ('left','right')),
     token_hash       TEXT NOT NULL UNIQUE,
     created_at       TEXT NOT NULL,
-    active           INTEGER NOT NULL DEFAULT 1
+    active           INTEGER NOT NULL DEFAULT 1,
+    -- Identifier from whatever system the roster came out of (TeamSnap,
+    -- SportsEngine, a school SIS). Present only when the import file carried
+    -- one; it is what makes re-importing an edited file update rather than
+    -- duplicate.
+    external_id      TEXT,
+    -- Short code an athlete types once to claim their account. A bulk import
+    -- creates hundreds of logins at once and a token shown once on screen is
+    -- unusable at that scale -- the coach prints a sheet of these instead.
+    claim_code_hash  TEXT UNIQUE,
+    claim_expires_at TEXT,
+    -- True when birth year was estimated from a grade column rather than
+    -- given. Estimates are treated as minors, never as adults.
+    birth_year_estimated INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS idx_users_external ON users(org_id, external_id);
 CREATE INDEX IF NOT EXISTS idx_users_org_role ON users(org_id, role);
 CREATE INDEX IF NOT EXISTS idx_users_token ON users(token_hash);
 
@@ -338,6 +352,12 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("peak", "REAL"),
         ("rom", "REAL"),
         ("cycle_ms", "INTEGER"),
+    ],
+    "users": [
+        ("external_id", "TEXT"),
+        ("claim_code_hash", "TEXT"),
+        ("claim_expires_at", "TEXT"),
+        ("birth_year_estimated", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }
 

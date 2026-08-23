@@ -308,3 +308,50 @@ tbody tr:hover { background: var(--surface-2); }
   background: rgba(57,217,138,.10); border: 1px solid var(--accent);
   color: var(--accent); font-size: .85rem;
 }
+
+/* ---- Roster import ---- */
+
+.dropzone {
+  border: 2px dashed var(--border); border-radius: 12px;
+  padding: 26px 18px; text-align: center; cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--surface-2); }
+.dropzone b { display: block; margin-bottom: 4px; }
+.dropzone span { font-size: .8rem; color: var(--muted); }
+
+.preview-row td { font-size: .84rem; }
+.preview-row.skip { opacity: .55; }
+.preview-row.skip td:first-child { border-left: 2px solid var(--danger); }
+.preview-row.warn td:first-child { border-left: 2px solid var(--warn); }
+.preview-row.create td:first-child { border-left: 2px solid var(--accent); }
+.preview-row.update td:first-child { border-left: 2px solid var(--left); }
+.rowmsg { font-size: .74rem; color: var(--muted); }
+.rowmsg.bad { color: var(--danger); }
+
+.mapping { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.mapping code {
+  font-size: .72rem; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 8px;
+}
+
+/* Claim slips, sized so a sheet of them cuts cleanly. */
+.slips { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.slip {
+  border: 1px dashed var(--line-strong, var(--border)); border-radius: 8px;
+  padding: 11px 12px; background: var(--surface);
+}
+.slip b { display: block; font-size: .9rem; }
+.slip .code {
+  font-family: ui-monospace, monospace; font-size: 1.15rem; font-weight: 700;
+  letter-spacing: .08em; color: var(--accent); margin-top: 5px;
+}
+.slip span { font-size: .68rem; color: var(--muted); display: block; margin-top: 4px; }
+
+@media print {
+  body { background: #fff; color: #000; }
+  .topbar, .no-print, button { display: none !important; }
+  .slip { border-color: #999; break-inside: avoid; }
+  .slip .code { color: #000; }
+  .card { border: none; background: none; padding: 0; }
+}

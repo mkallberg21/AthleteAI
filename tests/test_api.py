@@ -1149,3 +1149,113 @@ class TestGuardianEndpoints:
 
         assert notify.generate_guardian_digests(api_module._store.conn) == 1
         assert notify.generate_guardian_digests(api_module._store.conn) == 0
+
+
+class TestRosterEndpoints:
+    CSV = (
+        "Last Name,First Name,#,Pos,Birth Year,Shoots,Parent Email\n"
+        "Pierce,Jordan,14,Midfield,2011,Right,dana@example.com\n"
+        "Rivera,Sam,7,Attack,2010,left,\n"
+    )
+
+    def test_preview_writes_nothing(self, client, program):
+        before = api_module._store.conn.execute(
+            "SELECT COUNT(*) AS n FROM users"
+        ).fetchone()["n"]
+        res = client.post(
+            "/api/coach/roster/preview",
+            json={"content": self.CSV}, headers=program["director"],
+        )
+        assert res.status_code == 200
+        assert res.json()["summary"]["create"] == 2
+        after = api_module._store.conn.execute(
+            "SELECT COUNT(*) AS n FROM users"
+        ).fetchone()["n"]
+        assert after == before
+
+    def test_import_creates_athletes_and_claim_codes(self, client, program):
+        res = client.post(
+            "/api/coach/roster/import",
+            json={"content": self.CSV, "team_id": program["team"]["id"]},
+            headers=program["director"],
+        )
+        assert res.status_code == 201
+        data = res.json()
+        assert len(data["created"]) == 2
+        assert all(a["claim_code"] for a in data["created"])
+        assert len(data["guardian_invites"]) == 1
+
+    def test_a_claim_code_signs_the_athlete_in(self, client, program):
+        created = client.post(
+            "/api/coach/roster/import",
+            json={"content": self.CSV, "team_id": program["team"]["id"]},
+            headers=program["director"],
+        ).json()["created"]
+
+        res = client.post("/api/claim", json={"code": created[0]["claim_code"]})
+        assert res.status_code == 201 or res.status_code == 200
+        token = res.json()["token"]
+        me = client.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.status_code == 200
+        assert me.json()["role"] == "athlete"
+
+    def test_claiming_needs_no_prior_login(self, client, program):
+        """An imported athlete has no credentials yet; requiring some is circular."""
+        created = client.post(
+            "/api/coach/roster/import",
+            json={"content": self.CSV, "team_id": program["team"]["id"]},
+            headers=program["director"],
+        ).json()["created"]
+        assert client.post("/api/claim", json={"code": created[0]["claim_code"]}).status_code in (200, 201)
+
+    def test_a_bad_claim_code_is_refused(self, client):
+        res = client.post("/api/claim", json={"code": "ZZZZ-ZZZZ"})
+        assert res.status_code == 400
+
+    def test_athletes_cannot_import_a_roster(self, client, program):
+        res = client.post(
+            "/api/coach/roster/preview",
+            json={"content": self.CSV}, headers=program["athletes"][0]["headers"],
+        )
+        assert res.status_code == 403
+
+    def test_a_malformed_file_is_reported_not_crashed(self, client, program):
+        res = client.post(
+            "/api/coach/roster/preview",
+            json={"content": "just some text with no delimiters at all"},
+            headers=program["director"],
+        )
+        assert res.status_code in (200, 400)
+        if res.status_code == 200:
+            assert res.json()["file_problems"]
+
+    def test_an_empty_file_is_refused_clearly(self, client, program):
+        res = client.post(
+            "/api/coach/roster/preview",
+            json={"content": "   "}, headers=program["director"],
+        )
+        assert res.status_code == 400
+        assert "empty" in res.json()["detail"]
+
+    def test_importing_re_parses_rather_than_trusting_a_plan(self, client, program):
+        """The endpoint takes the file, not a plan the client could rewrite."""
+        schema = client.get("/openapi.json").json()
+        body = schema["paths"]["/api/coach/roster/import"]["post"]["requestBody"]
+        ref = body["content"]["application/json"]["schema"]["$ref"].split("/")[-1]
+        fields = set(schema["components"]["schemas"][ref]["properties"])
+        assert "content" in fields
+        assert "athletes" not in fields and "plan" not in fields
+
+    def test_a_template_is_offered(self, client, program):
+        res = client.get("/api/coach/roster/template", headers=program["director"])
+        assert res.status_code == 200
+        assert "First Name" in res.json()["content"]
+
+    def test_the_upload_stays_json_not_multipart(self, client):
+        """The 'no endpoint accepts a file' invariant has to survive this feature."""
+        schema = client.get("/openapi.json").json()
+        for path, methods in schema["paths"].items():
+            for method, op in methods.items():
+                content = (op.get("requestBody") or {}).get("content", {})
+                for media_type in content:
+                    assert media_type == "application/json", f"{method} {path}"

@@ -163,6 +163,43 @@
   </div>
 
   <div class="card">
+    <h2>Import a roster</h2>
+    <p class="small muted">
+      Drop in a CSV from TeamSnap, SportsEngine, a school export, or a
+      spreadsheet you typed yourself. Column names are matched loosely &mdash;
+      <code>Jersey #</code>, <code>No.</code>, and <code>Number</code> all work.
+      Only a name column is required.
+    </p>
+
+    <label for="import-team">Import into</label>
+    <select id="import-team"></select>
+
+    <div class="dropzone" id="dropzone">
+      <b>Choose a CSV file</b>
+      <span>or drop one here</span>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv" hidden>
+    </div>
+    <button class="secondary inline" id="template-btn" style="margin-top:10px">
+      Show a template
+    </button>
+
+    <div id="preview" class="hidden" style="margin-top:16px"></div>
+    <div id="import-err" class="err hidden"></div>
+  </div>
+
+  <div class="card hidden" id="slips-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px" class="no-print">
+      <h2 style="margin:0">Claim codes</h2>
+      <button class="secondary inline" id="print-slips">Print</button>
+    </div>
+    <p class="small muted no-print">
+      Cut these up and hand them out. Each code works once, expires in 30 days,
+      and is not stored anywhere you can read it again &mdash; print this now.
+    </p>
+    <div class="slips" id="slips"></div>
+  </div>
+
+  <div class="card">
     <h2>Teams &amp; join codes</h2>
     <div style="overflow-x:auto">
       <table>
@@ -459,7 +496,169 @@ async function loadTeams() {
   const options = teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
   $('a-team').innerHTML = options;
   $('b-team').innerHTML = options;
+  $('import-team').innerHTML = options;
 }
+
+// ------------------------------------------------------------ roster import
+
+let pendingCsv = null;
+
+function renderPreview(plan) {
+  const s = plan.summary;
+  const mapping = Object.entries(plan.columns)
+    .map(([field, header]) => `<code>${esc(header)} &rarr; ${esc(field)}</code>`).join('');
+  const ignored = plan.unmapped_headers.length
+    ? `<p class="small muted">Ignored columns: ${plan.unmapped_headers.map(esc).join(', ')}</p>`
+    : '';
+
+  const problems = plan.file_problems.length
+    ? `<div class="err">${plan.file_problems.map(esc).join('<br>')}</div>` : '';
+
+  const rows = plan.athletes.map((a) => {
+    const cls = a.problems.length ? 'skip' : a.warnings.length ? 'warn' : a.action;
+    const messages = [
+      ...a.problems.map((m) => `<div class="rowmsg bad">${esc(m)}</div>`),
+      ...a.warnings.map((m) => `<div class="rowmsg">${esc(m)}</div>`),
+    ].join('');
+    const label = a.problems.length ? 'skip'
+      : a.action === 'update' ? 'update' : 'new';
+    return `<tr class="preview-row ${cls}">
+      <td>${a.row}</td>
+      <td><b>${esc(a.display_name || '(no name)')}</b>${messages}</td>
+      <td class="num">${esc(a.jersey || '&mdash;')}</td>
+      <td>${esc(a.position || '&mdash;')}</td>
+      <td class="num">${a.birth_year || '&mdash;'}${a.birth_year_estimated ? '<span class="muted">~</span>' : ''}</td>
+      <td>${esc(a.dominant_hand || '&mdash;')}</td>
+      <td><span class="pill ${a.problems.length ? 'bad' : a.action === 'update' ? 'warn' : 'ok'}">${label}</span></td>
+    </tr>`;
+  }).join('');
+
+  const canImport = s.create + s.update > 0;
+
+  return `${problems}
+    <div class="mapping">${mapping}</div>
+    ${ignored}
+    <div class="stat-row" style="margin-bottom:12px">
+      <div class="stat"><b>${s.create}</b><span>New athletes</span></div>
+      <div class="stat"><b>${s.update}</b><span>Updates</span></div>
+      <div class="stat"><b>${s.skip}</b><span>Skipped</span></div>
+      <div class="stat"><b>${s.with_guardian_email}</b><span>Parent invites</span></div>
+    </div>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
+      <table>
+        <thead><tr><th>Row</th><th>Athlete</th><th class="num">#</th><th>Pos</th>
+          <th class="num">Born</th><th>Hand</th><th>Action</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:.85rem">
+      <input type="checkbox" id="invite-guardians" checked
+             style="width:auto;min-height:auto;margin:0">
+      Email invites to the parents in this file
+    </label>
+    <button id="confirm-import" style="margin-top:10px" ${canImport ? '' : 'disabled'}>
+      ${canImport ? `Import ${s.create} new and ${s.update} updated` : 'Nothing to import'}
+    </button>`;
+}
+
+async function previewFile(text) {
+  const err = $('import-err');
+  err.classList.add('hidden');
+  pendingCsv = text;
+  try {
+    const plan = await api('/api/coach/roster/preview', {
+      method: 'POST', body: { content: text },
+    });
+    $('preview').innerHTML = renderPreview(plan);
+    $('preview').classList.remove('hidden');
+    const btn = $('confirm-import');
+    if (btn) btn.addEventListener('click', doImport);
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  }
+}
+
+async function doImport() {
+  const btn = $('confirm-import');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+  try {
+    const res = await api('/api/coach/roster/import', {
+      method: 'POST',
+      body: {
+        content: pendingCsv,
+        team_id: Number($('import-team').value),
+        invite_guardians: $('invite-guardians').checked,
+      },
+    });
+    renderSlips(res);
+    $('preview').classList.add('hidden');
+    await Promise.all([loadTeams(), loadAll()]);
+  } catch (e) {
+    $('import-err').textContent = e.message;
+    $('import-err').classList.remove('hidden');
+    btn.disabled = false;
+  }
+}
+
+function renderSlips(res) {
+  const slips = [...res.created, ...res.guardian_invites.map((g) => ({
+    display_name: g.athlete_name, jersey: '', claim_code: g.code, guardian: g.email,
+  }))];
+
+  $('slips-card').classList.toggle('hidden', slips.length === 0);
+  $('slips').innerHTML = [
+    ...res.created.map((c) => `<div class="slip">
+        <b>${esc(c.display_name)}${c.jersey ? ` &middot; #${esc(c.jersey)}` : ''}</b>
+        <div class="code">${esc(c.claim_code)}</div>
+        <span>Athlete sign-in &middot; works once</span>
+      </div>`),
+    ...res.guardian_invites.map((g) => `<div class="slip">
+        <b>${esc(g.athlete_name)} &mdash; parent</b>
+        <div class="code">${esc(g.code)}</div>
+        <span>${esc(g.email)}</span>
+      </div>`),
+  ].join('');
+
+  if (slips.length) $('slips-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => previewFile(String(reader.result || ''));
+  reader.onerror = () => {
+    $('import-err').textContent = 'Could not read that file.';
+    $('import-err').classList.remove('hidden');
+  };
+  reader.readAsText(file);
+}
+
+$('dropzone').addEventListener('click', () => $('file-input').click());
+$('file-input').addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
+});
+['dragenter', 'dragover'].forEach((evt) =>
+  $('dropzone').addEventListener(evt, (e) => {
+    e.preventDefault();
+    $('dropzone').classList.add('over');
+  }));
+['dragleave', 'drop'].forEach((evt) =>
+  $('dropzone').addEventListener(evt, (e) => {
+    e.preventDefault();
+    $('dropzone').classList.remove('over');
+  }));
+$('dropzone').addEventListener('drop', (e) => {
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+
+$('template-btn').addEventListener('click', async () => {
+  const t = await api('/api/coach/roster/template');
+  await previewFile(t.content);
+});
+
+$('print-slips').addEventListener('click', () => window.print());
 
 async function loadDrillOptions() {
   const { drills } = await api('/api/drills');

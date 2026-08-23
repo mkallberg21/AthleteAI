@@ -32,6 +32,18 @@
   </div>
 
   <div class="card">
+    <h2>First time here?</h2>
+    <p class="small muted">
+      If your coach gave you a short claim code on a slip of paper, enter it
+      here to set up your account.
+    </p>
+    <label for="claim">Claim code</label>
+    <input id="claim" placeholder="ABCD-EFGH" autocomplete="off">
+    <div id="cerr" class="err hidden"></div>
+    <button class="secondary" id="claim-btn">Claim my account</button>
+  </div>
+
+  <div class="card">
     <h2>Parent or guardian?</h2>
     <p class="small muted">
       If a coach sent you an invite code, set up your account here. You will be
@@ -85,6 +97,31 @@ async function signIn() {
 
 goBtn.addEventListener('click', signIn);
 tokenInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+
+const claimBtn = document.getElementById('claim-btn');
+const cerr = document.getElementById('cerr');
+
+claimBtn.addEventListener('click', async () => {
+  const code = document.getElementById('claim').value.trim();
+  if (!code) return;
+  claimBtn.disabled = true;
+  cerr.classList.add('hidden');
+  try {
+    const res = await fetch('/api/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'That code did not work.');
+    setToken(data.token);
+    location.href = 'capture.html';
+  } catch (e) {
+    cerr.textContent = e.message;
+    cerr.classList.remove('hidden');
+    claimBtn.disabled = false;
+  }
+});
 
 const redeemBtn = document.getElementById('redeem');
 const perr = document.getElementById('perr');
