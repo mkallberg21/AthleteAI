@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AthleteIQ &mdash; Train</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">Athlete<span>IQ</span></div>
+  <div class="small muted" id="whoami"></div>
+</div>
+
+<div class="wrap wrap--narrow">
+
+  <!-- ---------- Home ---------- -->
+  <section id="view-home">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <h2 id="greeting">Ready to work</h2>
+        <span class="pill ok" id="level-pill">Level 1</span>
+      </div>
+      <div class="bar"><i id="level-bar" style="width:0%"></i></div>
+      <div class="small muted" id="level-text"></div>
+      <div class="stat-row" style="margin-top:14px">
+        <div class="stat"><b id="s-streak">0</b><span>Day streak</span></div>
+        <div class="stat"><b id="s-xp">0</b><span>Total XP</span></div>
+        <div class="stat"><b id="s-today">0</b><span>XP today</span></div>
+        <div class="stat"><b id="s-offhand">0</b><span>Off-hand reps</span></div>
+      </div>
+      <div id="streak-warn" class="banner warn hidden" style="position:static;margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2>Pick a drill</h2>
+      <div class="drill-list" id="drill-list"></div>
+    </div>
+
+    <div class="card" id="badges-card">
+      <h2>Badges</h2>
+      <div class="badge-grid" id="badge-grid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent sessions</h2>
+      <table><tbody id="recent"></tbody></table>
+    </div>
+
+    <button class="secondary" onclick="location.href='leaderboard.html'">Leaderboards</button>
+    <button class="secondary" id="signout" style="margin-top:10px">Sign out</button>
+  </section>
+
+  <!-- ---------- Capture ---------- -->
+  <section id="view-capture" class="hidden">
+    <div class="card" style="padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <b id="drill-name"></b>
+        <button class="secondary inline" id="back">Back</button>
+      </div>
+
+      <div class="stage">
+        <video id="video" playsinline muted autoplay></video>
+        <canvas id="overlay"></canvas>
+        <div class="banner" id="banner">Loading the pose model&hellip;</div>
+        <div class="hud">
+          <div class="repcount"><span id="reps">0</span><small id="rep-label">reps</small></div>
+          <div class="hands" id="hands"></div>
+        </div>
+      </div>
+
+      <div class="small muted" id="hint" style="margin-top:10px"></div>
+      <div class="privacy-note">Nothing you see here is recorded or uploaded. Counts only.</div>
+
+      <button id="startstop" style="margin-top:12px" disabled>Start</button>
+      <div id="cap-err" class="err hidden"></div>
+    </div>
+  </section>
+
+  <!-- ---------- Result ---------- -->
+  <section id="view-result" class="hidden">
+    <div class="card">
+      <h1 id="result-title">Session complete</h1>
+      <div class="stat-row">
+        <div class="stat"><b id="r-reps">0</b><span>Reps</span></div>
+        <div class="stat"><b id="r-left">0</b><span>Left</span></div>
+        <div class="stat"><b id="r-right">0</b><span>Right</span></div>
+        <div class="stat"><b id="r-xp">0</b><span>XP earned</span></div>
+      </div>
+      <table style="margin-top:14px"><tbody id="r-breakdown"></tbody></table>
+      <div id="r-notes" class="small muted" style="margin-top:12px"></div>
+      <div id="r-badges" class="badge-grid" style="margin-top:14px"></div>
+      <button style="margin-top:14px" id="done">Done</button>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { api, esc, fmtDate, getToken, logout } from './api.js';
+import { RepCounter } from './counter.js';
+
+const CLIENT_VERSION = 'web-0.1.0';
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/'
+  + 'pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+
+if (!getToken()) location.href = 'index.html';
+
+const $ = (id) => document.getElementById(id);
+const views = { home: $('view-home'), capture: $('view-capture'), result: $('view-result') };
+function show(name) {
+  for (const [key, el] of Object.entries(views)) el.classList.toggle('hidden', key !== name);
+}
+
+let drills = [];
+let profile = null;
+let landmarker = null;
+let stream = null;
+let counter = null;
+let session = null;
+let running = false;
+let rafId = null;
+let startedAt = 0;
+let lastVideoTime = -1;
+let activeDrill = null;
+
+const BADGE_ICONS = {
+  first_session: '\u{1F3C1}', wall_100: '\u{1F3AF}', wall_1000: '\u{1F525}',
+  wall_10000: '\u{1F451}', streak_7: '\u{1F4C5}', streak_30: '\u{26A1}',
+  streak_100: '\u{1F480}', ambidextrous: '\u{1F91D}', offhand_1000: '\u{1F4AA}',
+  early_bird: '\u{1F305}', all_rounder: '\u{1F31F}', level_10: '\u{1F947}', level_25: '\u{1F3C6}',
+};
+
+// ---------------------------------------------------------------- home
+
+async function loadHome() {
+  profile = await api('/api/me');
+  $('whoami').textContent = profile.display_name;
+  $('greeting').textContent = profile.streak > 0
+    ? `${profile.streak}-day streak`
+    : 'Ready to work';
+  $('level-pill').textContent = `Level ${profile.level}`;
+  const pct = Math.round((profile.level_fraction || 0) * 100);
+  $('level-bar').style.width = `${pct}%`;
+  $('level-text').textContent =
+    `${profile.xp_into_level} / ${profile.xp_for_next} XP to level ${profile.level + 1}`;
+  $('s-streak').textContent = profile.streak;
+  $('s-xp').textContent = profile.total_xp.toLocaleString();
+  $('s-today').textContent = `${profile.xp_today}`;
+  $('s-offhand').textContent = profile.stats.offhand_reps.toLocaleString();
+
+  const warn = $('streak-warn');
+  if (profile.streak_at_risk && profile.streak > 0) {
+    warn.textContent = `Train today to keep your ${profile.streak}-day streak alive.`;
+    warn.classList.remove('hidden');
+  } else if (profile.xp_today >= profile.daily_cap) {
+    warn.textContent = "You've hit today's XP cap. Rest up — it resets tomorrow.";
+    warn.classList.remove('hidden');
+  } else {
+    warn.classList.add('hidden');
+  }
+
+  $('badge-grid').innerHTML = profile.badges.length
+    ? profile.badges.map((b) => `
+        <div class="badge ${esc(b.tier)}" title="${esc(b.description)}">
+          <span class="ico">${BADGE_ICONS[b.key] || '\u{1F3C5}'}</span>${esc(b.name)}
+        </div>`).join('')
+    : '<p class="small muted">No badges yet. Your first session earns one.</p>';
+
+  $('recent').innerHTML = profile.recent_sessions.length
+    ? profile.recent_sessions.map((s) => {
+        const cls = s.status === 'counted' ? 'ok' : s.status === 'review' ? 'warn' : 'bad';
+        return `<tr>
+          <td><b>${esc(s.drill_name)}</b><br><span class="small muted">${fmtDate(s.submitted_at)}</span></td>
+          <td class="num">${s.reps_total} reps</td>
+          <td class="num">+${s.xp_awarded}<br><span class="pill ${cls}">${esc(s.status)}</span></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td class="muted small">Nothing yet.</td></tr>';
+}
+
+async function loadDrills() {
+  const data = await api('/api/drills');
+  drills = data.drills;
+  $('drill-list').innerHTML = drills.map((d, i) => `
+    <button class="drill-btn" data-i="${i}">
+      <b>${esc(d.name)}</b>
+      <span>${esc(d.description)}</span>
+    </button>`).join('');
+  $('drill-list').querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => openCapture(drills[Number(btn.dataset.i)]));
+  });
+}
+
+// ---------------------------------------------------------------- capture
+
+async function ensureLandmarker() {
+  if (landmarker) return landmarker;
+  const { PoseLandmarker, FilesetResolver } = await import(MP);
+  const vision = await FilesetResolver.forVisionTasks(`${MP}/wasm`);
+  landmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: MODEL, delegate: 'GPU' },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+  });
+  return landmarker;
+}
+
+async function openCapture(drill) {
+  activeDrill = drill;
+  counter = new RepCounter(drill);
+  session = null;
+  show('capture');
+  $('drill-name').textContent = drill.name;
+  $('hint').textContent = drill.setup_hint;
+  $('reps').textContent = '0';
+  $('rep-label').textContent = drill.metric === 'hold' ? 'seconds' : 'reps';
+  $('hands').innerHTML = drill.tracks_handedness
+    ? `<div class="hand-chip left"><b id="h-left">0</b><span>Left</span></div>
+       <div class="hand-chip right"><b id="h-right">0</b><span>Right</span></div>`
+    : '';
+  $('cap-err').classList.add('hidden');
+  $('startstop').disabled = true;
+  $('startstop').textContent = 'Start';
+
+  try {
+    setBanner('Starting camera…');
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
+      audio: false,
+    });
+    $('video').srcObject = stream;
+    await $('video').play();
+
+    setBanner('Loading the pose model…');
+    await ensureLandmarker();
+
+    setBanner('Step back until your whole body is in frame, then press Start.');
+    $('startstop').disabled = false;
+    renderLoop();
+  } catch (e) {
+    // A denied camera permission is the single most common failure here, and
+    // the browser's own message is not actionable for a 13-year-old.
+    const msg = e && e.name === 'NotAllowedError'
+      ? 'Camera access was blocked. Allow the camera in your browser settings, then reload.'
+      : `Could not start the camera: ${e.message}`;
+    showCaptureError(msg);
+    setBanner(msg, true);
+  }
+}
+
+function setBanner(text, warn = false) {
+  const el = $('banner');
+  el.textContent = text;
+  el.classList.toggle('warn', warn);
+  el.classList.toggle('hidden', !text);
+}
+
+function showCaptureError(message) {
+  const el = $('cap-err');
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+/**
+ * Per-frame loop: detect, count, draw. Runs whether or not a session is
+ * active, so the athlete can frame themselves before starting.
+ */
+function renderLoop() {
+  const video = $('video');
+  const canvas = $('overlay');
+  const ctx = canvas.getContext('2d');
+
+  const step = () => {
+    rafId = requestAnimationFrame(step);
+    if (!landmarker || video.readyState < 2) return;
+    if (video.currentTime === lastVideoTime) return;
+    lastVideoTime = video.currentTime;
+
+    if (canvas.width !== video.videoWidth) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    let result;
+    try {
+      result = landmarker.detectForVideo(video, performance.now());
+    } catch { return; }
+
+    const landmarks = result.landmarks && result.landmarks[0];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!landmarks) {
+      if (running) setBanner('Nobody in frame — counting paused.', true);
+      return;
+    }
+    drawSkeleton(ctx, landmarks, canvas.width, canvas.height);
+
+    if (!running) return;
+
+    const t = performance.now() - startedAt;
+    counter.push(landmarks, t);
+
+    if (activeDrill.metric === 'hold') {
+      $('reps').textContent = Math.floor(counter.holdMs / 1000);
+    } else {
+      $('reps').textContent = counter.count;
+      if (activeDrill.tracks_handedness) {
+        const { left, right } = counter.handCounts();
+        const l = $('h-left'), r = $('h-right');
+        if (l) l.textContent = left;
+        if (r) r.textContent = right;
+      }
+    }
+
+    // Live framing feedback. Bad framing is the top cause of a session being
+    // held for review, and it is trivially fixable *while* recording.
+    const conf = counter.meanConfidence;
+    if (conf > 0 && conf < 0.6) {
+      setBanner('Move so your whole body is in frame — reps may be missed.', true);
+    } else {
+      setBanner('');
+    }
+  };
+  step();
+}
+
+const BONES = [
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+  [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
+];
+
+function drawSkeleton(ctx, lms, w, h) {
+  ctx.lineWidth = Math.max(2, w / 220);
+  ctx.strokeStyle = 'rgba(57,217,138,.85)';
+  ctx.fillStyle = 'rgba(57,217,138,.95)';
+  for (const [a, b] of BONES) {
+    const p = lms[a], q = lms[b];
+    if (!p || !q || (p.visibility ?? 1) < 0.5 || (q.visibility ?? 1) < 0.5) continue;
+    ctx.beginPath();
+    ctx.moveTo(p.x * w, p.y * h);
+    ctx.lineTo(q.x * w, q.y * h);
+    ctx.stroke();
+  }
+  for (const i of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
+    const p = lms[i];
+    if (!p || (p.visibility ?? 1) < 0.5) continue;
+    ctx.beginPath();
+    ctx.arc(p.x * w, p.y * h, Math.max(3, w / 180), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+async function startSession() {
+  try {
+    session = await api('/api/sessions/start', {
+      method: 'POST',
+      body: { drill_key: activeDrill.key },
+    });
+  } catch (e) { return showCaptureError(e.message); }
+
+  counter.reset();
+  startedAt = performance.now();
+  running = true;
+  $('startstop').textContent = 'Finish';
+  $('startstop').classList.add('danger');
+  setBanner('');
+}
+
+async function finishSession() {
+  running = false;
+  const duration = performance.now() - startedAt;
+  $('startstop').disabled = true;
+  $('startstop').textContent = 'Submitting…';
+
+  const payload = counter.toSubmission(session.session_id, session.nonce, duration, {
+    client_version: CLIENT_VERSION,
+    device_label: navigator.platform || '',
+  });
+
+  try {
+    const result = await api('/api/sessions/submit', { method: 'POST', body: payload });
+    stopCamera();
+    showResult(result);
+  } catch (e) {
+    showCaptureError(e.message);
+    $('startstop').disabled = false;
+    $('startstop').textContent = 'Retry submit';
+  }
+}
+
+function stopCamera() {
+  running = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+  $('video').srcObject = null;
+  $('startstop').classList.remove('danger');
+}
+
+// ---------------------------------------------------------------- result
+
+function showResult(result) {
+  show('result');
+  const titles = {
+    counted: 'Logged. Nice work.',
+    review: 'Sent to your coach for review',
+    rejected: "That one didn't count",
+  };
+  $('result-title').textContent = titles[result.status] || 'Session complete';
+  $('r-reps').textContent = result.reps_total;
+  $('r-left').textContent = result.reps_left;
+  $('r-right').textContent = result.reps_right;
+  $('r-xp').textContent = result.xp_awarded;
+
+  $('r-breakdown').innerHTML = (result.xp_breakdown || [])
+    .map((l) => `<tr><td>${esc(l.label)}</td><td class="num">${l.amount >= 0 ? '+' : ''}${l.amount}</td></tr>`)
+    .join('');
+
+  const notes = result.notes || [];
+  $('r-notes').innerHTML = result.status === 'counted' && notes.length === 1
+    && notes[0] === 'No integrity concerns.'
+    ? ''
+    : notes.map((n) => `&bull; ${esc(n)}`).join('<br>');
+
+  $('r-badges').innerHTML = (result.new_badges || []).map((b) => `
+    <div class="badge ${esc(b.tier)}">
+      <span class="ico">${BADGE_ICONS[b.key] || '\u{1F3C5}'}</span>${esc(b.name)}
+    </div>`).join('');
+}
+
+// ---------------------------------------------------------------- wiring
+
+$('startstop').addEventListener('click', () => (running ? finishSession() : startSession()));
+$('back').addEventListener('click', () => { stopCamera(); show('home'); });
+$('done').addEventListener('click', async () => { await loadHome(); show('home'); });
+$('signout').addEventListener('click', logout);
+// Stopping the camera when the app is backgrounded matters on a phone: the
+// recording indicator staying lit is exactly the thing that makes a parent
+// distrust the privacy claim.
+window.addEventListener('pagehide', stopCamera);
+
+(async () => {
+  try {
+    await loadDrills();
+    await loadHome();
+    show('home');
+  } catch (e) {
+    document.body.innerHTML = `<div class="wrap"><div class="card"><h2>Could not load</h2><p>${esc(e.message)}</p><a href="index.html">Sign in again</a></div></div>`;
+  }
+})();
+</script>
+</body>
+</html>

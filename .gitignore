@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+venv/
+.venv/
+.env
+
+# Local databases (including the seeded demo)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Node
+node_modules/

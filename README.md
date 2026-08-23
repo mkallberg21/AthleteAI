@@ -1,0 +1,239 @@
+# AthleteIQ
+
+**On-device training analysis for youth athletes.**
+
+Athletes record their own training with a phone camera. Pose analysis runs **in
+the browser on the athlete's device** — the video never leaves the phone. Only
+derived counts (reps, which hand, timing, confidence) are uploaded, scored into
+XP, and rolled up for coaches and leaderboards.
+
+Built for youth lacrosse first — the flagship drill counts wall-ball
+throw/catch cycles and attributes each one to the hand on top of the stick —
+but the drill system is sport-agnostic and ships with general strength, speed,
+agility, and conditioning exercises.
+
+---
+
+## Why on-device
+
+The product requirement was "coaches shouldn't watch the videos, just get the
+data." Running the analysis on the phone is the only version of that which is
+structurally true rather than a policy promise:
+
+- **There is no endpoint that accepts video.** A test asserts this against the
+  generated OpenAPI schema, and a second asserts no database column stores
+  imagery. If someone later adds an upload path, the suite fails.
+- **No storage or GPU bill** that scales with usage. Inference is the athlete's
+  device.
+- **No footage of minors** in anyone's S3 bucket, which is the liability that
+  ends youth-sports products.
+
+The tradeoff is real and worth stating: with no footage retained, a disputed
+count cannot be settled by watching the clip. That is why the integrity layer
+and the coach review queue exist — see below.
+
+---
+
+## Running it
+
+```bash
+pip install -r requirements.txt
+
+# Seed a demo program (2 teams, 8 athletes, 6 weeks of history)
+python scripts/seed_demo.py --db data/demo.db
+
+# Serve
+ATHLETEIQ_DB_PATH=data/demo.db uvicorn athleteiq.api:app --reload
+```
+
+Open <http://127.0.0.1:8000/> and sign in with a token the seeder printed.
+Coaches land on the dashboard, athletes on the capture screen.
+
+> **Camera access requires HTTPS** on anything other than `localhost`. Browsers
+> refuse `getUserMedia` on plain HTTP, so a phone on your LAN needs a TLS
+> terminator in front (Caddy, ngrok, or `mkcert` + any TLS proxy all work).
+
+### Tests
+
+```bash
+python -m pytest tests/ -q          # 222 tests
+
+DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
+  node --test tests/js/counter.test.mjs   # 7 tests
+```
+
+The JS tests drive the counter with synthetic pose streams built from known rep
+counts — that is how the detector is verified without a camera and a stick.
+
+---
+
+## Architecture
+
+```
+athleteiq/
+  config.py         Scoring curves, integrity limits, retention windows
+  db.py             SQLite schema; tokens stored hashed, never in the clear
+  drills/
+    base.py         DrillSpec: the declarative counting contract
+    catalog.py      The 12 shipped drills
+  integrity.py      Server-side plausibility scoring of submitted sessions
+  scoring.py        XP, levels, streaks, badges
+  leaderboard.py    Windowed boards, team standings, coach roster rollups
+  store.py          The only module that speaks SQL
+  api.py            FastAPI surface
+  web/static/
+    counter.js      On-device pose -> reps engine (shared spec with server)
+    capture.html    Athlete capture app
+    coach.html      Coach dashboard
+    leaderboard.html
+```
+
+### The drill spec is the load-bearing idea
+
+A drill declares *how to collapse 33 pose landmarks into one number*, and the
+thresholds that turn that number into reps. The **same JSON** is consumed twice:
+the browser counts with it, and the server re-validates against it. They cannot
+drift apart.
+
+Adding an exercise is a data change in `drills/catalog.py` — no counter code, no
+client change, no migration:
+
+```python
+LUNGE = DrillSpec(
+    key="gen_lunge", name="Walking Lunges", sport="general",
+    category=Category.STRENGTH, metric=Metric.REPS,
+    description="Knee angle cycles from standing through a deep lunge.",
+    signal=SignalSpec(kind=SignalKind.JOINT_ANGLE,
+                      joints=("left_hip", "left_knee", "left_ankle")),
+    counter=CounterSpec(down_threshold=95.0, up_threshold=165.0, min_rep_ms=700),
+    setup_hint="Side-on to the phone, full body in frame.",
+)
+```
+
+Append it to `ALL_DRILLS` and it appears in the athlete's drill picker, counts
+on-device, scores, and ranks. `tests/test_drills.py` runs eleven
+invariants against every drill in the catalog, so a malformed spec fails the
+suite rather than silently miscounting in someone's driveway.
+
+Four signal kinds cover most exercises: `joint_angle` (push-ups, squats),
+`relative_height` (jumping jacks, pull-ups, high knees), `body_height` (burpees,
+squat jumps), and the bespoke `wall_ball_cycle`.
+
+### How wall ball counting works
+
+A single threshold cannot distinguish a throw from a catch — both move the
+stick. So the detector tracks the **top hand on the stick** (the wrist nearer
+the head) and measures its height above the shoulder line, normalized by torso
+length so it is invariant to how far the athlete stands from the phone.
+
+Through one throw–catch cycle that value dips (receiving) then peaks (cocked to
+throw). Whichever wrist is on top *at the peak* is the hand the rep is credited
+to — which is exactly the distinction lacrosse coaches care about.
+
+Two safeguards make it usable in a driveway:
+- **Hysteresis.** The signal must cross fully down *and* fully back up. Without
+  it, a signal hovering at the boundary sprays dozens of phantom reps.
+- **A refractory period.** Reps closer together than the drill's physical floor
+  are discarded.
+
+Both are covered by tests (`counter.test.mjs`), including a case that parks the
+signal on the threshold with noise and asserts zero reps.
+
+---
+
+## Integrity: the client is untrusted
+
+Counting happens on a device the athlete controls. Anyone willing to open
+developer tools can post any number they like, and on a leaderboard that matters.
+Every submission is therefore treated as a *claim* and re-scored server-side:
+
+| Check | Catches |
+|---|---|
+| Rep rate vs the drill's physical ceiling | "500 wall balls in 30 seconds" |
+| Cadence variance (too even) | Generated payloads — humans are never metronomic |
+| Cadence variance (too erratic) | Detector firing on background motion |
+| Timestamps past session end / negative | Hand-edited payloads |
+| Single-use nonce per session | Replaying a captured submission |
+| Mean pose confidence | Athlete half out of frame; counts unreliable |
+| Session duration envelope | Forgotten timers, accidental taps |
+
+Scores land in one of three buckets: **counted**, **held for review**, or
+**rejected**. Held sessions go to a coach queue *with the reason attached* —
+approving credits the withheld XP.
+
+This is deliberately not a fraud oracle. Falsely accusing a 14-year-old who
+actually did the work is far more damaging than a few inflated reps reaching a
+leaderboard, so borderline sessions go to a human rather than being thrown away.
+The confidence curve is tuned the same way: a marginally-framed session (0.45)
+still counts, and only a genuinely unusable one (0.40 and below) is held.
+
+---
+
+## Gamification, and what it is tuned against
+
+Points aimed at 12–18 year olds reward whatever you actually measure, so each
+choice here is deliberate:
+
+- **Off-hand reps pay 1.5×.** In lacrosse the weak hand is what every player
+  avoids and every coach wants. The premium points the incentive at the hard
+  thing. Off-hand is computed against the athlete's *stated* dominant hand, so
+  lefties are credited correctly.
+- **Balanced-session bonus** when the weaker side carries 40%+ of the work.
+- **Diminishing returns within a session.** One three-hour Sunday must not beat
+  six honest twenty-minute days.
+- **A hard daily XP cap.** Without it the leaderboard measures free time and
+  quietly encourages overuse injury.
+- **Streaks forgive one missed day.** Games, travel, and exams shouldn't erase
+  six weeks; an unforgiving streak makes athletes quit after the first break.
+
+**Five leaderboards, not one** — XP, off-hand, streak, reps, and most-improved.
+Ranking only by total XP crowns whoever has the most free time. Most-improved
+resets the field every window, and off-hand ranks the hardest work on its own,
+so a different athlete can be first at something that matters.
+
+**Team standings rank by XP *per athlete*,** not total — otherwise the board
+just ranks teams by roster size and a small squad can never win.
+
+---
+
+## Handling minors
+
+- **Coach-mediated signup.** An adult in the program creates athlete accounts;
+  tokens are handed over in person. No athlete email required.
+- **Name masking on shared leaderboards.** An athlete 17 or under without
+  recorded guardian consent appears as `A. (#14)` or `Athlete A.` — still
+  ranked, still accountable, but not full-named on a screen other families see.
+  Assigning jersey numbers keeps those handles distinct.
+- **Coaches always see real names** on the roster. They are the responsible
+  adult; the masking is about broadcast, not supervision.
+- **Per-rep timings are pruned** after 45 days (`prune_rep_events`). Aggregate
+  session records persist; the granular stream exists only for integrity review.
+
+`guardian_consent` is currently a boolean an adult sets. A production deployment
+needs a real consent record — who consented, when, and to what — plus the
+deletion and access rights COPPA and state student-privacy laws require. That is
+the main compliance gap between this and a shippable product.
+
+---
+
+## Known limitations
+
+Stated plainly, because these are the things that decide whether this survives
+contact with a real driveway:
+
+1. **Thresholds are uncalibrated.** Every number in `catalog.py` is a reasoned
+   starting point, not a measured one. They need tuning against real footage of
+   real athletes — that is the highest-value next task, and the reason the specs
+   are data rather than code.
+2. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
+   motion without tracking the ball, so a convincing shadow-throw with no ball
+   counts. Ball detection would close that, at real cost in model size and
+   battery.
+3. **Handedness is inferred from wrist height**, which is reliable for standard
+   lacrosse form and less so for unusual grips.
+4. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+   so that badge is wrong outside UTC. Noted in `store.py`.
+5. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+   wants Postgres. `store.py` is the only module to change.
+6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+   not for a public launch.

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AthleteIQ &mdash; Leaderboards</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">Athlete<span>IQ</span></div>
+  <button class="secondary inline" onclick="location.href='capture.html'">Back</button>
+</div>
+
+<div class="wrap wrap--narrow">
+  <div class="card">
+    <h2>Leaderboards</h2>
+    <div class="tabs" id="boards"></div>
+    <div class="tabs" id="windows"></div>
+    <p class="small muted" id="board-note"></p>
+  </div>
+
+  <div class="card">
+    <table><tbody id="rows"></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2>Team standings</h2>
+    <p class="small muted">Ranked by XP per athlete, so a small squad can still win.</p>
+    <table><tbody id="standings"></tbody></table>
+  </div>
+
+  <div id="err" class="err hidden"></div>
+</div>
+
+<script type="module">
+import { api, esc, getToken } from './api.js';
+
+if (!getToken()) location.href = 'index.html';
+const $ = (id) => document.getElementById(id);
+
+// Several boards rather than one, so the athlete who cannot win on raw volume
+// can still be first at something that matters.
+const BOARDS = [
+  ['xp', 'XP', 'Total XP earned in the window.'],
+  ['offhand', 'Off-hand', 'Reps on your weaker hand. The hardest work, ranked on its own.'],
+  ['streak', 'Streak', 'Consecutive days trained. Consistency, not volume.'],
+  ['reps', 'Reps', 'Raw rep count across every drill.'],
+  ['improvement', 'Most improved', 'Gain over the previous window — anyone can top this one.'],
+];
+const WINDOWS = [['week', 'This week'], ['month', 'This month'], ['season', 'Season'], ['all', 'All time']];
+
+let board = 'xp';
+let window_ = 'week';
+let myId = null;
+
+function renderTabs() {
+  $('boards').innerHTML = BOARDS.map(([k, label]) =>
+    `<button data-board="${k}" aria-selected="${k === board}">${esc(label)}</button>`).join('');
+  $('windows').innerHTML = WINDOWS.map(([k, label]) =>
+    `<button data-window="${k}" aria-selected="${k === window_}">${esc(label)}</button>`).join('');
+  $('board-note').textContent = (BOARDS.find(([k]) => k === board) || [])[2] || '';
+
+  $('boards').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    board = b.dataset.board; renderTabs(); load();
+  }));
+  $('windows').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    window_ = b.dataset.window; renderTabs(); load();
+  }));
+}
+
+const MEDALS = { 1: '\u{1F947}', 2: '\u{1F948}', 3: '\u{1F949}' };
+
+async function load() {
+  $('err').classList.add('hidden');
+  try {
+    const [data, standings] = await Promise.all([
+      api(`/api/leaderboard?board=${board}&window=${window_}`),
+      api(`/api/standings?window=${window_}`),
+    ]);
+
+    $('rows').innerHTML = data.rows.length ? data.rows.map((r) => {
+      const isMe = r.athlete_id === myId;
+      return `<tr${isMe ? ' style="background:rgba(57,217,138,.08)"' : ''}>
+        <td class="rank ${r.rank <= 3 ? 'top' : ''}" style="width:44px">${MEDALS[r.rank] || r.rank}</td>
+        <td><b>${esc(r.display_name)}</b>${isMe ? ' <span class="pill ok">you</span>' : ''}
+            <br><span class="small muted">${esc(r.team_name)} &middot; Lvl ${r.level}${r.detail ? ` &middot; ${esc(r.detail)}` : ''}</span></td>
+        <td class="num"><b>${r.value.toLocaleString()}</b></td>
+      </tr>`;
+    }).join('') : '<tr><td class="muted small">Nobody on this board yet. Be first.</td></tr>';
+
+    $('standings').innerHTML = standings.teams.length ? standings.teams.map((t) => `
+      <tr>
+        <td class="rank ${t.rank === 1 ? 'top' : ''}" style="width:44px">${MEDALS[t.rank] || t.rank}</td>
+        <td><b>${esc(t.team_name)}</b><br>
+            <span class="small muted">${Math.round(t.participation * 100)}% training</span></td>
+        <td class="num"><b>${t.xp_per_athlete.toLocaleString()}</b><br>
+            <span class="small muted">per athlete</span></td>
+      </tr>`).join('') : '<tr><td class="muted small">No teams yet.</td></tr>';
+  } catch (e) {
+    $('err').textContent = e.message;
+    $('err').classList.remove('hidden');
+  }
+}
+
+(async () => {
+  try { myId = (await api('/api/me')).athlete_id; } catch { /* still render the board */ }
+  renderTabs();
+  await load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,542 @@
+"""Data access: the only module that talks SQL.
+
+Everything above this layer works in domain objects. Everything below is
+SQLite. Keeping that boundary sharp is what makes a later move to Postgres a
+contained change.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
+
+from .config import CONFIG
+from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
+from .drills import DRILLS_BY_KEY, get_drill
+from .integrity import RepEvent, SessionClaim, evaluate
+from .scoring import (
+    AthleteStats,
+    BADGES_BY_KEY,
+    compute_streak,
+    earned_badges,
+    level_progress,
+    score_session,
+)
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _iso(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _parse(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+class StoreError(Exception):
+    """A request that is well-formed but not permissible."""
+
+
+@dataclass
+class Principal:
+    """The authenticated caller."""
+
+    id: int
+    org_id: int
+    role: str
+    display_name: str
+    dominant_hand: str | None
+
+    @property
+    def is_staff(self) -> bool:
+        return self.role in ("coach", "director")
+
+
+class Store:
+    def __init__(self, conn: sqlite3.Connection | None = None) -> None:
+        self.conn = conn or connect()
+        init_db(self.conn)
+
+    # ------------------------------------------------------------------
+    # Org / team / user setup
+    # ------------------------------------------------------------------
+
+    def create_org(self, name: str, sport: str = "lacrosse") -> int:
+        with transaction(self.conn) as c:
+            cur = c.execute(
+                "INSERT INTO organizations(name, sport, created_at) VALUES (?,?,?)",
+                (name, sport, _iso(_now())),
+            )
+        return int(cur.lastrowid)
+
+    def create_team(self, org_id: int, name: str, season: str = "") -> dict[str, Any]:
+        # Retry on the astronomically unlikely join-code collision rather than
+        # surfacing a UNIQUE constraint error to a coach mid-setup.
+        for _ in range(10):
+            code = new_join_code()
+            try:
+                with transaction(self.conn) as c:
+                    cur = c.execute(
+                        "INSERT INTO teams(org_id, name, season, join_code, created_at) "
+                        "VALUES (?,?,?,?,?)",
+                        (org_id, name, season, code, _iso(_now())),
+                    )
+                return {"id": int(cur.lastrowid), "name": name, "join_code": code}
+            except sqlite3.IntegrityError:
+                continue
+        raise StoreError("could not allocate a unique join code")
+
+    def create_user(
+        self,
+        org_id: int,
+        role: str,
+        display_name: str,
+        *,
+        email: str | None = None,
+        birth_year: int | None = None,
+        dominant_hand: str | None = None,
+        guardian_consent: bool = False,
+    ) -> dict[str, Any]:
+        """Create a user and return their one-time API token.
+
+        The token is shown exactly once. Only its hash is stored, so a lost
+        token is reissued, never recovered.
+        """
+        if role not in ("athlete", "coach", "director"):
+            raise StoreError(f"invalid role: {role!r}")
+        if dominant_hand not in (None, "left", "right"):
+            raise StoreError(f"invalid dominant_hand: {dominant_hand!r}")
+
+        token = new_token()
+        consent_at = _iso(_now()) if guardian_consent else None
+        with transaction(self.conn) as c:
+            cur = c.execute(
+                "INSERT INTO users(org_id, role, display_name, email, birth_year, "
+                "guardian_consent_at, dominant_hand, token_hash, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    org_id, role, display_name, email, birth_year,
+                    consent_at, dominant_hand, hash_token(token), _iso(_now()),
+                ),
+            )
+        return {"id": int(cur.lastrowid), "token": token, "display_name": display_name}
+
+    def join_team(self, join_code: str, user_id: int, jersey: str = "", position: str = "") -> int:
+        row = self.conn.execute(
+            "SELECT id, org_id FROM teams WHERE join_code = ?", (join_code.upper().strip(),)
+        ).fetchone()
+        if row is None:
+            raise StoreError("no team matches that join code")
+        user = self.conn.execute(
+            "SELECT org_id FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if user is None:
+            raise StoreError("unknown user")
+        if user["org_id"] != row["org_id"]:
+            raise StoreError("that team belongs to a different program")
+        with transaction(self.conn) as c:
+            c.execute(
+                "INSERT OR REPLACE INTO team_members(team_id, user_id, jersey, position, joined_at) "
+                "VALUES (?,?,?,?,?)",
+                (row["id"], user_id, jersey, position, _iso(_now())),
+            )
+        return int(row["id"])
+
+    def authenticate(self, token: str) -> Principal:
+        row = self.conn.execute(
+            "SELECT id, org_id, role, display_name, dominant_hand FROM users "
+            "WHERE token_hash = ? AND active = 1",
+            (hash_token(token),),
+        ).fetchone()
+        if row is None:
+            raise StoreError("invalid or inactive token")
+        return Principal(
+            id=row["id"],
+            org_id=row["org_id"],
+            role=row["role"],
+            display_name=row["display_name"],
+            dominant_hand=row["dominant_hand"],
+        )
+
+    # ------------------------------------------------------------------
+    # Sessions
+    # ------------------------------------------------------------------
+
+    def start_session(self, athlete_id: int, drill_key: str) -> dict[str, Any]:
+        """Open a session and hand back the nonce required to submit it."""
+        if drill_key not in DRILLS_BY_KEY:
+            raise StoreError(f"unknown drill: {drill_key!r}")
+        nonce = new_token()
+        with transaction(self.conn) as c:
+            cur = c.execute(
+                "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, status) "
+                "VALUES (?,?,?,?,'open')",
+                (athlete_id, drill_key, nonce, _iso(_now())),
+            )
+        return {"session_id": int(cur.lastrowid), "nonce": nonce, "drill_key": drill_key}
+
+    def submit_session(
+        self,
+        athlete_id: int,
+        session_id: int,
+        nonce: str,
+        *,
+        duration_ms: int,
+        reps: list[dict[str, Any]],
+        hold_ms: int = 0,
+        mean_confidence: float = 0.0,
+        client_version: str = "",
+        device_label: str = "",
+    ) -> dict[str, Any]:
+        """Validate, score, and record a completed session."""
+        row = self.conn.execute(
+            "SELECT * FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row is None:
+            raise StoreError("unknown session")
+        if row["athlete_id"] != athlete_id:
+            raise StoreError("session belongs to a different athlete")
+        # The nonce is what makes a submission single-use: replaying a captured
+        # payload hits this branch instead of double-scoring.
+        if row["status"] != "open":
+            raise StoreError("session has already been submitted")
+        if row["nonce"] != nonce:
+            raise StoreError("session nonce does not match")
+
+        drill = get_drill(row["drill_key"])
+        claim = SessionClaim(
+            drill_key=drill.key,
+            duration_ms=int(duration_ms),
+            reps=[
+                RepEvent(
+                    t_ms=int(r.get("t_ms", 0)),
+                    hand=str(r.get("hand", "none")),
+                    confidence=float(r.get("confidence", 0.0)),
+                )
+                for r in reps
+            ],
+            hold_ms=int(hold_ms),
+            mean_confidence=float(mean_confidence),
+            client_version=client_version,
+        )
+        verdict = evaluate(claim, drill)
+
+        today = _now().date().isoformat()
+        already = self._xp_on_day(athlete_id, today)
+        breakdown = score_session(
+            drill,
+            verdict,
+            hold_ms=claim.hold_ms,
+            dominant_hand=self._dominant_hand(athlete_id),
+            xp_already_today=already,
+        )
+        awarded = breakdown.total
+
+        with transaction(self.conn) as c:
+            c.execute(
+                "UPDATE sessions SET submitted_at=?, duration_ms=?, reps_total=?, "
+                "reps_left=?, reps_right=?, hold_ms=?, mean_confidence=?, cadence_cv=?, "
+                "integrity_score=?, integrity_notes=?, xp_awarded=?, status=?, "
+                "client_version=?, device_label=? WHERE id=?",
+                (
+                    _iso(_now()), claim.duration_ms, verdict.reps_total,
+                    verdict.reps_left, verdict.reps_right, claim.hold_ms,
+                    claim.mean_confidence, verdict.cadence_cv, verdict.score,
+                    json.dumps(verdict.notes), awarded, verdict.status,
+                    client_version, device_label, session_id,
+                ),
+            )
+            # Per-rep timings are kept only for integrity review and pruned by
+            # `prune_rep_events`. They are timings, never imagery.
+            c.executemany(
+                "INSERT INTO rep_events(session_id, t_ms, hand, confidence) VALUES (?,?,?,?)",
+                [
+                    (session_id, r.t_ms, r.hand if r.hand in ("left", "right") else "none", r.confidence)
+                    for r in claim.reps
+                ],
+            )
+            if awarded > 0:
+                c.execute(
+                    "INSERT INTO xp_ledger(athlete_id, session_id, amount, reason, day, created_at) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (athlete_id, session_id, awarded, f"{drill.name} session", today, _iso(_now())),
+                )
+
+        new_badges = self._sync_badges(athlete_id)
+
+        return {
+            "session_id": session_id,
+            "status": verdict.status,
+            "integrity_score": round(verdict.score, 3),
+            "notes": verdict.notes,
+            "reps_total": verdict.reps_total,
+            "reps_left": verdict.reps_left,
+            "reps_right": verdict.reps_right,
+            "xp_awarded": awarded,
+            "xp_breakdown": [{"label": l, "amount": a} for l, a in breakdown.lines],
+            "new_badges": [
+                {"key": k, "name": BADGES_BY_KEY[k].name, "tier": BADGES_BY_KEY[k].tier}
+                for k in new_badges
+            ],
+        }
+
+    def review_session(self, session_id: int, approve: bool, reviewer_id: int) -> dict[str, Any]:
+        """Coach decision on a session held for review.
+
+        Approving credits the XP that was withheld at submit time.
+        """
+        row = self.conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+        if row is None:
+            raise StoreError("unknown session")
+        if row["status"] != "review":
+            raise StoreError(f"session is {row['status']}, not awaiting review")
+
+        if not approve:
+            with transaction(self.conn) as c:
+                c.execute("UPDATE sessions SET status='rejected' WHERE id=?", (session_id,))
+            return {"session_id": session_id, "status": "rejected", "xp_awarded": 0}
+
+        drill = get_drill(row["drill_key"])
+        athlete_id = row["athlete_id"]
+        day = (_parse(row["submitted_at"]) or _now()).date().isoformat()
+
+        from .integrity import IntegrityResult
+
+        verdict = IntegrityResult(
+            score=row["integrity_score"],
+            status="counted",
+            reps_total=row["reps_total"],
+            reps_left=row["reps_left"],
+            reps_right=row["reps_right"],
+        )
+        breakdown = score_session(
+            drill,
+            verdict,
+            hold_ms=row["hold_ms"],
+            dominant_hand=self._dominant_hand(athlete_id),
+            xp_already_today=self._xp_on_day(athlete_id, day),
+        )
+        awarded = breakdown.total
+        with transaction(self.conn) as c:
+            c.execute(
+                "UPDATE sessions SET status='counted', xp_awarded=? WHERE id=?",
+                (awarded, session_id),
+            )
+            if awarded > 0:
+                c.execute(
+                    "INSERT INTO xp_ledger(athlete_id, session_id, amount, reason, day, created_at) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (
+                        athlete_id, session_id, awarded,
+                        f"{drill.name} session (coach approved)", day, _iso(_now()),
+                    ),
+                )
+        self._sync_badges(athlete_id)
+        return {"session_id": session_id, "status": "counted", "xp_awarded": awarded}
+
+    # ------------------------------------------------------------------
+    # Athlete views
+    # ------------------------------------------------------------------
+
+    def _dominant_hand(self, athlete_id: int) -> str | None:
+        row = self.conn.execute(
+            "SELECT dominant_hand FROM users WHERE id=?", (athlete_id,)
+        ).fetchone()
+        return row["dominant_hand"] if row else None
+
+    def _xp_on_day(self, athlete_id: int, day: str) -> int:
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(amount),0) AS t FROM xp_ledger WHERE athlete_id=? AND day=?",
+            (athlete_id, day),
+        ).fetchone()
+        return int(row["t"])
+
+    def athlete_stats(self, athlete_id: int) -> AthleteStats:
+        c = self.conn
+        total_xp = int(
+            c.execute(
+                "SELECT COALESCE(SUM(amount),0) AS t FROM xp_ledger WHERE athlete_id=?",
+                (athlete_id,),
+            ).fetchone()["t"]
+        )
+        agg = c.execute(
+            "SELECT COUNT(*) AS n, COUNT(DISTINCT drill_key) AS drills "
+            "FROM sessions WHERE athlete_id=? AND status='counted'",
+            (athlete_id,),
+        ).fetchone()
+
+        wall = c.execute(
+            "SELECT COALESCE(SUM(reps_total),0) AS r FROM sessions "
+            "WHERE athlete_id=? AND status='counted' AND drill_key IN ('lax_wall_ball','lax_quick_stick')",
+            (athlete_id,),
+        ).fetchone()["r"]
+
+        hand = self._dominant_hand(athlete_id) or "right"
+        offhand_col = "reps_left" if hand == "right" else "reps_right"
+        offhand = c.execute(
+            f"SELECT COALESCE(SUM({offhand_col}),0) AS r FROM sessions "
+            "WHERE athlete_id=? AND status='counted'",
+            (athlete_id,),
+        ).fetchone()["r"]
+
+        balanced = c.execute(
+            "SELECT COUNT(*) AS n FROM sessions WHERE athlete_id=? AND status='counted' "
+            "AND (reps_left + reps_right) >= 20 "
+            "AND (MIN(reps_left, reps_right) * 1.0 / (reps_left + reps_right)) >= ?",
+            (athlete_id, CONFIG.scoring.balance_threshold),
+        ).fetchone()["n"]
+
+        # "Before 8am" is evaluated on the stored UTC timestamp. A real
+        # deployment needs the athlete's local timezone stored on the user row;
+        # this is the known simplification here.
+        early = c.execute(
+            "SELECT COUNT(*) AS n FROM sessions WHERE athlete_id=? AND status='counted' "
+            "AND CAST(strftime('%H', submitted_at) AS INTEGER) < 8",
+            (athlete_id,),
+        ).fetchone()["n"]
+
+        days = [
+            date.fromisoformat(r["day"])
+            for r in c.execute(
+                "SELECT DISTINCT day FROM xp_ledger WHERE athlete_id=? "
+                "GROUP BY day HAVING SUM(amount) >= ? ORDER BY day",
+                (athlete_id, CONFIG.scoring.streak_min_xp),
+            )
+        ]
+        streak = compute_streak(days, _now().date())
+
+        return AthleteStats(
+            total_xp=total_xp,
+            session_count=int(agg["n"]),
+            wall_ball_reps=int(wall),
+            offhand_reps=int(offhand),
+            balanced_sessions=int(balanced),
+            early_sessions=int(early),
+            distinct_drills=int(agg["drills"]),
+            current_streak=streak.current,
+            longest_streak=streak.longest,
+        )
+
+    def _sync_badges(self, athlete_id: int) -> list[str]:
+        """Award any newly-earned badges. Idempotent."""
+        stats = self.athlete_stats(athlete_id)
+        deserved = set(earned_badges(stats))
+        held = {
+            r["badge_key"]
+            for r in self.conn.execute(
+                "SELECT badge_key FROM badges WHERE athlete_id=?", (athlete_id,)
+            )
+        }
+        fresh = sorted(deserved - held)
+        if fresh:
+            with transaction(self.conn) as c:
+                c.executemany(
+                    "INSERT OR IGNORE INTO badges(athlete_id, badge_key, awarded_at) VALUES (?,?,?)",
+                    [(athlete_id, k, _iso(_now())) for k in fresh],
+                )
+        return fresh
+
+    def athlete_profile(self, athlete_id: int) -> dict[str, Any]:
+        user = self.conn.execute(
+            "SELECT id, display_name, dominant_hand, birth_year FROM users WHERE id=?",
+            (athlete_id,),
+        ).fetchone()
+        if user is None:
+            raise StoreError("unknown athlete")
+
+        stats = self.athlete_stats(athlete_id)
+        prog = level_progress(stats.total_xp)
+        days = [
+            date.fromisoformat(r["day"])
+            for r in self.conn.execute(
+                "SELECT DISTINCT day FROM xp_ledger WHERE athlete_id=? "
+                "GROUP BY day HAVING SUM(amount) >= ? ORDER BY day",
+                (athlete_id, CONFIG.scoring.streak_min_xp),
+            )
+        ]
+        streak = compute_streak(days, _now().date())
+
+        badges = [
+            {
+                "key": r["badge_key"],
+                "name": BADGES_BY_KEY[r["badge_key"]].name,
+                "description": BADGES_BY_KEY[r["badge_key"]].description,
+                "tier": BADGES_BY_KEY[r["badge_key"]].tier,
+                "awarded_at": r["awarded_at"],
+            }
+            for r in self.conn.execute(
+                "SELECT badge_key, awarded_at FROM badges WHERE athlete_id=? ORDER BY awarded_at",
+                (athlete_id,),
+            )
+            if r["badge_key"] in BADGES_BY_KEY
+        ]
+
+        recent = [
+            dict(r)
+            for r in self.conn.execute(
+                "SELECT id, drill_key, submitted_at, duration_ms, reps_total, reps_left, "
+                "reps_right, xp_awarded, status FROM sessions "
+                "WHERE athlete_id=? AND status != 'open' "
+                "ORDER BY submitted_at DESC LIMIT 20",
+                (athlete_id,),
+            )
+        ]
+        for r in recent:
+            r["drill_name"] = DRILLS_BY_KEY[r["drill_key"]].name if r["drill_key"] in DRILLS_BY_KEY else r["drill_key"]
+
+        return {
+            "athlete_id": user["id"],
+            "display_name": user["display_name"],
+            "dominant_hand": user["dominant_hand"],
+            "level": prog.level,
+            "total_xp": prog.total_xp,
+            "xp_into_level": prog.xp_into_level,
+            "xp_for_next": prog.xp_for_next,
+            "level_fraction": round(prog.fraction, 3),
+            "streak": streak.current,
+            "longest_streak": streak.longest,
+            "streak_at_risk": streak.at_risk,
+            "xp_today": self._xp_on_day(athlete_id, _now().date().isoformat()),
+            "daily_cap": CONFIG.scoring.daily_xp_cap,
+            "stats": {
+                "sessions": stats.session_count,
+                "wall_ball_reps": stats.wall_ball_reps,
+                "offhand_reps": stats.offhand_reps,
+                "balanced_sessions": stats.balanced_sessions,
+                "distinct_drills": stats.distinct_drills,
+            },
+            "badges": badges,
+            "recent_sessions": recent,
+        }
+
+    # ------------------------------------------------------------------
+    # Maintenance
+    # ------------------------------------------------------------------
+
+    def prune_rep_events(self, retention_days: int | None = None) -> int:
+        """Drop per-rep timings past the retention window.
+
+        Aggregate session records survive; only the granular stream goes. Keeps
+        the stored footprint on a minor proportional to what review actually
+        requires.
+        """
+        days = retention_days if retention_days is not None else CONFIG.rep_event_retention_days
+        cutoff = _iso(_now() - timedelta(days=days))
+        with transaction(self.conn) as c:
+            cur = c.execute(
+                "DELETE FROM rep_events WHERE session_id IN "
+                "(SELECT id FROM sessions WHERE submitted_at IS NOT NULL AND submitted_at < ?)",
+                (cutoff,),
+            )
+        return cur.rowcount

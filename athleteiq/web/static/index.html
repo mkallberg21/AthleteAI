@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AthleteIQ</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar"><div class="brand">Athlete<span>IQ</span></div></div>
+
+<div class="wrap wrap--narrow">
+  <div class="card">
+    <h1>Train on your own. Get the credit.</h1>
+    <p>
+      Record your drills with your phone. The app counts your reps on the phone
+      itself and sends the numbers to your coach.
+    </p>
+    <p class="privacy-note">
+      <b>Your video never leaves your phone.</b> It is not uploaded, not saved,
+      and not stored anywhere. Only the counts &mdash; reps, which hand, how
+      long &mdash; are sent. Your coach sees the numbers, never the footage.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Sign in</h2>
+    <label for="token">Your athlete code</label>
+    <input id="token" type="password" autocomplete="off" placeholder="Paste the code your coach gave you">
+    <div id="err" class="err hidden"></div>
+    <button id="go">Continue</button>
+  </div>
+
+  <p class="small muted" style="text-align:center">
+    Coaches and directors sign in with the same code and land on the dashboard.
+  </p>
+</div>
+
+<script type="module">
+import { api, setToken } from './api.js';
+
+const tokenInput = document.getElementById('token');
+const errEl = document.getElementById('err');
+const goBtn = document.getElementById('go');
+
+function showError(message) {
+  errEl.textContent = message;
+  errEl.classList.remove('hidden');
+}
+
+async function signIn() {
+  const token = tokenInput.value.trim();
+  if (!token) return showError('Enter the code your coach gave you.');
+
+  goBtn.disabled = true;
+  errEl.classList.add('hidden');
+  setToken(token);
+  try {
+    const me = await api('/api/me');
+    // Coaches and athletes share a sign-in but want different screens.
+    location.href = me.role === 'athlete' ? 'capture.html' : 'coach.html';
+  } catch (e) {
+    setToken(null);
+    showError(e.message);
+    goBtn.disabled = false;
+  }
+}
+
+goBtn.addEventListener('click', signIn);
+tokenInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
+</script>
+</body>
+</html>

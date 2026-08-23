@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AthleteIQ &mdash; Coach Dashboard</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">Athlete<span>IQ</span> <span class="small muted" style="font-weight:400">Coach</span></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="small muted" id="whoami"></span>
+    <button class="secondary inline" id="signout">Sign out</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:180px">
+        <label for="team">Team</label>
+        <select id="team"><option value="">All teams</option></select>
+      </div>
+      <div style="flex:1;min-width:150px">
+        <label for="window">Window</label>
+        <select id="window">
+          <option value="week">Last 7 days</option>
+          <option value="month">Last 30 days</option>
+          <option value="season">Season</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+    </div>
+    <p class="privacy-note" style="margin-top:12px">
+      This dashboard contains no video. Athletes' footage is processed on their
+      own phones and never uploaded &mdash; what you see here are counts,
+      timings, and consistency.
+    </p>
+  </div>
+
+  <div class="stat-row" id="summary"></div>
+
+  <div class="card" id="attention-card">
+    <h2>Needs a nudge</h2>
+    <div id="attention"></div>
+  </div>
+
+  <div class="card">
+    <h2>Roster</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Athlete</th><th class="num">XP</th><th class="num">Sessions</th>
+          <th class="num">Off-hand</th><th>Last active</th><th>Status</th>
+        </tr></thead>
+        <tbody id="roster"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Team standings <span class="small muted">by XP per athlete</span></h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th class="num">#</th><th>Team</th><th class="num">XP / athlete</th>
+          <th class="num">Participation</th><th class="num">Total XP</th>
+        </tr></thead>
+        <tbody id="standings"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" id="review-card">
+    <h2>Review queue</h2>
+    <p class="small muted">
+      Sessions the automatic checks could not clear. Nearly all of these are
+      framing or lighting problems, not cheating &mdash; approve unless
+      something looks genuinely wrong.
+    </p>
+    <div id="review"></div>
+  </div>
+
+  <div class="card">
+    <h2>Teams &amp; join codes</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Team</th><th>Season</th><th class="num">Roster</th><th>Join code</th></tr></thead>
+        <tbody id="teams"></tbody>
+      </table>
+    </div>
+    <details style="margin-top:14px">
+      <summary class="small muted" style="cursor:pointer">Add a team or athlete</summary>
+      <div style="margin-top:12px">
+        <label for="new-team">New team name</label>
+        <input id="new-team" placeholder="U15 Boys">
+        <button class="secondary" id="add-team">Create team</button>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:18px 0">
+
+        <label for="new-athlete">New athlete name</label>
+        <input id="new-athlete" placeholder="Jordan P.">
+        <label for="new-hand">Dominant hand</label>
+        <select id="new-hand"><option value="right">Right</option><option value="left">Left</option></select>
+        <label for="new-code">Join code (optional)</label>
+        <input id="new-code" placeholder="ABC123">
+        <label style="display:flex;gap:8px;align-items:center;font-size:.85rem">
+          <input type="checkbox" id="new-consent" style="width:auto;min-height:auto;margin:0">
+          Guardian consent on file
+        </label>
+        <button class="secondary" id="add-athlete">Create athlete</button>
+        <div id="new-token" class="small hidden" style="margin-top:10px"></div>
+      </div>
+    </details>
+  </div>
+
+  <div id="err" class="err hidden"></div>
+</div>
+
+<script type="module">
+import { api, esc, fmtDate, getToken, logout } from './api.js';
+
+if (!getToken()) location.href = 'index.html';
+const $ = (id) => document.getElementById(id);
+
+const FLAG_LABELS = {
+  never_trained: ['bad', 'never trained'],
+  inactive_10d: ['bad', 'quiet 10+ days'],
+  quiet_5d: ['warn', 'quiet 5+ days'],
+  no_sessions_this_week: ['warn', 'nothing this week'],
+  neglecting_offhand: ['warn', 'off-hand neglected'],
+};
+
+function showError(message) {
+  $('err').textContent = message;
+  $('err').classList.remove('hidden');
+}
+
+async function loadAll() {
+  $('err').classList.add('hidden');
+  const teamId = $('team').value ? Number($('team').value) : null;
+  const window_ = $('window').value;
+
+  const [rosterData, standingsData, reviewData] = await Promise.all([
+    api(`/api/coach/roster?window=${window_}${teamId ? `&team_id=${teamId}` : ''}`),
+    api(`/api/standings?window=${window_}`),
+    api('/api/coach/review-queue'),
+  ]);
+
+  renderSummary(rosterData.athletes);
+  renderAttention(rosterData.athletes);
+  renderRoster(rosterData.athletes);
+  renderStandings(standingsData.teams);
+  renderReview(reviewData.sessions);
+}
+
+function renderSummary(athletes) {
+  const active = athletes.filter((a) => a.window_sessions > 0).length;
+  const totalXp = athletes.reduce((s, a) => s + a.window_xp, 0);
+  const sessions = athletes.reduce((s, a) => s + a.window_sessions, 0);
+  const participation = athletes.length ? Math.round((active / athletes.length) * 100) : 0;
+  $('summary').innerHTML = `
+    <div class="stat"><b>${athletes.length}</b><span>Athletes</span></div>
+    <div class="stat"><b>${participation}%</b><span>Participation</span></div>
+    <div class="stat"><b>${sessions}</b><span>Sessions</span></div>
+    <div class="stat"><b>${totalXp.toLocaleString()}</b><span>Total XP</span></div>`;
+}
+
+function renderAttention(athletes) {
+  // The dashboard's job is not to be read top to bottom -- it is to tell a
+  // coach which three kids to text tonight.
+  const flagged = athletes
+    .filter((a) => a.flags.length)
+    .sort((a, b) => (b.days_since_session ?? 999) - (a.days_since_session ?? 999))
+    .slice(0, 8);
+
+  $('attention-card').classList.toggle('hidden', flagged.length === 0);
+  $('attention').innerHTML = flagged.map((a) => {
+    const chips = a.flags.map((f) => {
+      const [cls, label] = FLAG_LABELS[f] || ['warn', f];
+      return `<span class="pill ${cls}">${esc(label)}</span>`;
+    }).join(' ');
+    return `<div style="display:flex;justify-content:space-between;gap:10px;
+              padding:9px 0;border-bottom:1px solid var(--border)">
+      <span><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}</span>
+      <span>${chips}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderRoster(athletes) {
+  $('roster').innerHTML = athletes.length ? athletes.map((a) => {
+    const share = a.offhand_share === null ? '&mdash;' : `${Math.round(a.offhand_share * 100)}%`;
+    const shareCls = a.offhand_share === null ? '' : a.offhand_share < 0.2 ? 'style="color:var(--warn)"' : '';
+    const status = a.flags.length
+      ? a.flags.map((f) => {
+          const [cls, label] = FLAG_LABELS[f] || ['warn', f];
+          return `<span class="pill ${cls}">${esc(label)}</span>`;
+        }).join(' ')
+      : '<span class="pill ok">on track</span>';
+    const review = a.pending_review ? ` <span class="pill warn">${a.pending_review} in review</span>` : '';
+    return `<tr>
+      <td><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
+          <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span></td>
+      <td class="num">${a.window_xp.toLocaleString()}</td>
+      <td class="num">${a.window_sessions}</td>
+      <td class="num" ${shareCls}>${share}</td>
+      <td>${fmtDate(a.last_session)}</td>
+      <td>${status}${review}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="muted small">No athletes yet. Add one below.</td></tr>';
+}
+
+function renderStandings(teams) {
+  $('standings').innerHTML = teams.length ? teams.map((t) => `
+    <tr>
+      <td class="num rank ${t.rank === 1 ? 'top' : ''}">${t.rank}</td>
+      <td><b>${esc(t.team_name)}</b> <span class="small muted">${t.roster} athletes</span></td>
+      <td class="num">${t.xp_per_athlete.toLocaleString()}</td>
+      <td class="num">${Math.round(t.participation * 100)}%</td>
+      <td class="num">${t.total_xp.toLocaleString()}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="muted small">No teams yet.</td></tr>';
+}
+
+function renderReview(sessions) {
+  $('review-card').classList.toggle('hidden', sessions.length === 0);
+  $('review').innerHTML = sessions.map((s) => `
+    <div style="padding:11px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span><b>${esc(s.display_name)}</b> &middot; ${esc(s.drill_name)}
+          <span class="small muted">${s.reps_total} reps &middot; ${fmtDate(s.submitted_at)}</span></span>
+        <span>
+          <button class="inline secondary" data-approve="${s.id}">Approve</button>
+          <button class="inline danger" data-reject="${s.id}">Reject</button>
+        </span>
+      </div>
+      <div class="small muted" style="margin-top:6px">
+        ${s.integrity_notes.map((n) => `&bull; ${esc(n)}`).join('<br>')}
+      </div>
+    </div>`).join('');
+
+  $('review').querySelectorAll('[data-approve],[data-reject]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.approve || btn.dataset.reject;
+      btn.disabled = true;
+      try {
+        await api(`/api/coach/review/${id}`, {
+          method: 'POST',
+          body: { approve: Boolean(btn.dataset.approve) },
+        });
+        await loadAll();
+      } catch (e) { showError(e.message); btn.disabled = false; }
+    });
+  });
+}
+
+async function loadTeams() {
+  const { teams } = await api('/api/coach/teams');
+  $('teams').innerHTML = teams.length ? teams.map((t) => `
+    <tr><td><b>${esc(t.name)}</b></td><td>${esc(t.season || '—')}</td>
+        <td class="num">${t.roster}</td>
+        <td><code>${esc(t.join_code)}</code></td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted small">No teams yet.</td></tr>';
+
+  const select = $('team');
+  const current = select.value;
+  select.innerHTML = '<option value="">All teams</option>'
+    + teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  select.value = current;
+}
+
+$('add-team').addEventListener('click', async () => {
+  const name = $('new-team').value.trim();
+  if (!name) return;
+  try {
+    await api('/api/teams', { method: 'POST', body: { name } });
+    $('new-team').value = '';
+    await loadTeams();
+  } catch (e) { showError(e.message); }
+});
+
+$('add-athlete').addEventListener('click', async () => {
+  const name = $('new-athlete').value.trim();
+  if (!name) return;
+  try {
+    const res = await api('/api/athletes', {
+      method: 'POST',
+      body: {
+        display_name: name,
+        dominant_hand: $('new-hand').value,
+        guardian_consent: $('new-consent').checked,
+        join_code: $('new-code').value.trim() || null,
+      },
+    });
+    // Shown once and never retrievable -- the server stores only a hash.
+    $('new-token').innerHTML =
+      `<b>${esc(name)}</b>'s athlete code (copy it now, it is not shown again):<br>
+       <code style="word-break:break-all">${esc(res.token)}</code>`;
+    $('new-token').classList.remove('hidden');
+    $('new-athlete').value = '';
+    await Promise.all([loadTeams(), loadAll()]);
+  } catch (e) { showError(e.message); }
+});
+
+$('team').addEventListener('change', () => loadAll().catch((e) => showError(e.message)));
+$('window').addEventListener('change', () => loadAll().catch((e) => showError(e.message)));
+$('signout').addEventListener('click', logout);
+
+(async () => {
+  try {
+    const me = await api('/api/me');
+    $('whoami').textContent = me.display_name;
+    await loadTeams();
+    await loadAll();
+  } catch (e) { showError(e.message); }
+})();
+</script>
+</body>
+</html>
