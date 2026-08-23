@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .config import CONFIG
+from . import assignments as assignments_mod
+from . import notifications as notify
+from .assignments import AssignmentError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
 from .leaderboard import coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError
@@ -61,6 +64,11 @@ def _staff(principal: Principal = Depends(_principal)) -> Principal:
 
 @app.exception_handler(StoreError)
 async def _store_error_handler(_request, exc: StoreError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(AssignmentError)
+async def _assignment_error_handler(_request, exc: AssignmentError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -206,6 +214,9 @@ class SubmitSessionRequest(BaseModel):
     mean_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     client_version: str = ""
     device_label: str = ""
+    # The device's own completion time, so a session recorded offline is
+    # credited to the day it was actually trained rather than the day it synced.
+    completed_at: str | None = None
 
 
 @app.post("/api/sessions/submit")
@@ -226,6 +237,7 @@ def submit_session(
             mean_confidence=body.mean_confidence,
             client_version=body.client_version,
             device_label=body.device_label,
+            completed_at=body.completed_at,
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -255,6 +267,206 @@ def athlete_profile(
     if principal.id != athlete_id and not principal.is_staff:
         raise HTTPException(status_code=403, detail="not permitted")
     return store.athlete_profile(athlete_id)
+
+
+class ReserveRequest(BaseModel):
+    drill_key: str
+    count: int = Field(default=3, ge=1, le=10)
+
+
+@app.post("/api/sessions/reserve", status_code=201)
+def reserve_sessions(
+    body: ReserveRequest,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Hand out session slots the athlete can spend with no connection."""
+    return {"slots": store.reserve_sessions(principal.id, body.drill_key, body.count)}
+
+
+# ----------------------------------------------------------------------
+# Assignments
+# ----------------------------------------------------------------------
+
+class CreateAssignmentRequest(BaseModel):
+    team_id: int
+    drill_key: str
+    title: str = Field(min_length=1, max_length=120)
+    starts_on: str
+    due_on: str
+    target_reps: int = Field(default=0, ge=0, le=100_000)
+    target_sessions: int = Field(default=0, ge=0, le=200)
+    min_offhand: float = Field(default=0.0, ge=0.0, le=1.0)
+    notes: str = Field(default="", max_length=500)
+    # Empty means the whole team, which is the common case.
+    athlete_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+@app.post("/api/coach/assignments", status_code=201)
+def create_assignment(
+    body: CreateAssignmentRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    assignment_id = assignments_mod.create(
+        store.conn,
+        org_id=principal.org_id,
+        team_id=body.team_id,
+        created_by=principal.id,
+        drill_key=body.drill_key,
+        title=body.title,
+        starts_on=body.starts_on,
+        due_on=body.due_on,
+        target_reps=body.target_reps,
+        target_sessions=body.target_sessions,
+        min_offhand=body.min_offhand,
+        notes=body.notes,
+        athlete_ids=body.athlete_ids,
+    )
+    # Announce it immediately -- an assignment nobody is told about is just a
+    # row in a table.
+    notified = notify.notify_new_assignment(store.conn, assignment_id)
+    return {"assignment_id": assignment_id, "athletes_notified": notified}
+
+
+@app.get("/api/coach/assignments")
+def list_assignments(
+    team_id: int | None = None,
+    include_inactive: bool = False,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Assignments with per-athlete compliance, worst first."""
+    items = assignments_mod.list_for_org(
+        store.conn, principal.org_id, team_id=team_id, include_inactive=include_inactive
+    )
+    out = []
+    for assignment in items:
+        rows = [p.to_dict() for p in assignments_mod.compliance(store.conn, assignment)]
+        done = sum(1 for r in rows if r["complete"])
+        out.append(
+            {
+                **assignment.to_dict(),
+                "days_remaining": assignment.days_remaining(),
+                "athletes": rows,
+                "completed_count": done,
+                "athlete_count": len(rows),
+            }
+        )
+    return {"assignments": out}
+
+
+@app.delete("/api/coach/assignments/{assignment_id}")
+def deactivate_assignment(
+    assignment_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    assignment = assignments_mod.get(store.conn, assignment_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="unknown assignment")
+    owner = store.conn.execute(
+        "SELECT org_id FROM assignments WHERE id = ?", (assignment_id,)
+    ).fetchone()
+    if owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=403, detail="assignment belongs to another program")
+    assignments_mod.deactivate(store.conn, assignment_id)
+    return {"assignment_id": assignment_id, "active": False}
+
+
+@app.get("/api/assignments")
+def my_assignments(
+    include_closed: bool = False,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The athlete's own assignments with live progress."""
+    return {
+        "assignments": assignments_mod.for_athlete(
+            store.conn, principal.id, only_open=not include_closed
+        )
+    }
+
+
+# ----------------------------------------------------------------------
+# Notifications
+# ----------------------------------------------------------------------
+
+@app.get("/api/notifications")
+def get_notifications(
+    limit: int = Query(default=30, ge=1, le=100),
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {
+        "unread": notify.unread_count(store.conn, principal.id),
+        "notifications": notify.feed(store.conn, principal.id, limit),
+    }
+
+
+class MarkReadRequest(BaseModel):
+    notification_id: int | None = None
+
+
+@app.post("/api/notifications/read")
+def read_notifications(
+    body: MarkReadRequest,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Mark one notification read, or all when no id is given."""
+    return {"marked": notify.mark_read(store.conn, principal.id, body.notification_id)}
+
+
+class PushSubscribeRequest(BaseModel):
+    endpoint: str = Field(min_length=1, max_length=1000)
+    p256dh: str = Field(min_length=1, max_length=400)
+    auth: str = Field(min_length=1, max_length=400)
+
+
+@app.post("/api/notifications/subscribe", status_code=201)
+def subscribe_push(
+    body: PushSubscribeRequest,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    notify.save_subscription(
+        store.conn, principal.id, body.endpoint, body.p256dh, body.auth
+    )
+    return {"subscribed": True}
+
+
+@app.get("/api/notifications/vapid-key")
+def vapid_key() -> dict[str, Any]:
+    """The public key a browser needs to subscribe.
+
+    Empty when push is not configured -- the client then falls back to the
+    in-app feed, which needs no third-party service.
+    """
+    return {"public_key": CONFIG.vapid_public_key}
+
+
+class BroadcastRequest(BaseModel):
+    team_id: int
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(default="", max_length=500)
+
+
+@app.post("/api/coach/broadcast")
+def coach_broadcast(
+    body: BroadcastRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    team = store.conn.execute(
+        "SELECT org_id FROM teams WHERE id = ?", (body.team_id,)
+    ).fetchone()
+    if team is None:
+        raise HTTPException(status_code=404, detail="unknown team")
+    if team["org_id"] != principal.org_id:
+        raise HTTPException(status_code=403, detail="team belongs to another program")
+    sent = notify.broadcast(store.conn, body.team_id, body.title, body.body, principal.id)
+    return {"sent": sent}
 
 
 # ----------------------------------------------------------------------

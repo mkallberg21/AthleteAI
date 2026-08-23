@@ -138,8 +138,39 @@ class TestCaptureFlow:
         keys = {b["key"] for b in res["new_badges"]}
         assert "first_session" in keys
 
-    def test_a_session_cannot_be_submitted_twice(self, client, program):
-        """Replaying a captured payload must not double-score."""
+    def test_resubmitting_replays_the_result_without_scoring_twice(self, client, program):
+        """An offline client that never saw its ack will retry the same payload.
+
+        Retrying has to be safe: the athlete gets their original result back,
+        and the XP is awarded exactly once.
+        """
+        athlete = program["athletes"][0]
+        headers = athlete["headers"]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "lax_wall_ball"}, headers=headers
+        ).json()
+        payload = {
+            "session_id": started["session_id"],
+            "nonce": started["nonce"],
+            "duration_ms": 60_000,
+            "reps": [{"t_ms": i * 900 + (i % 7) * 40, "hand": "right", "confidence": 0.9}
+                     for i in range(1, 60)],
+            "mean_confidence": 0.9,
+        }
+        first = client.post("/api/sessions/submit", json=payload, headers=headers)
+        assert first.status_code == 200
+
+        second = client.post("/api/sessions/submit", json=payload, headers=headers)
+        assert second.status_code == 200
+        assert second.json()["xp_awarded"] == first.json()["xp_awarded"]
+        assert second.json()["duplicate"] is True
+
+        # The invariant that actually matters: scored once, not twice.
+        profile = client.get("/api/me", headers=headers).json()
+        assert profile["total_xp"] == first.json()["xp_awarded"]
+
+    def test_a_replayed_payload_with_a_forged_nonce_is_refused(self, client, program):
+        """Idempotency must not become a way to read another session's result."""
         headers = program["athletes"][0]["headers"]
         started = client.post(
             "/api/sessions/start", json={"drill_key": "lax_wall_ball"}, headers=headers
@@ -152,10 +183,12 @@ class TestCaptureFlow:
                      for i in range(1, 60)],
             "mean_confidence": 0.9,
         }
-        assert client.post("/api/sessions/submit", json=payload, headers=headers).status_code == 200
-        second = client.post("/api/sessions/submit", json=payload, headers=headers)
-        assert second.status_code == 400
-        assert "already been submitted" in second.json()["detail"]
+        client.post("/api/sessions/submit", json=payload, headers=headers)
+
+        forged = {**payload, "nonce": "not-the-real-nonce"}
+        res = client.post("/api/sessions/submit", json=forged, headers=headers)
+        assert res.status_code == 400
+        assert "nonce" in res.json()["detail"]
 
     def test_a_wrong_nonce_is_rejected(self, client, program):
         headers = program["athletes"][0]["headers"]
@@ -457,3 +490,180 @@ class TestPrivacy:
             for col in cols:
                 assert not any(t in col for t in ("video", "image", "frame", "blob", "photo")), \
                     f"{table}.{col} looks like it stores imagery"
+
+
+class TestAssignmentEndpoints:
+    def _make(self, client, program, **kw):
+        from datetime import date, timedelta
+
+        today = date.today()
+        body = {
+            "team_id": program["team"]["id"],
+            "drill_key": "lax_wall_ball",
+            "title": "Week 1 Wall Ball",
+            "starts_on": (today - timedelta(days=1)).isoformat(),
+            "due_on": (today + timedelta(days=5)).isoformat(),
+            "target_reps": 300,
+            "target_sessions": 2,
+            "min_offhand": 0.4,
+        }
+        body.update(kw)
+        return client.post("/api/coach/assignments", json=body, headers=program["director"])
+
+    def test_creating_an_assignment_notifies_the_team(self, client, program):
+        res = self._make(client, program)
+        assert res.status_code == 201
+        assert res.json()["athletes_notified"] == 2
+
+    def test_an_athlete_sees_their_assignment(self, client, program):
+        self._make(client, program)
+        items = client.get(
+            "/api/assignments", headers=program["athletes"][0]["headers"]
+        ).json()["assignments"]
+        assert len(items) == 1
+        assert items[0]["title"] == "Week 1 Wall Ball"
+        assert items[0]["progress"]["complete"] is False
+
+    def test_compliance_updates_as_work_lands(self, client, program):
+        self._make(client, program, target_sessions=1, target_reps=100, min_offhand=0.0)
+        do_session(client, program["athletes"][0]["headers"])
+        row = client.get(
+            "/api/coach/assignments", headers=program["director"]
+        ).json()["assignments"][0]
+        assert row["completed_count"] == 1
+        assert row["athlete_count"] == 2
+
+    def test_invalid_assignment_is_rejected_with_a_reason(self, client, program):
+        res = self._make(client, program, target_reps=0, target_sessions=0, min_offhand=0.0)
+        assert res.status_code == 400
+        assert "target" in res.json()["detail"]
+
+    def test_athletes_cannot_create_assignments(self, client, program):
+        from datetime import date, timedelta
+
+        today = date.today()
+        res = client.post(
+            "/api/coach/assignments",
+            json={
+                "team_id": program["team"]["id"], "drill_key": "lax_wall_ball",
+                "title": "x", "starts_on": today.isoformat(),
+                "due_on": (today + timedelta(days=1)).isoformat(), "target_reps": 10,
+            },
+            headers=program["athletes"][0]["headers"],
+        )
+        assert res.status_code == 403
+
+    def test_a_coach_cannot_close_another_programs_assignment(self, client, program):
+        aid = self._make(client, program).json()["assignment_id"]
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+        ).json()
+        rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
+        assert client.delete(f"/api/coach/assignments/{aid}", headers=rival_headers).status_code == 403
+
+    def test_closing_removes_it_from_the_athlete_view(self, client, program):
+        aid = self._make(client, program).json()["assignment_id"]
+        client.delete(f"/api/coach/assignments/{aid}", headers=program["director"])
+        items = client.get(
+            "/api/assignments", headers=program["athletes"][0]["headers"]
+        ).json()["assignments"]
+        assert items == []
+
+
+class TestNotificationEndpoints:
+    def test_feed_starts_empty_and_fills(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        assert client.get("/api/notifications", headers=headers).json()["unread"] == 0
+        do_session(client, headers)  # earns badges, which notify
+        data = client.get("/api/notifications", headers=headers).json()
+        assert data["unread"] > 0
+
+    def test_mark_all_read(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        do_session(client, headers)
+        client.post("/api/notifications/read", json={}, headers=headers)
+        assert client.get("/api/notifications", headers=headers).json()["unread"] == 0
+
+    def test_athletes_only_see_their_own_notifications(self, client, program):
+        a, b = program["athletes"]
+        do_session(client, a["headers"])
+        assert client.get("/api/notifications", headers=b["headers"]).json()["unread"] == 0
+
+    def test_push_subscription_is_accepted(self, client, program):
+        res = client.post(
+            "/api/notifications/subscribe",
+            json={"endpoint": "https://push.example/1", "p256dh": "k", "auth": "a"},
+            headers=program["athletes"][0]["headers"],
+        )
+        assert res.status_code == 201
+
+    def test_vapid_key_endpoint_reports_unconfigured_cleanly(self, client):
+        """No push credentials must be a clean empty answer, not an error."""
+        res = client.get("/api/notifications/vapid-key")
+        assert res.status_code == 200
+        assert "public_key" in res.json()
+
+    def test_broadcast_reaches_the_team(self, client, program):
+        res = client.post(
+            "/api/coach/broadcast",
+            json={"team_id": program["team"]["id"], "title": "Practice at 6"},
+            headers=program["director"],
+        )
+        assert res.json()["sent"] == 2
+
+    def test_broadcast_to_another_program_is_refused(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+        ).json()
+        rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
+        res = client.post(
+            "/api/coach/broadcast",
+            json={"team_id": program["team"]["id"], "title": "hi"},
+            headers=rival_headers,
+        )
+        assert res.status_code == 403
+
+
+class TestOfflineEndpoints:
+    def test_reserve_returns_usable_slots(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        res = client.post(
+            "/api/sessions/reserve", json={"drill_key": "lax_wall_ball", "count": 3},
+            headers=headers,
+        )
+        assert res.status_code == 201
+        slots = res.json()["slots"]
+        assert len(slots) == 3
+        assert all(s["nonce"] and s["session_id"] for s in slots)
+
+    def test_reserve_rejects_an_absurd_count(self, client, program):
+        res = client.post(
+            "/api/sessions/reserve", json={"drill_key": "lax_wall_ball", "count": 5_000},
+            headers=program["athletes"][0]["headers"],
+        )
+        assert res.status_code == 422
+
+    def test_a_reserved_slot_can_be_submitted_with_a_backdated_time(self, client, program):
+        from datetime import datetime, timedelta, timezone
+
+        headers = program["athletes"][0]["headers"]
+        slot = client.post(
+            "/api/sessions/reserve", json={"drill_key": "lax_wall_ball", "count": 1},
+            headers=headers,
+        ).json()["slots"][0]
+
+        when = datetime.now(timezone.utc) - timedelta(days=2)
+        res = client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": slot["session_id"], "nonce": slot["nonce"],
+                "duration_ms": 60_000,
+                "reps": [{"t_ms": i * 900 + (i % 7) * 40, "hand": "left", "confidence": 0.9}
+                         for i in range(1, 60)],
+                "mean_confidence": 0.9,
+                "completed_at": when.isoformat(),
+            },
+            headers=headers,
+        )
+        assert res.status_code == 200
+        assert res.json()["counted_for_day"] == when.date().isoformat()

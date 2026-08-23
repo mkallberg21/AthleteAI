@@ -33,7 +33,13 @@ export async function api(path, { method = 'GET', body } = {}) {
         detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
       }
     } catch { /* non-JSON error body */ }
-    throw new Error(detail);
+    const err = new Error(detail);
+    // A 4xx is the server rejecting this payload on its merits -- it will
+    // never succeed, so a queued retry must give up rather than loop forever.
+    // A 5xx or a thrown fetch (offline) is worth retrying.
+    err.status = res.status;
+    err.permanent = res.status >= 400 && res.status < 500;
+    throw err;
   }
   return res.status === 204 ? null : res.json();
 }

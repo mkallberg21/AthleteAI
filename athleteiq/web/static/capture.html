@@ -4,18 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AthleteIQ &mdash; Train</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="topbar">
   <div class="brand">Athlete<span>IQ</span></div>
-  <div class="small muted" id="whoami"></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="small muted" id="whoami"></span>
+    <button class="bell" id="bell">Alerts<span class="dot hidden" id="bell-dot">0</span></button>
+  </div>
 </div>
 
 <div class="wrap wrap--narrow">
 
   <!-- ---------- Home ---------- -->
   <section id="view-home">
+    <div class="conn" id="conn"><i></i><span id="conn-text">Online</span></div>
+
+    <div class="card hidden" id="assign-card">
+      <h2>From your coach</h2>
+      <div id="assignments"></div>
+    </div>
+
+    <div class="card hidden" id="notif-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h2 style="margin:0">Alerts</h2>
+        <button class="secondary inline" id="mark-read">Mark all read</button>
+      </div>
+      <div id="notif-list"></div>
+      <button class="secondary" id="enable-push" style="margin-top:12px">Turn on phone notifications</button>
+      <div class="small muted hidden" id="push-note" style="margin-top:8px"></div>
+    </div>
+
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:baseline">
         <h2 id="greeting">Ready to work</h2>
@@ -98,6 +122,10 @@
 <script type="module">
 import { api, esc, fmtDate, getToken, logout } from './api.js';
 import { RepCounter } from './counter.js';
+import {
+  enablePush, enqueue, flush, onConnectivityChange, pendingCount,
+  registerServiceWorker, takeSlot, topUp,
+} from './offline.js';
 
 const CLIENT_VERSION = 'web-0.1.0';
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
@@ -192,6 +220,117 @@ async function loadDrills() {
   });
 }
 
+// ---------------------------------------------------------- assignments
+
+async function loadAssignments() {
+  let items = [];
+  try {
+    items = (await api('/api/assignments')).assignments;
+  } catch {
+    // Offline: leave whatever is already rendered rather than blanking it.
+    return;
+  }
+
+  $('assign-card').classList.toggle('hidden', items.length === 0);
+  $('assignments').innerHTML = items.map((a) => {
+    const p = a.progress;
+    const overdue = a.days_remaining < 0 && !p.complete;
+    const cls = p.complete ? 'done' : overdue ? 'overdue' : '';
+    const due = a.days_remaining < 0
+      ? `${-a.days_remaining}d overdue`
+      : a.days_remaining === 0 ? 'due today' : `${a.days_remaining}d left`;
+
+    const targets = [];
+    if (a.target_reps) {
+      targets.push(`<div class="target ${p.reps_met ? 'met' : 'unmet'}">
+        <b>${p.reps_done}/${a.target_reps}</b><span>Reps</span></div>`);
+    }
+    if (a.target_sessions) {
+      targets.push(`<div class="target ${p.sessions_met ? 'met' : 'unmet'}">
+        <b>${p.sessions_done}/${a.target_sessions}</b><span>Sessions</span></div>`);
+    }
+    if (a.min_offhand > 0) {
+      const share = p.offhand_share === null ? '—' : `${Math.round(p.offhand_share * 100)}%`;
+      targets.push(`<div class="target ${p.offhand_met ? 'met' : 'unmet'}">
+        <b>${share}</b><span>Off-hand / ${Math.round(a.min_offhand * 100)}%</span></div>`);
+    }
+
+    return `<div class="assignment ${cls}">
+      <h4>${esc(a.title)} ${p.complete ? '<span class="pill ok">done</span>' : ''}</h4>
+      <div class="meta">${esc(a.drill_name)} &middot; ${esc(a.team_name)} &middot; ${due}</div>
+      ${a.notes ? `<p class="small muted" style="margin:0 0 6px">${esc(a.notes)}</p>` : ''}
+      <div class="target-row">${targets.join('')}</div>
+      ${p.complete ? '' : `<button class="secondary inline" data-drill="${esc(a.drill_key)}"
+         style="margin-top:10px">Start ${esc(a.drill_name)}</button>`}
+    </div>`;
+  }).join('');
+
+  $('assignments').querySelectorAll('[data-drill]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const drill = drills.find((d) => d.key === btn.dataset.drill);
+      if (drill) openCapture(drill);
+    });
+  });
+
+  // Bank slots for assigned drills so the driveway session works with no
+  // signal -- this is exactly the work most likely to happen offline.
+  for (const a of items) await topUp(a.drill_key, api);
+}
+
+// --------------------------------------------------------- notifications
+
+async function loadNotifications() {
+  let data;
+  try {
+    data = await api('/api/notifications');
+  } catch { return; }
+
+  const dot = $('bell-dot');
+  dot.textContent = data.unread;
+  dot.classList.toggle('hidden', data.unread === 0);
+
+  $('notif-list').innerHTML = data.notifications.length
+    ? data.notifications.map((n) => `
+        <div class="notif ${n.read_at ? '' : 'unread'}">
+          <div style="flex:1">
+            <b>${esc(n.title)}</b>
+            ${n.body ? `<p class="muted">${esc(n.body)}</p>` : ''}
+          </div>
+          <time>${fmtDate(n.created_at)}</time>
+        </div>`).join('')
+    : '<p class="small muted">Nothing yet.</p>';
+}
+
+// ------------------------------------------------------------ connectivity
+
+async function refreshConnBanner() {
+  const el = $('conn');
+  const text = $('conn-text');
+  const queued = await pendingCount();
+
+  el.classList.remove('offline', 'syncing');
+  if (!navigator.onLine) {
+    el.classList.add('offline');
+    text.textContent = queued
+      ? `Offline — ${queued} session${queued === 1 ? '' : 's'} saved, will upload later`
+      : 'Offline — you can still record. Sessions upload when you reconnect.';
+  } else if (queued) {
+    el.classList.add('syncing');
+    text.textContent = `Uploading ${queued} saved session${queued === 1 ? '' : 's'}…`;
+  } else {
+    text.textContent = 'Online';
+  }
+}
+
+async function syncQueue() {
+  const { sent } = await flush(api);
+  await refreshConnBanner();
+  if (sent > 0) {
+    // Scores, badges, and assignment progress all move when a backlog lands.
+    await Promise.all([loadHome(), loadAssignments(), loadNotifications()]);
+  }
+}
+
 // ---------------------------------------------------------------- capture
 
 async function ensureLandmarker() {
@@ -222,6 +361,10 @@ async function openCapture(drill) {
   $('cap-err').classList.add('hidden');
   $('startstop').disabled = true;
   $('startstop').textContent = 'Start';
+
+  // Opening a drill online banks slots for it, so this drill works offline
+  // from now on.
+  topUp(drill.key, api);
 
   try {
     setBanner('Starting camera…');
@@ -351,12 +494,24 @@ function drawSkeleton(ctx, lms, w, h) {
 }
 
 async function startSession() {
-  try {
-    session = await api('/api/sessions/start', {
-      method: 'POST',
-      body: { drill_key: activeDrill.key },
-    });
-  } catch (e) { return showCaptureError(e.message); }
+  // A banked slot first: it works with no signal, and spending one online is
+  // harmless because the pool tops itself back up.
+  session = await takeSlot(activeDrill.key);
+
+  if (!session) {
+    if (!navigator.onLine) {
+      return showCaptureError(
+        'No saved session slots for this drill, and you are offline. '
+        + 'Open this drill once with a connection and it will work offline after that.'
+      );
+    }
+    try {
+      session = await api('/api/sessions/start', {
+        method: 'POST',
+        body: { drill_key: activeDrill.key },
+      });
+    } catch (e) { return showCaptureError(e.message); }
+  }
 
   counter.reset();
   startedAt = performance.now();
@@ -370,22 +525,44 @@ async function finishSession() {
   running = false;
   const duration = performance.now() - startedAt;
   $('startstop').disabled = true;
-  $('startstop').textContent = 'Submitting…';
+  $('startstop').textContent = 'Saving…';
 
   const payload = counter.toSubmission(session.session_id, session.nonce, duration, {
     client_version: CLIENT_VERSION,
     device_label: navigator.platform || '',
+    // The device's own clock decides which day this counts for. A session
+    // trained Sunday in a dead zone and synced Monday earns Sunday's credit.
+    completed_at: new Date().toISOString(),
   });
+
+  // Durable first, network second. Once it is in IndexedDB the session cannot
+  // be lost by a dropped connection, a closed tab, or a dead battery.
+  await enqueue(payload);
+  stopCamera();
 
   try {
     const result = await api('/api/sessions/submit', { method: 'POST', body: payload });
-    stopCamera();
+    await flush(api);   // clears this one from the queue
     showResult(result);
-  } catch (e) {
-    showCaptureError(e.message);
-    $('startstop').disabled = false;
-    $('startstop').textContent = 'Retry submit';
+  } catch (err) {
+    if (err && err.permanent) {
+      await flush(api);
+      showResult({
+        status: 'rejected', reps_total: counter.count, reps_left: 0, reps_right: 0,
+        xp_awarded: 0, notes: [err.message], xp_breakdown: [], new_badges: [],
+      });
+    } else {
+      // Offline or the server is down. It is saved; say so plainly rather than
+      // showing an error for work the athlete actually did.
+      const { left, right } = counter.handCounts();
+      showResult({
+        status: 'queued', reps_total: counter.count,
+        reps_left: left, reps_right: right,
+        xp_awarded: 0, notes: [], xp_breakdown: [], new_badges: [],
+      });
+    }
   }
+  refreshConnBanner();
 }
 
 function stopCamera() {
@@ -408,6 +585,7 @@ function showResult(result) {
     counted: 'Logged. Nice work.',
     review: 'Sent to your coach for review',
     rejected: "That one didn't count",
+    queued: 'Saved. It will send itself.',
   };
   $('result-title').textContent = titles[result.status] || 'Session complete';
   $('r-reps').textContent = result.reps_total;
@@ -418,6 +596,15 @@ function showResult(result) {
   $('r-breakdown').innerHTML = (result.xp_breakdown || [])
     .map((l) => `<tr><td>${esc(l.label)}</td><td class="num">${l.amount >= 0 ? '+' : ''}${l.amount}</td></tr>`)
     .join('');
+
+  if (result.status === 'queued') {
+    $('r-notes').innerHTML =
+      'You are offline, so this is stored on your phone. It uploads automatically '
+      + 'the next time you have a connection, and it still counts for today.';
+    $('r-breakdown').innerHTML = '';
+    $('r-badges').innerHTML = '';
+    return;
+  }
 
   const notes = result.notes || [];
   $('r-notes').innerHTML = result.status === 'counted' && notes.length === 1
@@ -435,8 +622,45 @@ function showResult(result) {
 
 $('startstop').addEventListener('click', () => (running ? finishSession() : startSession()));
 $('back').addEventListener('click', () => { stopCamera(); show('home'); });
-$('done').addEventListener('click', async () => { await loadHome(); show('home'); });
+$('done').addEventListener('click', async () => {
+  await Promise.all([loadHome(), loadAssignments(), loadNotifications()]);
+  show('home');
+});
 $('signout').addEventListener('click', logout);
+
+$('bell').addEventListener('click', async () => {
+  const card = $('notif-card');
+  card.classList.toggle('hidden');
+  if (!card.classList.contains('hidden')) {
+    await loadNotifications();
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+});
+
+$('mark-read').addEventListener('click', async () => {
+  try {
+    await api('/api/notifications/read', { method: 'POST', body: {} });
+    await loadNotifications();
+  } catch { /* offline; the badge refreshes on reconnect */ }
+});
+
+$('enable-push').addEventListener('click', async () => {
+  const note = $('push-note');
+  try {
+    const res = await enablePush(api);
+    note.textContent = res.ok
+      ? "Done. We'll remind you when a streak is on the line or a coach assigns work."
+      : res.reason;
+  } catch (e) {
+    note.textContent = e.message;
+  }
+  note.classList.remove('hidden');
+});
+
+onConnectivityChange((online) => {
+  refreshConnBanner();
+  if (online) syncQueue();
+});
 // Stopping the camera when the app is backgrounded matters on a phone: the
 // recording indicator staying lit is exactly the thing that makes a parent
 // distrust the privacy claim.
@@ -444,9 +668,16 @@ window.addEventListener('pagehide', stopCamera);
 
 (async () => {
   try {
+    registerServiceWorker();
     await loadDrills();
     await loadHome();
     show('home');
+    // Non-blocking: a queued backlog or a slow feed must not hold up the
+    // screen an athlete opened in order to train.
+    syncQueue();
+    loadAssignments();
+    loadNotifications();
+    refreshConnBanner();
   } catch (e) {
     document.body.innerHTML = `<div class="wrap"><div class="card"><h2>Could not load</h2><p>${esc(e.message)}</p><a href="index.html">Sign in again</a></div></div>`;
   }

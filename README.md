@@ -12,6 +12,10 @@ throw/catch cycles and attributes each one to the hand on top of the stick —
 but the drill system is sport-agnostic and ships with general strength, speed,
 agility, and conditioning exercises.
 
+Coaches assign work and see who did it. Athletes get nudged when a streak is on
+the line. The whole capture flow works with no signal, because youth athletes
+train in driveways.
+
 ---
 
 ## Why on-device
@@ -56,7 +60,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 222 tests
+python -m pytest tests/ -q          # 296 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs   # 7 tests
@@ -71,21 +75,28 @@ counts — that is how the detector is verified without a camera and a stick.
 
 ```
 athleteiq/
-  config.py         Scoring curves, integrity limits, retention windows
+  config.py         Scoring curves, integrity limits, retention, VAPID keys
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
     catalog.py      The 12 shipped drills
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
+  assignments.py    Coach prescriptions and derived compliance
+  notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
   store.py          The only module that speaks SQL
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
+    offline.js      IndexedDB slot pool + submission queue
+    sw.js           Service worker: app-shell cache and push delivery
     capture.html    Athlete capture app
     coach.html      Coach dashboard
     leaderboard.html
+scripts/
+  seed_demo.py            Demo program with six weeks of history
+  run_notifications.py    Scheduled nudge generation and delivery
 ```
 
 ### The drill spec is the load-bearing idea
@@ -138,6 +149,92 @@ Two safeguards make it usable in a driveway:
 
 Both are covered by tests (`counter.test.mjs`), including a case that parks the
 signal on the threshold with noise and asserts zero reps.
+
+---
+
+## Assignments
+
+A coach assigns a drill with any combination of targets — total reps, number of
+sessions, and a minimum share of reps on the athlete's weaker hand — over a
+date window, to a whole team or to named athletes. The athlete's home screen
+leads with the assignment instead of a drill picker, and the coach gets a
+compliance table sorted worst-first, because that list exists to say who needs a
+text tonight.
+
+**Compliance is derived, never stored.** A session counts toward an assignment
+if it matches the drill and falls inside the window, so a session rejected by
+the integrity checks stops counting and one later approved in review starts
+counting, with nothing to recompute. Storing progress would mean two sources of
+truth that drift.
+
+The off-hand target is the interesting one in practice: in the demo data, an
+athlete with 1,449 reps still fails the assignment at 15% off-hand while a
+teammate with fewer reps passes at 42%. That is the entire point — it makes the
+hard work the binding constraint instead of volume.
+
+---
+
+## Notifications
+
+Every streak mechanic is really a notification mechanic. The app knew when a
+streak was about to lapse and never told anyone, which made the streak
+decorative.
+
+Generation is separate from delivery. Rules produce notification rows; channels
+ship them. **The in-app feed therefore works with no third-party service
+configured at all** — Web Push is additive, not required.
+
+Every rule carries a dedupe key, so the scheduler can run as often as you like:
+
+```bash
+0 * * * *  cd /srv/athleteiq && python scripts/run_notifications.py
+```
+
+Rules that fire today: streak at risk (only for streaks of 3+, since warning
+someone about a one-day streak is noise and noise costs you push permission),
+assignment due in two days and again on the due date, badge unlocked, week-long
+inactivity, and coach broadcasts to a team.
+
+To enable phone-level push, set `ATHLETEIQ_VAPID_PUBLIC_KEY`,
+`ATHLETEIQ_VAPID_PRIVATE_KEY`, and `ATHLETEIQ_VAPID_EMAIL`, and install
+`pywebpush`. Without them the generator still runs and the feed still fills.
+
+---
+
+## Offline capture
+
+Athletes train in driveways and on fields with one bar. Previously, starting a
+session needed a server round-trip, so a dead zone cost the whole session — and
+a lost session breaks a streak, and a broken streak loses the athlete. This is a
+correctness requirement, not a convenience.
+
+Three pieces make it work:
+
+**Pre-reserved session slots.** `POST /api/sessions/reserve` hands out session
+IDs and nonces ahead of time, banked in IndexedDB. The client tops up whenever
+it has signal — on app load for assigned drills, and whenever a drill screen is
+opened — and spends one when it doesn't. A drill you have opened once online
+works offline from then on.
+
+**A durable submission queue.** A finished session is written to IndexedDB
+*before* any network call, so it survives a dropped connection, a closed tab, or
+a dead battery. It flushes on reconnect.
+
+**Idempotent submit.** Resubmitting with the correct nonce replays the original
+result instead of erroring or scoring twice, which is what makes retrying safe.
+A wrong nonce is still refused, so idempotency never becomes a way to read back
+someone else's session. A 4xx marks the payload permanently rejected and drops
+it from the queue rather than retrying forever.
+
+**Day attribution.** The device reports its own completion time, and that
+decides which day the session is credited to — a session trained Sunday in a
+dead zone and synced Monday earns Sunday's credit. The value is clamped: more
+than five minutes in the future or more than 14 days in the past falls back to
+today, so a device clock cannot be used to dodge the daily XP cap.
+
+The app is a PWA — installable, with the shell cached by a service worker. API
+responses are deliberately never cached: a stale leaderboard or stale assignment
+progress read as current is worse than an absent one.
 
 ---
 
@@ -237,3 +334,8 @@ contact with a real driveway:
    wants Postgres. `store.py` is the only module to change.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
+7. **Offline slots are per-drill.** A drill you have never opened online has no
+   banked slot, so its first-ever session needs a connection. The app says so
+   plainly rather than failing silently.
+8. **Web Push needs credentials.** Notifications generate and display in-app
+   with nothing configured, but reaching a locked phone needs VAPID keys.

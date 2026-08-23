@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -95,7 +95,17 @@ CREATE TABLE IF NOT EXISTS sessions (
     status           TEXT NOT NULL DEFAULT 'open'
                      CHECK (status IN ('open','counted','review','rejected')),
     client_version   TEXT NOT NULL DEFAULT '',
-    device_label     TEXT NOT NULL DEFAULT ''
+    device_label     TEXT NOT NULL DEFAULT '',
+    -- When the athlete actually finished, as reported by their device. An
+    -- offline session recorded Sunday and synced Monday must earn Sunday's
+    -- credit, or every dead zone silently breaks a streak.
+    completed_at     TEXT,
+    -- Cached submit response, replayed verbatim if the client resends. An
+    -- offline client that never saw its ack will retry, and it must get the
+    -- original result rather than an error or a second score.
+    result_json      TEXT,
+    -- True when the nonce was handed out ahead of time for offline use.
+    reserved         INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_athlete ON sessions(athlete_id, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
@@ -131,6 +141,68 @@ CREATE TABLE IF NOT EXISTS badges (
     detail      TEXT NOT NULL DEFAULT '',
     UNIQUE (athlete_id, badge_key)
 );
+
+-- A coach's prescription. This is what turns free-form logging into a
+-- program: the athlete sees what was asked of them, and the coach sees who
+-- did it.
+CREATE TABLE IF NOT EXISTS assignments (
+    id              INTEGER PRIMARY KEY,
+    org_id          INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    team_id         INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    drill_key       TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    notes           TEXT NOT NULL DEFAULT '',
+    -- Any target may be 0, meaning "not part of this assignment".
+    target_reps     INTEGER NOT NULL DEFAULT 0,
+    target_sessions INTEGER NOT NULL DEFAULT 0,
+    -- Minimum share of reps on the athlete's weaker hand, 0..1.
+    min_offhand     REAL NOT NULL DEFAULT 0.0,
+    starts_on       TEXT NOT NULL,
+    due_on          TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    active          INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_assignments_team ON assignments(team_id, active);
+
+-- Optional narrowing: rows here restrict an assignment to specific athletes.
+-- No rows means it applies to the whole team, which is the common case.
+CREATE TABLE IF NOT EXISTS assignment_athletes (
+    assignment_id INTEGER NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+    athlete_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (assignment_id, athlete_id)
+);
+
+-- Generated nudges. Stored regardless of whether a push channel is
+-- configured, so the in-app feed works with no third-party service at all.
+CREATE TABLE IF NOT EXISTS notifications (
+    id          INTEGER PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    body        TEXT NOT NULL DEFAULT '',
+    link        TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    read_at     TEXT,
+    pushed_at   TEXT,
+    -- Collapses repeat nudges: one "streak at risk" per athlete per day, not
+    -- one per cron tick.
+    dedupe_key  TEXT NOT NULL,
+    UNIQUE (user_id, dedupe_key)
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
+
+-- Web Push endpoints, one row per device an athlete has opted in on.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id          INTEGER PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint    TEXT NOT NULL UNIQUE,
+    p256dh      TEXT NOT NULL,
+    auth        TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    failed_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,

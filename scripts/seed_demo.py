@@ -19,6 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from athleteiq import assignments as assignments_mod  # noqa: E402
+from athleteiq import notifications as notify  # noqa: E402
 from athleteiq.db import connect, transaction  # noqa: E402
 from athleteiq.drills import get_drill  # noqa: E402
 from athleteiq.store import Store  # noqa: E402
@@ -162,6 +164,28 @@ def main() -> int:
     for athlete, *_ in athletes:
         store._sync_badges(athlete["id"])
 
+    # A live assignment per team, so the compliance view has something in it.
+    today = now.date()
+    for team in (varsity, jv):
+        assignments_mod.create(
+            store.conn,
+            org_id=org_id,
+            team_id=team["id"],
+            created_by=director["id"],
+            drill_key="lax_wall_ball",
+            title=f"{team['name']} Wall Ball Week",
+            notes="Both hands. Quality over speed.",
+            starts_on=(today - timedelta(days=3)).isoformat(),
+            due_on=(today + timedelta(days=3)).isoformat(),
+            target_reps=600,
+            target_sessions=3,
+            min_offhand=0.35,
+        )
+
+    for assignment in assignments_mod.list_for_org(store.conn, org_id):
+        notify.notify_new_assignment(store.conn, assignment.id)
+    generated = notify.run_all(store.conn)
+
     counts = dict(
         store.conn.execute(
             "SELECT status, COUNT(*) FROM sessions WHERE status != 'open' GROUP BY status"
@@ -170,6 +194,8 @@ def main() -> int:
 
     print(f"\nSeeded {db_path} with {total_sessions} sessions over {args.weeks} weeks.")
     print(f"  by status: {counts}")
+    print(f"  assignments: {len(assignments_mod.list_for_org(store.conn, org_id))}")
+    print(f"  notifications: {sum(generated.values())} scheduled + new-assignment alerts")
     print(f"\n  Join codes: Varsity={varsity['join_code']}  JV={jv['join_code']}")
     print("\n  Sign-in tokens")
     print(f"    {'Coach Rivera (director)':<26} {director['token']}")

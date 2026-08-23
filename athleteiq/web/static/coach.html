@@ -47,6 +47,75 @@
   </div>
 
   <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h2 style="margin:0">Assignments</h2>
+      <button class="secondary inline" id="new-assignment-toggle">New assignment</button>
+    </div>
+    <p class="small muted">
+      Compliance is worst-first, because this list exists to tell you who needs a
+      text tonight.
+    </p>
+
+    <div id="assign-form" class="hidden" style="background:var(--surface-2);
+         border:1px solid var(--border);border-radius:11px;padding:14px;margin:12px 0">
+      <label for="a-title">Title</label>
+      <input id="a-title" placeholder="Week 1 Wall Ball" maxlength="120">
+
+      <label for="a-team">Team</label>
+      <select id="a-team"></select>
+
+      <label for="a-drill">Drill</label>
+      <select id="a-drill"></select>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:110px">
+          <label for="a-reps">Target reps</label>
+          <input id="a-reps" type="number" min="0" max="100000" value="300">
+        </div>
+        <div style="flex:1;min-width:110px">
+          <label for="a-sessions">Sessions</label>
+          <input id="a-sessions" type="number" min="0" max="200" value="3">
+        </div>
+        <div style="flex:1;min-width:110px">
+          <label for="a-offhand">Min off-hand %</label>
+          <input id="a-offhand" type="number" min="0" max="100" value="40">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px">
+          <label for="a-start">Starts</label>
+          <input id="a-start" type="date">
+        </div>
+        <div style="flex:1;min-width:140px">
+          <label for="a-due">Due</label>
+          <input id="a-due" type="date">
+        </div>
+      </div>
+
+      <label for="a-notes">Note to the team (optional)</label>
+      <input id="a-notes" placeholder="Both hands. Quality over speed." maxlength="500">
+
+      <button id="a-create">Assign &amp; notify team</button>
+      <div id="a-err" class="err hidden"></div>
+    </div>
+
+    <div id="assignments"></div>
+  </div>
+
+  <div class="card">
+    <h2>Message the team</h2>
+    <p class="small muted">Goes to every athlete's alerts, and their phone if they enabled push.</p>
+    <label for="b-team">Team</label>
+    <select id="b-team"></select>
+    <label for="b-title">Message</label>
+    <input id="b-title" placeholder="Practice moved to 6pm" maxlength="120">
+    <input id="b-body" placeholder="Turf field. Bring both sticks." maxlength="500">
+    <button class="secondary" id="b-send">Send</button>
+    <div id="b-note" class="small muted hidden" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
     <h2>Roster</h2>
     <div style="overflow-x:auto">
       <table>
@@ -137,6 +206,72 @@ function showError(message) {
   $('err').classList.remove('hidden');
 }
 
+// ------------------------------------------------------------- assignments
+
+function dotRow(p) {
+  const mark = (on, ch) => `<span class="${on ? 'on' : 'off'}">${ch}</span>`;
+  return `<span class="dots">${mark(p.sessions_met, 'S')}${mark(p.reps_met, 'R')}${mark(p.offhand_met, 'O')}</span>`;
+}
+
+async function loadAssignments() {
+  const teamId = $('team').value ? Number($('team').value) : null;
+  const { assignments } = await api(
+    `/api/coach/assignments${teamId ? `?team_id=${teamId}` : ''}`
+  );
+
+  $('assignments').innerHTML = assignments.length ? assignments.map((a) => {
+    const due = a.days_remaining < 0
+      ? `<span class="pill bad">${-a.days_remaining}d overdue</span>`
+      : a.days_remaining === 0
+        ? '<span class="pill warn">due today</span>'
+        : `<span class="pill ok">${a.days_remaining}d left</span>`;
+
+    const rows = a.athletes.map((p) => {
+      const share = p.offhand_share === null ? '&mdash;' : `${Math.round(p.offhand_share * 100)}%`;
+      return `<tr>
+        <td>${esc(p.display_name)}</td>
+        <td class="num">${p.sessions_done}/${a.target_sessions || '&mdash;'}</td>
+        <td class="num">${p.reps_done}/${a.target_reps || '&mdash;'}</td>
+        <td class="num">${share}</td>
+        <td>${dotRow(p)} ${p.complete ? '<span class="pill ok">done</span>' : ''}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div style="border:1px solid var(--border);border-radius:11px;
+                 padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
+        <div>
+          <b>${esc(a.title)}</b> ${due}
+          <br><span class="small muted">${esc(a.drill_name)} &middot; ${esc(a.team_name)}
+            &middot; due ${esc(a.due_on)}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="pill ${a.completed_count === a.athlete_count ? 'ok' : 'warn'}">
+            ${a.completed_count}/${a.athlete_count} complete</span>
+          <button class="inline secondary" data-close="${a.id}">Close</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;margin-top:10px">
+        <table class="compliance">
+          <thead><tr><th>Athlete</th><th class="num">Sess</th><th class="num">Reps</th>
+            <th class="num">Off-hand</th><th>Met</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('') : '<p class="small muted">No open assignments. Create one above.</p>';
+
+  $('assignments').querySelectorAll('[data-close]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api(`/api/coach/assignments/${btn.dataset.close}`, { method: 'DELETE' });
+        await loadAssignments();
+      } catch (e) { showError(e.message); btn.disabled = false; }
+    });
+  });
+}
+
 async function loadAll() {
   $('err').classList.add('hidden');
   const teamId = $('team').value ? Number($('team').value) : null;
@@ -153,6 +288,7 @@ async function loadAll() {
   renderRoster(rosterData.athletes);
   renderStandings(standingsData.teams);
   renderReview(reviewData.sessions);
+  await loadAssignments();
 }
 
 function renderSummary(athletes) {
@@ -268,6 +404,25 @@ async function loadTeams() {
   select.innerHTML = '<option value="">All teams</option>'
     + teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
   select.value = current;
+
+  const options = teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  $('a-team').innerHTML = options;
+  $('b-team').innerHTML = options;
+}
+
+async function loadDrillOptions() {
+  const { drills } = await api('/api/drills');
+  $('a-drill').innerHTML = drills
+    .map((d) => `<option value="${esc(d.key)}">${esc(d.name)}</option>`).join('');
+}
+
+function defaultAssignmentDates() {
+  // A week-long window starting today is what a coach almost always wants.
+  const today = new Date();
+  const due = new Date(today.getTime() + 6 * 86400000);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  $('a-start').value = iso(today);
+  $('a-due').value = iso(due);
 }
 
 $('add-team').addEventListener('click', async () => {
@@ -303,6 +458,59 @@ $('add-athlete').addEventListener('click', async () => {
   } catch (e) { showError(e.message); }
 });
 
+$('new-assignment-toggle').addEventListener('click', () => {
+  $('assign-form').classList.toggle('hidden');
+});
+
+$('a-create').addEventListener('click', async () => {
+  const err = $('a-err');
+  err.classList.add('hidden');
+  const teamId = Number($('a-team').value);
+  if (!teamId) { err.textContent = 'Create a team first.'; err.classList.remove('hidden'); return; }
+
+  try {
+    const res = await api('/api/coach/assignments', {
+      method: 'POST',
+      body: {
+        team_id: teamId,
+        drill_key: $('a-drill').value,
+        title: $('a-title').value.trim() || 'Training assignment',
+        starts_on: $('a-start').value,
+        due_on: $('a-due').value,
+        target_reps: Number($('a-reps').value) || 0,
+        target_sessions: Number($('a-sessions').value) || 0,
+        min_offhand: (Number($('a-offhand').value) || 0) / 100,
+        notes: $('a-notes').value.trim(),
+      },
+    });
+    $('assign-form').classList.add('hidden');
+    $('a-title').value = '';
+    await loadAssignments();
+    $('b-note').textContent = `Assigned. ${res.athletes_notified} athlete(s) notified.`;
+    $('b-note').classList.remove('hidden');
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  }
+});
+
+$('b-send').addEventListener('click', async () => {
+  const note = $('b-note');
+  try {
+    const res = await api('/api/coach/broadcast', {
+      method: 'POST',
+      body: {
+        team_id: Number($('b-team').value),
+        title: $('b-title').value.trim(),
+        body: $('b-body').value.trim(),
+      },
+    });
+    note.textContent = `Sent to ${res.sent} athlete(s).`;
+    note.classList.remove('hidden');
+    $('b-title').value = ''; $('b-body').value = '';
+  } catch (e) { note.textContent = e.message; note.classList.remove('hidden'); }
+});
+
 $('team').addEventListener('change', () => loadAll().catch((e) => showError(e.message)));
 $('window').addEventListener('change', () => loadAll().catch((e) => showError(e.message)));
 $('signout').addEventListener('click', logout);
@@ -312,6 +520,8 @@ $('signout').addEventListener('click', logout);
     const me = await api('/api/me');
     $('whoami').textContent = me.display_name;
     await loadTeams();
+    await loadDrillOptions();
+    defaultAssignmentDates();
     await loadAll();
   } catch (e) { showError(e.message); }
 })();

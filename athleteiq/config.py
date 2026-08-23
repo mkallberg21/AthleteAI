@@ -113,5 +113,18 @@ class Config:
     # guardian consent before their name appears on any shared leaderboard.
     minor_age_ceiling: int = 17
 
+    # Web Push (VAPID). Absent these, notifications still generate and appear
+    # in the in-app feed -- only the phone-level push is skipped, so nothing
+    # about the product depends on a third-party service being configured.
+    vapid_public_key: str = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_VAPID_PUBLIC_KEY", "")
+    )
+    vapid_private_key: str = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_VAPID_PRIVATE_KEY", "")
+    )
+    vapid_email: str = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_VAPID_EMAIL", "coach@example.com")
+    )
+
 
 CONFIG = Config()

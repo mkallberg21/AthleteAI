@@ -16,6 +16,7 @@ from typing import Any
 from .config import CONFIG
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
+from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
 from .scoring import (
     AthleteStats,
@@ -42,6 +43,11 @@ def _parse(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value)
     except ValueError:
         return None
+
+
+# How far back a device-reported completion time may be honoured. Past this
+# the claim is unverifiable, so the session is credited to the day it arrived.
+OFFLINE_BACKDATE_LIMIT_DAYS = 14
 
 
 class StoreError(Exception):
@@ -186,6 +192,66 @@ class Store:
             )
         return {"session_id": int(cur.lastrowid), "nonce": nonce, "drill_key": drill_key}
 
+    def reserve_sessions(
+        self, athlete_id: int, drill_key: str, count: int = 3
+    ) -> list[dict[str, Any]]:
+        """Pre-issue session slots so capture can start with no network.
+
+        Athletes train in driveways and on fields with no signal. Requiring a
+        round-trip before counting begins means a dead zone costs a whole
+        session, which costs a streak, which costs the athlete. The client
+        stocks up on slots while it has signal and spends them offline.
+        """
+        if drill_key not in DRILLS_BY_KEY:
+            raise StoreError(f"unknown drill: {drill_key!r}")
+        count = max(1, min(int(count), 10))
+
+        issued = []
+        with transaction(self.conn) as c:
+            for _ in range(count):
+                nonce = new_token()
+                cur = c.execute(
+                    "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, "
+                    "status, reserved) VALUES (?,?,?,?,'open',1)",
+                    (athlete_id, drill_key, nonce, _iso(_now())),
+                )
+                issued.append(
+                    {
+                        "session_id": int(cur.lastrowid),
+                        "nonce": nonce,
+                        "drill_key": drill_key,
+                    }
+                )
+        return issued
+
+    def _effective_day(self, completed_at: str | None) -> tuple[str, str]:
+        """Resolve the day a session should be credited to.
+
+        Prefers the device's own completion time: a session trained Sunday in a
+        dead zone and synced Monday has to earn Sunday's credit, or every lost
+        signal silently breaks a streak. The value is clamped -- a device clock
+        set far forward would otherwise let an athlete bank XP against future
+        days and dodge the daily cap.
+        """
+        now = _now()
+        if not completed_at:
+            return now.date().isoformat(), _iso(now)
+
+        parsed = _parse(completed_at)
+        if parsed is None:
+            return now.date().isoformat(), _iso(now)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+
+        # Small forward skew is ordinary clock drift; anything more is wrong.
+        if parsed > now + timedelta(minutes=5):
+            parsed = now
+        # Beyond this the claim is unverifiable, so credit it to today.
+        earliest = now - timedelta(days=OFFLINE_BACKDATE_LIMIT_DAYS)
+        if parsed < earliest:
+            parsed = now
+        return parsed.date().isoformat(), _iso(parsed)
+
     def submit_session(
         self,
         athlete_id: int,
@@ -198,8 +264,15 @@ class Store:
         mean_confidence: float = 0.0,
         client_version: str = "",
         device_label: str = "",
+        completed_at: str | None = None,
     ) -> dict[str, Any]:
-        """Validate, score, and record a completed session."""
+        """Validate, score, and record a completed session.
+
+        Idempotent: resubmitting with the correct nonce returns the original
+        result rather than erroring or scoring twice. An offline client that
+        never saw its acknowledgement will retry, and a retry must not be
+        punished.
+        """
         row = self.conn.execute(
             "SELECT * FROM sessions WHERE id = ?", (session_id,)
         ).fetchone()
@@ -207,12 +280,19 @@ class Store:
             raise StoreError("unknown session")
         if row["athlete_id"] != athlete_id:
             raise StoreError("session belongs to a different athlete")
-        # The nonce is what makes a submission single-use: replaying a captured
-        # payload hits this branch instead of double-scoring.
-        if row["status"] != "open":
-            raise StoreError("session has already been submitted")
+        # The nonce is what makes a submission single-use. Checked before the
+        # status branch below so a wrong nonce can never read back a result.
         if row["nonce"] != nonce:
             raise StoreError("session nonce does not match")
+        if row["status"] != "open":
+            # Already scored. Hand back exactly what the first submit returned,
+            # so a duplicate delivery is a no-op rather than an error the
+            # athlete sees. Scoring still happened only once.
+            if row["result_json"]:
+                stored = json.loads(row["result_json"])
+                stored["duplicate"] = True
+                return stored
+            raise StoreError("session has already been submitted")
 
         drill = get_drill(row["drill_key"])
         claim = SessionClaim(
@@ -232,7 +312,7 @@ class Store:
         )
         verdict = evaluate(claim, drill)
 
-        today = _now().date().isoformat()
+        today, effective_at = self._effective_day(completed_at)
         already = self._xp_on_day(athlete_id, today)
         breakdown = score_session(
             drill,
@@ -245,12 +325,12 @@ class Store:
 
         with transaction(self.conn) as c:
             c.execute(
-                "UPDATE sessions SET submitted_at=?, duration_ms=?, reps_total=?, "
-                "reps_left=?, reps_right=?, hold_ms=?, mean_confidence=?, cadence_cv=?, "
-                "integrity_score=?, integrity_notes=?, xp_awarded=?, status=?, "
-                "client_version=?, device_label=? WHERE id=?",
+                "UPDATE sessions SET submitted_at=?, completed_at=?, duration_ms=?, "
+                "reps_total=?, reps_left=?, reps_right=?, hold_ms=?, mean_confidence=?, "
+                "cadence_cv=?, integrity_score=?, integrity_notes=?, xp_awarded=?, "
+                "status=?, client_version=?, device_label=? WHERE id=?",
                 (
-                    _iso(_now()), claim.duration_ms, verdict.reps_total,
+                    _iso(_now()), effective_at, claim.duration_ms, verdict.reps_total,
                     verdict.reps_left, verdict.reps_right, claim.hold_ms,
                     claim.mean_confidence, verdict.cadence_cv, verdict.score,
                     json.dumps(verdict.notes), awarded, verdict.status,
@@ -274,8 +354,9 @@ class Store:
                 )
 
         new_badges = self._sync_badges(athlete_id)
+        notify.notify_badges(self.conn, athlete_id, new_badges)
 
-        return {
+        result = {
             "session_id": session_id,
             "status": verdict.status,
             "integrity_score": round(verdict.score, 3),
@@ -289,7 +370,15 @@ class Store:
                 {"key": k, "name": BADGES_BY_KEY[k].name, "tier": BADGES_BY_KEY[k].tier}
                 for k in new_badges
             ],
+            "counted_for_day": today,
         }
+        # Stored so a duplicate delivery replays this exact response.
+        with transaction(self.conn) as c:
+            c.execute(
+                "UPDATE sessions SET result_json = ? WHERE id = ?",
+                (json.dumps(result), session_id),
+            )
+        return result
 
     def review_session(self, session_id: int, approve: bool, reviewer_id: int) -> dict[str, Any]:
         """Coach decision on a session held for review.
