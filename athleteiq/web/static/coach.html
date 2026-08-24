@@ -102,6 +102,17 @@
     <div id="attention"></div>
   </div>
 
+  <div class="card hidden" id="budget-card">
+    <h2>Time outside practice</h2>
+    <p class="small muted">
+      Against an age-appropriate weekly budget, not a target to beat. Both ends
+      matter: an athlete well past their budget is a check-in, same as one who
+      has not started. School, friends and other sports are the rest of the week.
+    </p>
+    <div id="budget-spread"></div>
+    <div id="budget-over"></div>
+  </div>
+
   <div class="card hidden" id="load-card">
     <h2>Workload watch</h2>
     <p class="small muted">
@@ -653,11 +664,52 @@ async function loadAll() {
   renderStandings(standingsData.teams);
   renderReview(reviewData.sessions);
   renderLoadWatch(rosterData.athletes);
+  try {
+    renderBudgets(await api(`/api/coach/budgets${teamId ? `?team_id=${teamId}` : ''}`));
+  } catch { /* nothing logged yet */ }
   await loadAssignments();
   try {
     renderDigest(await api('/api/coach/digest'));
     await loadDelivery();
   } catch { /* a brand-new program has no week to report yet */ }
+}
+
+const BUDGET_STATES = [
+  ['over', 'Past their budget'],
+  ['full', 'Full week'],
+  ['good', 'On track'],
+  ['building', 'Building the habit'],
+  ['unknown', 'Nothing logged'],
+];
+
+function renderBudgets(data) {
+  const counts = data.counts || {};
+  const total = BUDGET_STATES.reduce((n, [k]) => n + (counts[k] || 0), 0);
+  $('budget-card').classList.toggle('hidden', total === 0);
+  if (!total) return;
+
+  $('budget-spread').innerHTML = BUDGET_STATES.map(([key, label]) => {
+    const n = counts[key] || 0;
+    const pct = Math.round((n / total) * 100);
+    return `<div class="budget-row">
+      <span class="budget-key ${esc(key)}"></span>
+      <span class="budget-label">${esc(label)}</span>
+      <span class="budget-n">${n}</span>
+      <span class="small muted">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  const over = data.over_budget || [];
+  $('budget-over').innerHTML = over.length === 0 ? '' : `
+    <p class="small" style="margin-top:14px">
+      <b>Worth a word with:</b> these athletes have gone past what their age
+      band calls a full week. Nothing is wrong &mdash; it is just a lot.
+    </p>
+    ${over.map((a) => `<div class="advisory warn">
+        <span class="dotmark"></span>
+        <div>${esc(a.display_name)} &mdash; ${Math.round(a.minutes)} minutes this week
+          <em>${esc(a.band)} band tops out around ${a.weekly_max}</em></div>
+      </div>`).join('')}`;
 }
 
 function renderLoadWatch(athletes) {

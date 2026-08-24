@@ -25,6 +25,26 @@
   <section id="view-home">
     <div class="conn" id="conn"><i></i><span id="conn-text">Online</span></div>
 
+    <div class="card hidden" id="budget-card">
+      <div class="budget-head">
+        <b id="budget-headline"></b>
+        <span id="budget-band"></span>
+      </div>
+      <div class="budget-bar">
+        <i id="budget-fill" style="width:0%"></i>
+        <span class="ceiling" id="budget-ceiling" style="left:100%"></span>
+      </div>
+      <div class="budget-scale">
+        <span>0</span><span id="budget-target-label"></span>
+      </div>
+      <p class="budget-detail" id="budget-detail"></p>
+      <div id="budget-advisories"></div>
+      <details style="margin-top:10px">
+        <summary class="small muted" style="cursor:pointer">How you compare</summary>
+        <div id="budget-peers" style="margin-top:8px"></div>
+      </details>
+    </div>
+
     <div class="card hidden" id="load-card">
       <div class="load-top">
         <h2 style="margin:0">Training load</h2>
@@ -293,6 +313,51 @@ async function loadDrills() {
   $('drill-list').querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => openCapture(drills[Number(btn.dataset.i)]));
   });
+}
+
+// ---------------------------------------------------------- age budget
+
+async function loadBudget() {
+  let report;
+  try {
+    report = await api('/api/benchmarks');
+  } catch { return; }
+  if (!report || !report.budget) return;
+
+  const b = report.budget;
+  const card = $('budget-card');
+  card.className = `card budget-card ${esc(b.status)}`;
+  card.classList.remove('hidden');
+
+  $('budget-headline').textContent = b.headline;
+  $('budget-band').textContent = `${b.band.label} · ${b.band.weekly_target} min/week`;
+  $('budget-detail').textContent = b.detail;
+  $('budget-target-label').textContent = `${b.band.weekly_target} min — a good week`;
+
+  // Capped at the recommended maximum rather than running on: a bar that keeps
+  // filling past the point of "enough" reads as a target to beat.
+  const ceilingRatio = b.band.weekly_max / b.band.weekly_target;
+  const pct = Math.min(100, (b.fraction / ceilingRatio) * 100);
+  const fill = $('budget-fill');
+  fill.className = b.status === 'over' ? 'over' : b.status === 'building' ? 'building' : '';
+  fill.style.width = `${pct}%`;
+  $('budget-ceiling').style.left = `${(1 / ceilingRatio) * 100}%`;
+
+  $('budget-advisories').innerHTML = (report.advisories || []).map((a) => `
+    <div class="advisory caution"><span class="dotmark"></span><div>${esc(a)}</div></div>
+  `).join('');
+
+  const peers = report.comparisons || [];
+  $('budget-peers').innerHTML = peers.length
+    ? peers.map((p) => `
+        <div class="peer">
+          <b>${esc(p.label)}</b>
+          <span class="pct">${p.percentile === null ? '&mdash;' : `${p.percentile}<small>th</small>`}</span>
+          <span>${esc(p.blurb)} Compared with ${p.peer_count} others your age.</span>
+        </div>`).join('')
+      + `<p class="small muted" style="margin-top:10px">${esc(report.disclaimer)}</p>`
+    : `<p class="small muted">Not enough athletes your age in the program to compare
+       yet. ${esc(report.disclaimer)}</p>`;
 }
 
 // ------------------------------------------------------------ training load
@@ -985,7 +1050,8 @@ $('review-save').addEventListener('click', () => {
 $('review-close').addEventListener('click', async () => {
   discardRecording();
   await Promise.all([
-    loadHome(), loadAssignments(), loadNotifications(), loadTrainingLoad(),
+    loadHome(), loadBudget(), loadAssignments(),
+    loadNotifications(), loadTrainingLoad(),
   ]);
   show('home');
 });
@@ -1002,7 +1068,8 @@ $('back').addEventListener('click', () => { stopCamera(); show('home'); });
 $('done').addEventListener('click', async () => {
   discardRecording();
   await Promise.all([
-    loadHome(), loadAssignments(), loadNotifications(), loadTrainingLoad(),
+    loadHome(), loadBudget(), loadAssignments(),
+    loadNotifications(), loadTrainingLoad(),
   ]);
   show('home');
 });
@@ -1061,6 +1128,7 @@ window.addEventListener('pagehide', () => {
     // Non-blocking: a queued backlog or a slow feed must not hold up the
     // screen an athlete opened in order to train.
     syncQueue();
+    loadBudget();
     loadAssignments();
     loadNotifications();
     loadTrainingLoad();

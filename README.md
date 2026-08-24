@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 838 tests
+python -m pytest tests/ -q          # 877 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -88,6 +88,7 @@ athleteiq/
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
   load.py           Workload ratio, throwing volume, rest days, advisories
+  benchmarks.py     Age-banded weekly time budgets and peer context
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
   digest.py         Weekly team KPIs and the coach email
@@ -724,6 +725,82 @@ actually spent inside the body-line tolerance, so sagging costs you.
 
 ---
 
+## Age benchmarks and the weekly time budget
+
+Most benchmark features answer "how do I compare?" and quietly imply "do more".
+For a twelve-year-old who already trains four evenings a week, that is the wrong
+answer, so this module is built the other way round: the primary number is a
+**time budget**, and the app is willing to tell an athlete to stop.
+
+### The bands
+
+`weekly_target` is a good week, not a floor. `weekly_max` is the point past which
+the app says *that is more than enough*. All figures are minutes of logged
+training **outside team practice** — team sessions, games, and PE are not in this
+budget and are assumed to sit on top of it.
+
+| Band | Target/wk | Min-max | Max session | Days/wk | Framing |
+|---|---|---|---|---|---|
+| Under 11 | 30 | 15-60 | 15 | 2 (max 3) | Short and fun beats long and serious |
+| 11-12 | 45 | 20-90 | 20 | 3 (max 4) | Keep other sports in the mix |
+| 13-14 | 75 | 30-135 | 30 | 3 (max 5) | A real habit without taking over the week |
+| 15-16 | 110 | 45-180 | 40 | 4 (max 5) | Rest days matter as much as reps |
+| 17-18 | 140 | 60-225 | 45 | 4 (max 6) | School is still the bigger commitment |
+| 19+ | 150 | 60-300 | 60 | 4 (max 6) | Judge it against your own schedule |
+
+Where the numbers come from: they are anchored on the widely used paediatric
+sports-medicine heuristics — cap organised training hours per week at roughly the
+athlete's age, keep single-sport specialisation late, take at least one or two
+full rest days a week, and take extended off-season breaks. This module spends a
+*fraction* of that age-hours allowance on solo work, because the rest belongs to
+team practice and games. They are deliberately conservative defaults, not a
+clinical instrument, and a program can scale them with `ATHLETEIQ_BUDGET_SCALE`.
+
+An unknown or estimated birth year falls back to the **11-12** band rather than
+an average one: guessing low is the safe direction to be wrong in.
+
+### What the athlete sees
+
+Five states, each with copy written to close the loop rather than open it:
+
+- **unknown** — nothing logged; describes what a good week looks like for the band.
+- **building** — under the minimum; suggests a number of short sessions capped at
+  the band's own `days_target`.
+- **good** — "Right where you should be."
+- **full** — target reached: *"You have done enough this week... go and do
+  something else."*
+- **over** — past `weekly_max`: *"Take a couple of days off... there is more to
+  being your age than this."*
+
+Advisories fire independently for a single session longer than `session_max`,
+for training more than `days_max` days in the week, and for an under-13 over
+target — that one points at other sports and unstructured play by name.
+
+The progress bar is capped at `weekly_max`, not at the target, so a full bar
+never reads as a score to beat. Tests assert that no message in any state
+contains "must", "behind", or "only".
+
+### Peer comparison, deliberately narrowed
+
+Comparison is restricted to the same age band (optionally the same position) and
+suppressed entirely below `MIN_PEER_GROUP` (8), so a small squad cannot turn into
+a two-person race.
+
+**Volume is never compared.** Ranking kids by minutes trained is precisely the
+mechanic that produces the twelve-year-old training four evenings a week. What
+is compared is **form quality** and **off-hand balance** — things that improve by
+training better rather than more. **Consistency** is offered only to an athlete
+whose status is `unknown` or `building`, where a nudge is still useful; once
+they are at `good` or above it disappears rather than becoming a reason to add
+sessions.
+
+### What the coach sees
+
+`program_summary()` returns counts across all five states plus an explicit
+`over_budget` list. Over-training surfaces as prominently as under-training, on
+the same screen — a coach should find out that a kid is grinding every night in
+the same glance that tells them who has not started.
+
 ## Load management and overuse protection
 
 Stated plainly, because it is the reason this exists: **everything else in this
@@ -971,44 +1048,50 @@ contact with a real driveway:
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
    battery.
-3. **Handedness is inferred from wrist height**, which is reliable for standard
+3. **The age bands are heuristics, not a clinical instrument.** They are drawn
+   from general paediatric sports-medicine guidance and rounded to numbers a
+   twelve-year-old can act on. They know nothing about the individual athlete's
+   growth stage, injury history, or what else their week already contains, and
+   they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
+   as a program-level dial, not a per-athlete prescription.
+4. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-4. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+5. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-5. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+6. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+7. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **Revocation soft-fails by default**, though pre-fetched staples make strict
+8. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-8. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+9. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-9. **No payment processor.** The billing model, entitlements, and invoicing are
+10. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-9. **Offline slots are per-drill.** A drill you have never opened online has no
+11. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-10. **Web Push needs credentials.** Notifications generate and display in-app
+12. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-11. **Form quality is pose-only.** It reads how the body moved, not where the
+13. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-12. **Guardian identity is proven by the invite code alone.** There is no email
+14. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-13. **Roster import reads delimited text only.** CSV, TSV, and
+15. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-14. **Load coefficients are reasoned estimates, not measured values.** The
+16. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

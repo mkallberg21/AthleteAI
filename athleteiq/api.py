@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
+from . import benchmarks as benchmarks_mod
 from . import billing as billing_mod
 from . import digest as digest_mod
 from . import mailer
@@ -1384,6 +1385,41 @@ def erase_athlete_data(
     return guardians_mod.erase_athlete(
         store.conn, body.athlete_id, body.scope, requested_by="guardian"
     )
+
+
+@app.get("/api/benchmarks")
+def my_benchmarks(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """How much training suits this athlete's age, and how they compare inside it."""
+    return benchmarks_mod.report(store.conn, principal.id)
+
+
+@app.get("/api/coach/budgets")
+def team_budgets(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Who is short of their age-appropriate budget, and who is past it.
+
+    Both directions, deliberately. A dashboard that only surfaces the quiet
+    ones teaches a squad that more is always better, which is the belief this
+    whole feature exists to interrupt.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
+    )
+    return {
+        **benchmarks_mod.program_summary(
+            store.conn, [a["athlete_id"] for a in athletes]
+        ),
+        "bands": [b.to_dict() for b in benchmarks_mod.AGE_BANDS],
+    }
 
 
 @app.get("/api/standings")

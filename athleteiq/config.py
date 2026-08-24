@@ -184,6 +184,13 @@ class Config:
     # guardian consent before their name appears on any shared leaderboard.
     minor_age_ceiling: int = 17
 
+    # Multiplier on the published age-appropriate training budgets. A program
+    # can raise or lower them, but has to choose to -- the app never quietly
+    # assumes an athlete can take more than the guidance suggests.
+    budget_scale: float = field(
+        default_factory=lambda: float(os.environ.get("ATHLETEIQ_BUDGET_SCALE", "1") or 1)
+    )
+
     # When true, a coach with no team assignments sees nothing rather than the
     # whole program. Off by default so accounts created before team assignment
     # existed keep working on upgrade; new deployments should turn it on.

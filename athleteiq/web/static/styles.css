@@ -472,3 +472,43 @@ tbody tr:hover { background: var(--surface-2); }
   font-size: .78rem; color: var(--muted); border-left: 2px solid var(--accent-dim);
   padding-left: 10px; margin-top: 12px; line-height: 1.5;
 }
+
+/* ---- Age-appropriate budget ---- */
+
+.budget-card { border-left: 3px solid var(--accent); }
+.budget-card.building { border-left-color: var(--left); }
+.budget-card.over { border-left-color: var(--warn); }
+.budget-card.unknown { border-left-color: var(--border); }
+
+.budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.budget-head b { font-size: 1.02rem; }
+.budget-head span { font-size: .74rem; color: var(--muted); }
+
+/* The bar stops looking like a target to beat once it is full: past the
+   recommended amount it turns amber rather than continuing to fill. */
+.budget-bar { height: 12px; background: var(--surface-2); border-radius: 99px; margin: 12px 0 6px; position: relative; overflow: hidden; }
+.budget-bar > i { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .3s ease; }
+.budget-bar > i.building { background: var(--left); }
+.budget-bar > i.over { background: var(--warn); }
+.budget-bar .ceiling { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted); opacity: .5; }
+
+.budget-detail { font-size: .88rem; line-height: 1.55; color: var(--text); margin-top: 4px; }
+.budget-scale { display: flex; justify-content: space-between; font-size: .66rem; color: var(--muted); }
+
+.peer { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.peer:last-child { border-bottom: none; }
+.peer b { font-size: .88rem; }
+.peer .pct { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.peer span { font-size: .74rem; color: var(--muted); grid-column: 1 / -1; }
+
+/* Coach-side budget spread. Colour carries the meaning here, so `over` is
+   warned rather than celebrated: this is the one board where the top of the
+   scale is not the good end. */
+.budget-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.budget-key { width: 10px; height: 10px; border-radius: 3px; flex: none; background: var(--muted); }
+.budget-key.over { background: var(--warn); }
+.budget-key.full { background: var(--gold); }
+.budget-key.good { background: var(--accent); }
+.budget-key.building { background: var(--accent-dim); }
+.budget-label { flex: 1; }
+.budget-n { font-variant-numeric: tabular-nums; font-weight: 600; }

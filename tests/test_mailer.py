@@ -15,7 +15,15 @@ from athleteiq import mailer
 from athleteiq.db import connect
 from athleteiq.store import Store
 
-NOW = datetime(2026, 8, 24, 9, tzinfo=timezone.utc)
+def now() -> datetime:
+    """The current time, read at the point of use.
+
+    Never a module-level constant. A message is queued with next_attempt_at set
+    to the real clock, so a fixed timestamp stops finding anything due the
+    moment the clock passes it -- as a module constant that happened partway
+    through a slow suite, and as a hardcoded hour it happened at lunchtime.
+    """
+    return datetime.now(timezone.utc)
 
 
 @pytest.fixture
@@ -128,19 +136,21 @@ class TestDelivery:
 
     def test_a_transient_failure_is_retried_later(self, store, coach):
         queue(store, coach)
-        assert mailer.flush(store.conn, Always(TRANSIENT), now=NOW)["retrying"] == 1
+        at = now()
+        assert mailer.flush(store.conn, Always(TRANSIENT), now=at)["retrying"] == 1
         row = store.conn.execute(
             "SELECT status, attempts, next_attempt_at FROM email_outbox"
         ).fetchone()
         assert row["status"] == "queued"
         assert row["attempts"] == 1
-        assert datetime.fromisoformat(row["next_attempt_at"]) > NOW
+        assert datetime.fromisoformat(row["next_attempt_at"]) > at
 
     def test_a_retry_is_not_attempted_before_its_time(self, store, coach):
         queue(store, coach)
         transport = Always(TRANSIENT)
-        mailer.flush(store.conn, transport, now=NOW)
-        mailer.flush(store.conn, transport, now=NOW + timedelta(seconds=30))
+        at = now()
+        mailer.flush(store.conn, transport, now=at)
+        mailer.flush(store.conn, transport, now=at + timedelta(seconds=30))
         assert len(transport.calls) == 1
 
     def test_a_transient_failure_eventually_succeeds(self, store, coach):
@@ -154,7 +164,7 @@ class TestDelivery:
 
         queue(store, coach)
         transport = Flaky()
-        when = NOW
+        when = now()
         for _ in range(3):
             mailer.flush(store.conn, transport, now=when)
             when += timedelta(hours=6)
@@ -180,7 +190,7 @@ class TestDelivery:
     def test_retries_stop_after_the_attempt_limit(self, store, coach):
         queue(store, coach)
         transport = Always(TRANSIENT)
-        when = NOW
+        when = now()
         for _ in range(mailer.MAX_ATTEMPTS + 2):
             mailer.flush(store.conn, transport, now=when)
             when += timedelta(days=1)
@@ -192,7 +202,7 @@ class TestDelivery:
         """A bad night for a mail server is not a dead address."""
         queue(store, coach)
         transport = Always(TRANSIENT)
-        when = NOW
+        when = now()
         for _ in range(mailer.MAX_ATTEMPTS + 1):
             mailer.flush(store.conn, transport, now=when)
             when += timedelta(days=1)
@@ -297,7 +307,7 @@ class TestMaintenance:
 
         store.conn.execute(
             "UPDATE email_outbox SET sent_at = ? WHERE status = 'sent'",
-            ((datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),),
+            ((now() - timedelta(days=200)).isoformat(),),
         )
         store.conn.commit()
 
