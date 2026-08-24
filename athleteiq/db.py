@@ -194,6 +194,58 @@ CREATE TABLE IF NOT EXISTS return_plan_events (
 );
 CREATE INDEX IF NOT EXISTS idx_return_plan_events ON return_plan_events(plan_id);
 
+-- A curated film clip. Stores a provider and an id, never the video: the
+-- athlete's browser plays it from the provider's own embed, nothing is
+-- downloaded or re-hosted.
+CREATE TABLE IF NOT EXISTS clips (
+    id          INTEGER PRIMARY KEY,
+    org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    provider    TEXT NOT NULL DEFAULT 'youtube',
+    video_id    TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    -- What to watch for. The difference between film study and watching telly.
+    focus       TEXT NOT NULL DEFAULT '',
+    start_s     INTEGER NOT NULL DEFAULT 0,
+    end_s       INTEGER,
+    positions   TEXT NOT NULL DEFAULT '',
+    min_age     INTEGER NOT NULL DEFAULT 0,
+    max_age     INTEGER NOT NULL DEFAULT 200,
+    question    TEXT,
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_clips_org ON clips(org_id, active);
+
+-- One athlete watching one clip. Heartbeats update this row in place rather
+-- than writing their own -- a beat every few seconds would be the largest
+-- table in the database within a season, and the aggregate is what anyone
+-- ever reads.
+CREATE TABLE IF NOT EXISTS clip_watches (
+    id           INTEGER PRIMARY KEY,
+    athlete_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    clip_id      INTEGER NOT NULL REFERENCES clips(id) ON DELETE CASCADE,
+    day          TEXT NOT NULL,
+    position_s   REAL NOT NULL DEFAULT 0,
+    watched_s    REAL NOT NULL DEFAULT 0,
+    audible_s    REAL NOT NULL DEFAULT 0,
+    focused_s    REAL NOT NULL DEFAULT 0,
+    wall_s       REAL NOT NULL DEFAULT 0,
+    seeks        INTEGER NOT NULL DEFAULT 0,
+    max_rate     REAL NOT NULL DEFAULT 1,
+    -- Whole seconds of the clip actually seen, so rewatching the first ten
+    -- seconds forty times does not read as having watched it.
+    seen_json    TEXT NOT NULL DEFAULT '[]',
+    verdict      TEXT NOT NULL DEFAULT 'partial',
+    answered     INTEGER,
+    answer_ok    INTEGER,
+    xp_awarded   INTEGER NOT NULL DEFAULT 0,
+    started_at   TEXT NOT NULL,
+    last_beat_at TEXT NOT NULL,
+    UNIQUE (athlete_id, clip_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_clip_watches_day ON clip_watches(athlete_id, day);
+
 -- One recording. Contains no video and no frames -- only derived counts.
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY,

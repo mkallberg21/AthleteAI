@@ -456,23 +456,41 @@ class TestPrivacy:
     def test_no_endpoint_accepts_video_or_image_data(self, client):
         """The privacy promise has to be structural, not a policy note.
 
-        Checks the actual request-body field names in the OpenAPI schema, not
-        the prose -- the description is *supposed* to mention video.
+        Film study introduced fields that *refer* to video without carrying
+        any, so this no longer bans the word -- banning a word was always a
+        proxy anyway. It now proves the property instead: nothing binary is
+        accepted, no field names raw imagery, and any field that names a video
+        is a short string or an integer, which cannot hold one.
         """
         schema = client.get("/openapi.json").json()
-        banned = ("video", "image", "frame", "landmark", "photo", "media", "clip")
+        # Words that only appear on a field carrying actual pixels.
+        imagery = ("image", "frame", "landmark", "photo", "pixel", "base64",
+                   "blob", "thumbnail", "bytes", "media")
+        # Words that name a video without being one. These have to prove it.
+        references = ("video", "clip")
 
-        field_names: list[str] = []
         for name, model in schema.get("components", {}).get("schemas", {}).items():
-            for prop in (model.get("properties") or {}):
-                field_names.append(f"{name}.{prop}")
+            for prop, spec in (model.get("properties") or {}).items():
+                field = f"{name}.{prop}"
+                lowered = prop.lower()
+                for term in imagery:
+                    assert term not in lowered, f"request schema exposes {field!r}"
 
-        for field in field_names:
-            lowered = field.lower()
-            for term in banned:
-                assert term not in lowered, f"request schema exposes {field!r}"
+                if any(term in lowered for term in references):
+                    kinds = {spec.get("type")} | {
+                        option.get("type") for option in spec.get("anyOf", [])
+                    }
+                    assert kinds & {"string", "integer"}, \
+                        f"{field} is not a plain reference"
+                    if "string" in kinds:
+                        limit = spec.get("maxLength") or max(
+                            (o.get("maxLength") or 0) for o in spec.get("anyOf", [{}])
+                        )
+                        assert 0 < limit <= 2_000, \
+                            f"{field} has no length cap, so it could carry a payload"
 
-        # And no endpoint may accept a binary/multipart body at all.
+        # And no endpoint may accept a binary/multipart body at all. This is
+        # the guard that actually stops an upload, whatever anything is named.
         for path, methods in schema["paths"].items():
             for method, op in methods.items():
                 content = (op.get("requestBody") or {}).get("content", {})
@@ -532,16 +550,50 @@ class TestPrivacy:
                 )
 
     def test_submissions_store_no_imagery(self, client, program):
+        """No table can hold a video, whatever its columns are called.
+
+        Film study stores an eleven-character provider id, so a name-based ban
+        would have to make an exception for it -- and an exception is exactly
+        what a guarantee should not have. This checks type affinity instead:
+        SQLite cannot store a video without a BLOB column, so there are none.
+        """
+        # Binary is allowed in exactly one place, and it holds DER-encoded
+        # OCSP responses for certificate checking. Named rather than pattern
+        # matched, so adding a second binary column fails this test loudly.
+        binary_allowed = {"ocsp_staples"}
+
         do_session(client, program["athletes"][0]["headers"])
         conn = api_module._store.conn
         tables = [r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )]
         for table in tables:
-            cols = [r[1].lower() for r in conn.execute(f"PRAGMA table_info({table})")]
-            for col in cols:
-                assert not any(t in col for t in ("video", "image", "frame", "blob", "photo")), \
+            for row in conn.execute(f"PRAGMA table_info({table})"):
+                col, decl = row[1].lower(), (row[2] or "").upper()
+                if "BLOB" in decl:
+                    assert table in binary_allowed, f"{table}.{col} is a BLOB"
+                assert not any(t in col for t in ("image", "frame", "photo", "pixel")), \
                     f"{table}.{col} looks like it stores imagery"
+
+    def test_film_stores_a_reference_and_never_a_video(self, client, program):
+        """The positive statement, since film is the one place this product
+        points a child's browser at video at all."""
+        made = client.post(
+            "/api/coach/clips",
+            json={"video": "https://youtu.be/dQw4w9WgXcQ", "title": "Sliding early",
+                  "start_s": 10, "end_s": 70},
+            headers=program["director"],
+        ).json()
+        assert made["video_id"] == "dQw4w9WgXcQ"
+        assert len(made["video_id"]) == 11
+
+        stored = api_module._store.conn.execute(
+            "SELECT video_id FROM clips WHERE id = ?", (made["id"],)
+        ).fetchone()["video_id"]
+        assert stored == "dQw4w9WgXcQ"
+        # The embed points at the privacy-enhanced host, which is a mitigation
+        # and not a cure -- see the README.
+        assert made["embed_url"].startswith("https://www.youtube-nocookie.com/embed/")
 
 
 class TestAssignmentEndpoints:

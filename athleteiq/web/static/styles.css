@@ -577,3 +577,14 @@ tbody tr:hover { background: var(--surface-2); }
 .rtp-step.done i { background: var(--accent-dim); }
 .rtp-step.now i { background: var(--accent); }
 .rtp-step.now { color: var(--accent); font-weight: 600; }
+
+/* Film. The progress bar tracks coverage of the clip, not elapsed time, so
+   scrubbing to the end does not fill it. */
+.film-frame { position: relative; padding-bottom: 56.25%; height: 0;
+              border-radius: var(--radius); overflow: hidden; background: #000; }
+.film-frame iframe, .film-frame > div { position: absolute; inset: 0;
+                                        width: 100%; height: 100%; border: 0; }
+.film-bar { height: 6px; border-radius: 99px; background: var(--surface-2);
+            overflow: hidden; margin: 10px 0 6px; }
+.film-bar i { display: block; height: 100%; background: var(--accent);
+              transition: width .4s ease; }

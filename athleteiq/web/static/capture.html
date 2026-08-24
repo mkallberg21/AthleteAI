@@ -25,6 +25,15 @@
   <section id="view-home">
     <div class="conn" id="conn"><i></i><span id="conn-text">Online</span></div>
 
+    <div class="card hidden" id="film-card">
+      <div class="budget-head">
+        <b>Film study</b>
+        <span class="small muted" id="film-left"></span>
+      </div>
+      <p class="small muted" id="film-message"></p>
+      <div id="film-list"></div>
+    </div>
+
     <div class="card" id="wellness-card">
       <div class="budget-head">
         <b>How do you feel today?</b>
@@ -228,6 +237,25 @@
     </div>
   </section>
 
+  <!-- ---------- Film ---------- -->
+  <section id="view-film" class="hidden">
+    <div class="card">
+      <h1 id="film-title">Clip</h1>
+      <p class="small" id="film-focus"></p>
+      <div class="film-frame"><div id="film-player"></div></div>
+      <div class="film-bar"><i id="film-progress" style="width:0%"></i></div>
+      <p class="small muted" id="film-state">
+        Sound on, screen on. That is the whole trick.
+      </p>
+      <div id="film-question" class="hidden">
+        <p><b id="film-prompt"></b></p>
+        <div id="film-options"></div>
+        <div id="film-because" class="small muted" style="margin-top:8px"></div>
+      </div>
+      <button class="secondary" id="film-done" style="margin-top:12px">Done</button>
+    </div>
+  </section>
+
   <!-- ---------- Result ---------- -->
   <section id="view-result" class="hidden">
     <div class="card">
@@ -273,7 +301,7 @@ if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
 const views = {
   home: $('view-home'), capture: $('view-capture'),
-  result: $('view-result'), review: $('view-review'),
+  result: $('view-result'), review: $('view-review'), film: $('view-film'),
 };
 function show(name) {
   for (const [key, el] of Object.entries(views)) el.classList.toggle('hidden', key !== name);
@@ -442,6 +470,139 @@ async function loadBudget() {
 }
 
 let sportCatalog = null;
+let filmPlayer = null;
+let filmWatch = null;
+let filmBeat = null;
+let filmClip = null;
+
+async function loadFilm() {
+  let data;
+  try { data = await api('/api/film'); } catch { return; }
+  $('film-card').classList.remove('hidden');
+  $('film-left').textContent = data.day.spent
+    ? 'Done for today'
+    : `${data.day.minutes_left} min left today`;
+  $('film-message').textContent = data.day.message;
+  $('film-list').innerHTML = data.clips.map((c, i) => `
+    <button class="drill-btn" data-clip="${i}">
+      <b>${esc(c.title)}</b>
+      <span>${esc(c.focus)}</span>
+      <span class="transfer-inline">${Math.round(c.length_s)} seconds</span>
+    </button>`).join('');
+  $('film-list').dataset.clips = JSON.stringify(data.clips);
+}
+
+$('film-list').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-clip]');
+  if (!button) return;
+  const clips = JSON.parse($('film-list').dataset.clips || '[]');
+  openClip(clips[Number(button.dataset.clip)]);
+});
+
+// The YouTube IFrame API is what makes it possible to know whether a clip was
+// actually watched. Loaded on demand rather than at boot, so an athlete who
+// never opens film never talks to Google at all.
+function loadYouTubeApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (!loadYouTubeApi._pending) {
+    loadYouTubeApi._pending = new Promise((resolve) => {
+      window.onYouTubeIframeAPIReady = resolve;
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    });
+  }
+  return loadYouTubeApi._pending;
+}
+
+async function openClip(clip) {
+  filmClip = clip;
+  show('film');
+  $('film-title').textContent = clip.title;
+  $('film-focus').textContent = clip.focus;
+  $('film-question').classList.add('hidden');
+  $('film-because').textContent = '';
+  $('film-progress').style.width = '0%';
+  $('film-state').textContent = 'Sound on, screen on. That is the whole trick.';
+
+  try {
+    filmWatch = await api(`/api/film/${clip.id}/start`, { method: 'POST' });
+  } catch (e) { showError(e.message); show('home'); return; }
+
+  await loadYouTubeApi();
+  if (filmPlayer) { filmPlayer.destroy(); filmPlayer = null; }
+  filmPlayer = new YT.Player('film-player', {
+    host: 'https://www.youtube-nocookie.com',
+    videoId: clip.video_id,
+    playerVars: {
+      start: clip.start_s, end: clip.end_s || undefined,
+      rel: 0, modestbranding: 1, playsinline: 1,
+    },
+    events: { onReady: startBeats },
+  });
+}
+
+// Beats carry position, not elapsed time: the server measures elapsed itself,
+// because a payload that reports its own clock can report whatever it likes.
+function startBeats() {
+  clearInterval(filmBeat);
+  filmBeat = setInterval(async () => {
+    if (!filmPlayer || !filmWatch) return;
+    if (filmPlayer.getPlayerState() !== YT.PlayerState.PLAYING) return;
+    try {
+      const out = await api(`/api/film/watches/${filmWatch.watch_id}/beat`, {
+        method: 'POST',
+        body: {
+          position_s: filmPlayer.getCurrentTime() - (filmClip.start_s || 0),
+          muted: filmPlayer.isMuted() || filmPlayer.getVolume() === 0,
+          hidden: document.visibilityState !== 'visible',
+          rate: filmPlayer.getPlaybackRate(),
+        },
+      });
+      $('film-progress').style.width = `${Math.round(out.coverage * 100)}%`;
+      if (out.verdict === 'watched') {
+        clearInterval(filmBeat);
+        $('film-state').textContent = 'Watched, start to finish. Nice.';
+        showClipQuestion();
+      } else if (out.audible_share < 0.6) {
+        $('film-state').textContent = 'Turn the sound up — the coaching is in the audio.';
+      }
+    } catch { /* a dropped beat is not worth interrupting a clip for */ }
+  }, 4000);
+}
+
+function showClipQuestion() {
+  if (!filmClip.question) return;
+  $('film-question').classList.remove('hidden');
+  $('film-prompt').textContent = filmClip.question.prompt;
+  $('film-options').innerHTML = filmClip.question.options.map((option, i) => `
+    <button class="secondary" style="margin-top:6px" data-choice="${i}">
+      ${esc(option)}</button>`).join('');
+}
+
+$('film-options').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-choice]');
+  if (!button) return;
+  try {
+    const out = await api(`/api/film/watches/${filmWatch.watch_id}/answer`, {
+      method: 'POST', body: { choice: Number(button.dataset.choice) },
+    });
+    // Being wrong about a slide is the entire reason to watch film, so this
+    // says what the answer was rather than marking anyone.
+    $('film-because').textContent = out.correct
+      ? `Yes. ${out.because}`
+      : `Not quite — it was "${filmClip.question.options[out.answer]}". ${out.because}`;
+    $('film-options').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  } catch (e) { showError(e.message); }
+});
+
+$('film-done').addEventListener('click', async () => {
+  clearInterval(filmBeat);
+  if (filmPlayer) { filmPlayer.destroy(); filmPlayer = null; }
+  filmWatch = null;
+  show('home');
+  await loadFilm();
+});
 let wellnessForm = null;
 
 const FEELINGS = [
@@ -1460,6 +1621,7 @@ window.addEventListener('pagehide', () => {
     const boot = await api('/api/me');
     homeSport = boot.sport || null;
     await loadWellness();
+    await loadFilm();
     await loadDrills();
     await loadHome(boot);
     show('home');

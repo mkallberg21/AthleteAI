@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1122 tests
+python -m pytest tests/ -q          # 1168 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -90,6 +90,7 @@ athleteiq/
   load.py           Workload ratio, throwing volume, rest days, advisories
   wellness.py       Soreness and injury reporting, and what it holds back
   rtp.py            The ramp back after an injury, and who has to authorise it
+  film.py           Short film study: attention scoring and daily caps
   benchmarks.py     Age-banded weekly time budgets and peer context
   positions.py      Canonical positions, aliases, and per-position drill mix
   sports.py         Other sports played, and how single-sport a year is
@@ -996,6 +997,100 @@ that did not resolve. Over-training surfaces as prominently as under-training, o
 the same screen — a coach should find out that a kid is grinding every night in
 the same glance that tells them who has not started.
 
+## Film study
+
+Reps build hands. Watching builds the other half — reading a slide, seeing a cut
+two passes early, knowing where the help is coming from. That half is normally
+only available to a kid whose coach happens to run film sessions, and short
+clips with a coach's voice over them are the cheapest way to give it to everyone.
+
+Coaches curate clips by pasting a link. Athletes get a short shortlist, filtered
+by age, and it disappears when the day's allowance is gone.
+
+### Nothing is uploaded, and the honest caveat
+
+A clip is a **provider and an id** — nothing is downloaded, re-hosted, or
+stripped of its ads. It plays in the provider's own embedded player, which is
+what embedding is for. Coaches can paste any shape of YouTube link (`watch?v=`,
+`youtu.be`, `shorts/`, `embed/`, or a bare id) and it is parsed and validated
+before it goes anywhere near an embed URL.
+
+**This is a genuine change of posture from the rest of the product**, and the
+README says so rather than glossing it. Everywhere else, video never leaves the
+phone. Here the athlete's browser talks to YouTube, and YouTube knows about it.
+Mitigations, not cures:
+
+- `youtube-nocookie.com`, YouTube's privacy-enhanced host
+- `rel=0`, so a clip aimed at a child does not end in a grid of unrelated video
+- the IFrame API script is loaded **on demand**, so an athlete who never opens
+  film never talks to Google at all
+- the `link` provider exists for programs that host their own clips
+
+A program that cannot accept a child's browser reaching YouTube should self-host
+and use `link`. Worth checking your own obligations here — youth programs and
+schools often have rules about third-party embeds that this README cannot know.
+
+### Attention, not playback
+
+A tab left running is not film study, and neither is a muted clip — the coaching
+is in the audio. The client is untrusted exactly as it is for rep counting.
+
+Heartbeats carry **position, never elapsed time**: the server measures elapsed
+itself from its own record of the previous beat, because a payload that reports
+its own clock can report whatever makes the numbers work.
+
+| What happened | Verdict |
+|---|---|
+| Watched through, sound on, ≤1.5× | `watched` |
+| Muted, or the tab was hidden | `background` |
+| 2× speed, or scrubbed repeatedly | `skimmed` |
+| Stopped early | `partial` |
+
+Only `watched` counts for anything. Coverage tracks **distinct seconds seen**, so
+looping the first ten seconds forty times racks up playback and almost no
+coverage. A jump forward earns nothing and is recorded as a seek. A gap between
+beats longer than 20 seconds is a locked phone, not attention, and is not
+credited. 1.25× is how people watch things, so the line sits above it.
+
+### Minutes are capped hard, by age
+
+A daily film budget is screen time dressed up as training, and it would be very
+easy for this to become the thing a kid does for forty minutes because it is
+easier than going outside.
+
+| Band | Longest clip | Daily minutes | Daily clips |
+|---|---|---|---|
+| Under 11 | 75s | 4 | 2 |
+| 11-12 | 100s | 6 | 3 |
+| 13-14 | 140s | 9 | 4 |
+| 15-16 | 170s | 12 | 5 |
+| 17-18 | 200s | 15 | 6 |
+| 19+ | 240s | 20 | 8 |
+
+Clips longer than a band's cap are simply not offered to it, and a clip over the
+longest cap **cannot be curated at all** — a ten-minute "short clip" is how a
+film feature turns into homework. When the day is spent the shortlist returns
+**empty**, not greyed out: a grid of clips an athlete cannot watch is an
+invitation to go and find them somewhere else. A clip already started can always
+be finished, because stopping a kid halfway through is worse than a minute over.
+
+### Gamification, deliberately weak
+
+Film earns 12 XP a clip, capped at 40 a day — under a fifteenth of the daily XP
+cap, and asserted as such in a test. A kid must not be able to out-earn training
+by watching video.
+
+**Film keeps its own streak** rather than feeding the training one. Letting film
+hold the training streak would mean a streak maintained from the sofa, which is
+the opposite of what the streak is for. There is a test asserting film alone does
+*not* hold it.
+
+The question after a clip is a comprehension check, not a grade: getting it wrong
+costs nothing, awards the same XP, and is never reported to a coach as a score.
+The answer is not sent to the client until it has been given. What a coach sees
+is who is watching, not who is clever — **completions and days, never minutes**,
+because minutes are not a thing to rank children by here either.
+
 ## Soreness and injury reporting
 
 The most sensitive data in the product: health information about children.
@@ -1400,92 +1495,104 @@ the main compliance gap between this and a shippable product.
 Stated plainly, because these are the things that decide whether this survives
 contact with a real driveway:
 
-1. **Nothing here is a medical device, and the return ramp least of all.** The
+1. **Film study sends a child's browser to a third party.** Everywhere else
+   in this product video never leaves the phone; film is the exception, and
+   the privacy-enhanced host is a mitigation rather than a fix. Programs with
+   obligations around third-party embeds — schools especially — should check
+   them before enabling it, and self-host with the `link` provider if in
+   doubt. Clip availability is also outside our control: an uploader can
+   disable embedding or delete a video, and a curated clip can go dead.
+2. **Attention scoring can be fooled by someone determined.** It catches the
+   ordinary ways of not watching — muted, backgrounded, scrubbed, raced — but
+   a kid who leaves a clip playing at normal speed with the sound on and walks
+   away is indistinguishable from one who watched it. The comprehension
+   question is the better signal, and it is optional per clip.
+3. **Nothing here is a medical device, and the return ramp least of all.** The
    stages are a load schedule, not a protocol, and completing one means the
    athlete pressed a button five times over five symptom-free days — not that
    any tissue has healed. The app records that a human cleared them and cannot
    verify that the human was right, that a named clinician exists, or that the
    athlete answered honestly. It should never be the reason a young athlete
    goes back, and finishing a ramp should never be the reason one is picked.
-2. **Soreness reporting is not a medical device and must not be relied on as
+4. **Soreness reporting is not a medical device and must not be relied on as
    one.** It is a prompt to involve an adult, and its most important output is
    "tell someone" rather than any assessment of its own. It cannot see an
    athlete who says nothing, it takes every report at face value, and a child
    who is hurt and silent looks identical to one who is fine. Nothing in it
    should ever delay getting a young athlete looked at.
-3. **Thresholds are calibrated against synthetic motion, not real athletes.**
+5. **Thresholds are calibrated against synthetic motion, not real athletes.**
    The calibration harness makes every drill self-consistent — a textbook rep
    counts and measures what its spec claims — but "textbook" is still a
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
    the calibration against hand-counted ground truth remains the
    highest-value next task, and the reason the specs are data rather than code.
-4. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
+6. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
    battery.
-5. **Multi-sport participation is self-reported and unverified.** An athlete
+7. **Multi-sport participation is self-reported and unverified.** An athlete
    who ticks three sports gets an earlier specialisation gate and a lighter
    weekly budget, and nothing stops them ticking sports they do not play. The
    incentive is weak in both directions — the reward is a different drill mix,
    not points or a leaderboard place, and the lighter budget asks *less* of
    them — and a coach sees the list on the roster, which is the check that
    matters. But it is a self-report, and the gate treats it as fact.
-6. **Seasons are a coarse proxy for training load.** Three seasons of
+8. **Seasons are a coarse proxy for training load.** Three seasons of
    recreational soccer and three seasons of travel soccer score identically,
    though they are not remotely the same week. Capturing sessions per week per
    sport would sharpen it, at the cost of a form a twelve-year-old will not
    fill in — which is the trade the season picker deliberately takes.
-7. **Positions are modelled for lacrosse only.** Another sport gets honest
+9. **Positions are modelled for lacrosse only.** Another sport gets honest
    silence — `for_sport` returns nothing, athletes fall back to the generic
    mix, and the join form falls back to free text. Adding a sport means adding
    its positions *and* the sport-specific drills their emphasis would point at;
    half of that is worse than neither, since a soccer emphasis built only from
    the general strength drills would recommend the same mix to every position
    on the pitch.
-8. **The age bands are heuristics, not a clinical instrument.** They are drawn
+10. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-9. **Handedness is inferred from wrist height**, which is reliable for standard
+11. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-10. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+12. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-11. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+13. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-12. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+14. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-13. **Revocation soft-fails by default**, though pre-fetched staples make strict
+15. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-14. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+16. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-15. **No payment processor.** The billing model, entitlements, and invoicing are
+17. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-16. **Offline slots are per-drill.** A drill you have never opened online has no
+18. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-17. **Web Push needs credentials.** Notifications generate and display in-app
+19. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-18. **Form quality is pose-only.** It reads how the body moved, not where the
+20. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-19. **Guardian identity is proven by the invite code alone.** There is no email
+21. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-20. **Roster import reads delimited text only.** CSV, TSV, and
+22. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-21. **Load coefficients are reasoned estimates, not measured values.** The
+23. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

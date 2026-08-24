@@ -15,6 +15,7 @@ from typing import Any
 
 from .config import CONFIG
 from . import sports
+from . import film
 from . import rtp
 from . import wellness
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
@@ -626,6 +627,364 @@ class Store:
                 (plan_id,),
             )
         ]
+
+    # ------------------------------------------------------------------
+    # Film study
+    # ------------------------------------------------------------------
+
+    def create_clip(
+        self,
+        org_id: int,
+        raw_video: str,
+        title: str,
+        *,
+        focus: str = "",
+        provider: str = "youtube",
+        start_s: int = 0,
+        end_s: int | None = None,
+        positions: list[str] | None = None,
+        min_age: int = 0,
+        max_age: int = 200,
+        question: dict[str, Any] | None = None,
+        created_by: int | None = None,
+    ) -> dict[str, Any]:
+        """Curate a clip. Coaches paste a link; this works out what it is."""
+        if provider not in film.PROVIDERS:
+            raise StoreError(f"unknown clip provider: {provider}")
+        if provider == "youtube":
+            video_id = film.parse_youtube_id(raw_video)
+            if video_id is None:
+                raise StoreError("that does not look like a YouTube link or video id")
+        else:
+            video_id = (raw_video or "").strip()
+            if not video_id.startswith("https://"):
+                raise StoreError("a self-hosted clip needs an https link")
+
+        if end_s is not None and end_s <= start_s:
+            raise StoreError("the clip has to end after it starts")
+
+        # The length cap is a product rule, not a preference: a ten-minute
+        # "short clip" is how a film feature turns into homework.
+        longest = max(b.clip_max_s for b in film.BANDS)
+        if end_s is not None and (end_s - start_s) > longest:
+            raise StoreError(
+                f"clips are capped at {longest} seconds — trim it to the moment "
+                "that actually teaches something"
+            )
+
+        parsed = film.Question(**question) if question else None
+        if parsed is not None and not (0 <= parsed.answer < len(parsed.options)):
+            raise StoreError("the answer has to be one of the options")
+
+        with transaction(self.conn) as conn:
+            cur = conn.execute(
+                "INSERT INTO clips(org_id, provider, video_id, title, focus, start_s, "
+                "end_s, positions, min_age, max_age, question, created_by, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (org_id, provider, video_id, title.strip(), focus.strip(), int(start_s),
+                 end_s, ",".join(positions or []), int(min_age), int(max_age),
+                 json.dumps(question) if question else None, created_by, _iso(_now())),
+            )
+        return self.clip(int(cur.lastrowid))
+
+    def _row_to_clip(self, row) -> film.Clip:
+        raw = json.loads(row["question"]) if row["question"] else None
+        return film.Clip(
+            id=int(row["id"]), org_id=int(row["org_id"]), provider=row["provider"],
+            video_id=row["video_id"], title=row["title"], focus=row["focus"] or "",
+            start_s=int(row["start_s"]), end_s=row["end_s"],
+            positions=tuple(p for p in (row["positions"] or "").split(",") if p),
+            min_age=int(row["min_age"]), max_age=int(row["max_age"]),
+            question=film.Question(
+                prompt=raw["prompt"], options=tuple(raw["options"]),
+                answer=int(raw["answer"]), because=raw.get("because", ""),
+            ) if raw else None,
+            active=bool(row["active"]),
+        )
+
+    def clip(self, clip_id: int) -> dict[str, Any]:
+        row = self.conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+        if row is None:
+            raise StoreError("no clip with that id")
+        return self._row_to_clip(row).to_dict()
+
+    def retire_clip(self, org_id: int, clip_id: int) -> bool:
+        with transaction(self.conn) as conn:
+            return bool(conn.execute(
+                "UPDATE clips SET active = 0 WHERE id = ? AND org_id = ?",
+                (clip_id, org_id),
+            ).rowcount)
+
+    def film_day(self, athlete_id: int, day: date | None = None) -> film.DayState:
+        """How much film this athlete has had today, against their allowance."""
+        day = day or _now().date()
+        profile = self.conn.execute(
+            "SELECT birth_year, birth_year_estimated FROM users WHERE id = ?",
+            (athlete_id,),
+        ).fetchone()
+        age = None
+        if profile is not None and profile["birth_year"]:
+            age = day.year - int(profile["birth_year"])
+        band = film.band_for(
+            age, bool(profile["birth_year_estimated"]) if profile else False
+        )
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(watched_s), 0) AS secs, COUNT(*) AS n "
+            "FROM clip_watches WHERE athlete_id = ? AND day = ?",
+            (athlete_id, day.isoformat()),
+        ).fetchone()
+        return film.DayState(band, float(row["secs"]) / 60.0, int(row["n"]))
+
+    def clips_for_athlete(
+        self, athlete_id: int, org_id: int, day: date | None = None, limit: int = 12
+    ) -> dict[str, Any]:
+        """Today's shortlist, already filtered by age and by what is left.
+
+        Returns an empty list once the day's allowance is gone rather than a
+        list with a disabled flag: a grid of clips an athlete cannot watch is
+        an invitation to find them somewhere else.
+        """
+        day = day or _now().date()
+        state = self.film_day(athlete_id, day)
+        profile = self.conn.execute(
+            "SELECT birth_year FROM users WHERE id = ?", (athlete_id,)
+        ).fetchone()
+        age = day.year - int(profile["birth_year"]) if profile and profile["birth_year"] else None
+
+        seen = {
+            int(r["clip_id"]) for r in self.conn.execute(
+                "SELECT clip_id FROM clip_watches WHERE athlete_id = ? AND day = ?",
+                (athlete_id, day.isoformat()),
+            )
+        }
+        out = []
+        if not state.spent:
+            for row in self.conn.execute(
+                "SELECT * FROM clips WHERE org_id = ? AND active = 1 ORDER BY id DESC",
+                (org_id,),
+            ):
+                clip = self._row_to_clip(row)
+                if clip.id in seen or not clip.suits(age, state.band):
+                    continue
+                out.append(clip.to_dict())
+                if len(out) >= limit:
+                    break
+        return {"day": state.to_dict(), "clips": out}
+
+    def start_watch(
+        self, athlete_id: int, clip_id: int, day: date | None = None
+    ) -> dict[str, Any]:
+        day = day or _now().date()
+        clip = self.conn.execute(
+            "SELECT * FROM clips WHERE id = ? AND active = 1", (clip_id,)
+        ).fetchone()
+        if clip is None:
+            raise StoreError("no clip with that id")
+
+        state = self.film_day(athlete_id, day)
+        existing = self.conn.execute(
+            "SELECT id FROM clip_watches WHERE athlete_id = ? AND clip_id = ? AND day = ?",
+            (athlete_id, clip_id, day.isoformat()),
+        ).fetchone()
+        # The cap gates starting something new. Finishing a clip already begun
+        # is never blocked -- stopping a kid halfway through is a worse
+        # outcome than a minute over.
+        if existing is None and state.spent:
+            raise StoreError(state.message())
+
+        now = _iso(_now())
+        if existing is not None:
+            return {"watch_id": int(existing["id"]), "resumed": True}
+        with transaction(self.conn) as conn:
+            cur = conn.execute(
+                "INSERT INTO clip_watches(athlete_id, clip_id, day, started_at, "
+                "last_beat_at) VALUES (?,?,?,?,?)",
+                (athlete_id, clip_id, day.isoformat(), now, now),
+            )
+        return {"watch_id": int(cur.lastrowid), "resumed": False}
+
+    def record_beat(
+        self,
+        athlete_id: int,
+        watch_id: int,
+        position_s: float,
+        *,
+        muted: bool = False,
+        hidden: bool = False,
+        rate: float = 1.0,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Fold one heartbeat into a watch and re-score it.
+
+        The wall-clock gap comes from the server's own record of the last beat,
+        never from the client: a payload that reports its own elapsed time can
+        report whatever makes the numbers work.
+        """
+        row = self.conn.execute(
+            "SELECT w.*, c.start_s, c.end_s FROM clip_watches w "
+            "JOIN clips c ON c.id = w.clip_id WHERE w.id = ? AND w.athlete_id = ?",
+            (watch_id, athlete_id),
+        ).fetchone()
+        if row is None:
+            raise StoreError("no watch with that id")
+
+        now = now or _now()
+        gap = (now - datetime.fromisoformat(row["last_beat_at"])).total_seconds()
+        length = max(0, int(row["end_s"] - row["start_s"])) if row["end_s"] else 0
+
+        state = film.WatchState(
+            length_s=length,
+            position_s=float(row["position_s"]),
+            watched_s=float(row["watched_s"]),
+            audible_s=float(row["audible_s"]),
+            focused_s=float(row["focused_s"]),
+            wall_s=float(row["wall_s"]),
+            seeks=int(row["seeks"]),
+            max_rate=float(row["max_rate"]),
+            seen=set(json.loads(row["seen_json"] or "[]")),
+        )
+        film.apply_beat(
+            state, position_s, gap, muted=muted, hidden=hidden, rate=rate,
+        )
+        verdict = film.assess(state)
+
+        awarded = int(row["xp_awarded"])
+        if verdict == film.Verdict.WATCHED and not awarded:
+            awarded = self._award_film_xp(athlete_id, watch_id, now.date())
+
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE clip_watches SET position_s = ?, watched_s = ?, audible_s = ?, "
+                "focused_s = ?, wall_s = ?, seeks = ?, max_rate = ?, seen_json = ?, "
+                "verdict = ?, xp_awarded = ?, last_beat_at = ? WHERE id = ?",
+                (state.position_s, state.watched_s, state.audible_s, state.focused_s,
+                 state.wall_s, state.seeks, state.max_rate,
+                 json.dumps(sorted(state.seen)), verdict, awarded,
+                 _iso(now), watch_id),
+            )
+        return {
+            "watch_id": watch_id, "verdict": verdict, "xp_awarded": awarded,
+            **state.to_dict(),
+            "day": self.film_day(athlete_id, now.date()).to_dict(),
+        }
+
+    def _award_film_xp(self, athlete_id: int, watch_id: int, day: date) -> int:
+        """Small, capped, and the same whether the answer was right.
+
+        Being wrong about a slide is the entire reason to watch film, so the
+        reward is for attention rather than correctness -- and it is capped
+        low so that a kid cannot out-earn training by watching video.
+        """
+        already = self.conn.execute(
+            "SELECT COALESCE(SUM(xp_awarded), 0) AS t FROM clip_watches "
+            "WHERE athlete_id = ? AND day = ?",
+            (athlete_id, day.isoformat()),
+        ).fetchone()
+        room = max(0, film.XP_DAILY_CAP - int(already["t"]))
+        amount = min(film.XP_PER_WATCH, room)
+        if amount <= 0:
+            return 0
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT INTO xp_ledger(athlete_id, session_id, amount, reason, day, "
+                "created_at) VALUES (?,?,?,?,?,?)",
+                (athlete_id, None, amount, f"film:{watch_id}", day.isoformat(),
+                 _iso(_now())),
+            )
+        return amount
+
+    def answer_clip(
+        self, athlete_id: int, watch_id: int, choice: int
+    ) -> dict[str, Any]:
+        """Record what they picked, and tell them why.
+
+        Getting it wrong costs nothing and is not reported to a coach as a
+        score. What a coach sees is who is watching, not who is clever.
+        """
+        row = self.conn.execute(
+            "SELECT w.id, c.question FROM clip_watches w JOIN clips c ON c.id = w.clip_id "
+            "WHERE w.id = ? AND w.athlete_id = ?",
+            (watch_id, athlete_id),
+        ).fetchone()
+        if row is None:
+            raise StoreError("no watch with that id")
+        if not row["question"]:
+            raise StoreError("that clip has no question")
+
+        question = json.loads(row["question"])
+        correct = int(choice) == int(question["answer"])
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE clip_watches SET answered = ?, answer_ok = ? WHERE id = ?",
+                (int(choice), int(correct), watch_id),
+            )
+        return {
+            "correct": correct,
+            "answer": int(question["answer"]),
+            "because": question.get("because", ""),
+        }
+
+    def film_history(
+        self, athlete_id: int, days: int = 28
+    ) -> dict[str, Any]:
+        start = (_now().date() - timedelta(days=days - 1)).isoformat()
+        rows = self.conn.execute(
+            "SELECT w.day, w.verdict, w.watched_s, c.title FROM clip_watches w "
+            "JOIN clips c ON c.id = w.clip_id "
+            "WHERE w.athlete_id = ? AND w.day >= ? ORDER BY w.day DESC, w.id DESC",
+            (athlete_id, start),
+        ).fetchall()
+        watched = [r for r in rows if r["verdict"] == film.Verdict.WATCHED]
+        # Film keeps its own streak rather than feeding the training one. A
+        # clip is worth less XP than the streak threshold on purpose: letting
+        # film hold the training streak would mean a streak maintained from
+        # the sofa, which is the opposite of what the streak is for.
+        watched_days = sorted({date.fromisoformat(r["day"]) for r in watched})
+        streak = compute_streak(watched_days, _now().date())
+        return {
+            "streak": streak.current,
+            "longest_streak": streak.longest,
+            "days": len({r["day"] for r in watched}),
+            "clips": len(watched),
+            "minutes": round(sum(float(r["watched_s"]) for r in watched) / 60.0, 1),
+            "recent": [
+                {"day": r["day"], "title": r["title"], "verdict": r["verdict"]}
+                for r in rows[:20]
+            ],
+        }
+
+    def team_film(
+        self, athlete_ids: list[int], days: int = 7
+    ) -> dict[str, Any]:
+        """Who is putting the time in, without ranking anyone by minutes."""
+        if not athlete_ids:
+            return {"athletes": [], "clips_watched": 0, "days": days}
+        start = (_now().date() - timedelta(days=days - 1)).isoformat()
+        marks = ",".join("?" for _ in athlete_ids)
+        rows = self.conn.execute(
+            f"SELECT w.athlete_id, u.display_name, "
+            f"  SUM(CASE WHEN w.verdict = 'watched' THEN 1 ELSE 0 END) AS watched, "
+            f"  COUNT(*) AS started, "
+            f"  COUNT(DISTINCT CASE WHEN w.verdict = 'watched' THEN w.day END) AS days "
+            f"FROM clip_watches w JOIN users u ON u.id = w.athlete_id "
+            f"WHERE w.athlete_id IN ({marks}) AND w.day >= ? "
+            f"GROUP BY w.athlete_id ORDER BY days DESC, watched DESC",
+            (*athlete_ids, start),
+        ).fetchall()
+        return {
+            "days": days,
+            "clips_watched": sum(int(r["watched"]) for r in rows),
+            "athletes": [
+                {
+                    "athlete_id": int(r["athlete_id"]),
+                    "display_name": r["display_name"],
+                    "clips_watched": int(r["watched"]),
+                    "clips_started": int(r["started"]),
+                    "days_with_film": int(r["days"]),
+                }
+                for r in rows
+            ],
+        }
 
     # ------------------------------------------------------------------
     # Org / team / user setup

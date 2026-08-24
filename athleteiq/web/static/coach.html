@@ -135,6 +135,41 @@
     <div id="budget-sports"></div>
   </div>
 
+  <div class="card" id="film-card">
+    <h2>Film study</h2>
+    <p class="small muted">
+      Short clips, curated by you. Nothing is uploaded or re-hosted &mdash; you
+      paste a link and athletes watch it in the provider's own player, which
+      means their browser talks to that provider. Keep clips to the moment that
+      teaches something: they are capped by age, and an athlete's whole day of
+      film is single digits of minutes on purpose.
+    </p>
+    <div id="film-watchers"></div>
+    <details style="margin-top:12px">
+      <summary class="small muted" style="cursor:pointer">Add a clip</summary>
+      <label for="clip-url">YouTube link or video id</label>
+      <input id="clip-url" placeholder="https://youtu.be/...">
+      <label for="clip-title">Title</label>
+      <input id="clip-title" placeholder="Sliding early off the crease">
+      <label for="clip-focus">What should they watch for?</label>
+      <input id="clip-focus" placeholder="The crease defender moves before the dodge commits.">
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label for="clip-start">Start (s)</label>
+          <input id="clip-start" type="number" min="0" value="0"></div>
+        <div style="flex:1"><label for="clip-end">End (s)</label>
+          <input id="clip-end" type="number" min="1" placeholder="60"></div>
+      </div>
+      <label for="clip-question">Question after the clip (optional)</label>
+      <input id="clip-question" placeholder="When did the slide start?">
+      <input id="clip-opts" placeholder="Options, comma separated">
+      <label for="clip-answer">Which option is right? (1, 2, 3...)</label>
+      <input id="clip-answer" type="number" min="1" max="4" value="1">
+      <input id="clip-because" placeholder="Why — shown after they answer">
+      <button class="secondary" id="clip-save" style="margin-top:8px">Add clip</button>
+    </details>
+    <div id="clip-list" style="margin-top:12px"></div>
+  </div>
+
   <div class="card hidden" id="wellness-card">
     <h2>Carrying something</h2>
     <p class="small muted">
@@ -708,6 +743,7 @@ async function loadAll() {
   renderStandings(standingsData.teams);
   renderReview(reviewData.sessions);
   renderLoadWatch(rosterData.athletes);
+  await loadFilm(teamId);
   try {
     renderWellnessWatch(await api(
       `/api/coach/wellness${teamId ? `?team_id=${teamId}` : ''}`,
@@ -903,6 +939,79 @@ $('wellness-watch').addEventListener('click', async (event) => {
     await api(`/api/wellness/plans/${button.dataset.clear}/clearance`, {
       method: 'POST', body: {},
     });
+    await loadAll();
+  } catch (e) { showError(e.message); }
+});
+
+async function loadFilm(teamId) {
+  try {
+    const [watchers, catalog] = await Promise.all([
+      api(`/api/coach/film${teamId ? `?team_id=${teamId}` : ''}`),
+      api('/api/coach/clips'),
+    ]);
+    renderFilmWatchers(watchers);
+    renderClipList(catalog.clips);
+  } catch { /* no clips curated yet */ }
+}
+
+function renderFilmWatchers(data) {
+  const rows = data.athletes || [];
+  if (!rows.length) {
+    $('film-watchers').innerHTML =
+      '<p class="small muted">Nobody has watched a clip yet.</p>';
+    return;
+  }
+  // Completions and days, never minutes: minutes are not a thing to rank
+  // children by, here or anywhere else in this product.
+  $('film-watchers').innerHTML = `
+    <p class="small"><b>Last ${data.days} days</b> &mdash;
+      ${data.clips_watched} clip${data.clips_watched === 1 ? '' : 's'} watched through</p>
+    ${rows.map((a) => `<div class="budget-row">
+      <span class="budget-label">${esc(a.display_name)}</span>
+      <span class="budget-n">${a.days_with_film}d</span>
+      <span class="small muted">${a.clips_watched} of ${a.clips_started} finished</span>
+    </div>`).join('')}`;
+}
+
+function renderClipList(clips) {
+  $('clip-list').innerHTML = (clips || []).map((c) => `
+    <div class="budget-row">
+      <span class="budget-label">${esc(c.title)}
+        <span class="small muted">&middot; ${c.length_s || '?'}s</span></span>
+      <button class="secondary inline" data-retire="${c.id}">Remove</button>
+    </div>`).join('');
+}
+
+$('clip-list').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-retire]');
+  if (!button) return;
+  try {
+    await api(`/api/coach/clips/${button.dataset.retire}`, { method: 'DELETE' });
+    await loadAll();
+  } catch (e) { showError(e.message); }
+});
+
+$('clip-save').addEventListener('click', async () => {
+  const options = $('clip-opts').value.split(',').map((o) => o.trim()).filter(Boolean);
+  const body = {
+    video: $('clip-url').value.trim(),
+    title: $('clip-title').value.trim(),
+    focus: $('clip-focus').value.trim(),
+    start_s: Number($('clip-start').value) || 0,
+    end_s: Number($('clip-end').value) || null,
+  };
+  if ($('clip-question').value.trim() && options.length >= 2) {
+    body.question = {
+      prompt: $('clip-question').value.trim(),
+      options,
+      answer: Math.max(0, Math.min(options.length - 1, Number($('clip-answer').value) - 1)),
+      because: $('clip-because').value.trim(),
+    };
+  }
+  try {
+    await api('/api/coach/clips', { method: 'POST', body });
+    ['clip-url', 'clip-title', 'clip-focus', 'clip-question', 'clip-opts', 'clip-because']
+      .forEach((id) => { $(id).value = ''; });
     await loadAll();
   } catch (e) { showError(e.message); }
 });

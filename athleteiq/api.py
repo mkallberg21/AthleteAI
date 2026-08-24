@@ -28,6 +28,7 @@ from . import sports as sports_mod
 from . import rtp as rtp_mod
 from . import wellness as wellness_mod
 from . import transfer as transfer_mod
+from . import film as film_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
 from . import notifications as notify
@@ -1546,6 +1547,166 @@ class DiscomfortReport(BaseModel):
     side: Literal["left", "right", "both", ""] = ""
     flags: list[str] = Field(default_factory=list, max_length=8)
     note: str = Field(default="", max_length=500)
+
+
+class ClipQuestion(BaseModel):
+    prompt: str = Field(min_length=1, max_length=300)
+    options: list[str] = Field(min_length=2, max_length=4)
+    answer: int = Field(ge=0, le=3)
+    because: str = Field(default="", max_length=400)
+
+
+class NewClip(BaseModel):
+    video: str = Field(min_length=5, max_length=500)
+    title: str = Field(min_length=1, max_length=160)
+    focus: str = Field(default="", max_length=400)
+    provider: Literal["youtube", "link"] = "youtube"
+    start_s: int = Field(default=0, ge=0, le=86_400)
+    end_s: int | None = Field(default=None, ge=1, le=86_400)
+    positions: list[str] = Field(default_factory=list, max_length=8)
+    min_age: int = Field(default=0, ge=0, le=99)
+    max_age: int = Field(default=200, ge=0, le=200)
+    question: ClipQuestion | None = None
+
+
+class Beat(BaseModel):
+    """One heartbeat from the player.
+
+    Note what is *not* here: elapsed time. The server takes that from its own
+    record of the previous beat, because a payload that reports its own elapsed
+    time can report whatever makes the numbers work.
+    """
+
+    position_s: float = Field(ge=0, le=86_400)
+    muted: bool = False
+    hidden: bool = False
+    rate: float = Field(default=1.0, ge=0.1, le=4.0)
+
+
+class ClipAnswer(BaseModel):
+    choice: int = Field(ge=0, le=3)
+
+
+@app.get("/api/film")
+def my_film(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Today's shortlist, and what is left of the day's allowance."""
+    return store.clips_for_athlete(principal.id, principal.org_id)
+
+
+@app.get("/api/film/history")
+def my_film_history(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return store.film_history(principal.id)
+
+
+@app.post("/api/film/{clip_id}/start", status_code=201)
+def start_watch(
+    clip_id: int,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    try:
+        return store.start_watch(principal.id, clip_id)
+    except StoreError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/film/watches/{watch_id}/beat")
+def record_beat(
+    watch_id: int,
+    body: Beat,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    try:
+        return store.record_beat(
+            principal.id, watch_id, body.position_s,
+            muted=body.muted, hidden=body.hidden, rate=body.rate,
+        )
+    except StoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/film/watches/{watch_id}/answer")
+def answer_clip(
+    watch_id: int,
+    body: ClipAnswer,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    try:
+        return store.answer_clip(principal.id, watch_id, body.choice)
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/coach/film")
+def team_film(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Who is putting the time in.
+
+    Reports clips *completed* rather than minutes, and does not rank by volume
+    -- the same rule the training boards follow. A kid who watches two clips
+    properly has done the work; one who leaves six playing in a background tab
+    has not, and neither number is a score to beat.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
+    )
+    return store.team_film([a["athlete_id"] for a in athletes])
+
+
+@app.get("/api/coach/clips")
+def list_clips(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    rows = store.conn.execute(
+        "SELECT * FROM clips WHERE org_id = ? AND active = 1 ORDER BY id DESC",
+        (principal.org_id,),
+    ).fetchall()
+    return {
+        "clips": [store._row_to_clip(r).to_dict(include_answer=True) for r in rows],
+        "bands": [b.to_dict() for b in film_mod.BANDS],
+    }
+
+
+@app.post("/api/coach/clips", status_code=201)
+def create_clip(
+    body: NewClip,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    try:
+        return store.create_clip(
+            principal.org_id, body.video, body.title,
+            focus=body.focus, provider=body.provider,
+            start_s=body.start_s, end_s=body.end_s, positions=body.positions,
+            min_age=body.min_age, max_age=body.max_age,
+            question=body.question.model_dump() if body.question else None,
+            created_by=principal.id,
+        )
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/coach/clips/{clip_id}")
+def retire_clip(
+    clip_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {"retired": store.retire_clip(principal.org_id, clip_id)}
 
 
 @app.get("/api/wellness/form")
