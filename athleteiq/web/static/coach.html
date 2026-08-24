@@ -10,6 +10,7 @@
 <div class="topbar">
   <div class="brand">Athlete<span>IQ</span> <span class="small muted" style="font-weight:400">Coach</span></div>
   <div style="display:flex;gap:8px;align-items:center">
+    <select class="org-switch hidden" id="org-switch"></select>
     <span class="small muted" id="whoami"></span>
     <button class="secondary inline" id="signout">Sign out</button>
   </div>
@@ -40,6 +41,35 @@
   </div>
 
   <div class="stat-row" id="summary"></div>
+
+  <div class="card hidden" id="scope-card">
+    <p class="scope-note" id="scope-note" style="margin:0"></p>
+  </div>
+
+  <div class="card" id="billing-card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <h2 style="margin:0">Plan &amp; seats</h2>
+      <span id="billing-status"></span>
+    </div>
+    <div id="billing-summary"></div>
+    <div class="seatbar"><i id="seatbar-fill" style="width:0%"></i></div>
+    <div class="small muted" id="seat-text"></div>
+    <details style="margin-top:12px">
+      <summary class="small muted" style="cursor:pointer">Compare plans</summary>
+      <div class="plan-grid" id="plans"></div>
+    </details>
+    <div id="billing-err" class="err hidden"></div>
+  </div>
+
+  <div class="card hidden" id="staff-card">
+    <h2>Coaches &amp; team access</h2>
+    <p class="small muted">
+      A coach sees the athletes on the teams they are assigned to. Assigning a
+      team grants access to those children's training data, so only a director
+      can change it.
+    </p>
+    <div id="staff-list"></div>
+  </div>
 
   <div class="card" id="digest-card">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
@@ -256,7 +286,7 @@
 </div>
 
 <script type="module">
-import { api, esc, fmtDate, getToken, logout } from './api.js';
+import { api, esc, fmtDate, getToken, logout, setOrg } from './api.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -275,6 +305,126 @@ const FLAG_LABELS = {
 function showError(message) {
   $('err').textContent = message;
   $('err').classList.remove('hidden');
+}
+
+// --------------------------------------------------------------- billing
+
+function renderBilling(b) {
+  const status = {
+    trialing: ['ok', `trial · ${b.trial_days_left} days left`],
+    active: ['ok', 'active'],
+    past_due: ['bad', 'payment overdue'],
+    canceled: ['bad', 'canceled'],
+  }[b.status] || ['warn', b.status];
+  $('billing-status').innerHTML = `<span class="pill ${status[0]}">${esc(status[1])}</span>`;
+
+  $('billing-summary').innerHTML = `
+    <div class="stat-row" style="margin-top:12px">
+      <div class="stat"><b>${esc(b.plan.name)}</b><span>Plan</span></div>
+      <div class="stat"><b>${b.usage.athletes}</b><span>Athletes</span></div>
+      <div class="stat"><b>${b.usage.teams}</b><span>Teams</span></div>
+      <div class="stat"><b>${esc(b.monthly_display)}</b><span>Per month</span></div>
+    </div>`;
+
+  const pct = b.seat_limit ? Math.min(100, (b.usage.athletes / b.seat_limit) * 100) : 0;
+  const cls = b.over_seats ? 'over' : pct > 85 ? 'warn' : '';
+  $('seatbar-fill').className = cls;
+  $('seatbar-fill').style.width = `${pct}%`;
+  $('seat-text').textContent = b.over_seats
+    ? `${b.usage.athletes} athletes on a ${b.seat_limit}-seat plan. Existing athletes keep training; new ones need more seats.`
+    : `${b.usage.athletes} of ${b.seat_limit} seats used · ${b.seats_remaining} left`;
+
+  $('plans').innerHTML = b.plans.map((p) => {
+    const current = p.code === b.plan.code;
+    const recommended = p.code === b.recommended && !current;
+    return `<div class="plan ${current ? 'current' : ''} ${recommended ? 'recommended' : ''}">
+      <b>${esc(p.name)}${current ? ' <span class="pill ok">current</span>'
+        : recommended ? ' <span class="pill warn">fits you</span>' : ''}</b>
+      <div class="price">${esc(p.price_display)}</div>
+      <span>${p.included_seats} athletes${p.max_teams ? `, ${p.max_teams} teams` : ', unlimited teams'}</span>
+      <span style="margin-top:5px">${esc(p.blurb)}</span>
+      ${current ? '' : `<button class="secondary inline" data-plan="${esc(p.code)}">Switch</button>`}
+    </div>`;
+  }).join('');
+
+  $('plans').querySelectorAll('[data-plan]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api('/api/billing/plan', {
+          method: 'POST', body: { plan_code: btn.dataset.plan },
+        });
+        await loadBilling();
+      } catch (e) {
+        $('billing-err').textContent = e.message;
+        $('billing-err').classList.remove('hidden');
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function loadBilling() {
+  try {
+    renderBilling(await api('/api/billing'));
+  } catch (e) {
+    $('billing-card').classList.add('hidden');
+  }
+}
+
+// ----------------------------------------------------------------- staff
+
+async function loadStaff(isDirector) {
+  $('staff-card').classList.toggle('hidden', !isDirector);
+  if (!isDirector) return;
+
+  const [{ staff }, { teams }] = await Promise.all([
+    api('/api/coach/staff'), api('/api/coach/teams'),
+  ]);
+
+  $('staff-list').innerHTML = staff.map((person) => {
+    const chips = person.teams.map((t) => `
+      <span class="team-chip">${esc(t.name)}
+        <button data-unassign="${person.id}" data-team="${t.id}" title="Remove">&times;</button>
+      </span>`).join('');
+    const options = teams
+      .filter((t) => !person.teams.some((x) => x.id === t.id))
+      .map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+
+    return `<div class="staff-row">
+      <span><b>${esc(person.display_name)}</b>
+        <span class="pill ${person.role === 'director' ? 'ok' : 'warn'}">${esc(person.role)}</span>
+        ${person.role === 'coach' && person.sees_whole_program
+          ? '<br><span class="small" style="color:var(--warn)">No teams assigned — currently sees the whole program</span>' : ''}
+      </span>
+      <span class="team-chips">${chips}
+        ${person.role === 'coach' && options ? `
+          <select data-assign="${person.id}" class="org-switch">
+            <option value="">Add team…</option>${options}
+          </select>` : ''}
+      </span>
+    </div>`;
+  }).join('');
+
+  $('staff-list').querySelectorAll('[data-assign]').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      if (!sel.value) return;
+      await api('/api/coach/staff/assign', {
+        method: 'POST',
+        body: { user_id: Number(sel.dataset.assign), team_id: Number(sel.value) },
+      });
+      await loadStaff(true);
+    });
+  });
+  $('staff-list').querySelectorAll('[data-unassign]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api('/api/coach/staff/unassign', {
+        method: 'POST',
+        body: { user_id: Number(btn.dataset.unassign), team_id: Number(btn.dataset.team) },
+      });
+      await loadStaff(true);
+    });
+  });
 }
 
 // ---------------------------------------------------------------- digest
@@ -838,6 +988,28 @@ $('signout').addEventListener('click', logout);
   try {
     const me = await api('/api/me');
     $('whoami').textContent = me.display_name;
+
+    const orgs = await api('/api/orgs/mine');
+    if (orgs.memberships.length > 1) {
+      const select = $('org-switch');
+      select.innerHTML = orgs.memberships
+        .map((m) => `<option value="${m.org_id}" ${m.org_id === orgs.active_org_id ? 'selected' : ''}
+             >${esc(m.org_name)} (${esc(m.role)})</option>`).join('');
+      select.classList.remove('hidden');
+      select.addEventListener('change', () => {
+        setOrg(select.value);
+        location.reload();
+      });
+    }
+
+    if (orgs.team_scoped) {
+      $('scope-note').textContent =
+        'You are seeing only the teams you are assigned to. A director can change that.';
+      $('scope-card').classList.remove('hidden');
+    }
+
+    await loadBilling();
+    await loadStaff(orgs.role === 'director');
     await loadTeams();
     await loadDrillOptions();
     defaultAssignmentDates();

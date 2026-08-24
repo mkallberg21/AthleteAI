@@ -17,11 +17,13 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
+from . import billing as billing_mod
 from . import digest as digest_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
 from . import notifications as notify
 from .assignments import AssignmentError
+from .billing import BillingError
 from .guardians import GuardianError
 from .roster import RosterError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
@@ -50,15 +52,24 @@ def get_store() -> Store:
 
 def _principal(
     authorization: str | None = Header(default=None),
+    x_org_id: int | None = Header(default=None, alias="X-Org-Id"),
     store: Store = Depends(get_store),
 ) -> Principal:
+    """Resolve the caller, in one program.
+
+    The active program comes from an X-Org-Id header, defaulting to their home
+    org. Someone with roles in two clubs is one account, not two logins.
+    """
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
     try:
-        return store.authenticate(token)
+        return store.authenticate(token, org_id=x_org_id)
     except StoreError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        # A token that is valid but not for that program is a 403, not a 401 --
+        # re-authenticating would not help.
+        status = 403 if "access to that program" in str(exc) else 401
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
 
 def _staff(principal: Principal = Depends(_principal)) -> Principal:
@@ -85,6 +96,12 @@ async def _guardian_error_handler(_request, exc: GuardianError) -> JSONResponse:
 @app.exception_handler(RosterError)
 async def _roster_error_handler(_request, exc: RosterError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(BillingError)
+async def _billing_error_handler(_request, exc: BillingError) -> JSONResponse:
+    # 402: this is a plan limit, not a malformed request or a missing right.
+    return JSONResponse(status_code=402, content={"detail": str(exc)})
 
 
 def _guardian(principal: Principal = Depends(_principal)) -> Principal:
@@ -320,8 +337,9 @@ def athlete_profile(
     principal: Principal = Depends(_principal),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    if principal.id != athlete_id and not principal.is_staff:
-        raise HTTPException(status_code=403, detail="not permitted")
+    if principal.id != athlete_id:
+        if not principal.is_staff or not store.staff_can_see_athlete(principal, athlete_id):
+            raise HTTPException(status_code=403, detail="not permitted")
     return store.athlete_profile(athlete_id)
 
 
@@ -364,6 +382,8 @@ def create_assignment(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
     assignment_id = assignments_mod.create(
         store.conn,
         org_id=principal.org_id,
@@ -393,9 +413,14 @@ def list_assignments(
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     """Assignments with per-athlete compliance, worst first."""
-    items = assignments_mod.list_for_org(
-        store.conn, principal.org_id, team_id=team_id, include_inactive=include_inactive
-    )
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    items = [
+        a for a in assignments_mod.list_for_org(
+            store.conn, principal.org_id, team_id=team_id, include_inactive=include_inactive
+        )
+        if principal.can_see_team(a.team_id)
+    ]
     out = []
     for assignment in items:
         rows = [p.to_dict() for p in assignments_mod.compliance(store.conn, assignment)]
@@ -521,6 +546,8 @@ def coach_broadcast(
         raise HTTPException(status_code=404, detail="unknown team")
     if team["org_id"] != principal.org_id:
         raise HTTPException(status_code=403, detail="team belongs to another program")
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
     sent = notify.broadcast(store.conn, body.team_id, body.title, body.body, principal.id)
     return {"sent": sent}
 
@@ -631,6 +658,148 @@ def team_load(
         -(a["acwr"] or 0),
     ))
     return {"athletes": out}
+
+
+# ----------------------------------------------------------------------
+# Programs, roles, and billing
+# ----------------------------------------------------------------------
+
+@app.get("/api/orgs/mine")
+def my_orgs(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Every program this person holds a role in, and which one is active.
+
+    Pass the chosen org back as an X-Org-Id header on later requests.
+    """
+    return {
+        "active_org_id": principal.org_id,
+        "role": principal.role,
+        "team_scoped": principal.team_scoped,
+        "memberships": [
+            {"org_id": m.org_id, "org_name": m.org_name, "role": m.role}
+            for m in principal.memberships
+        ],
+    }
+
+
+class StaffAssignment(BaseModel):
+    user_id: int
+    team_id: int
+
+
+@app.post("/api/coach/staff/assign")
+def assign_staff(
+    body: StaffAssignment,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Put a coach on a team. Directors only -- this grants access to children."""
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can change team assignments"
+        )
+    team = store.conn.execute(
+        "SELECT org_id FROM teams WHERE id = ?", (body.team_id,)
+    ).fetchone()
+    if team is None or team["org_id"] != principal.org_id:
+        raise HTTPException(status_code=404, detail="unknown team")
+    member = store.conn.execute(
+        "SELECT 1 FROM memberships WHERE user_id = ? AND org_id = ?",
+        (body.user_id, principal.org_id),
+    ).fetchone()
+    if member is None:
+        raise HTTPException(status_code=404, detail="that person is not in this program")
+
+    store.assign_staff_to_team(body.user_id, body.team_id)
+    return {"assigned": True, "user_id": body.user_id, "team_id": body.team_id}
+
+
+@app.post("/api/coach/staff/unassign")
+def unassign_staff(
+    body: StaffAssignment,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can change team assignments"
+        )
+    store.unassign_staff_from_team(body.user_id, body.team_id)
+    return {"assigned": False, "user_id": body.user_id, "team_id": body.team_id}
+
+
+@app.get("/api/coach/staff")
+def list_staff(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    rows = store.conn.execute(
+        "SELECT u.id, u.display_name, m.role, u.email FROM memberships m "
+        "JOIN users u ON u.id = m.user_id "
+        "WHERE m.org_id = ? AND m.role IN ('coach','director') AND m.active = 1 "
+        "ORDER BY m.role, u.display_name",
+        (principal.org_id,),
+    ).fetchall()
+
+    out = []
+    for row in rows:
+        teams = [
+            dict(t) for t in store.conn.execute(
+                "SELECT t.id, t.name FROM team_staff ts JOIN teams t ON t.id = ts.team_id "
+                "WHERE ts.user_id = ? AND t.org_id = ?",
+                (row["id"], principal.org_id),
+            )
+        ]
+        out.append({**dict(row), "teams": teams, "sees_whole_program": not teams})
+    return {"staff": out}
+
+
+@app.get("/api/billing")
+def get_billing(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    subscription = billing_mod.get_subscription(store.conn, principal.org_id)
+    return {
+        **subscription.to_dict(),
+        "plans": [p.to_dict() for p in billing_mod.PLANS],
+        "recommended": billing_mod.recommend(store.conn, principal.org_id),
+        "history": billing_mod.history(store.conn, principal.org_id, 20),
+    }
+
+
+@app.get("/api/billing/quote")
+def billing_quote(
+    plan: str,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What a plan would cost this program at its current size."""
+    return billing_mod.quote(store.conn, principal.org_id, plan)
+
+
+class ChangePlanRequest(BaseModel):
+    plan_code: str = Field(max_length=40)
+    seats: int = Field(default=0, ge=0, le=100_000)
+
+
+@app.post("/api/billing/plan")
+def change_plan(
+    body: ChangePlanRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can change the plan"
+        )
+    subscription = billing_mod.start_subscription(
+        store.conn, principal.org_id, body.plan_code,
+        trial=False, seats=body.seats, actor=principal.display_name,
+    )
+    return subscription.to_dict()
 
 
 # ----------------------------------------------------------------------
@@ -755,6 +924,8 @@ def import_roster(
     plan is a preview, not an instruction, and accepting one would let a
     modified payload create athletes the file never contained.
     """
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
     plan = store.resolve_import(principal.org_id, roster_mod.parse(body.content))
     result = store.apply_import(
         principal.org_id, body.team_id, plan, principal.id,
@@ -819,6 +990,8 @@ def create_guardian_invite(
         raise HTTPException(status_code=404, detail="unknown athlete")
     if owner["org_id"] != principal.org_id:
         raise HTTPException(status_code=403, detail="athlete belongs to another program")
+    if not store.staff_can_see_athlete(principal, body.athlete_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that athlete's team")
     return guardians_mod.create_invite(
         store.conn, body.athlete_id, principal.id, body.email
     )
@@ -981,7 +1154,11 @@ def get_roster(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    athletes = coach_roster(store.conn, principal.org_id, team_id, window)
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, window, scope=principal.scope_filter()
+    )
     states = {a["athlete_id"]: store.load_state(a["athlete_id"]).to_dict() for a in athletes}
     return {
         "window": window,
@@ -1001,7 +1178,10 @@ def get_teams(
         "FROM teams t WHERE t.org_id = ? ORDER BY t.name",
         (principal.org_id,),
     ).fetchall()
-    return {"teams": [dict(r) for r in rows]}
+    return {
+        "teams": [dict(r) for r in rows if principal.can_see_team(r["id"])],
+        "team_scoped": principal.team_scoped,
+    }
 
 
 @app.get("/api/coach/review-queue")

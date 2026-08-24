@@ -184,6 +184,13 @@ class Config:
     # guardian consent before their name appears on any shared leaderboard.
     minor_age_ceiling: int = 17
 
+    # When true, a coach with no team assignments sees nothing rather than the
+    # whole program. Off by default so accounts created before team assignment
+    # existed keep working on upgrade; new deployments should turn it on.
+    strict_team_scope: bool = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_STRICT_TEAM_SCOPE", "") == "1"
+    )
+
     # Web Push (VAPID). Absent these, notifications still generate and appear
     # in the in-app feed -- only the phone-level push is skipped, so nothing
     # about the product depends on a third-party service being configured.

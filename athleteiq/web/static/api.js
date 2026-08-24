@@ -1,6 +1,7 @@
 /** Thin API client. Token lives in localStorage; nothing else is persisted. */
 
 const TOKEN_KEY = 'athleteiq.token';
+const ORG_KEY = 'athleteiq.org';
 
 export function getToken() {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
@@ -8,12 +9,29 @@ export function getToken() {
 export function setToken(t) {
   try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ }
 }
-export function logout() { setToken(null); location.href = '/app/index.html'; }
+export function logout() {
+  setToken(null);
+  setOrg(null);
+  location.href = '/app/index.html';
+}
+
+/** The program the caller is currently acting in. */
+export function getOrg() {
+  try { return localStorage.getItem(ORG_KEY); } catch { return null; }
+}
+export function setOrg(orgId) {
+  try {
+    orgId ? localStorage.setItem(ORG_KEY, String(orgId)) : localStorage.removeItem(ORG_KEY);
+  } catch { /* private mode */ }
+}
 
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
+  // Someone with roles in two clubs is one account; this says which hat.
+  const org = getOrg();
+  if (org) headers['X-Org-Id'] = org;
 
   const res = await fetch(path, {
     method,

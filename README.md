@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 546 tests
+python -m pytest tests/ -q          # 612 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -91,6 +91,7 @@ athleteiq/
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
   digest.py         Weekly team KPIs and the coach email
+  billing.py        Plans, seats, entitlements, invoicing seam
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -159,6 +160,78 @@ Two safeguards make it usable in a driveway:
 
 Both are covered by tests (`counter.test.mjs`), including a case that parks the
 signal on the threshold with noise and asserts zero reps.
+
+---
+
+## Programs, roles, and billing
+
+### Access follows responsibility
+
+Until now any coach in a program could read every athlete in it. At a club with
+four hundred children that is not a product gap, it is a safeguarding one.
+
+A coach now sees only the teams they are assigned to — enforced on the roster
+*and* on every route that reaches an individual athlete, because scoping a list
+while leaving the detail route open is not scoping at all. A JV coach asking for
+a varsity athlete by id, assigning them work, broadcasting to their team, or
+inviting their parent all return 403. Directors see their whole program, and
+only a director can change team assignments, since assigning a team grants
+access to those children's data.
+
+One deliberate accommodation: **a coach with no assignments falls back to seeing
+the whole program.** Accounts created before team assignment existed have no
+assignment rows, and defaulting them to "sees nothing" would lock out every
+existing coach on deploy. New deployments should set
+`ATHLETEIQ_STRICT_TEAM_SCOPE=1`, which makes an unassigned coach see nothing
+instead; until then the dashboard flags any coach in that state. The empty-scope
+case is tested explicitly, because "no teams" silently meaning "all teams" is
+exactly the bug this feature would otherwise ship with.
+
+### One person, several programs
+
+A school coach who also runs a club side is one human with two jobs, and making
+them keep two logins is how a roster ends up half-maintained. Roles live in a
+`memberships` table, so the same account can be a coach at one club and a
+director at another. The active program comes from an `X-Org-Id` header and
+defaults to their home org; asking for a program they do not belong to is a 403,
+not a 401 — re-authenticating would not help.
+
+### Billing that never locks a child out
+
+One rule overrides the rest: **an adult's payment problem must never stop a kid
+from training.** A lapsed card is a conversation with the club treasurer, not a
+reason to end a fourteen-year-old's streak or hide a load warning from the coach
+responsible for them.
+
+So enforcement is asymmetric. *Growth* is gated — adding athletes, teams, and
+staff stops when a program is past due or over its seats, returning **402** with
+the exact number of seats needed. *Everything already running keeps running*:
+athletes train, coaches see rosters, parents keep their portal, safety
+advisories keep flowing. A program that stops paying stops growing, and someone
+calls them. There is a test class holding this.
+
+| Plan | Athletes | Teams | Price |
+|---|---|---|---|
+| Single Team | 25 | 1 | Free |
+| Team | 60 | 3 | $49/mo |
+| Program | 200 | 12 | $149/mo |
+| Club | 600 | unlimited | $399/mo |
+
+Extra seats are billed per athlete at a rate that falls with plan size, so
+upgrading is genuinely cheaper at scale — 250 athletes costs $189 on Program
+against $239 on Team, and `recommend()` picks the cheapest plan that actually
+fits.
+
+Two onboarding decisions worth naming. **New programs start on a Program
+trial**, not the free tier: hitting a paywall on your second team before the
+product has shown anyone anything is how an evaluation ends. And **existing
+programs are backfilled onto a plan that fits what they already run** — telling
+a club with six teams that they are now on a one-team plan is the wrong way to
+introduce billing to someone already using the thing.
+
+No payment processor is wired in. `Gateway` is the seam one drops into, and the
+default `ManualGateway` records the invoice without charging — which is also
+what most youth clubs, paying by invoice or purchase order, actually need.
 
 ---
 
@@ -663,22 +736,25 @@ contact with a real driveway:
    than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **Offline slots are per-drill.** A drill you have never opened online has no
+7. **No payment processor.** The billing model, entitlements, and invoicing are
+   real; taking money is a `Gateway` implementation away, and nothing here has
+   been through a PCI review.
+8. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-8. **Web Push needs credentials.** Notifications generate and display in-app
+9. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-9. **Form quality is pose-only.** It reads how the body moved, not where the
+10. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-10. **Guardian identity is proven by the invite code alone.** There is no email
+11. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-11. **Roster import reads delimited text only.** CSV, TSV, and
+12. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-12. **Load coefficients are reasoned estimates, not measured values.** The
+13. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

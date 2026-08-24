@@ -1325,3 +1325,175 @@ class TestDigestEndpoints:
         rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
         data = client.get("/api/coach/digest", headers=rival_headers).json()
         assert data["roster_size"] == 0
+
+
+class TestScopedCoachEndpoints:
+    """A scoped coach must not reach another team through any endpoint."""
+
+    def _scoped(self, client, program):
+        """A coach assigned only to a second team with its own athlete."""
+        other_team = client.post(
+            "/api/teams", json={"name": "JV"}, headers=program["director"]
+        ).json()
+        coach = api_module._store.create_user(
+            program["org"]["org_id"], "coach", "Coach JV"
+        )
+        api_module._store.assign_staff_to_team(coach["id"], other_team["id"])
+        jv_athlete = client.post(
+            "/api/athletes",
+            json={"display_name": "JV Kid", "join_code": other_team["join_code"]},
+            headers=program["director"],
+        ).json()
+        return {
+            "headers": {"Authorization": f"Bearer {coach['token']}"},
+            "team": other_team,
+            "athlete": jv_athlete,
+        }
+
+    def test_the_roster_is_limited_to_assigned_teams(self, client, program):
+        scoped = self._scoped(client, program)
+        rows = client.get("/api/coach/roster", headers=scoped["headers"]).json()["athletes"]
+        assert [r["display_name"] for r in rows] == ["JV Kid"]
+
+    def test_a_director_still_sees_everyone(self, client, program):
+        self._scoped(client, program)
+        rows = client.get("/api/coach/roster", headers=program["director"]).json()["athletes"]
+        assert len(rows) == 3
+
+    def test_requesting_another_team_is_refused(self, client, program):
+        scoped = self._scoped(client, program)
+        res = client.get(
+            f"/api/coach/roster?team_id={program['team']['id']}", headers=scoped["headers"]
+        )
+        assert res.status_code == 403
+
+    def test_another_teams_athlete_cannot_be_read_by_id(self, client, program):
+        """Scoping the list is not enough if the detail route is open."""
+        scoped = self._scoped(client, program)
+        other = program["athletes"][0]["id"]
+        assert client.get(
+            f"/api/athletes/{other}", headers=scoped["headers"]
+        ).status_code == 403
+        assert client.get(
+            f"/api/athletes/{scoped['athlete']['id']}", headers=scoped["headers"]
+        ).status_code == 200
+
+    def test_assigning_work_to_another_team_is_refused(self, client, program):
+        from datetime import date, timedelta
+
+        scoped = self._scoped(client, program)
+        today = date.today()
+        res = client.post(
+            "/api/coach/assignments",
+            json={
+                "team_id": program["team"]["id"], "drill_key": "lax_wall_ball",
+                "title": "x", "starts_on": today.isoformat(),
+                "due_on": (today + timedelta(days=3)).isoformat(), "target_reps": 100,
+            },
+            headers=scoped["headers"],
+        )
+        assert res.status_code == 403
+
+    def test_broadcasting_to_another_team_is_refused(self, client, program):
+        scoped = self._scoped(client, program)
+        res = client.post(
+            "/api/coach/broadcast",
+            json={"team_id": program["team"]["id"], "title": "hi"},
+            headers=scoped["headers"],
+        )
+        assert res.status_code == 403
+
+    def test_inviting_a_guardian_for_another_team_is_refused(self, client, program):
+        scoped = self._scoped(client, program)
+        res = client.post(
+            "/api/coach/guardian-invites",
+            json={"athlete_id": program["athletes"][0]["id"]},
+            headers=scoped["headers"],
+        )
+        assert res.status_code == 403
+
+    def test_importing_into_another_team_is_refused(self, client, program):
+        scoped = self._scoped(client, program)
+        res = client.post(
+            "/api/coach/roster/import",
+            json={"content": "Name\nNew Kid\n", "team_id": program["team"]["id"]},
+            headers=scoped["headers"],
+        )
+        assert res.status_code == 403
+
+    def test_only_a_director_can_change_team_assignments(self, client, program):
+        scoped = self._scoped(client, program)
+        res = client.post(
+            "/api/coach/staff/assign",
+            json={"user_id": 1, "team_id": scoped["team"]["id"]},
+            headers=scoped["headers"],
+        )
+        assert res.status_code == 403
+
+
+class TestOrgSwitching:
+    def test_memberships_are_listed(self, client, program):
+        res = client.get("/api/orgs/mine", headers=program["director"]).json()
+        assert res["active_org_id"] == program["org"]["org_id"]
+        assert len(res["memberships"]) == 1
+
+    def test_a_program_header_selects_the_active_org(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Two Hats"}
+        ).json()
+        api_module._store.add_membership(
+            program["org"]["director"]["id"], rival["org_id"], "coach"
+        )
+        headers = {**program["director"], "X-Org-Id": str(rival["org_id"])}
+        res = client.get("/api/orgs/mine", headers=headers).json()
+        assert res["active_org_id"] == rival["org_id"]
+        assert res["role"] == "coach"
+
+    def test_a_program_they_do_not_belong_to_is_403(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+        ).json()
+        headers = {**program["director"], "X-Org-Id": str(rival["org_id"])}
+        assert client.get("/api/orgs/mine", headers=headers).status_code == 403
+
+
+class TestBillingEndpoints:
+    def test_billing_reports_the_plan_and_usage(self, client, program):
+        data = client.get("/api/billing", headers=program["director"]).json()
+        assert data["plan"]["code"]
+        assert data["usage"]["athletes"] == 2
+        assert data["plans"]
+
+    def test_a_quote_prices_a_plan(self, client, program):
+        data = client.get("/api/billing/quote?plan=team", headers=program["director"]).json()
+        assert data["total_cents"] >= 0
+
+    def test_only_a_director_can_change_the_plan(self, client, program):
+        coach = api_module._store.create_user(
+            program["org"]["org_id"], "coach", "Assistant"
+        )
+        res = client.post(
+            "/api/billing/plan", json={"plan_code": "club"},
+            headers={"Authorization": f"Bearer {coach['token']}"},
+        )
+        assert res.status_code == 403
+
+    def test_exceeding_seats_returns_402_with_a_number(self, client, program):
+        """402 because this is a plan limit, not a malformed request."""
+        client.post(
+            "/api/billing/plan", json={"plan_code": "free"}, headers=program["director"]
+        )
+        for i in range(30):
+            res = client.post(
+                "/api/athletes", json={"display_name": f"Filler {i}"},
+                headers=program["director"],
+            )
+            if res.status_code == 402:
+                assert "seat" in res.json()["detail"]
+                return
+        pytest.fail("seat limit was never enforced")
+
+    def test_athletes_cannot_read_billing(self, client, program):
+        assert client.get(
+            "/api/billing", headers=program["athletes"][0]["headers"]
+        ).status_code == 403

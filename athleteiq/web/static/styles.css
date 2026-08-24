@@ -389,3 +389,46 @@ tbody tr:hover { background: var(--surface-2); }
   display: block; font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
   color: var(--accent); font-weight: 700; margin-bottom: 4px;
 }
+
+/* ---- Plans, seats, staff ---- */
+
+.seatbar { height: 10px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 10px 0 6px; }
+.seatbar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.seatbar > i.warn { background: var(--warn); }
+.seatbar > i.over { background: var(--danger); }
+
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 12px; }
+.plan {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 11px; padding: 13px; text-align: left;
+}
+.plan.current { border-color: var(--accent); }
+.plan.recommended { border-color: var(--left); }
+.plan b { display: block; font-size: .95rem; }
+.plan .price { font-size: 1.35rem; font-weight: 800; margin: 5px 0 2px; letter-spacing: -.02em; }
+.plan span { font-size: .72rem; color: var(--muted); display: block; line-height: 1.45; }
+.plan button { margin-top: 10px; }
+
+.staff-row {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap;
+}
+.staff-row:last-child { border-bottom: none; }
+.team-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.team-chip {
+  font-size: .72rem; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 99px; padding: 3px 9px; display: inline-flex; gap: 5px; align-items: center;
+}
+.team-chip button {
+  width: auto; min-height: auto; padding: 0 2px; background: none; border: none;
+  color: var(--muted); font-size: .85rem; line-height: 1;
+}
+.scope-note {
+  font-size: .78rem; color: var(--warn); border-left: 2px solid var(--warn);
+  padding-left: 10px; margin-top: 8px;
+}
+.org-switch {
+  font: inherit; font-size: .8rem; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px;
+  min-height: auto; width: auto;
+}

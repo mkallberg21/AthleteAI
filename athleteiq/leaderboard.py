@@ -313,6 +313,7 @@ def coach_roster(
     org_id: int,
     team_id: int | None = None,
     window: Window = "week",
+    scope: tuple[str, list[Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """The coach's working view: who is training, who has gone quiet.
 
@@ -321,6 +322,9 @@ def coach_roster(
     """
     start = window_start(window)
     join, scope_params = _scope_clause(team_id, org_id)
+    # Restricts the roster to the caller's assigned teams. Empty for a
+    # director, so the same statement serves both.
+    scope_sql, staff_scope_params = scope or ("", [])
 
     rows = conn.execute(
         f"""
@@ -351,10 +355,11 @@ def coach_roster(
         FROM users u {join}
         LEFT JOIN teams t ON t.id = tm.team_id
         WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1
+        {scope_sql}
         GROUP BY u.id
         ORDER BY window_xp DESC, u.display_name
         """,
-        (start, start, start, start, start, org_id, *scope_params),
+        (start, start, start, start, start, org_id, *scope_params, *staff_scope_params),
     ).fetchall()
 
     today = datetime.now(timezone.utc).date()

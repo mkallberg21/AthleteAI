@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -17,6 +17,7 @@ from .config import CONFIG
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
 from . import assignments as assignments_mod
+from . import billing as billing_mod
 from . import guardians as guardians_mod
 from . import load as load_mod
 from . import roster as roster_mod
@@ -76,18 +77,60 @@ class StoreError(Exception):
 
 
 @dataclass
+class Membership:
+    org_id: int
+    org_name: str
+    role: str
+
+
+@dataclass
 class Principal:
-    """The authenticated caller."""
+    """The authenticated caller, in one program at a time."""
 
     id: int
     org_id: int
     role: str
     display_name: str
     dominant_hand: str | None
+    memberships: list[Membership] = field(default_factory=list)
+    # Teams this caller may see. None means every team in the program.
+    team_ids: list[int] | None = None
 
     @property
     def is_staff(self) -> bool:
         return self.role in ("coach", "director")
+
+    @property
+    def is_director(self) -> bool:
+        return self.role == "director"
+
+    @property
+    def team_scoped(self) -> bool:
+        return self.team_ids is not None
+
+    def can_see_team(self, team_id: int | None) -> bool:
+        if self.team_ids is None:
+            return True
+        return team_id in self.team_ids
+
+    def scope_filter(self) -> tuple[str, list[Any]]:
+        """SQL fragment restricting a query to this caller's teams.
+
+        Returns an empty fragment for unscoped callers so the same query text
+        works for a director and a single-team assistant coach.
+        """
+        if self.team_ids is None:
+            return "", []
+        if not self.team_ids:
+            # Scoped to nothing: a condition that is false rather than one that
+            # is absent, so an empty scope cannot silently mean "everything".
+            return " AND 1 = 0", []
+        placeholders = ",".join("?" for _ in self.team_ids)
+        return (
+            f" AND EXISTS (SELECT 1 FROM team_members tmx WHERE tmx.user_id = u.id "
+            f"AND tmx.team_id IN ({placeholders}))",
+            list(self.team_ids),
+        )
 
 
 class Store:
@@ -105,9 +148,17 @@ class Store:
                 "INSERT INTO organizations(name, sport, created_at) VALUES (?,?,?)",
                 (name, sport, _iso(_now())),
             )
-        return int(cur.lastrowid)
+        org_id = int(cur.lastrowid)
+        # New programs start on a full-capability trial rather than the free
+        # plan. Hitting a paywall on your second team before the product has
+        # shown anyone anything is how an evaluation ends.
+        billing_mod.start_subscription(
+            self.conn, org_id, billing_mod.TRIAL_PLAN, trial=True, actor="signup"
+        )
+        return org_id
 
     def create_team(self, org_id: int, name: str, season: str = "") -> dict[str, Any]:
+        billing_mod.check_can_add_team(self.conn, org_id)
         # Retry on the astronomically unlikely join-code collision rather than
         # surfacing a UNIQUE constraint error to a coach mid-setup.
         for _ in range(10):
@@ -145,6 +196,13 @@ class Store:
         if dominant_hand not in (None, "left", "right"):
             raise StoreError(f"invalid dominant_hand: {dominant_hand!r}")
 
+        # Growth is what billing gates. Guardians are free -- charging a club
+        # per parent would price out exactly the involvement the product needs.
+        if role == "athlete":
+            billing_mod.check_can_add_athletes(self.conn, org_id, 1)
+        elif role in ("coach", "director"):
+            billing_mod.check_can_add_staff(self.conn, org_id)
+
         token = new_token()
         consent_at = _iso(_now()) if guardian_consent else None
         with transaction(self.conn) as c:
@@ -157,7 +215,13 @@ class Store:
                     consent_at, dominant_hand, hash_token(token), _iso(_now()),
                 ),
             )
-        return {"id": int(cur.lastrowid), "token": token, "display_name": display_name}
+            user_id = int(cur.lastrowid)
+            c.execute(
+                "INSERT OR REPLACE INTO memberships(user_id, org_id, role, created_at, active) "
+                "VALUES (?,?,?,?,1)",
+                (user_id, org_id, role, _iso(_now())),
+            )
+        return {"id": user_id, "token": token, "display_name": display_name}
 
     def join_team(self, join_code: str, user_id: int, jersey: str = "", position: str = "") -> int:
         row = self.conn.execute(
@@ -180,7 +244,13 @@ class Store:
             )
         return int(row["id"])
 
-    def authenticate(self, token: str) -> Principal:
+    def authenticate(self, token: str, org_id: int | None = None) -> Principal:
+        """Resolve a token to a caller acting in one program.
+
+        A person may hold roles in several programs -- a school coach who also
+        runs a club side is one human with two jobs -- so the active program is
+        chosen per request, defaulting to their home org.
+        """
         row = self.conn.execute(
             "SELECT id, org_id, role, display_name, dominant_hand FROM users "
             "WHERE token_hash = ? AND active = 1",
@@ -188,13 +258,93 @@ class Store:
         ).fetchone()
         if row is None:
             raise StoreError("invalid or inactive token")
+
+        memberships = [
+            Membership(org_id=m["org_id"], org_name=m["org_name"], role=m["role"])
+            for m in self.conn.execute(
+                "SELECT m.org_id, m.role, o.name AS org_name FROM memberships m "
+                "JOIN organizations o ON o.id = m.org_id "
+                "WHERE m.user_id = ? AND m.active = 1 ORDER BY o.name",
+                (row["id"],),
+            )
+        ]
+        if not memberships:
+            # Predates memberships and the backfill has not run for this row.
+            memberships = [Membership(row["org_id"], "", row["role"])]
+
+        active = next((m for m in memberships if m.org_id == org_id), None) if org_id else None
+        if org_id and active is None:
+            raise StoreError("you do not have access to that program")
+        if active is None:
+            active = next(
+                (m for m in memberships if m.org_id == row["org_id"]), memberships[0]
+            )
+
         return Principal(
             id=row["id"],
-            org_id=row["org_id"],
-            role=row["role"],
+            org_id=active.org_id,
+            role=active.role,
             display_name=row["display_name"],
             dominant_hand=row["dominant_hand"],
+            memberships=memberships,
+            team_ids=self._team_scope(row["id"], active.org_id, active.role),
         )
+
+    def _team_scope(self, user_id: int, org_id: int, role: str) -> list[int] | None:
+        """Which teams this caller may see, or None for all of them.
+
+        Directors see their whole program. A coach sees the teams they are
+        assigned to -- because access should follow responsibility, and at a
+        club with four hundred children blanket access is a safeguarding
+        problem rather than a convenience.
+
+        A coach with no assignments falls back to the whole program. That is a
+        deliberate accommodation for accounts created before team assignment
+        existed, not the intended end state: set ATHLETEIQ_STRICT_TEAM_SCOPE=1
+        to make an unassigned coach see nothing instead.
+        """
+        if role != "coach":
+            return None
+
+        assigned = [
+            r["team_id"]
+            for r in self.conn.execute(
+                "SELECT ts.team_id FROM team_staff ts JOIN teams t ON t.id = ts.team_id "
+                "WHERE ts.user_id = ? AND t.org_id = ?",
+                (user_id, org_id),
+            )
+        ]
+        if assigned:
+            return assigned
+        return [] if CONFIG.strict_team_scope else None
+
+    def assign_staff_to_team(self, user_id: int, team_id: int) -> None:
+        self.conn.execute(
+            "INSERT OR IGNORE INTO team_staff(team_id, user_id, created_at) VALUES (?,?,?)",
+            (team_id, user_id, _iso(_now())),
+        )
+        self.conn.commit()
+
+    def unassign_staff_from_team(self, user_id: int, team_id: int) -> None:
+        self.conn.execute(
+            "DELETE FROM team_staff WHERE team_id = ? AND user_id = ?", (team_id, user_id)
+        )
+        self.conn.commit()
+
+    def add_membership(self, user_id: int, org_id: int, role: str) -> None:
+        """Give an existing person a role in another program."""
+        if role not in ("athlete", "coach", "director", "guardian"):
+            raise StoreError(f"invalid role: {role!r}")
+        if role in ("coach", "director"):
+            billing_mod.check_can_add_staff(self.conn, org_id)
+        elif role == "athlete":
+            billing_mod.check_can_add_athletes(self.conn, org_id, 1)
+        self.conn.execute(
+            "INSERT OR REPLACE INTO memberships(user_id, org_id, role, created_at, active) "
+            "VALUES (?,?,?,?,1)",
+            (user_id, org_id, role, _iso(_now())),
+        )
+        self.conn.commit()
 
     # ------------------------------------------------------------------
     # Sessions
@@ -514,6 +664,26 @@ class Store:
     # ------------------------------------------------------------------
     # Athlete views
     # ------------------------------------------------------------------
+
+    def staff_can_see_athlete(self, principal: "Principal", athlete_id: int) -> bool:
+        """Whether a coach's team assignments cover this athlete.
+
+        Checked wherever staff reach an individual athlete's data, not just on
+        the roster listing: a scoped coach who can guess an id must not be able
+        to read a child on another team by asking for them directly.
+        """
+        if principal.team_ids is None:
+            owner = self.conn.execute(
+                "SELECT org_id FROM users WHERE id = ?", (athlete_id,)
+            ).fetchone()
+            return owner is not None and owner["org_id"] == principal.org_id
+        if not principal.team_ids:
+            return False
+        placeholders = ",".join("?" for _ in principal.team_ids)
+        return self.conn.execute(
+            f"SELECT 1 FROM team_members WHERE user_id = ? AND team_id IN ({placeholders})",
+            (athlete_id, *principal.team_ids),
+        ).fetchone() is not None
 
     def _dominant_hand(self, athlete_id: int) -> str | None:
         row = self.conn.execute(

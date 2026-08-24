@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -299,6 +299,66 @@ CREATE TABLE IF NOT EXISTS erasure_log (
     created_at    TEXT NOT NULL
 );
 
+-- A person's role in a program. Authoritative; `users.org_id` is kept as the
+-- home org a token defaults to.
+--
+-- Many-to-many because it genuinely is: a school coach who also runs a club
+-- side is one person with two jobs, and making them keep two logins is how a
+-- roster ends up half-maintained.
+CREATE TABLE IF NOT EXISTS memberships (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id     INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    role       TEXT NOT NULL CHECK (role IN ('athlete','coach','director','guardian')),
+    created_at TEXT NOT NULL,
+    active     INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (user_id, org_id)
+);
+CREATE INDEX IF NOT EXISTS idx_memberships_org ON memberships(org_id, role);
+
+-- Which teams a coach is responsible for.
+--
+-- Without this every coach in a program can read every athlete in it. At a
+-- club with four hundred children that is not a product gap, it is a
+-- safeguarding one: access should follow responsibility.
+CREATE TABLE IF NOT EXISTS team_staff (
+    team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role       TEXT NOT NULL DEFAULT 'coach',
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (team_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_team_staff_user ON team_staff(user_id);
+
+-- One row per program. Absent means the free plan.
+CREATE TABLE IF NOT EXISTS subscriptions (
+    org_id             INTEGER PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+    plan_code          TEXT NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'trialing'
+                       CHECK (status IN ('trialing','active','past_due','canceled')),
+    seats_purchased    INTEGER NOT NULL DEFAULT 0,
+    trial_ends_at      TEXT,
+    period_start       TEXT NOT NULL,
+    period_end         TEXT NOT NULL,
+    -- Identifier from whatever processor is attached. Empty while billing is
+    -- being kept manually.
+    external_ref       TEXT NOT NULL DEFAULT '',
+    updated_at         TEXT NOT NULL
+);
+
+-- Append-only billing history: plan changes, seat changes, invoices raised.
+-- Append-only because a billing dispute is settled by what happened and when,
+-- not by the current state of a row.
+CREATE TABLE IF NOT EXISTS billing_events (
+    id          INTEGER PRIMARY KEY,
+    org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    detail      TEXT NOT NULL DEFAULT '',
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    seats       INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_billing_org ON billing_events(org_id, created_at);
+
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -408,6 +468,23 @@ def _widen_user_roles(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = ON")
 
 
+def _backfill_memberships(conn: sqlite3.Connection) -> None:
+    """Give every existing user a membership row for their home org.
+
+    Memberships became the authority for role and program access; a database
+    predating them has that information only in `users.org_id`, and skipping
+    this would leave every existing user with no access to anything.
+    """
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memberships'"
+    ).fetchone():
+        return
+    conn.execute(
+        "INSERT OR IGNORE INTO memberships(user_id, org_id, role, created_at, active) "
+        "SELECT id, org_id, role, created_at, active FROM users"
+    )
+
+
 def migrate(conn: sqlite3.Connection) -> int:
     """Bring an existing database up to the current schema.
 
@@ -420,6 +497,17 @@ def migrate(conn: sqlite3.Connection) -> int:
     ).fetchone()
     _widen_user_roles(conn)
     _add_missing_columns(conn)
+    _backfill_memberships(conn)
+    conn.commit()
+
+    # Existing programs get a plan matching what they already run, rather than
+    # being dropped onto the free tier and finding half their teams blocked.
+    try:
+        from .billing import backfill_subscriptions
+
+        backfill_subscriptions(conn)
+    except Exception:  # noqa: BLE001 -- billing must never block opening the DB
+        pass
     conn.commit()
     return int(before[0]) if before else 0
 
