@@ -533,3 +533,14 @@ tbody tr:hover { background: var(--surface-2); }
 .transfer-sport { flex: 0 0 88px; color: var(--text); font-weight: 600; }
 .transfer-inline { display: block; margin-top: 4px; font-size: 12px;
                    color: var(--accent); opacity: .9; }
+
+/* Season picker. One row per sport, four checkboxes: the smallest thing a
+   twelve-year-old will actually fill in. */
+.sport-row { display: flex; align-items: center; gap: 8px; padding: 4px 0;
+             border-bottom: 1px solid var(--border); }
+.sport-row.on .sport-name { color: var(--accent); font-weight: 600; }
+.sport-name { flex: 1; font-size: 13px; }
+.sport-seasons { display: flex; gap: 4px; }
+.season { display: flex; flex-direction: column; align-items: center;
+          font-size: 10px; color: var(--muted); cursor: pointer; }
+.season input { width: auto; min-height: auto; margin: 0; }

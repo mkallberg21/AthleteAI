@@ -24,6 +24,7 @@ from . import mailer
 from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import positions as positions_mod
+from . import sports as sports_mod
 from . import transfer as transfer_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
@@ -1493,6 +1494,79 @@ def _specialisation_label(age: int) -> str:
     if age <= 0:
         return "All ages"
     return f"Age {age} and up"
+
+
+class SportEntry(BaseModel):
+    sport: str
+    seasons: list[str] = Field(default_factory=list)
+    is_primary: bool = False
+
+
+class AthleteSports(BaseModel):
+    sports: list[SportEntry] = Field(default_factory=list, max_length=12)
+
+
+@app.get("/api/sports")
+def list_sports() -> dict[str, Any]:
+    """The sports an athlete can say they play, for the picker.
+
+    Public reference data, like the drill catalog. Seasons rather than hours,
+    because a twelve-year-old can answer which seasons they play basketball
+    and cannot answer how many hours a year.
+    """
+    return {
+        "seasons": list(sports_mod.SEASONS),
+        "sports": [s.to_dict() for s in sports_mod.CATALOG],
+    }
+
+
+@app.get("/api/me/sports")
+def get_my_sports(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {"sports": store.athlete_sports(principal.id)}
+
+
+@app.put("/api/me/sports")
+def set_my_sports(
+    body: AthleteSports,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Record what else this athlete plays.
+
+    The athlete's own to set. It relaxes their specialisation gate and trims
+    their weekly budget, so it is worth being clear that it is self-reported:
+    a coach sees the list on the roster, which is the check that matters.
+    """
+    saved = store.set_athlete_sports(
+        principal.id, [entry.model_dump() for entry in body.sports]
+    )
+    # Nested, not spread: Profile.to_dict() carries its own "sports" key and
+    # spreading it silently replaced the ordered list we just saved.
+    profile = benchmarks_mod.sport_profile(store.conn, principal.id)
+    return {"sports": saved, "profile": profile.to_dict()}
+
+
+@app.put("/api/athletes/{athlete_id}/sports")
+def set_athlete_sports(
+    athlete_id: int,
+    body: AthleteSports,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Same, filled in by a coach -- usually from a roster form at signup."""
+    owner = store.conn.execute(
+        "SELECT org_id FROM users WHERE id = ?", (athlete_id,)
+    ).fetchone()
+    if owner is None or owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=404, detail="unknown athlete")
+    saved = store.set_athlete_sports(
+        athlete_id, [entry.model_dump() for entry in body.sports]
+    )
+    profile = benchmarks_mod.sport_profile(store.conn, athlete_id)
+    return {"sports": saved, "profile": profile.to_dict()}
 
 
 @app.get("/api/positions")

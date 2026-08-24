@@ -41,6 +41,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import positions
+from . import sports
 from . import transfer
 from .config import CONFIG
 from .drills.catalog import DRILLS_BY_KEY
@@ -157,6 +158,27 @@ def band_for(age: int | None, estimated: bool = False) -> AgeBand:
         if band.contains(age):
             return band
     return AGE_BANDS[-1]
+
+
+def _rescaled(band: AgeBand, scale: float) -> AgeBand:
+    """Scale the volume figures of a band, leaving the day counts alone.
+
+    Days per week are a rhythm, not a quantity: an athlete on a lighter budget
+    should still spread it over the same number of short sessions rather than
+    compress it into one. `session_max` is left alone for the same reason --
+    it is a ceiling on any single sitting, and lowering it here would flag
+    ordinary sessions as too long for a kid who simply plays other sports.
+    """
+    if scale == 1.0:
+        return band
+    return AgeBand(
+        label=band.label, min_age=band.min_age, max_age=band.max_age,
+        weekly_min=round(band.weekly_min * scale),
+        weekly_target=round(band.weekly_target * scale),
+        weekly_max=round(band.weekly_max * scale),
+        session_max=band.session_max,
+        days_target=band.days_target, days_max=band.days_max, note=band.note,
+    )
 
 
 def scaled(band: AgeBand) -> AgeBand:
@@ -616,6 +638,7 @@ def training_mix(
     days: int = 28,
     suppress_suggestions: bool = False,
     home_sport: str | None = None,
+    plays: list[str] | None = None,
 ) -> dict[str, Any]:
     """How an athlete divides their solo time, against what their position needs.
 
@@ -653,7 +676,9 @@ def training_mix(
             minutes=by_drill.get(key, 0.0),
             actual=(by_drill.get(key, 0.0) / total) if total else 0.0,
             target=target.get(key, 0.0),
-            transfers=[t.to_dict() for t in transfer.for_drill(key, home_sport)],
+            transfers=[
+                t.to_dict() for t in transfer.for_drill(key, home_sport, plays=plays)
+            ],
         )
         for key in keys
     ]
@@ -679,7 +704,7 @@ def training_mix(
             # is told which *other sports* the drill pays off in, because that
             # is the honest argument for why they are not doing position work
             # yet -- and it is the argument they will repeat to a parent.
-            cross = transfer.blurb(short.drill_key, home_sport, limit=3)
+            cross = transfer.blurb(short.drill_key, home_sport, limit=3, plays=plays)
             if position.key == positions.GENERIC.key and cross:
                 reason = cross.replace("This one pays off", "it pays off")
             else:
@@ -705,11 +730,32 @@ def training_mix(
 # The whole picture
 # ---------------------------------------------------------------------------
 
+def sport_profile(conn: sqlite3.Connection, athlete_id: int) -> sports.Profile:
+    """What else this athlete plays, scored for how single-sport their year is."""
+    rows = conn.execute(
+        "SELECT sport, seasons, is_primary FROM athlete_sports WHERE athlete_id = ?",
+        (athlete_id,),
+    ).fetchall()
+    played = []
+    for row in rows:
+        sport = sports.BY_KEY.get(row["sport"])
+        if sport is None:
+            continue
+        played.append(sports.Participation(
+            sport=sport,
+            seasons=tuple(s for s in (row["seasons"] or "").split(",") if s),
+            is_primary=bool(row["is_primary"]),
+        ))
+    return sports.assess(played)
+
+
 def _specialisation_note(
     position: positions.Position | None,
     age: int | None,
     min_age: int,
     specialising: bool,
+    profile: sports.Profile | None = None,
+    program_min_age: int | None = None,
 ) -> dict[str, Any] | None:
     """Why a young athlete is not getting position-specific work.
 
@@ -718,21 +764,91 @@ def _specialisation_note(
     forgotten they are a goalie will go and do goalie work anyway. So the
     position is named back to them, and the reason is given in terms of what
     they gain rather than what they are being denied.
+
+    When the line has moved for this particular athlete, say so and say why.
+    An unexplained difference between two kids on the same team is the kind of
+    thing that gets compared in a group chat and read as the app being broken.
     """
     if position is None or specialising:
         return None
+
+    label = position.label.lower()
+    moved = program_min_age is not None and min_age != program_min_age
+    reason = ""
+    if profile is not None and profile.known and moved:
+        if min_age > program_min_age:
+            others = "" if profile.sport_count > 1 else " and nothing else"
+            reason = (
+                f" You have {profile.primary.sport.label} down for most of the "
+                f"year{others}, so we are giving the all-round work a bit longer "
+                "than usual — that is the part that protects you."
+            )
+        else:
+            played = _names([p.sport.label for p in profile.participations])
+            reason = (
+                f" You already play {played}, which is exactly the all-round "
+                "base we would be building anyway, so this starts earlier for "
+                "you than for most."
+            )
+
     return {
         "position": position.label,
         "min_age": min_age,
-        "headline": f"You are down as {position.label.lower()}, and your coach knows it",
+        "program_min_age": program_min_age,
+        "moved": moved,
+        "headline": f"You are down as {label}, and your coach knows it",
         "detail": (
             f"Your training plan is the all-round one until you are {min_age}. "
             "The best players your age are the ones who can run, jump, land and "
             "change direction — that is what turns into being good at "
-            f"{position.label.lower()} later, and it is worth more right now than "
-            "practising one job."
+            f"{label} later, and it is worth more right now than practising one "
+            f"job.{reason}"
         ),
     }
+
+
+def _names(items: list[str]) -> str:
+    """Join a list the way a person would say it, not the way a loop emits it."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _sport_advisories(profile: sports.Profile, age: int | None) -> list[str]:
+    """Things worth saying about the shape of an athlete's year.
+
+    Kept separate from the budget advisories because these are not about this
+    week. They are about a pattern that takes a season to form and a season to
+    fix, and they are addressed to a reader who can act on it.
+    """
+    out: list[str] = []
+    if not profile.known:
+        return out
+
+    if profile.level == sports.Level.HIGH:
+        out.append(
+            f"{profile.primary.sport.label} is most of your year. The strongest "
+            "thing you could do for it is a season of something else — a "
+            "different sport builds parts of you this one never asks for, and "
+            "it is the single best protection against getting hurt."
+        )
+    elif profile.sport_count == 1 and age is not None and age <= 14:
+        out.append(
+            f"{profile.primary.sport.label} is the only sport you have down. "
+            "At your age, playing a second one is not a distraction from this "
+            "— it is one of the better things you can do for it."
+        )
+
+    if profile.sport_count >= 2:
+        played = _names([p.sport.label for p in profile.participations])
+        out.append(
+            f"You play {played}. That already counts as training, so what you "
+            "do here does not need to be as long — the weekly number below has "
+            "been trimmed to match."
+        )
+    return out
 
 
 def report(
@@ -755,7 +871,12 @@ def report(
     if row["birth_year"]:
         age = today.year - int(row["birth_year"])
 
+    profile = sport_profile(conn, athlete_id)
     band = scaled(band_for(age, bool(row["birth_year_estimated"])))
+    # A kid playing three sports is already moving plenty, and none of that
+    # week shows up here. Expecting the same solo volume from them as from a
+    # single-sport athlete overstates what is left to give.
+    band = _rescaled(band, sports.budget_scale(profile))
     week = week_of_training(conn, athlete_id, today)
     first_name = (row["display_name"] or "").split()[0] if row["display_name"] else ""
     budget = assess_time(band, week, first_name)
@@ -776,8 +897,13 @@ def report(
     # roster -- it just does not narrow what this athlete practises or who
     # they are measured against, because narrowing both at twelve is exactly
     # the specialisation the age bands exist to slow down.
-    min_age = row["position_emphasis_min_age"]
-    min_age = 15 if min_age is None else int(min_age)
+    program_min_age = row["position_emphasis_min_age"]
+    program_min_age = 15 if program_min_age is None else int(program_min_age)
+    # The program sets the baseline; the athlete's own sport mix moves it a
+    # bounded amount either side. Real variety already supplies the broad base
+    # the delay was protecting; single-sport and year-round is the case the
+    # delay is actually for.
+    min_age = sports.effective_min_age(program_min_age, profile)
     specialising = position is not None and age is not None and age >= min_age
     applied = position if specialising else None
 
@@ -794,6 +920,7 @@ def report(
         conn, athlete_id, applied, today,
         suppress_suggestions=budget.status == Status.OVER,
         home_sport=sport,
+        plays=[p.sport.label for p in profile.participations],
     )
 
     advisories: list[str] = []
@@ -823,7 +950,11 @@ def report(
         "position": position.to_dict() if position else None,
         "position_raw": raw_position,
         "specialising": specialising,
-        "specialisation": _specialisation_note(position, age, min_age, specialising),
+        "specialisation": _specialisation_note(
+            position, age, min_age, specialising, profile, program_min_age
+        ),
+        "sports": profile.to_dict(),
+        "sport_advisories": _sport_advisories(profile, age),
         "peer_pool": pool.to_dict(),
         "mix": mix,
         "advisories": advisories,
@@ -854,6 +985,8 @@ def program_summary(
     today = today or datetime.now(timezone.utc).date()
     by_position: dict[str, int] = {}
     raw_positions: list[str] = []
+    specialisation_counts: dict[str, int] = {}
+    single_sport: list[dict[str, Any]] = []
     counts = {s: 0 for s in (Status.UNKNOWN, Status.BUILDING, Status.GOOD, Status.FULL, Status.OVER)}
     over: list[dict[str, Any]] = []
     year = today.year
@@ -871,6 +1004,17 @@ def program_summary(
             (athlete_id,),
         ).fetchone()
         raw = raw["position"] if raw else None
+        athlete_profile = sport_profile(conn, athlete_id)
+        specialisation_counts[athlete_profile.level] = (
+            specialisation_counts.get(athlete_profile.level, 0) + 1
+        )
+        if athlete_profile.level == sports.Level.HIGH:
+            single_sport.append({
+                "athlete_id": athlete_id,
+                "display_name": row["display_name"],
+                "sport": athlete_profile.primary.sport.label,
+                "months": athlete_profile.primary.months,
+            })
         if raw:
             raw_positions.append(raw)
         resolved = positions.normalize(raw, sport)
@@ -901,4 +1045,9 @@ def program_summary(
             for key, n in sorted(by_position.items(), key=lambda kv: -kv[1])
         ],
         "unrecognised_positions": positions.unrecognised(raw_positions, sport),
+        "specialisation": specialisation_counts,
+        # Named, unlike the budget lists, because this is not a this-week
+        # nudge -- it is a conversation a coach has once, with a family, about
+        # a pattern that took a season to form.
+        "single_sport": sorted(single_sport, key=lambda a: -a["months"]),
     }

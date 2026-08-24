@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from .config import CONFIG
+from . import sports
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
 from . import assignments as assignments_mod
@@ -133,10 +134,90 @@ class Principal:
         )
 
 
+def _write_imported_sports(
+    conn: sqlite3.Connection, athlete_id: int, keys: list[str], now: str
+) -> None:
+    """Record sports from a roster import, without seasons.
+
+    Seasons are left empty on purpose. A roster column will not carry them,
+    and inventing a plausible season span would relax the specialisation gate
+    on data nobody actually gave us. An empty season list scores as a short
+    year, which is the cautious direction: it never makes an athlete look more
+    single-sport than they are, and the athlete can fill in the real seasons.
+    """
+    if not keys:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO athlete_sports(athlete_id, sport, seasons, "
+        "is_primary, updated_at) VALUES (?,?,?,?,?)",
+        [(athlete_id, key, "", int(i == 0), now) for i, key in enumerate(keys)],
+    )
+
+
 class Store:
     def __init__(self, conn: sqlite3.Connection | None = None) -> None:
         self.conn = conn or connect()
         init_db(self.conn)
+
+    # ------------------------------------------------------------------
+    # Multi-sport participation
+    # ------------------------------------------------------------------
+
+    def set_athlete_sports(
+        self, athlete_id: int, entries: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Replace an athlete's recorded sports.
+
+        A full replace rather than a merge: the picker this backs shows the
+        whole list, so what comes back *is* the answer. Merging would leave a
+        sport a kid deliberately unticked sitting in the table, which is the
+        direction that matters -- a stale extra sport makes them look more
+        multi-sport than they are, and that relaxes the specialisation gate.
+        """
+        cleaned: list[tuple[str, str, int]] = []
+        seen: set[str] = set()
+        primary_taken = False
+        for entry in entries or []:
+            sport = sports.normalize(entry.get("sport"))
+            if sport is None or sport.key in seen:
+                continue
+            seen.add(sport.key)
+            seasons = sports.clean_seasons(entry.get("seasons"))
+            is_primary = bool(entry.get("is_primary")) and not primary_taken
+            primary_taken = primary_taken or is_primary
+            cleaned.append((sport.key, ",".join(seasons), int(is_primary)))
+
+        # Exactly one primary. Falling back to the sport with the longest
+        # season keeps `assess` from having to invent one, and keeps the
+        # stored rows honest about what the athlete was actually asked.
+        if cleaned and not primary_taken:
+            widest = max(range(len(cleaned)), key=lambda i: len(cleaned[i][1]))
+            key, seasons, _ = cleaned[widest]
+            cleaned[widest] = (key, seasons, 1)
+
+        now = _iso(_now())
+        with transaction(self.conn) as conn:
+            conn.execute("DELETE FROM athlete_sports WHERE athlete_id = ?", (athlete_id,))
+            conn.executemany(
+                "INSERT INTO athlete_sports(athlete_id, sport, seasons, is_primary, "
+                "updated_at) VALUES (?,?,?,?,?)",
+                [(athlete_id, key, seasons, primary, now) for key, seasons, primary in cleaned],
+            )
+        return self.athlete_sports(athlete_id)
+
+    def athlete_sports(self, athlete_id: int) -> list[dict[str, Any]]:
+        return [
+            {
+                "sport": row["sport"],
+                "seasons": [s for s in (row["seasons"] or "").split(",") if s],
+                "is_primary": bool(row["is_primary"]),
+            }
+            for row in self.conn.execute(
+                "SELECT sport, seasons, is_primary FROM athlete_sports "
+                "WHERE athlete_id = ? ORDER BY is_primary DESC, sport",
+                (athlete_id,),
+            )
+        ]
 
     # ------------------------------------------------------------------
     # Org / team / user setup
@@ -1082,6 +1163,7 @@ class Store:
                         "position, joined_at) VALUES (?,?,?,?,?)",
                         (team_id, athlete_id, athlete.jersey, athlete.position, now),
                     )
+                    _write_imported_sports(c, athlete_id, athlete.sports, now)
                 created.append({
                     "athlete_id": athlete_id,
                     "display_name": athlete.display_name,
@@ -1111,6 +1193,7 @@ class Store:
                         "position, joined_at) VALUES (?,?,?,?,?)",
                         (team_id, athlete_id, athlete.jersey, athlete.position, now),
                     )
+                    _write_imported_sports(c, athlete_id, athlete.sports, now)
                 updated.append({
                     "athlete_id": athlete_id,
                     "display_name": athlete.display_name,

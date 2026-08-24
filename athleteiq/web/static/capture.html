@@ -40,6 +40,20 @@
       <p class="budget-detail" id="budget-detail"></p>
       <div id="budget-advisories"></div>
       <div id="specialisation-note" class="hidden"></div>
+      <div id="sport-advisories"></div>
+      <details style="margin-top:10px" id="sports-details">
+        <summary class="small muted" style="cursor:pointer">
+          What else do you play?
+        </summary>
+        <p class="small muted" style="margin:8px 0">
+          Tick the seasons you play each one. This is not a test &mdash; it lets
+          the app stop expecting the same driveway time from someone who is
+          already at basketball twice a week.
+        </p>
+        <div id="sport-picker"></div>
+        <button class="secondary" id="sports-save" style="margin-top:10px">Save</button>
+        <span class="small muted" id="sports-saved"></span>
+      </details>
       <div id="mix-suggestions"></div>
       <details style="margin-top:10px" id="mix-details">
         <summary class="small muted" style="cursor:pointer">
@@ -379,8 +393,55 @@ async function loadBudget() {
        yet. ${esc(report.disclaimer)}</p>`;
 
   renderSpecialisation(report.specialisation);
+  $('sport-advisories').innerHTML = (report.sport_advisories || []).map((a) => `
+    <div class="advisory info"><span class="dotmark"></span><div>${esc(a)}</div></div>
+  `).join('');
+  renderSportPicker(report.sports);
   renderMix(report.mix);
 }
+
+let sportCatalog = null;
+
+// Self-reported, and deliberately low-friction: a season checkbox is something
+// a twelve-year-old will actually fill in, where "hours per year" is not.
+async function renderSportPicker(profile) {
+  if (!sportCatalog) {
+    try { sportCatalog = await api('/api/sports'); } catch { return; }
+  }
+  const mine = new Map(
+    (profile && profile.sports ? profile.sports : []).map((s) => [s.sport, s])
+  );
+  $('sport-picker').innerHTML = sportCatalog.sports.map((sport) => {
+    const held = mine.get(sport.key);
+    return `<div class="sport-row ${held ? 'on' : ''}" data-sport="${esc(sport.key)}">
+      <span class="sport-name">${esc(sport.label)}</span>
+      <span class="sport-seasons">
+        ${sportCatalog.seasons.map((season) => `
+          <label class="season">
+            <input type="checkbox" data-season="${esc(season)}"
+              ${held && held.seasons.includes(season) ? 'checked' : ''}>
+            <span>${esc(season[0].toUpperCase() + season.slice(1, 3))}</span>
+          </label>`).join('')}
+      </span>
+    </div>`;
+  }).join('');
+}
+
+$('sports-save').addEventListener('click', async () => {
+  const chosen = [...document.querySelectorAll('#sport-picker .sport-row')]
+    .map((row) => ({
+      sport: row.dataset.sport,
+      seasons: [...row.querySelectorAll('input:checked')].map((i) => i.dataset.season),
+    }))
+    .filter((entry) => entry.seasons.length);
+  try {
+    await api('/api/me/sports', { method: 'PUT', body: { sports: chosen } });
+    $('sports-saved').textContent = 'Saved.';
+    // The budget and the specialisation line both move on this, so the card
+    // is redrawn rather than left showing the numbers from before the change.
+    await loadBudget();
+  } catch (e) { showError(e.message); }
+});
 
 // Why a young athlete is on the all-round plan. Saying nothing here would read
 // as the app not knowing what position they play, and a kid who believes that

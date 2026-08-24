@@ -2183,3 +2183,101 @@ class TestAYoungAthleteIsNotSpecialisedThroughTheApi:
         assert report["specialising"] is True
         assert report["mix"]["position"]["key"] == "goalie"
         assert report["specialisation"] is None
+
+
+class TestMultiSportEndpoints:
+
+    def test_the_picker_offers_sports_and_seasons(self, client):
+        body = client.get("/api/sports").json()
+        assert body["seasons"] == ["fall", "winter", "spring", "summer"]
+        keys = {s["key"] for s in body["sports"]}
+        assert {"basketball", "soccer", "swimming", "track"} <= keys
+
+    def test_an_athlete_records_their_own(self, client, program):
+        athlete = program["athletes"][0]
+        res = client.put("/api/me/sports", json={"sports": [
+            {"sport": "Bball", "seasons": ["winter"], "is_primary": False},
+            {"sport": "Lacrosse", "seasons": ["spring"], "is_primary": True},
+        ]}, headers=athlete["headers"]).json()
+        assert [s["sport"] for s in res["sports"]] == ["lacrosse", "basketball"]
+        assert res["profile"]["level"] == "low"
+        assert client.get(
+            "/api/me/sports", headers=athlete["headers"]
+        ).json()["sports"] == res["sports"]
+
+    def test_saving_replaces_rather_than_merges(self, client, program):
+        """A sport a kid deliberately unticked must not linger -- a stale extra
+        makes them look more multi-sport than they are, which relaxes the gate."""
+        athlete = program["athletes"][0]
+        client.put("/api/me/sports", json={"sports": [
+            {"sport": "lacrosse", "seasons": ["spring"]},
+            {"sport": "basketball", "seasons": ["winter"]},
+        ]}, headers=athlete["headers"])
+        res = client.put("/api/me/sports", json={"sports": [
+            {"sport": "lacrosse", "seasons": ["spring"]},
+        ]}, headers=athlete["headers"]).json()
+        assert [s["sport"] for s in res["sports"]] == ["lacrosse"]
+
+    def test_junk_is_dropped_rather_than_stored(self, client, program):
+        athlete = program["athletes"][0]
+        res = client.put("/api/me/sports", json={"sports": [
+            {"sport": "competitive napping", "seasons": ["winter"]},
+            {"sport": "Soccer", "seasons": ["fall", "nonsense"]},
+        ]}, headers=athlete["headers"]).json()
+        assert [s["sport"] for s in res["sports"]] == ["soccer"]
+        assert res["sports"][0]["seasons"] == ["fall"]
+
+    def test_a_coach_can_fill_it_in_for_their_own_athletes_only(self, client, program):
+        athlete = program["athletes"][0]
+        ok = client.put(
+            f"/api/athletes/{athlete['id']}/sports",
+            json={"sports": [{"sport": "soccer", "seasons": ["fall"]}]},
+            headers=program["director"],
+        )
+        assert ok.status_code == 200
+
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+        ).json()
+        theirs = {"Authorization": f"Bearer {rival['director']['token']}"}
+        assert client.put(
+            f"/api/athletes/{athlete['id']}/sports",
+            json={"sports": [{"sport": "soccer", "seasons": ["fall"]}]},
+            headers=theirs,
+        ).status_code == 404
+
+    def test_a_guardian_cannot_record_training_sports_as_an_athlete(self, client, program):
+        assert client.put(
+            "/api/me/sports", json={"sports": []},
+            headers=program["director"],
+        ).status_code == 403
+
+    def test_it_changes_what_the_athlete_is_shown(self, client, program):
+        athlete = program["athletes"][0]
+        before = client.get("/api/benchmarks", headers=athlete["headers"]).json()
+        client.put("/api/me/sports", json={"sports": [
+            {"sport": "lacrosse", "seasons": ["spring"], "is_primary": True},
+            {"sport": "basketball", "seasons": ["winter"]},
+            {"sport": "soccer", "seasons": ["fall"]},
+        ]}, headers=athlete["headers"])
+        after = client.get("/api/benchmarks", headers=athlete["headers"]).json()
+
+        assert after["budget"]["band"]["weekly_target"] < before["budget"]["band"]["weekly_target"]
+        assert after["sports"]["level"] == "low"
+        assert any("does not need to be as long" in a for a in after["sport_advisories"])
+
+    def test_a_roster_import_can_carry_other_sports(self, client, program):
+        csv = ("name,birth_year,position,sports\n"
+               "Alex T.,2011,Middie,basketball; soccer\n")
+        plan = client.post(
+            "/api/coach/roster/preview", json={"content": csv}, headers=program["director"]
+        ).json()
+        assert plan["athletes"][0]["sports"] == ["basketball", "soccer"]
+
+        client.post(
+            "/api/coach/roster/import",
+            json={"content": csv, "team_id": program["team"]["id"]},
+            headers=program["director"],
+        )
+        summary = client.get("/api/coach/budgets", headers=program["director"]).json()
+        assert summary["specialisation"].get("moderate") or summary["specialisation"].get("low")

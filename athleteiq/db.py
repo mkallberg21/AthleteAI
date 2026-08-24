@@ -98,6 +98,23 @@ CREATE TABLE IF NOT EXISTS team_members (
 );
 CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
 
+-- The other sports an athlete plays. Drives how cautious the specialisation
+-- gate is and how much solo training the weekly budget expects: a kid playing
+-- three sports is already moving plenty, and none of that shows up here.
+--
+-- Seasons rather than hours, because a twelve-year-old can answer "which
+-- seasons do you play basketball" and cannot answer "how many hours a year".
+CREATE TABLE IF NOT EXISTS athlete_sports (
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sport       TEXT NOT NULL,
+    -- Comma-joined subset of fall/winter/spring/summer, normalised on write.
+    seasons     TEXT NOT NULL DEFAULT '',
+    is_primary  INTEGER NOT NULL DEFAULT 0,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (athlete_id, sport)
+);
+CREATE INDEX IF NOT EXISTS idx_athlete_sports ON athlete_sports(athlete_id);
+
 -- One recording. Contains no video and no frames -- only derived counts.
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY,

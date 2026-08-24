@@ -34,9 +34,12 @@ class Transfer:
     #: Completes "...which is". Written for a twelve-year-old, and specific
     #: enough to be checkable: "helps with agility" is not worth reading.
     why: str
+    #: True when this athlete plays the sport. Set per-athlete by `for_drill`,
+    #: never stored -- the table itself knows nothing about any one child.
+    plays: bool = False
 
-    def to_dict(self) -> dict[str, str]:
-        return {"sport": self.sport, "why": self.why}
+    def to_dict(self) -> dict[str, Any]:
+        return {"sport": self.sport, "why": self.why, "plays": self.plays}
 
 
 TRANSFERS: dict[str, tuple[Transfer, ...]] = {
@@ -110,35 +113,80 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
 
 
 def for_drill(
-    drill_key: str, home_sport: str | None = None, limit: int = 3
+    drill_key: str,
+    home_sport: str | None = None,
+    limit: int = 3,
+    plays: list[str] | None = None,
 ) -> list[Transfer]:
     """Transfers for a drill, minus the athlete's own sport.
 
     A lacrosse player does not need to be told that wall ball helps at
     lacrosse. Filtering on the way out rather than storing per-sport copies
     keeps one true list per drill.
+
+    `plays` reorders the result so the sports this athlete actually plays come
+    first. "This helps in basketball" is a claim; "this helps in basketball,
+    which you play on Tuesdays" is a reason. Sorting rather than filtering
+    keeps the rest of the list visible, since part of the point is to make a
+    single-sport kid curious about a sport they have not tried.
     """
     home = (home_sport or "").strip().lower()
     out = [t for t in TRANSFERS.get(drill_key, ()) if t.sport.strip().lower() != home]
+
+    mine = {(name or "").strip().lower() for name in (plays or [])}
+    if mine:
+        out = [
+            Transfer(t.sport, t.why, plays=t.sport.strip().lower() in mine)
+            for t in out
+        ]
+        out.sort(key=lambda t: not t.plays)
     return out[:limit] if limit else out
 
 
-def blurb(drill_key: str, home_sport: str | None = None, limit: int = 3) -> str:
-    """One sentence naming the sports, for somewhere a list will not fit."""
-    names = [t.sport for t in for_drill(drill_key, home_sport, limit)]
-    if not names:
-        return ""
+def _listed(names: list[str]) -> str:
     if len(names) == 1:
-        listed = names[0]
-    else:
-        listed = f"{', '.join(names[:-1])} and {names[-1]}"
-    return f"This one pays off in {listed} too."
+        return names[0]
+    return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def describe(drill_key: str, home_sport: str | None = None, limit: int = 3) -> dict[str, Any]:
-    items = for_drill(drill_key, home_sport, limit)
+def blurb(
+    drill_key: str,
+    home_sport: str | None = None,
+    limit: int = 3,
+    plays: list[str] | None = None,
+) -> str:
+    """One sentence naming the sports, for somewhere a list will not fit.
+
+    When the athlete plays one of them, that sport leads and is called out.
+    "This helps in basketball" is a claim; "this helps in basketball, which
+    you play" is a reason, and the difference is whether a kid reads the rest
+    of the sentence.
+    """
+    items = for_drill(drill_key, home_sport, limit, plays)
+    if not items:
+        return ""
+
+    theirs = [t.sport for t in items if t.plays]
+    rest = [t.sport for t in items if not t.plays]
+    if not theirs:
+        return f"This one pays off in {_listed(rest)} too."
+
+    verb = "which you play" if len(theirs) == 1 else "both of which you play" \
+        if len(theirs) == 2 else "all of which you play"
+    if not rest:
+        return f"This one pays off in {_listed(theirs)}, {verb}."
+    return f"This one pays off in {_listed(theirs)}, {verb} — and in {_listed(rest)}."
+
+
+def describe(
+    drill_key: str,
+    home_sport: str | None = None,
+    limit: int = 3,
+    plays: list[str] | None = None,
+) -> dict[str, Any]:
+    items = for_drill(drill_key, home_sport, limit, plays)
     return {
         "drill_key": drill_key,
         "transfers": [t.to_dict() for t in items],
-        "blurb": blurb(drill_key, home_sport, limit),
+        "blurb": blurb(drill_key, home_sport, limit, plays),
     }

@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 977 tests
+python -m pytest tests/ -q          # 1036 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -90,6 +90,7 @@ athleteiq/
   load.py           Workload ratio, throwing volume, rest days, advisories
   benchmarks.py     Age-banded weekly time budgets and peer context
   positions.py      Canonical positions, aliases, and per-position drill mix
+  sports.py         Other sports played, and how single-sport a year is
   transfer.py       What each drill is worth in an athlete's other sports
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
@@ -857,6 +858,70 @@ repair. A sport with no position model returns an empty list and the form falls
 back to free text — honest silence rather than another sport's positions with
 the labels changed.
 
+### Multi-sport tracking, and why the gate reads it
+
+An age threshold alone could not tell a fourteen-year-old who plays basketball
+in winter and runs track in spring from one who plays lacrosse eleven months a
+year and nothing else. Those are different children, and the second is the one
+the research is actually about. So athletes record what else they play, and two
+things key off it.
+
+**Seasons, not hours.** A twelve-year-old can answer "which seasons do you play
+basketball" and cannot answer "how many hours a year". Four checkboxes per sport
+is the smallest thing they will actually fill in.
+
+The score is shaped after the screening questions used in youth sports
+medicine — has this athlete dropped other sports, is one ranked above the rest,
+do they train it more than eight months a year — with the last two answered by
+proxy from the season picker. It is a routing heuristic for how cautious to be,
+not a diagnosis.
+
+| Year | Level | Gate (program set to 15) | Weekly budget |
+|---|---|---|---|
+| Three sports across three seasons | low | **13** | ×0.7 |
+| One sport, one or two seasons | moderate | 15 | ×0.85 |
+| One sport, year-round | high | **17** | ×1.0 |
+| Nothing recorded | unknown | 15 | ×1.0 |
+
+**The specialisation gate moves.** Real variety already supplies the broad
+athletic base the delay was protecting, so position guidance starts earlier.
+Single-sport and year-round gets it later. Three guards on that, all tested:
+the adjustment is bounded to ±2 years, it can never go below `ABSOLUTE_MIN_AGE`
+(12) whatever the sport mix says, and a director who set the program to *never*
+is not overridden by a child filling in a season picker.
+
+**The weekly solo budget shrinks.** A kid playing three sports is already moving
+plenty, and none of that week shows up here. Only the volume figures scale —
+`session_max` and the days-per-week targets are left alone, since trimming the
+week should not start flagging ordinary sessions as too long or push the same
+work into fewer days. `BUDGET_SCALE` is capped at 1.0 in both the table and a
+test: **recording sports can never unlock more training.**
+
+The athlete is told when their line moved, and why:
+
+> Your training plan is the all-round one until you are 17. […] You have
+> Lacrosse down for most of the year and nothing else, so we are giving the
+> all-round work a bit longer than usual — that is the part that protects you.
+
+An unexplained difference between two kids on the same team gets compared in a
+group chat and read as the app being broken.
+
+Transfer notes also lead with the sports the athlete actually plays — *"This one
+pays off in Basketball, which you play — and in Soccer and Tennis."* Sorted
+rather than filtered, because part of the point is making a single-sport kid
+curious about a sport they have not tried.
+
+Coaches see the squad's spread across the four levels, and the year-round
+athletes **by name** — unlike the budget lists, which never name anyone. That is
+deliberate: this is not a this-week nudge, it is a conversation with a family
+about a pattern that took a season to form, and the dashboard says so.
+
+Roster import reads a `sports` column ("basketball; soccer", "Bball / XC") but
+deliberately **imports no seasons** — a roster column will not carry them, and
+inventing a plausible span would relax the gate on data nobody gave us. An empty
+season list scores as a short year, which never makes an athlete look more
+multi-sport than they are.
+
 ### Specialisation is a setting, and it defaults late
 
 Position guidance is **off below an age the program sets**, default 15. Under it
@@ -1176,64 +1241,69 @@ contact with a real driveway:
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
    battery.
-3. **The specialisation age is one number for a whole program.** It cannot
-   distinguish an athlete who plays three sports from one who plays only this
-   one, which is the distinction the research actually turns on. A multi-sport
-   fourteen-year-old is arguably fine to specialise by position within one of
-   them; a single-sport one is not. Capturing other sports played would let
-   the gate key off that instead, and would also let the transfer notes name
-   the sports that athlete actually plays rather than a general list.
-4. **Positions are modelled for lacrosse only.** Another sport gets honest
+3. **Multi-sport participation is self-reported and unverified.** An athlete
+   who ticks three sports gets an earlier specialisation gate and a lighter
+   weekly budget, and nothing stops them ticking sports they do not play. The
+   incentive is weak in both directions — the reward is a different drill mix,
+   not points or a leaderboard place, and the lighter budget asks *less* of
+   them — and a coach sees the list on the roster, which is the check that
+   matters. But it is a self-report, and the gate treats it as fact.
+4. **Seasons are a coarse proxy for training load.** Three seasons of
+   recreational soccer and three seasons of travel soccer score identically,
+   though they are not remotely the same week. Capturing sessions per week per
+   sport would sharpen it, at the cost of a form a twelve-year-old will not
+   fill in — which is the trade the season picker deliberately takes.
+5. **Positions are modelled for lacrosse only.** Another sport gets honest
    silence — `for_sport` returns nothing, athletes fall back to the generic
    mix, and the join form falls back to free text. Adding a sport means adding
    its positions *and* the sport-specific drills their emphasis would point at;
    half of that is worse than neither, since a soccer emphasis built only from
    the general strength drills would recommend the same mix to every position
    on the pitch.
-5. **The age bands are heuristics, not a clinical instrument.** They are drawn
+6. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-6. **Handedness is inferred from wrist height**, which is reliable for standard
+7. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-7. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+8. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-8. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+9. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-9. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+10. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-10. **Revocation soft-fails by default**, though pre-fetched staples make strict
+11. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-11. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+12. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-12. **No payment processor.** The billing model, entitlements, and invoicing are
+13. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-13. **Offline slots are per-drill.** A drill you have never opened online has no
+14. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-14. **Web Push needs credentials.** Notifications generate and display in-app
+15. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-15. **Form quality is pose-only.** It reads how the body moved, not where the
+16. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-16. **Guardian identity is proven by the invite code alone.** There is no email
+17. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-17. **Roster import reads delimited text only.** CSV, TSV, and
+18. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-18. **Load coefficients are reasoned estimates, not measured values.** The
+19. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

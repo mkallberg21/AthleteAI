@@ -412,6 +412,9 @@ class TestTheCopyReadsLikeEnglish:
 #: that position does *not* apply -- that is its own suite below.
 SPECIALISING_AGE = 16
 
+#: Re-exported so the multi-sport suites do not import athleteiq.sports twice.
+B_SEASONS = ("fall", "winter", "spring", "summer")
+
 
 def squad(store, program, spec, age=SPECIALISING_AGE, drill="lax_wall_ball",
           minutes=12, days=3):
@@ -702,3 +705,199 @@ class TestTheDrillIsNotJustForThisSport:
                 assert "same minutes" in low
                 for word in banned:
                     assert word not in low, (position, word, suggestion)
+
+
+# ---------------------------------------------------------------------------
+# Multi-sport: the gate stops being one number for everybody
+# ---------------------------------------------------------------------------
+
+def plays(store, athlete_id, *entries):
+    """plays(store, id, ('lacrosse', ['spring'], True), ('basketball', ['winter']))"""
+    store.set_athlete_sports(athlete_id, [
+        {"sport": e[0], "seasons": e[1], "is_primary": len(e) > 2 and e[2]}
+        for e in entries
+    ])
+
+
+class TestTheGateReadsTheAthletesYear:
+    """Three fourteen-year-olds on the same team, three different answers --
+    which is the entire point of recording this."""
+
+    def test_a_multi_sport_athlete_starts_position_work_earlier(self, store, program):
+        athlete = add_athlete(store, program, "Varied", 14, position="Attack")
+        plays(store, athlete["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]), ("soccer", ["fall"]))
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["specialising"] is True
+        assert report["mix"]["position"]["key"] == "attack"
+
+    def test_a_year_round_single_sport_athlete_waits_longer(self, store, program):
+        athlete = add_athlete(store, program, "Only Lax", 14, position="Attack")
+        plays(store, athlete["id"], ("lacrosse", list(B_SEASONS), True))
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["specialising"] is False
+        assert report["specialisation"]["min_age"] == 17
+        assert report["mix"]["position"]["key"] == "general"
+
+    def test_an_athlete_who_recorded_nothing_is_unchanged(self, store, program):
+        """The whole feature must be invisible until someone fills it in."""
+        athlete = add_athlete(store, program, "Silent", 14, position="Attack")
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["sports"]["level"] == "unknown"
+        assert report["specialisation"]["min_age"] == 15
+        assert report["sport_advisories"] == []
+
+    def test_the_athlete_is_told_the_line_moved_and_why(self, store, program):
+        """An unexplained difference between two kids on the same team gets
+        compared in a group chat and read as the app being broken."""
+        athlete = add_athlete(store, program, "Only Lax", 14, position="Attack")
+        plays(store, athlete["id"], ("lacrosse", list(B_SEASONS), True))
+        note = B.report(store.conn, athlete["id"], TODAY)["specialisation"]
+        assert note["moved"] is True
+        assert note["program_min_age"] == 15 and note["min_age"] == 17
+        assert "most of the year" in note["detail"]
+
+    def test_the_floor_holds_against_any_sport_mix(self, store, program):
+        store.conn.execute(
+            "UPDATE organizations SET position_emphasis_min_age = 12 WHERE id = ?",
+            (program["org"],),
+        )
+        store.conn.commit()
+        athlete = add_athlete(store, program, "Tiny", 10, position="Attack")
+        plays(store, athlete["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]), ("soccer", ["fall"]), ("swimming", ["summer"]))
+        assert B.report(store.conn, athlete["id"], TODAY)["specialising"] is False
+
+    def test_a_program_that_turned_it_off_is_not_overridden(self, store, program):
+        store.conn.execute(
+            "UPDATE organizations SET position_emphasis_min_age = 99 WHERE id = ?",
+            (program["org"],),
+        )
+        store.conn.commit()
+        athlete = add_athlete(store, program, "Varied", 17, position="Attack")
+        plays(store, athlete["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]), ("soccer", ["fall"]))
+        assert B.report(store.conn, athlete["id"], TODAY)["specialising"] is False
+
+
+class TestTheBudgetAccountsForTheRestOfTheirWeek:
+
+    def test_a_multi_sport_athlete_is_asked_for_less_solo_time(self, store, program):
+        plain = add_athlete(store, program, "Plain", 14, position="Attack")
+        varied = add_athlete(store, program, "Varied", 14, position="Attack")
+        plays(store, varied["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]), ("soccer", ["fall"]))
+
+        base = B.report(store.conn, plain["id"], TODAY)["budget"]["band"]
+        cut = B.report(store.conn, varied["id"], TODAY)["budget"]["band"]
+        assert cut["weekly_target"] < base["weekly_target"]
+        assert cut["weekly_max"] < base["weekly_max"]
+
+    def test_the_session_ceiling_and_rhythm_are_not_touched(self, store, program):
+        """Trimming the week must not start flagging ordinary sessions as long,
+        or push a kid to compress the same work into fewer days."""
+        plain = add_athlete(store, program, "Plain", 14)
+        varied = add_athlete(store, program, "Varied", 14)
+        plays(store, varied["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]), ("soccer", ["fall"]))
+        base = B.report(store.conn, plain["id"], TODAY)["budget"]["band"]
+        cut = B.report(store.conn, varied["id"], TODAY)["budget"]["band"]
+        assert cut["session_max"] == base["session_max"]
+        assert cut["days_target"] == base["days_target"]
+        assert cut["days_max"] == base["days_max"]
+
+    def test_recording_sports_can_never_unlock_more_training(self, store, program):
+        plain = add_athlete(store, program, "Plain", 14)
+        base = B.report(store.conn, plain["id"], TODAY)["budget"]["band"]
+        for mix in (
+            (("lacrosse", B_SEASONS, True),),
+            (("lacrosse", ["spring"], True), ("basketball", ["winter"])),
+            (("lacrosse", ["spring"], True), ("basketball", ["winter"]), ("soccer", ["fall"])),
+        ):
+            athlete = add_athlete(store, program, f"A{len(mix)}{mix[0][1]}", 14)
+            plays(store, athlete["id"], *mix)
+            band = B.report(store.conn, athlete["id"], TODAY)["budget"]["band"]
+            assert band["weekly_target"] <= base["weekly_target"]
+
+    def test_they_are_told_why_it_is_lower(self, store, program):
+        athlete = add_athlete(store, program, "Varied", 14)
+        plays(store, athlete["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]), ("soccer", ["fall"]))
+        advisories = B.report(store.conn, athlete["id"], TODAY)["sport_advisories"]
+        assert any("does not need to be as long" in a for a in advisories)
+        assert any("Lacrosse, Basketball and Soccer" in a for a in advisories)
+
+
+class TestWhatASingleSportAthleteHears:
+
+    def test_a_year_round_athlete_is_pointed_at_a_second_sport(self, store, program):
+        athlete = add_athlete(store, program, "Only Lax", 14)
+        plays(store, athlete["id"], ("lacrosse", list(B_SEASONS), True))
+        advisories = B.report(store.conn, athlete["id"], TODAY)["sport_advisories"]
+        assert any("a season of something else" in a for a in advisories)
+
+    def test_nothing_scolds_them_for_loving_one_sport(self, store, program):
+        banned = ("too much", "unhealthy", "risk of injury", "you should not", "wrong")
+        for mix in ((("lacrosse", B_SEASONS, True),),
+                    (("lacrosse", ["spring", "summer"], True),)):
+            athlete = add_athlete(store, program, f"S{len(mix[0][1])}", 13)
+            plays(store, athlete["id"], *mix)
+            for advisory in B.report(store.conn, athlete["id"], TODAY)["sport_advisories"]:
+                for word in banned:
+                    assert word not in advisory.lower(), (word, advisory)
+
+
+class TestTransferNamesTheSportsTheyActuallyPlay:
+
+    def test_a_sport_they_play_leads_the_list(self, store, program):
+        athlete = add_athlete(store, program, "Hooper", 12)
+        plays(store, athlete["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]))
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        bounds = next(
+            s for s in B.report(store.conn, athlete["id"], TODAY)["mix"]["slices"]
+            if s["drill_key"] == "gen_lateral_bound"
+        )
+        assert bounds["transfers"][0]["sport"] == "Basketball"
+        assert bounds["transfers"][0]["plays"] is True
+
+    def test_the_rest_of_the_list_survives(self, store, program):
+        """Part of the point is making a kid curious about a sport they have
+        not tried, so playing one must not hide the others."""
+        athlete = add_athlete(store, program, "Hooper", 12)
+        plays(store, athlete["id"], ("basketball", ["winter"], True))
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        bounds = next(
+            s for s in B.report(store.conn, athlete["id"], TODAY)["mix"]["slices"]
+            if s["drill_key"] == "gen_lateral_bound"
+        )
+        assert len(bounds["transfers"]) > 1
+        assert any(not t["plays"] for t in bounds["transfers"])
+
+
+class TestWhatTheCoachSeesAboutSports:
+
+    def test_the_squad_is_summarised_by_specialisation(self, store, program):
+        varied = add_athlete(store, program, "Varied", 14)
+        plays(store, varied["id"], ("lacrosse", ["spring"], True),
+              ("basketball", ["winter"]), ("soccer", ["fall"]))
+        only = add_athlete(store, program, "Only Lax", 14)
+        plays(store, only["id"], ("lacrosse", list(B_SEASONS), True))
+        silent = add_athlete(store, program, "Silent", 14)
+
+        summary = B.program_summary(
+            store.conn, [varied["id"], only["id"], silent["id"]], TODAY
+        )
+        assert summary["specialisation"]["low"] == 1
+        assert summary["specialisation"]["high"] == 1
+        assert summary["specialisation"]["unknown"] == 1
+
+    def test_year_round_athletes_are_named_for_a_conversation(self, store, program):
+        only = add_athlete(store, program, "Only Lax", 14)
+        plays(store, only["id"], ("lacrosse", list(B_SEASONS), True))
+        summary = B.program_summary(store.conn, [only["id"]], TODAY)
+        assert summary["single_sport"][0]["display_name"] == "Only Lax"
+        assert summary["single_sport"][0]["sport"] == "Lacrosse"
+        assert summary["single_sport"][0]["months"] == 12

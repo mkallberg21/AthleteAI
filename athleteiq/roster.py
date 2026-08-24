@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 from . import positions
+from . import sports
 
 # How long a printed claim code stays valid. Long enough to survive a coach
 # printing a sheet and handing it out at the next practice.
@@ -72,6 +73,7 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "full_name": ("fullname", "name", "athlete", "player", "athletename", "playername"),
     "jersey": ("jersey", "jerseynumber", "jerseyno", "number", "no", "num", "uniform"),
     "position": ("position", "pos", "role"),
+    "sports": ("sports", "other sports", "other_sports", "multi sport", "sport"),
     "birth_year": ("birthyear", "yearofbirth", "yob", "classof", "gradyear", "graduationyear"),
     "birth_date": ("birthdate", "dob", "dateofbirth", "birthday"),
     "grade": ("grade", "gradelevel", "year", "schoolyear"),
@@ -165,6 +167,16 @@ def match_key(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
+def parse_sports(raw: str) -> list[str]:
+    """Read a free-text sports column: "basketball; soccer", "Bball / XC"."""
+    out: list[str] = []
+    for part in re.split(r"[;,/|]| and ", raw or ""):
+        found = sports.normalize(part)
+        if found is not None and found.key not in out:
+            out.append(found.key)
+    return out
+
+
 def parse_hand(value: str) -> str | None:
     text = (value or "").strip().lower()
     if not text:
@@ -231,6 +243,10 @@ class Athlete:
     external_id: str | None = None
     jersey: str = ""
     position: str = ""
+    #: Canonical keys of other sports played. Seasons are not imported -- a
+    #: roster column will not carry them, and guessing would relax the
+    #: specialisation gate on made-up data. The athlete fills those in.
+    sports: list[str] = field(default_factory=list)
     birth_year: int | None = None
     birth_year_estimated: bool = False
     dominant_hand: str | None = None
@@ -270,6 +286,7 @@ class Athlete:
             "external_id": self.external_id,
             "jersey": self.jersey,
             "position": self.position,
+            "sports": list(self.sports),
             "birth_year": self.birth_year,
             "birth_year_estimated": self.birth_year_estimated,
             "dominant_hand": self.dominant_hand,
@@ -405,6 +422,7 @@ def parse(
                 "not be used for position benchmarks. The athlete still trains "
                 "and still counts everywhere else."
             )
+        athlete.sports = parse_sports(value(row, "sports"))
         athlete.dominant_hand = parse_hand(value(row, "dominant_hand"))
         athlete.email = value(row, "email") or None
         athlete.guardian_name = value(row, "guardian_name") or None

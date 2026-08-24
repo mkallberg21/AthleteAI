@@ -132,6 +132,7 @@
     <div id="budget-spread"></div>
     <div id="budget-over"></div>
     <div id="budget-positions"></div>
+    <div id="budget-sports"></div>
   </div>
 
   <div class="card hidden" id="load-card">
@@ -732,6 +733,7 @@ function renderBudgets(data) {
   }).join('');
 
   renderPositions(data);
+  renderSpecialisationSpread(data);
 
   const over = data.over_budget || [];
   $('budget-over').innerHTML = over.length === 0 ? '' : `
@@ -777,6 +779,37 @@ $('spec-age').addEventListener('change', async (event) => {
     await loadAll();
   } catch (e) { showError(e.message); }
 });
+
+const SPECIALISATION_LABELS = [
+  ['high', 'One sport, most of the year'],
+  ['moderate', 'Mostly one sport'],
+  ['low', 'Plays several sports'],
+  ['unknown', 'Not told us yet'],
+];
+
+function renderSpecialisationSpread(data) {
+  const counts = data.specialisation || {};
+  const total = Object.values(counts).reduce((n, v) => n + v, 0);
+  if (!total) { $('budget-sports').innerHTML = ''; return; }
+
+  const named = data.single_sport || [];
+  $('budget-sports').innerHTML = `
+    <p class="small" style="margin-top:14px"><b>The rest of their year</b></p>
+    ${SPECIALISATION_LABELS.filter(([k]) => counts[k]).map(([key, label]) => `
+      <div class="budget-row">
+        <span class="budget-label">${esc(label)}</span>
+        <span class="budget-n">${counts[key]}</span>
+        <span class="small muted">${Math.round((counts[key] / total) * 100)}%</span>
+      </div>`).join('')}
+    ${named.length ? `<div class="advisory caution" style="margin-top:10px">
+        <span class="dotmark"></span>
+        <div>${named.map((a) => esc(a.display_name)).join(', ')}
+          ${named.length === 1 ? 'has' : 'have'} one sport down for most of the year.
+          <em>Worth a conversation with the family &mdash; a season of something
+          else is the single best protection against overuse, and it is not a
+          conversation this app can have for you.</em></div>
+      </div>` : ''}`;
+}
 
 function renderPositions(data) {
   const rows = (data.positions || []).filter((p) => p.key !== 'none');
