@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 787 tests
+python -m pytest tests/ -q          # 812 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -96,6 +96,7 @@ athleteiq/
   webhooks.py       Inbound delivery events: verification, bounce handling
   sns.py            SNS certificate verification for SES notifications
   chain.py          X.509 path validation against pinned Amazon roots
+  revocation.py     OCSP and CRL checking for signing certificates
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -386,6 +387,31 @@ signature link, every certificate's validity window, path-length constraints, an
 that each issuer actually carries `CA=TRUE`. That last check is the classic hole:
 without it, any certificate an attacker legitimately owns can sign a forged
 intermediate that walks all the way up to a genuine root.
+
+**Accepting a certificate that has been revoked.** The chain is checked against
+OCSP, falling back to a CRL, across the *whole path* rather than just the leaf —
+a revoked intermediate compromises everything beneath it at once.
+
+Two things make this real rather than decorative. **Every OCSP response is
+signature-verified** against the issuer's key, or against a delegated responder
+certificate the issuer signed *and* marked with the OCSP-signing EKU. An
+unverified response is worse than no check at all, because anyone able to answer
+the request can reply "good" for a certificate revoked years ago — and it reads
+as protection. The same applies to CRLs: an unsigned list could simply omit the
+serial an attacker cares about.
+
+And **soft-fail is named as a limitation, not hidden as a default.** When no
+responder can be reached, the check proceeds with a warning logged. That is
+defeated by anyone who can block the request, which is exactly why browsers
+stopped relying on OCSP. It is the default here because a failed webhook is
+retried by the provider and the primary controls — allowlisted topic, pinned
+chain — do not depend on this one. Set `ATHLETEIQ_SNS_REVOCATION_STRICT=1` to
+refuse anything that cannot be cleared. **A `revoked` answer is always fatal**,
+in either mode; that part is never a judgement call.
+
+Answers are cached for an hour, so this is roughly one network round trip per
+hour rather than one per webhook — and a revocation is never cached, since
+re-deciding it costs nothing that matters.
 
 Both signature versions are supported — v1 is SHA1, v2 is SHA256, and AWS still
 emits v1 for older topics. Certificates are cached for an hour so a bounce storm
@@ -866,10 +892,13 @@ contact with a real driveway:
    than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **No certificate revocation checking.** The chain is validated and validity
-   dates are enforced, but a revoked-but-unexpired certificate would still pass;
-   CRL and OCSP are not consulted. The short-lived nature of SNS signing
-   certificates and the topic allowlist limit what that is worth to an attacker.
+7. **Revocation checking soft-fails by default.** A `revoked` answer is always
+   fatal, but an unreachable responder is proceeded past with a warning, which
+   an attacker able to block the request can exploit.
+   `ATHLETEIQ_SNS_REVOCATION_STRICT=1` closes that at the cost of dropping
+   bounce events during a CA outage. There is no OCSP stapling, which would
+   remove the round trip and the soft-fail question together — it does not
+   apply to a certificate fetched as a file rather than offered in a handshake.
 8. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.

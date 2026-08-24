@@ -560,6 +560,7 @@ def _handle_ses(
     auto_confirm: bool | None = None,
     anchors: list | None = None,
     verify_chain: bool | None = None,
+    check_revocation: bool | None = None,
 ) -> dict[str, Any]:
     """SES, delivered through SNS.
 
@@ -580,6 +581,7 @@ def _handle_ses(
         message = sns.verify(
             envelope, allowed_topics=allowed, fetcher=fetcher,
             anchors=anchors, verify_chain=verify_chain,
+            check_revocation=check_revocation,
         )
     except sns.SnsError as exc:
         # Surfaced as a verification failure so the endpoint answers 401 the

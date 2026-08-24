@@ -33,6 +33,7 @@ from typing import Any, Callable, Iterable
 from urllib.parse import urlparse
 
 from . import chain as chain_mod
+from . import revocation as revocation_mod
 from .config import CONFIG
 
 log = logging.getLogger(__name__)
@@ -227,6 +228,9 @@ def _load_certificate(
     anchors: list | None = None,
     verify_chain: bool | None = None,
     now: float | None = None,
+    check_revocation: bool | None = None,
+    revocation_strict: bool | None = None,
+    revocation_fetcher: revocation_mod.Fetcher | None = None,
 ):
     """Parse the fetched bundle and return its leaf certificate.
 
@@ -251,6 +255,23 @@ def _load_certificate(
         path = chain_mod.validate_pem(pem, anchors or trust_anchors(), now=now)
     except chain_mod.ChainError as exc:
         raise SnsError(f"certificate chain rejected: {exc}") from None
+
+    # Checked across the whole path, not just the leaf: a revoked intermediate
+    # is the more serious failure, since everything beneath it is compromised
+    # at once.
+    should_check = (
+        CONFIG.sns_check_revocation if check_revocation is None else check_revocation
+    )
+    if should_check:
+        strict = (
+            CONFIG.sns_revocation_strict
+            if revocation_strict is None else revocation_strict
+        )
+        try:
+            revocation_mod.check_chain(path, fetcher=revocation_fetcher, strict=strict)
+        except revocation_mod.RevocationError as exc:
+            raise SnsError(f"certificate rejected: {exc}") from None
+
     return path[0]
 
 
@@ -262,6 +283,9 @@ def verify(
     now: float | None = None,
     anchors: list | None = None,
     verify_chain: bool | None = None,
+    check_revocation: bool | None = None,
+    revocation_strict: bool | None = None,
+    revocation_fetcher: revocation_mod.Fetcher | None = None,
 ) -> VerifiedMessage:
     """Verify an SNS message, or raise SnsError explaining what failed.
 
@@ -293,7 +317,9 @@ def verify(
 
     pem = fetch_certificate(cert_url, fetcher)
     certificate = _load_certificate(
-        pem, anchors=anchors, verify_chain=verify_chain, now=now
+        pem, anchors=anchors, verify_chain=verify_chain, now=now,
+        check_revocation=check_revocation, revocation_strict=revocation_strict,
+        revocation_fetcher=revocation_fetcher,
     )
 
     # An expired certificate means either a misconfiguration or a replay of a

@@ -251,6 +251,20 @@ class Config:
     sns_ca_bundle: str = field(
         default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_CA_BUNDLE", "")
     )
+    # Check the signing certificate against OCSP, falling back to a CRL.
+    # Answers are cached for an hour, so this is roughly one network round trip
+    # per hour rather than one per webhook.
+    sns_check_revocation: bool = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_CHECK_REVOCATION", "1") != "0"
+    )
+    # What to do when revocation cannot be established. Soft-fail by default:
+    # a responder outage should not stop bounce processing, and the primary
+    # controls -- allowlisted topic, pinned chain -- do not depend on this one.
+    # Set to 1 to refuse anything that cannot be cleared.
+    sns_revocation_strict: bool = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_REVOCATION_STRICT", "") == "1"
+    )
+
     # Restrict anchors to Amazon's roots rather than every CA on the machine.
     # A host trusts ~150 roots; trusting all of them to vouch for an AWS
     # signing certificate makes the pinning pointless.
