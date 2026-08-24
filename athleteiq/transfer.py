@@ -147,6 +147,29 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Ice Hockey", "taking a hit along the boards and staying up"),
         Transfer("Rugby", "staying on your feet in contact"),
     ),
+    # The ball drills. Short lists, like the stick drills, and for the same
+    # reason: these are sport skills, and the honest transfer is the underlying
+    # coordination rather than "it helps everywhere".
+    "soc_juggle": (
+        Transfer("Basketball", "soft first touch — the ball stops where you want it"),
+        Transfer("Volleyball", "reading a ball out of the air and getting under it"),
+    ),
+    "bkb_dribble": (
+        Transfer("Soccer", "controlling something without looking down at it"),
+        Transfer("Ice Hockey", "the same hands-and-eyes-up problem, with a stick"),
+    ),
+    "vb_set": (
+        Transfer("Basketball", "soft hands and a shot that starts from your legs"),
+        Transfer("Cheer", "catching something coming down and absorbing it"),
+    ),
+    "bb_wall_throw": (
+        Transfer("Lacrosse", "throw, catch, repeat — the same wall, a different tool"),
+        Transfer("Football", "a throwing motion that starts at your feet"),
+    ),
+    "ten_wall_rally": (
+        Transfer("Volleyball", "tracking a fast ball and getting your feet there first"),
+        Transfer("Baseball", "reading a bounce early enough to do something about it"),
+    ),
     # Deliberately short. These are stick-skill drills, and the honest transfer
     # is hand-eye, not "it helps everywhere".
     "lax_wall_ball": (

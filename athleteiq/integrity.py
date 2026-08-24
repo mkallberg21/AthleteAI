@@ -32,6 +32,10 @@ class RepEvent:
     peak: float | None = None
     rom: float | None = None
     cycle_ms: int | None = None
+    # Ball drills only. `speed` is how fast the ball left the contact and
+    # `part` is what took it, both in normalised frame units.
+    speed: float | None = None
+    part: str = ""
 
 
 @dataclass

@@ -18,6 +18,7 @@ value would mark every honest rep short.
 from __future__ import annotations
 
 from .base import (
+    BallSpec,
     Category,
     LoadSpec,
     CounterSpec,
@@ -791,7 +792,170 @@ GEN_SIDE_PLANK = DrillSpec(
 )
 
 
+# ---------------------------------------------------------------------------
+# Ball drills
+#
+# The first drills in this catalog that read the ball rather than the body.
+# Everything here would count a kid standing still if the ball were not
+# required, so `required=True` is doing real work: below the track-quality
+# floor these refuse rather than degrade.
+#
+# The `parts` lists are what separates one drill from another. A ball bouncing
+# at ankle height is a juggle if a foot is next to it and a dribble if nothing
+# is, which is why the contact classifier checks landmarks before the floor.
+# ---------------------------------------------------------------------------
+
+SOC_JUGGLE = DrillSpec(
+    key="soc_juggle",
+    name="Juggling",
+    sport="soccer",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description="Keep it up. Counts every touch, and which foot took it.",
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=200, max_rep_ms=6_000,
+    ),
+    ball=BallSpec(
+        required=True,
+        contact="body",
+        parts=("left_ankle", "right_ankle", "left_knee", "right_knee", "nose"),
+        min_gap_ms=200,
+        min_speed=0.22,
+        attribute_side=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.9, daily_rep_cap=600, diminishing_after_reps=200),
+    validation=ValidationSpec(max_reps_per_second=3.0, min_reps=6),
+    setup_hint="Phone on the ground, propped up, your whole body and the ball in frame.",
+    quality=None,
+    load=LoadSpec(load_per_rep=0.3, load_per_minute=1.6, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+BKB_DRIBBLE = DrillSpec(
+    key="bkb_dribble",
+    name="Dribbling",
+    sport="basketball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description="Counts every bounce, and which hand is on it.",
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=140, max_rep_ms=4_000,
+    ),
+    ball=BallSpec(
+        required=True,
+        # The floor, not the hand: the bounce is the crisp, unambiguous event,
+        # and the hand is read from whichever wrist is nearest at the time.
+        contact="ground",
+        parts=("left_wrist", "right_wrist"),
+        min_gap_ms=150,
+        min_speed=0.30,
+        attribute_side=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.4, daily_rep_cap=900, diminishing_after_reps=300),
+    validation=ValidationSpec(max_reps_per_second=5.0, min_reps=10),
+    setup_hint="Phone propped up side-on, hands and the floor in frame.",
+    quality=None,
+    load=LoadSpec(load_per_rep=0.15, load_per_minute=1.4, tissue=Tissue.WHOLE_BODY),
+    tracks_handedness=True,
+)
+
+VB_SET = DrillSpec(
+    key="vb_set",
+    name="Setting",
+    sport="volleyball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description="Set it straight up, over and over. Counts every clean contact.",
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=350, max_rep_ms=6_000,
+    ),
+    ball=BallSpec(
+        required=True,
+        contact="body",
+        parts=("left_wrist", "right_wrist", "nose"),
+        min_gap_ms=350,
+        min_speed=0.28,
+        attribute_side=False,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=500, diminishing_after_reps=180),
+    validation=ValidationSpec(max_reps_per_second=2.0, min_reps=6),
+    setup_hint="Phone propped up, you and the top of the ball's flight in frame.",
+    quality=None,
+    load=LoadSpec(load_per_rep=0.3, load_per_minute=1.4, tissue=Tissue.UPPER_BODY),
+)
+
+BB_WALL_THROW = DrillSpec(
+    key="bb_wall_throw",
+    name="Wall Throws",
+    sport="baseball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description="Throw and field off a wall. Counts every catch.",
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=500, max_rep_ms=8_000,
+    ),
+    ball=BallSpec(
+        required=True,
+        contact="body",
+        parts=("left_wrist", "right_wrist"),
+        min_gap_ms=500,
+        min_speed=0.35,
+        attribute_side=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=400, diminishing_after_reps=150),
+    validation=ValidationSpec(max_reps_per_second=1.6, min_reps=6),
+    setup_hint="Side-on to the wall, phone propped up, you and the ball in frame.",
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=1.0,
+        # Throwing volume is the number this whole load model was built to
+        # watch, and it is the reason a young arm gets hurt.
+        throws_per_rep=1.0,
+        tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+TEN_WALL_RALLY = DrillSpec(
+    key="ten_wall_rally",
+    name="Wall Rally",
+    sport="tennis",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description="Rally against a wall. Counts every shot you hit.",
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=350, max_rep_ms=6_000,
+    ),
+    ball=BallSpec(
+        required=True,
+        contact="body",
+        parts=("left_wrist", "right_wrist"),
+        min_gap_ms=350,
+        # A tennis ball comes off the strings fast, which makes the impulse
+        # obvious -- and lets the floor bounce in between be ignored.
+        min_speed=0.45,
+        attribute_side=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.8, daily_rep_cap=700, diminishing_after_reps=250),
+    validation=ValidationSpec(max_reps_per_second=2.5, min_reps=8),
+    setup_hint="Phone behind you, propped up, you and the wall in frame.",
+    quality=None,
+    load=LoadSpec(load_per_rep=0.5, load_per_minute=1.8, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=True,
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
+    SOC_JUGGLE,
+    BKB_DRIBBLE,
+    VB_SET,
+    BB_WALL_THROW,
+    TEN_WALL_RALLY,
     GEN_LUNGE,
     GEN_GLUTE_BRIDGE,
     GEN_MOUNTAIN_CLIMBER,

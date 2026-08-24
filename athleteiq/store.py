@@ -15,6 +15,7 @@ from typing import Any
 
 from .config import CONFIG
 from . import sports
+from . import ball as ball_mod
 from . import film
 from . import rtp
 from . import wellness
@@ -1308,6 +1309,7 @@ class Store:
         client_version: str = "",
         device_label: str = "",
         completed_at: str | None = None,
+        track_quality: float | None = None,
     ) -> dict[str, Any]:
         """Validate, score, and record a completed session.
 
@@ -1357,6 +1359,27 @@ class Store:
             client_version=client_version,
         )
         verdict = evaluate(claim, drill)
+
+        # Ball drills carry a second verdict. The browser did the tracking, so
+        # the browser is where these numbers came from, so the browser cannot
+        # be trusted with them -- the same reasoning that produced the pose
+        # integrity layer, applied to a payload that is much easier to fake
+        # because a contact is a timestamp rather than a whole skeleton.
+        ball_review = None
+        if drill.ball is not None:
+            ball_review = ball_mod.review(
+                drill,
+                [
+                    {"t_ms": r.t_ms, "hand": r.hand, "speed": getattr(r, "speed", None),
+                     "part": getattr(r, "part", "")}
+                    for r in claim.reps
+                ],
+                track_quality,
+                claim.duration_ms,
+            )
+            if not ball_review.ok:
+                verdict.status = "review"
+                verdict.notes = list(verdict.notes) + ball_review.reasons
 
         hand = self._dominant_hand(athlete_id)
 
@@ -1434,6 +1457,7 @@ class Store:
             "status": verdict.status,
             "integrity_score": round(verdict.score, 3),
             "notes": verdict.notes,
+            **({"ball": ball_review.to_dict()} if ball_review else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,

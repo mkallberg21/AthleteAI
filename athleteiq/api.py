@@ -343,6 +343,10 @@ class RepPayload(BaseModel):
     peak: float | None = Field(default=None, ge=-1000.0, le=1000.0)
     rom: float | None = Field(default=None, ge=0.0, le=1000.0)
     cycle_ms: int | None = Field(default=None, ge=0, le=600_000)
+    # Ball drills only: how fast the ball left the contact, and what took it.
+    # Both bounded like everything else here, since they are client-supplied.
+    speed: float | None = Field(default=None, ge=0.0, le=100.0)
+    part: str = Field(default="", max_length=32)
 
 
 class SubmitSessionRequest(BaseModel):
@@ -359,6 +363,10 @@ class SubmitSessionRequest(BaseModel):
     # The device's own completion time, so a session recorded offline is
     # credited to the day it was actually trained rather than the day it synced.
     completed_at: str | None = None
+    # Share of frames on which the ball was actually detected. Absent on pose
+    # drills; on a ball drill its absence is itself a reason to hold the
+    # session, since a real client always knows this number.
+    track_quality: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 @app.post("/api/sessions/submit")
@@ -380,6 +388,7 @@ def submit_session(
             client_version=body.client_version,
             device_label=body.device_label,
             completed_at=body.completed_at,
+            track_quality=body.track_quality,
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

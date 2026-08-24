@@ -254,6 +254,46 @@ class ValidationSpec:
 
 
 @dataclass(frozen=True)
+class BallSpec:
+    """What the ball has to do for this drill to count a rep.
+
+    Ball drills are the one place in the catalog where the athlete can be
+    doing the movement perfectly and the app should still refuse to count:
+    juggling with no ball is not juggling. So `required` is the important
+    field, and it is enforced rather than advisory -- a drill that quietly
+    degraded to pose-only would report "42 juggles" for a kid standing still,
+    which is worse than having no feature at all.
+    """
+
+    #: A rep is impossible without seeing the ball.
+    required: bool = True
+    #: Which contacts count. 'body' for juggling, 'ground' for dribbling.
+    contact: str = "body"
+    #: Landmarks that count as having touched it, nearest wins.
+    parts: tuple[str, ...] = ()
+    #: Refractory window, so one strike is not read as three.
+    min_gap_ms: int = 180
+    #: Outgoing speed, in frame-heights per second, below which it is a wobble.
+    min_speed: float = 0.25
+    #: Whether the contacting landmark's side is worth recording.
+    attribute_side: bool = False
+    #: Share of frames that must have a real detection behind them. Below
+    #: this the session is held for review rather than counted.
+    min_track_quality: float = 0.35
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "required": self.required,
+            "contact": self.contact,
+            "parts": list(self.parts),
+            "min_gap_ms": self.min_gap_ms,
+            "min_speed": self.min_speed,
+            "attribute_side": self.attribute_side,
+            "min_track_quality": self.min_track_quality,
+        }
+
+
+@dataclass(frozen=True)
 class DrillSpec:
     key: str
     name: str
@@ -268,6 +308,10 @@ class DrillSpec:
     # Absent for drills where per-rep form cannot be read from pose alone.
     quality: QualitySpec | None = None
     load: LoadSpec = field(default_factory=LoadSpec)
+    # Present only on drills that need the ball tracked. Absent means the
+    # drill is read from the body alone, which is every drill shipped before
+    # ball tracking existed.
+    ball: BallSpec | None = None
 
     # Whether left/right attribution is meaningful. True for wall ball and
     # single-arm lifts; false for squats.
@@ -284,7 +328,13 @@ class DrillSpec:
         data["signal"]["kind"] = self.signal.kind.value
         data["signal"]["joints"] = list(self.signal.joints)
         data["load"]["tissue"] = self.load.tissue.value
+        if self.ball is not None:
+            data["ball"] = self.ball.to_dict()
         return data
+
+    @property
+    def needs_ball(self) -> bool:
+        return self.ball is not None and self.ball.required
 
     @property
     def scores_quality(self) -> bool:

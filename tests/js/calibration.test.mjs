@@ -67,6 +67,11 @@ const SWEEP = {
 // sine says nothing about them. They are covered by tests/test_drills.py.
 const HOLD_DRILLS = new Set(SPECS.filter((d) => d.metric === 'hold').map((d) => d.key));
 
+// Ball drills count contacts, not a pose signal, so sweeping a joint angle
+// through them measures nothing. Their equivalent guard is ball.test.mjs,
+// which drives synthetic trajectories the same way this drives synthetic reps.
+const BALL_DRILLS = new Set(SPECS.filter((d) => d.ball).map((d) => d.key));
+
 function frame(kind, v) {
   const pts = base();
   if (kind === 'wrist') {
@@ -111,7 +116,7 @@ function frame(kind, v) {
 // newly added drill was unguarded and looked green. Now it fails.
 test('every rep-counted drill has a calibration sweep', () => {
   const missing = SPECS
-    .filter((d) => !HOLD_DRILLS.has(d.key) && !SWEEP[d.key])
+    .filter((d) => !HOLD_DRILLS.has(d.key) && !BALL_DRILLS.has(d.key) && !SWEEP[d.key])
     .map((d) => d.key);
   assert.deepEqual(missing, [],
     `these drills are not calibration-tested: ${missing.join(', ')}`);

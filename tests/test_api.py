@@ -2685,3 +2685,71 @@ class TestSigningUpAsAnySport:
                 for entry in drill["transfers"]:
                     resolved = sports_mod.normalize(entry["sport"])
                     assert not resolved or resolved.key != sport, (sport, entry)
+
+
+class TestBallTrackingKeepsThePrivacyPosture:
+
+    def test_a_ball_session_uploads_contacts_and_nothing_else(self, client, program):
+        """Ball tracking runs on the phone like pose does. What reaches the
+        server is timestamps and speeds -- no frames, no boxes, no imagery."""
+        athlete = program["athletes"][0]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "soc_juggle"},
+            headers=athlete["headers"],
+        ).json()
+        reps = [
+            {"t_ms": i * 900 + (i % 3) * 70, "hand": "left" if i % 2 else "right",
+             "confidence": 0.7, "speed": 1.2, "part": "left_ankle"}
+            for i in range(30)
+        ]
+        res = client.post(
+            "/api/sessions/submit",
+            json={"session_id": started["session_id"], "nonce": started["nonce"],
+                  "duration_ms": 28_000, "reps": reps, "mean_confidence": 0.7,
+                  "track_quality": 0.62},
+            headers=athlete["headers"],
+        )
+        assert res.status_code == 200
+        assert res.json()["status"] == "counted"
+
+    def test_a_session_that_barely_saw_the_ball_is_held_for_review(self, client, program):
+        athlete = program["athletes"][0]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "soc_juggle"},
+            headers=athlete["headers"],
+        ).json()
+        reps = [
+            {"t_ms": i * 900 + (i % 3) * 70, "hand": "left", "confidence": 0.4,
+             "speed": 1.2, "part": "left_ankle"}
+            for i in range(30)
+        ]
+        body = client.post(
+            "/api/sessions/submit",
+            json={"session_id": started["session_id"], "nonce": started["nonce"],
+                  "duration_ms": 28_000, "reps": reps, "mean_confidence": 0.4,
+                  "track_quality": 0.08},
+            headers=athlete["headers"],
+        ).json()
+        assert body["status"] == "review"
+        assert any("visible" in n for n in body["notes"])
+
+    def test_omitting_the_track_quality_does_not_slip_through(self, client, program):
+        athlete = program["athletes"][0]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "soc_juggle"},
+            headers=athlete["headers"],
+        ).json()
+        reps = [{"t_ms": i * 900, "hand": "left", "confidence": 0.7} for i in range(30)]
+        body = client.post(
+            "/api/sessions/submit",
+            json={"session_id": started["session_id"], "nonce": started["nonce"],
+                  "duration_ms": 28_000, "reps": reps, "mean_confidence": 0.7},
+            headers=athlete["headers"],
+        ).json()
+        assert body["status"] == "review"
+
+    def test_the_ball_drills_are_offered_by_sport(self, client):
+        by_key = {d["key"]: d for d in client.get("/api/drills").json()["drills"]}
+        assert by_key["soc_juggle"]["sport"] == "soccer"
+        assert by_key["bkb_dribble"]["sport"] == "basketball"
+        assert by_key["soc_juggle"]["ball"]["required"] is True

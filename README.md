@@ -14,9 +14,12 @@ Ice Hockey and Rugby. Each ships with its own positions — 61 in total — and 
 position with its own suggested mix of work and a line saying what that mix is
 for. A volleyball middle blocker and a rugby prop get genuinely different plans.
 
-Lacrosse came first and still has the only sport-specific counted drills: the
-flagship one counts wall-ball throw/catch cycles and attributes each to the hand
-on top of the stick. Everything else is built on eighteen bodyweight movements
+Five sports have skill drills that watch the **ball** rather than the body —
+soccer juggling, basketball dribbling, volleyball setting, baseball wall throws,
+tennis wall rallies — counted on the phone by the same on-device pipeline, with
+nothing but timestamps leaving it. Lacrosse came first and still has the
+stick-skill drills, which count wall-ball throw/catch cycles and attribute each
+to the hand on top of the stick. Everything else is built on eighteen bodyweight movements
 that work for any sport, and the app tells athletes which *other* sports each
 one carries over into — because a twelve-year-old doing lateral bounds should
 know that is a basketball slide and a tennis recovery step too.
@@ -73,7 +76,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1319 tests
+python -m pytest tests/ -q          # 1415 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -104,6 +107,7 @@ athleteiq/
   positions.py      Canonical positions, aliases, and per-position drill mix
   sports.py         Other sports played, and how single-sport a year is
   transfer.py       What each drill is worth in an athlete's other sports
+  ball.py           Server-side checks on ball-tracked sessions
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
   digest.py         Weekly team KPIs and the coach email
@@ -121,6 +125,7 @@ athleteiq/
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
+    ball.js         Ball tracking: detect-then-track, contacts, ball reps
     review.js       Self-review recording, markers, pose track (never uploaded)
     offline.js      IndexedDB slot pool + submission queue
     sw.js           Service worker: app-shell cache and push delivery
@@ -1048,6 +1053,64 @@ characters and one of the most concrete lines in the table).
 that did not resolve. Over-training surfaces as prominently as under-training, on
 the same screen — a coach should find out that a kid is grinding every night in
 the same glance that tells them who has not started.
+
+## Ball tracking
+
+The catalog used to stop at the body. A wall-ball rep was a throwing motion, so
+a convincing shadow-throw with no ball counted, and there were no dribbling or
+juggling drills at all because counting them means watching the *ball*. Five
+drills now do: soccer juggling, basketball dribbling, volleyball setting,
+baseball wall throws and tennis wall rallies.
+
+It runs on the phone, like everything else. Nothing about the privacy posture
+changes: what reaches the server is still timestamps and speeds.
+
+### Detect, then track
+
+A detector heavy enough to find a tennis ball cannot run every frame while
+MediaPipe is already using the GPU. So detection runs at roughly 15fps and a
+constant-velocity tracker fills the gaps — and frames the tracker *invented* are
+labelled as such and never counted as evidence.
+
+The detector is COCO's `sports ball` class, which covers every ball in the
+catalog, loaded on demand: an athlete who only does squats never downloads it.
+
+### A contact is physics, not a heuristic
+
+A ball in free flight accelerates downward at a constant rate. Anything else is
+something hitting it. So a contact is a velocity change far larger than gravity
+explains — and **gravity is learned from the athlete's own footage**, which means
+the detector never needs to know the camera distance, what the frame height
+represents in metres, or which way up the phone is. Against synthetic
+trajectories it recovers a true gravity of 2.4 as 2.40, and 4.0 as 3.77.
+
+What *kind* of contact is the difference between two drills. The classifier
+checks body landmarks before the floor, so a ball bouncing at ankle height is a
+juggle if a foot is next to it and a dribble if nothing is. There is a test
+driving the same trajectory into both drills and asserting each counts it — and
+that a foot placed elsewhere counts nothing.
+
+### When it cannot see the ball, it says so
+
+`required=True` on every ball drill is enforced, not advisory. Below the
+track-quality floor the session is **held for review** rather than counted, and
+the athlete sees the ball-seen percentage live while recording, because someone
+who can see the app losing the ball can move the phone. A drill that quietly
+degraded to pose-only would report "42 juggles" for a kid standing still, which
+is worse than not shipping the feature.
+
+The server checks it too, because the browser did the tracking and so the
+browser cannot be trusted with the result — the same reasoning that produced the
+pose integrity layer, applied to a payload that is easier to fake because a
+contact is a timestamp rather than a whole skeleton. It rejects contacts closer
+together than the drill's own refractory window (a real client enforces that
+itself, so their presence means the payload did not come from one), rates faster
+than the ball can come back, metronomic timing, and a left/right split too exact
+to have happened. A missing quality figure is itself a reason to hold: a real
+client always knows that number.
+
+Ball drills carry **no form score**. Range of motion is a pose idea; a contact
+has none, and claiming one would be inventing a number.
 
 ## Film study
 

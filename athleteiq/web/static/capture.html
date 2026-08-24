@@ -189,6 +189,10 @@
       </div>
 
       <div class="small muted" id="hint" style="margin-top:10px"></div>
+      <div id="ball-readout" class="hidden" style="margin-top:6px">
+        <div class="small muted" id="ball-quality"></div>
+        <div class="small warn-text" id="ball-help"></div>
+      </div>
       <div class="privacy-note">Nothing you see here is recorded or uploaded. Counts only.</div>
 
       <button id="startstop" style="margin-top:12px" disabled>Start</button>
@@ -237,6 +241,7 @@
     </div>
   </section>
 
+  <!-- ball readout lives inside the capture view, injected below -->
   <!-- ---------- Film ---------- -->
   <section id="view-film" class="hidden">
     <div class="card">
@@ -281,6 +286,7 @@
 
 <script type="module">
 import { api, esc, fmtDate, getToken, logout } from './api.js';
+import { BallRepCounter } from './ball.js';
 import { RepCounter } from './counter.js';
 import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
@@ -293,6 +299,13 @@ import {
 
 const CLIENT_VERSION = 'web-0.1.0';
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const BALL_MODEL =
+  'https://storage.googleapis.com/mediapipe-models/object_detector/'
+  + 'efficientdet_lite0/float16/1/efficientdet_lite0.tflite';
+// The ball detector is far heavier than pose and cannot run every frame
+// alongside it on a mid-range phone. Detect-then-track: this is the "detect"
+// rate, and BallTracker fills the gaps.
+const BALL_DETECT_EVERY_MS = 66;
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/'
   + 'pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
@@ -311,6 +324,9 @@ let drills = [];
 let profile = null;
 let homeSport = null;
 let landmarker = null;
+let ballDetector = null;
+let ballCounter = null;
+let lastBallDetectAt = 0;
 let stream = null;
 let counter = null;
 let session = null;
@@ -1019,6 +1035,51 @@ async function syncQueue() {
 
 // ---------------------------------------------------------------- capture
 
+/**
+ * The object detector, loaded only for drills that need a ball.
+ *
+ * COCO's "sports ball" class covers basketballs, footballs, volleyballs,
+ * tennis balls and baseballs, which is the whole ball catalog. It is a second
+ * model on top of pose, so it is fetched on demand -- an athlete who only ever
+ * does squats never downloads it.
+ */
+async function ensureBallDetector() {
+  if (ballDetector) return ballDetector;
+  const { ObjectDetector, FilesetResolver } = await import(MP);
+  const vision = await FilesetResolver.forVisionTasks(`${MP}/wasm`);
+  ballDetector = await ObjectDetector.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: BALL_MODEL, delegate: 'GPU' },
+    runningMode: 'VIDEO',
+    scoreThreshold: 0.32,
+    categoryAllowlist: ['sports ball'],
+  });
+  return ballDetector;
+}
+
+/**
+ * Pull the best ball out of a detection result.
+ *
+ * Normalised to the same 0-1 space the pose landmarks use, because the
+ * contact classifier measures distances between the two and pixel coordinates
+ * would make that comparison meaningless on a rotated phone.
+ */
+function bestBall(result, width, height) {
+  if (!result || !result.detections || !result.detections.length) return null;
+  let best = null;
+  for (const d of result.detections) {
+    const score = d.categories && d.categories[0] ? d.categories[0].score : 0;
+    if (!best || score > best.score) best = { box: d.boundingBox, score };
+  }
+  if (!best || !best.box) return null;
+  const b = best.box;
+  return {
+    x: (b.originX + b.width / 2) / width,
+    y: (b.originY + b.height / 2) / height,
+    r: Math.max(b.width / width, b.height / height) / 2,
+    score: best.score,
+  };
+}
+
 async function ensureLandmarker() {
   if (landmarker) return landmarker;
   const { PoseLandmarker, FilesetResolver } = await import(MP);
@@ -1034,6 +1095,20 @@ async function ensureLandmarker() {
 async function openCapture(drill) {
   activeDrill = drill;
   counter = new RepCounter(drill);
+  ballCounter = drill.ball ? new BallRepCounter(drill) : null;
+  lastBallDetectAt = 0;
+  $('ball-readout').classList.toggle('hidden', !drill.ball);
+  if (drill.ball) {
+    setBanner('Loading the ball detector…');
+    try {
+      await ensureBallDetector();
+      setBanner('');
+    } catch {
+      // Refused rather than degraded. Counting juggles off the body alone
+      // would report a number for a kid standing still holding a phone.
+      setBanner('Could not load the ball detector — this drill needs it.', true);
+    }
+  }
   session = null;
   show('capture');
   $('drill-name').textContent = drill.name;
@@ -1127,10 +1202,37 @@ function renderLoop() {
     if (!running) return;
 
     const t = performance.now() - startedAt;
-    counter.push(landmarks, t);
+
+    // Ball drills run their own counter off contacts. The pose counter is not
+    // fed at all for them: there is no joint angle that means "juggled".
+    if (ballCounter) {
+      let detection = null;
+      const now = performance.now();
+      if (ballDetector && now - lastBallDetectAt >= BALL_DETECT_EVERY_MS) {
+        lastBallDetectAt = now;
+        try {
+          detection = bestBall(
+            ballDetector.detectForVideo(video, now), canvas.width, canvas.height,
+          );
+        } catch { detection = null; }
+      }
+      ballCounter.push(detection, landmarks, t);
+      if (detection) drawBall(ctx, detection, canvas.width, canvas.height);
+      updateBallReadout();
+    } else {
+      counter.push(landmarks, t);
+    }
     if (recorder) recorder.samplePose(landmarks, t);
 
-    if (activeDrill.metric === 'hold') {
+    if (ballCounter) {
+      $('reps').textContent = ballCounter.count;
+      if (activeDrill.tracks_handedness) {
+        const { left, right } = ballCounter.handCounts();
+        const l = $('h-left'), r = $('h-right');
+        if (l) l.textContent = left;
+        if (r) r.textContent = right;
+      }
+    } else if (activeDrill.metric === 'hold') {
       $('reps').textContent = Math.floor(counter.holdMs / 1000);
     } else {
       $('reps').textContent = counter.count;
@@ -1158,6 +1260,33 @@ const BONES = [
   [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
   [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
 ];
+
+/** A ring where the ball is, so an athlete can see it is being followed. */
+function drawBall(ctx, ball, width, height) {
+  ctx.beginPath();
+  ctx.arc(ball.x * width, ball.y * height,
+          Math.max(8, ball.r * height), 0, Math.PI * 2);
+  ctx.strokeStyle = '#39d98a';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+}
+
+/**
+ * Live honesty about the track.
+ *
+ * An athlete who can see the app losing the ball can move the phone. One who
+ * only finds out at the end has wasted the session.
+ */
+function updateBallReadout() {
+  if (!ballCounter) return;
+  const quality = ballCounter.trackQuality;
+  const el = $('ball-quality');
+  el.textContent = `Ball seen in ${Math.round(quality * 100)}% of frames`;
+  el.className = ballCounter.trusted ? 'small muted' : 'small warn-text';
+  $('ball-help').textContent = ballCounter.trusted
+    ? ''
+    : 'Move the phone so the ball and your whole body are in shot.';
+}
 
 function drawSkeleton(ctx, lms, w, h) {
   ctx.lineWidth = Math.max(2, w / 220);
@@ -1222,7 +1351,10 @@ async function finishSession() {
   $('startstop').disabled = true;
   $('startstop').textContent = 'Saving…';
 
-  const payload = counter.toSubmission(session.session_id, session.nonce, duration, {
+  // Whichever counter was actually running. A ball drill never fed the pose
+  // counter, so submitting from it would post an empty session.
+  const source = ballCounter || counter;
+  const payload = source.toSubmission(session.session_id, session.nonce, duration, {
     client_version: CLIENT_VERSION,
     device_label: navigator.platform || '',
     // The device's own clock decides which day this counts for. A session
@@ -1234,7 +1366,7 @@ async function finishSession() {
   // be lost by a dropped connection, a closed tab, or a dead battery.
   await enqueue(payload);
   if (recorder) await recorder.stop();
-  reviewMarkers = buildMarkers(counter.reps, {
+  reviewMarkers = buildMarkers(source.reps, {
     tracksHandedness: activeDrill.tracks_handedness,
   });
   stopCamera({ keepRecording: true });
