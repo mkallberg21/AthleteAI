@@ -11,6 +11,7 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 import athleteiq.api as api_module
+from athleteiq import sports as sports_mod
 from athleteiq.db import connect
 from athleteiq.store import Store
 
@@ -2584,3 +2585,103 @@ class TestReturnToPlayEndpoints:
         assert client.get(
             f"/api/wellness/plans/{plan_id}/history", headers=other["headers"]
         ).status_code == 404
+
+
+class TestSigningUpAsAnySport:
+
+    def test_the_catalog_is_public_because_you_need_it_before_an_account(self, client):
+        body = client.get("/api/sports/catalog").json()
+        labels = {s["label"] for s in body["sports"]}
+        assert {
+            "Lacrosse", "Basketball", "Soccer", "Volleyball", "Baseball", "Softball",
+            "Cheer", "Dance", "Swimming", "Track & Field", "Football", "Gymnastics",
+            "Tennis", "Cross Country", "Hockey", "Rugby",
+        } <= labels
+
+    def test_each_entry_says_whether_positions_exist(self, client):
+        """So the signup form can be honest rather than promising a position
+        picker that turns out to be empty."""
+        by_key = {s["key"]: s for s in client.get("/api/sports/catalog").json()["sports"]}
+        for key in ("basketball", "soccer", "cheer", "rugby", "gymnastics"):
+            assert by_key[key]["positions"] > 0, key
+        assert by_key["golf"]["positions"] == 0
+
+    @pytest.mark.parametrize("sport,expected", [
+        ("basketball", "basketball"), ("Cheer", "cheer"),
+        ("Ice Hockey", "hockey"), ("track and field", "track"),
+        ("Girls Lacrosse", "lacrosse"), ("hoops", "basketball"),
+    ])
+    def test_what_a_director_types_is_normalised(self, client, sport, expected):
+        """Stored verbatim, "Girls Lacrosse" would match no position list, no
+        drill emphasis and no transfer filter -- broken three ways, silently."""
+        org = client.post(
+            "/api/orgs", json={"name": "A Club", "sport": sport, "director_name": "Dir"},
+        ).json()
+        stored = api_module._store.conn.execute(
+            "SELECT sport FROM organizations WHERE id = ?", (org["org_id"],)
+        ).fetchone()["sport"]
+        assert stored == expected
+
+    def test_a_sport_we_do_not_know_is_refused_with_the_list(self, client):
+        res = client.post(
+            "/api/orgs",
+            json={"name": "A Club", "sport": "quidditch", "director_name": "Dir"},
+        )
+        assert res.status_code == 400
+        assert "Lacrosse" in res.json()["detail"]
+
+    def _program(self, client, sport, position):
+        org = client.post(
+            "/api/orgs", json={"name": f"{sport} club", "sport": sport,
+                               "director_name": "Dir"},
+        ).json()
+        director = {"Authorization": f"Bearer {org['director']['token']}"}
+        team = client.post(
+            "/api/teams", json={"name": "Varsity", "season": "26"}, headers=director,
+        ).json()
+        athlete = client.post(
+            "/api/athletes",
+            json={"display_name": "Alex T.", "birth_year": 2008, "dominant_hand": "right",
+                  "guardian_consent": True, "join_code": team["join_code"],
+                  "position": position},
+            headers=director,
+        ).json()
+        athlete["headers"] = {"Authorization": f"Bearer {athlete['token']}"}
+        return org, director, athlete
+
+    @pytest.mark.parametrize("sport,position,expected", [
+        ("basketball", "PG", "guard"),
+        ("soccer", "Striker", "forward"),
+        ("volleyball", "Libero", "libero"),
+        ("cheer", "Flyer", "flyer"),
+        ("football", "QB", "quarterback"),
+        ("hockey", "Goalie", "goaltender"),
+        ("rugby", "Prop", "front_row"),
+        ("swimming", "Butterfly", "stroke"),
+    ])
+    def test_a_program_of_any_sport_gets_its_own_positions(
+        self, client, sport, position, expected,
+    ):
+        _, _, athlete = self._program(client, sport, position)
+        report = client.get("/api/benchmarks", headers=athlete["headers"]).json()
+        assert report["position"]["key"] == expected
+        assert report["position"]["sport"] == sport
+        assert report["mix"]["slices"], "and a real drill mix behind it"
+
+    def test_the_positions_endpoint_follows_the_program_sport(self, client):
+        _, director, _ = self._program(client, "volleyball", "Libero")
+        body = client.get("/api/positions", headers=director).json()
+        assert body["sport"] == "volleyball"
+        assert {p["key"] for p in body["positions"]} == {
+            "setter", "hitter", "middle", "libero",
+        }
+
+    def test_a_program_never_sees_its_own_sport_in_the_transfer_notes(self, client):
+        """A hockey program being told wall sits help at ice hockey is the
+        noise the filter exists to remove."""
+        for sport in ("basketball", "soccer", "hockey", "gymnastics", "tennis"):
+            body = client.get("/api/drills", params={"sport": sport}).json()
+            for drill in body["drills"]:
+                for entry in drill["transfers"]:
+                    resolved = sports_mod.normalize(entry["sport"])
+                    assert not resolved or resolved.key != sport, (sport, entry)

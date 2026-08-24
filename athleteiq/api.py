@@ -234,8 +234,20 @@ def create_org(body: CreateOrgRequest, store: Store = Depends(get_store)) -> dic
 
     Open by design so a program can self-serve. In a real deployment this sits
     behind whatever signup/billing gate the business needs.
+
+    The sport is normalised rather than stored verbatim: a director who types
+    "Girls Lacrosse" or "B-Ball" into a field they think is free text would
+    otherwise get a program whose sport matches no position list, no drill
+    emphasis and no transfer filter -- broken in three places at once, silently.
     """
-    org_id = store.create_org(body.name, body.sport)
+    resolved = sports_mod.normalize(body.sport)
+    if resolved is None:
+        known = ", ".join(s.label for s in sports_mod.CATALOG)
+        raise HTTPException(
+            status_code=400,
+            detail=f"{body.sport!r} is not a sport we know. Pick one of: {known}",
+        )
+    org_id = store.create_org(body.name, resolved.key)
     director = store.create_user(org_id, "director", body.director_name)
     return {"org_id": org_id, "director": director}
 
@@ -2006,6 +2018,26 @@ def set_athlete_sports(
     )
     profile = benchmarks_mod.sport_profile(store.conn, athlete_id)
     return {"sports": saved, "profile": profile.to_dict()}
+
+
+@app.get("/api/sports/catalog")
+def sports_catalog() -> dict[str, Any]:
+    """Every sport a program can sign up as, for the signup dropdown.
+
+    Public and unauthenticated: it is the list you need *before* you have an
+    account. Each entry says whether positions are modelled for it, so the
+    signup form can be honest rather than promising a position picker that
+    turns out to be empty.
+    """
+    return {
+        "sports": [
+            {
+                **sport.to_dict(),
+                "positions": len(positions_mod.for_sport(sport.key)),
+            }
+            for sport in sports_mod.CATALOG
+        ]
+    }
 
 
 @app.get("/api/positions")

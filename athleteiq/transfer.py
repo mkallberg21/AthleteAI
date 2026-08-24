@@ -25,6 +25,8 @@ Two rules keep it honest:
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from . import sports
 from typing import Any
 
 
@@ -99,6 +101,52 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Any sport", "it is a warm-up — feet and arms on the same beat "
                               "before you do anything harder"),
     ),
+    "gen_lunge": (
+        Transfer("Soccer", "every stride is one leg holding you up on its own"),
+        Transfer("Basketball", "stepping through contact without losing your balance"),
+        Transfer("Track", "the single-leg strength sprinting is built on"),
+        Transfer("Gymnastics", "landing on one foot and staying there"),
+    ),
+    "gen_glute_bridge": (
+        Transfer("Track", "the back of your legs is what makes you fast, not the front"),
+        Transfer("Soccer", "the muscle that pulls up lame in the 80th minute"),
+        Transfer("Swimming", "the kick comes from your hips"),
+        Transfer("Football", "driving forward from a low position"),
+    ),
+    "gen_mountain_climber": (
+        Transfer("Wrestling", "scrambling on the mat with your hands down"),
+        Transfer("Basketball", "getting back on defence after a turnover"),
+        Transfer("Rugby", "getting off the floor and back into the line"),
+    ),
+    "gen_tuck_jump": (
+        Transfer("Volleyball", "the block jump, and the one straight after it"),
+        Transfer("Basketball", "going up twice for the same rebound"),
+        Transfer("Cheer", "getting the height to finish a skill cleanly"),
+        Transfer("Gymnastics", "the pop off the floor a tumbling pass needs"),
+    ),
+    "gen_dead_bug": (
+        Transfer("Gymnastics", "keeping your middle still while your limbs move"),
+        Transfer("Dance", "control, which is what makes a line look effortless"),
+        Transfer("Swimming", "not wriggling — a wriggle is drag"),
+    ),
+    "gen_wall_sit": (
+        Transfer("Skiing & Snowboarding", "this is literally the position, for a whole run"),
+        Transfer("Ice Hockey", "the low stance you have to hold a whole shift"),
+        Transfer("Tennis", "staying loaded and ready between points"),
+        Transfer("Basketball", "a defensive stance that does not stand up when you tire"),
+    ),
+    "gen_hollow_hold": (
+        Transfer("Gymnastics", "the shape almost every skill starts and finishes in"),
+        Transfer("Swimming", "holding your body flat instead of dragging"),
+        Transfer("Diving", "the tight line that stops a splash"),
+        Transfer("Cheer", "staying rigid while somebody else is holding you up"),
+    ),
+    "gen_side_plank": (
+        Transfer("Tennis", "a groundstroke is your middle rotating, not your arm"),
+        Transfer("Baseball", "throwing across your body without giving anything away"),
+        Transfer("Ice Hockey", "taking a hit along the boards and staying up"),
+        Transfer("Rugby", "staying on your feet in contact"),
+    ),
     # Deliberately short. These are stick-skill drills, and the honest transfer
     # is hand-eye, not "it helps everywhere".
     "lax_wall_ball": (
@@ -130,15 +178,21 @@ def for_drill(
     keeps the rest of the list visible, since part of the point is to make a
     single-sport kid curious about a sport they have not tried.
     """
-    home = (home_sport or "").strip().lower()
-    out = [t for t in TRANSFERS.get(drill_key, ()) if t.sport.strip().lower() != home]
+    # Both sides go through the sport catalog rather than being compared as
+    # strings. A program's sport is stored as a key (`cross_country`,
+    # `hockey`), these notes are written as labels ("Track", "Ice Hockey"),
+    # and a plain compare quietly shows a hockey program "Ice Hockey" in its
+    # own list -- the exact noise this filter exists to remove.
+    def _key(name: str | None) -> str:
+        resolved = sports.normalize(name)
+        return resolved.key if resolved else (name or "").strip().lower()
 
-    mine = {(name or "").strip().lower() for name in (plays or [])}
+    home = _key(home_sport)
+    out = [t for t in TRANSFERS.get(drill_key, ()) if _key(t.sport) != home]
+
+    mine = {_key(name) for name in (plays or []) if name}
     if mine:
-        out = [
-            Transfer(t.sport, t.why, plays=t.sport.strip().lower() in mine)
-            for t in out
-        ]
+        out = [Transfer(t.sport, t.why, plays=_key(t.sport) in mine) for t in out]
         out.sort(key=lambda t: not t.plays)
     return out[:limit] if limit else out
 

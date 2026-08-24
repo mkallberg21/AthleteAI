@@ -518,7 +518,288 @@ PLANK = DrillSpec(
 )
 
 
+# ---------------------------------------------------------------------------
+# Broader bodyweight work
+#
+# Added when the product went multi-sport. Every one of these is a bodyweight
+# movement with an unambiguous pose signal -- which is exactly why the list
+# does not contain dribbling, juggling, serving or shooting. Those need the
+# ball tracked, not the body, and a drill that miscounts is worse than one that
+# does not exist. Sport-specific *skill* work is coached through film and
+# assignments instead.
+# ---------------------------------------------------------------------------
+
+GEN_LUNGE = DrillSpec(
+    key="gen_lunge",
+    name="Alternating Lunges",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.REPS,
+    description="Step forward, knee down, drive back. Counts each leg.",
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_hip", "left_knee", "left_ankle"),
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        down_threshold=105.0,
+        up_threshold=158.0,
+        min_rep_ms=600,
+        max_rep_ms=6_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.1, daily_rep_cap=400, diminishing_after_reps=140),
+    validation=ValidationSpec(max_reps_per_second=1.4, min_reps=6),
+    setup_hint="Side-on, hips and both knees in frame.",
+    quality=QualitySpec(
+        target_rom=72.0,
+        tempo_min_ms=700,
+        tempo_max_ms=3_500,
+        w_consistency=0.30, w_depth=0.40, w_tempo=0.10, w_endurance=0.20,
+    ),
+    load=LoadSpec(load_per_rep=1.2, tissue=Tissue.LOWER_BODY),
+)
+
+GEN_GLUTE_BRIDGE = DrillSpec(
+    key="gen_glute_bridge",
+    name="Glute Bridges",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.REPS,
+    description="Hips up until shoulders, hips and knees line up. Counts each lift.",
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_shoulder", "left_hip", "left_knee"),
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        down_threshold=118.0,
+        up_threshold=163.0,
+        min_rep_ms=600,
+        max_rep_ms=6_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.9, daily_rep_cap=400, diminishing_after_reps=150),
+    validation=ValidationSpec(max_reps_per_second=1.5, min_reps=6),
+    setup_hint="Side-on, lying down, knees bent and hips in frame.",
+    quality=QualitySpec(
+        target_rom=58.0,
+        tempo_min_ms=700,
+        tempo_max_ms=3_500,
+        w_consistency=0.30, w_depth=0.40, w_tempo=0.10, w_endurance=0.20,
+    ),
+    load=LoadSpec(load_per_rep=0.8, tissue=Tissue.LOWER_BODY),
+)
+
+GEN_MOUNTAIN_CLIMBER = DrillSpec(
+    key="gen_mountain_climber",
+    name="Mountain Climbers",
+    sport="general",
+    category=Category.CONDITIONING,
+    metric=Metric.REPS,
+    description="Knees driving to the chest from a plank. Counts each drive.",
+    signal=SignalSpec(
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_knee",
+        reference="left_hip",
+        # Fast oscillation, so smoothing stays light for the same reason squat
+        # jumps needed it: a heavy filter eats the amplitude and the signal
+        # never falls back far enough to re-arm.
+        smoothing=0.45,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.05,
+        up_threshold=0.28,
+        min_rep_ms=260,
+        max_rep_ms=3_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.5, daily_rep_cap=600, diminishing_after_reps=200),
+    validation=ValidationSpec(max_reps_per_second=3.5, min_reps=10),
+    setup_hint="Side-on in a plank, hips and knees in frame.",
+    quality=QualitySpec(
+        # 0.40 rather than the 0.33 first guessed: the calibration harness
+        # measures a textbook knee drive at ~0.42, and a target below what a
+        # perfect rep scores would hand out full depth for a half rep.
+        target_rom=0.40,
+        tempo_min_ms=280,
+        tempo_max_ms=1_600,
+        w_consistency=0.35, w_depth=0.30, w_tempo=0.10, w_endurance=0.25,
+    ),
+    load=LoadSpec(load_per_rep=0.5, load_per_minute=2.0, tissue=Tissue.WHOLE_BODY),
+)
+
+GEN_TUCK_JUMP = DrillSpec(
+    key="gen_tuck_jump",
+    name="Tuck Jumps",
+    sport="general",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description="Jump and pull both knees up. Counts each landing.",
+    # Same light smoothing as squat jumps, and for the same reason.
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.45),
+    counter=CounterSpec(
+        down_threshold=0.42,
+        up_threshold=1.00,
+        min_rep_ms=450,
+        max_rep_ms=4_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=2.0, daily_rep_cap=200, diminishing_after_reps=60),
+    validation=ValidationSpec(max_reps_per_second=2.0, min_reps=5),
+    setup_hint="Side-on, full body in frame at the top of the jump.",
+    quality=QualitySpec(
+        target_rom=0.68,
+        tempo_min_ms=550,
+        tempo_max_ms=2_500,
+        w_consistency=0.25, w_depth=0.35, w_tempo=0.10, w_endurance=0.30,
+    ),
+    load=LoadSpec(
+        # The highest impact per rep in the catalog alongside squat jumps.
+        load_per_rep=2.4,
+        tissue=Tissue.LOWER_BODY,
+    ),
+)
+
+GEN_DEAD_BUG = DrillSpec(
+    key="gen_dead_bug",
+    name="Dead Bugs",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.REPS,
+    description="Opposite arm and leg out, slow and controlled. Counts each extension.",
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_shoulder", "left_hip", "left_knee"),
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        down_threshold=105.0,
+        up_threshold=158.0,
+        min_rep_ms=900,
+        max_rep_ms=8_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=120),
+    validation=ValidationSpec(max_reps_per_second=1.0, min_reps=6),
+    setup_hint="Side-on, lying on your back with hips and knees in frame.",
+    quality=QualitySpec(
+        target_rom=66.0,
+        # Rushing this one is the whole failure mode, so the tempo window is
+        # deliberately slow and the consistency weight high.
+        tempo_min_ms=1_000,
+        tempo_max_ms=5_000,
+        w_consistency=0.40, w_depth=0.30, w_tempo=0.15, w_endurance=0.15,
+    ),
+    load=LoadSpec(load_per_rep=0.6, tissue=Tissue.CORE),
+)
+
+GEN_WALL_SIT = DrillSpec(
+    key="gen_wall_sit",
+    name="Wall Sit",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Timed hold against a wall. The clock runs while the knees stay near "
+        "a right angle, so sliding up pauses it."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_hip", "left_knee", "left_ankle"),
+        smoothing=0.40,
+    ),
+    counter=CounterSpec(
+        # Hold drills use the thresholds as a valid band rather than a rep
+        # cycle: the clock runs while the knee angle sits inside it.
+        down_threshold=70.0,
+        up_threshold=125.0,
+        min_rep_ms=1_000,
+        max_rep_ms=600_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=26.0),
+    validation=ValidationSpec(min_reps=0),
+    setup_hint="Side-on, back against a wall, hips and knees in frame.",
+    quality=QualitySpec(
+        target_rom=1.0,
+        tempo_min_ms=1_000,
+        tempo_max_ms=600_000,
+        w_consistency=0.30, w_depth=0.40, w_tempo=0.0, w_endurance=0.30,
+    ),
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=7.0, tissue=Tissue.LOWER_BODY),
+)
+
+GEN_HOLLOW_HOLD = DrillSpec(
+    key="gen_hollow_hold",
+    name="Hollow Hold",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Timed hold on your back, shoulders and legs off the floor. The clock "
+        "stops when your feet or shoulders drop."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_shoulder", "left_hip", "left_knee"),
+        smoothing=0.40,
+    ),
+    counter=CounterSpec(
+        down_threshold=118.0,
+        up_threshold=168.0,
+        min_rep_ms=1_000,
+        max_rep_ms=600_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=30.0),
+    validation=ValidationSpec(min_reps=0),
+    setup_hint="Side-on, lying on your back with your whole body in frame.",
+    quality=QualitySpec(
+        target_rom=1.0,
+        tempo_min_ms=1_000,
+        tempo_max_ms=600_000,
+        w_consistency=0.30, w_depth=0.40, w_tempo=0.0, w_endurance=0.30,
+    ),
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=6.0, tissue=Tissue.CORE),
+)
+
+GEN_SIDE_PLANK = DrillSpec(
+    key="gen_side_plank",
+    name="Side Plank",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Timed hold on one forearm. The clock runs while your hips stay up "
+        "in a straight line."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_shoulder", "left_hip", "left_ankle"),
+        smoothing=0.40,
+    ),
+    counter=CounterSpec(
+        down_threshold=155.0,
+        up_threshold=200.0,
+        min_rep_ms=1_000,
+        max_rep_ms=600_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=28.0),
+    validation=ValidationSpec(min_reps=0),
+    setup_hint="Facing the camera, on one forearm, whole body in frame.",
+    quality=QualitySpec(
+        target_rom=1.0,
+        tempo_min_ms=1_000,
+        tempo_max_ms=600_000,
+        w_consistency=0.30, w_depth=0.40, w_tempo=0.0, w_endurance=0.30,
+    ),
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=5.5, tissue=Tissue.CORE),
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
+    GEN_LUNGE,
+    GEN_GLUTE_BRIDGE,
+    GEN_MOUNTAIN_CLIMBER,
+    GEN_TUCK_JUMP,
+    GEN_DEAD_BUG,
+    GEN_WALL_SIT,
+    GEN_HOLLOW_HOLD,
+    GEN_SIDE_PLANK,
     WALL_BALL,
     QUICK_STICK,
     PUSH_UP,

@@ -59,6 +59,25 @@
     <button class="secondary" id="redeem">Create parent account</button>
   </div>
 
+  <div class="card">
+    <h2>Starting a program?</h2>
+    <p class="small muted">
+      Set up your club or school here. Pick your sport and the app fits itself
+      around it &mdash; positions, the drills it suggests, and which other
+      sports it tells your athletes their training carries over into.
+    </p>
+    <label for="org-name">Program name</label>
+    <input id="org-name" placeholder="Northshore Lacrosse Club">
+    <label for="org-sport">Sport</label>
+    <select id="org-sport"></select>
+    <p class="small muted" id="org-sport-note" style="margin:-4px 0 8px"></p>
+    <label for="org-director">Your name</label>
+    <input id="org-director" placeholder="Dana Pierce" autocomplete="name">
+    <div id="oerr" class="err hidden"></div>
+    <button class="secondary" id="create-org">Create program</button>
+    <div id="org-token" class="small hidden" style="margin-top:10px"></div>
+  </div>
+
   <p class="small muted" style="text-align:center">
     Coaches and directors sign in with the same code and land on the dashboard.
   </p>
@@ -67,7 +86,58 @@
 <script type="module">
 import { api, setToken } from './api.js';
 
+const $ = (id) => document.getElementById(id);
 const tokenInput = document.getElementById('token');
+
+// The sport list is public, because you need it before you have an account.
+(async () => {
+  try {
+    const { sports } = await api('/api/sports/catalog');
+    $('org-sport').innerHTML = sports
+      .map((s) => `<option value="${s.key}" data-positions="${s.positions}">${s.label}</option>`)
+      .join('');
+    describeSport();
+  } catch { $('org-sport').innerHTML = '<option value="lacrosse">Lacrosse</option>'; }
+})();
+
+// Said up front rather than discovered later: a sport with no position model
+// still works, it just does not offer a position picker.
+function describeSport() {
+  const chosen = $('org-sport').selectedOptions[0];
+  if (!chosen) return;
+  const count = Number(chosen.dataset.positions || 0);
+  $('org-sport-note').textContent = count
+    ? `${count} positions, each with its own suggested mix of work.`
+    : 'No positions modelled for this one yet — athletes get the all-round plan.';
+}
+
+$('org-sport').addEventListener('change', describeSport);
+
+$('create-org').addEventListener('click', async () => {
+  const name = $('org-name').value.trim();
+  const director = $('org-director').value.trim();
+  $('oerr').classList.add('hidden');
+  if (!name || !director) {
+    $('oerr').textContent = 'A program name and your name, please.';
+    $('oerr').classList.remove('hidden');
+    return;
+  }
+  try {
+    const res = await api('/api/orgs', {
+      method: 'POST',
+      body: { name, sport: $('org-sport').value, director_name: director },
+    });
+    // Shown once and never retrievable -- only a hash is stored.
+    $('org-token').innerHTML =
+      `<b>${name}</b> is set up. This is your director code &mdash; copy it now,
+       it is not shown again:<br>
+       <code style="word-break:break-all">${res.director.token}</code>`;
+    $('org-token').classList.remove('hidden');
+  } catch (e) {
+    $('oerr').textContent = e.message;
+    $('oerr').classList.remove('hidden');
+  }
+});
 const errEl = document.getElementById('err');
 const goBtn = document.getElementById('go');
 

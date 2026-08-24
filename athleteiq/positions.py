@@ -84,6 +84,20 @@ class Position:
         }
 
 
+def mix(**weights: float) -> dict[str, float]:
+    """Turn relative weights into shares of solo time that sum to 1.
+
+    Written this way because the alternative is a hundred hand-balanced dicts
+    of decimals across sixteen sports, where one typo silently gives a
+    position a mix that adds up to 0.97 and nobody ever notices. Here the
+    numbers are read as "twice as much of this as that" and normalised.
+    """
+    total = sum(weights.values())
+    if total <= 0:
+        raise ValueError("a position needs at least one drill weighted")
+    return {key: value / total for key, value in weights.items()}
+
+
 LACROSSE: tuple[Position, ...] = (
     Position(
         key="attack", label="Attack", sport="lacrosse", group="offense",
@@ -178,7 +192,407 @@ GENERIC = Position(
     focus="General athleticism: move well, in every direction.",
 )
 
-BY_SPORT: dict[str, tuple[Position, ...]] = {"lacrosse": LACROSSE}
+# ---------------------------------------------------------------------------
+# The other sports
+#
+# Weak-hand parity is a lacrosse-only comparison: it is computed from the
+# left/right split a drill reports, and the only drills that report one are the
+# two stick drills. Setting `offhand_matters=False` everywhere else is not a
+# claim that bilateral skill does not matter in basketball -- it is a refusal to
+# rank children on a number that would be zero for all of them.
+# ---------------------------------------------------------------------------
+
+def _pos(key, label, sport, group, aliases, emphasis, focus, plural=""):
+    return Position(
+        key=key, label=label, sport=sport, group=group, aliases=aliases,
+        emphasis=emphasis, focus=focus, plural_label=plural, offhand_matters=False,
+    )
+
+
+BASKETBALL: tuple[Position, ...] = (
+    _pos("guard", "Guard", "basketball", "perimeter",
+         ("guard", "point guard", "pg", "shooting guard", "sg", "combo guard", "g", "1", "2"),
+         mix(gen_lateral_bound=5, gen_high_knees=3, gen_squat_jump=3, gen_lunge=3,
+             gen_wall_sit=2, gen_plank=2, gen_mountain_climber=2, gen_squat=2),
+         "Change direction, then change it again. Low, quick and never upright.",
+         "guards"),
+    _pos("wing", "Wing", "basketball", "perimeter",
+         ("wing", "forward", "small forward", "sf", "3", "swing"),
+         mix(gen_lateral_bound=4, gen_squat_jump=4, gen_lunge=3, gen_push_up=2,
+             gen_high_knees=2, gen_plank=2, gen_tuck_jump=2, gen_squat=2),
+         "Guard anyone, rebound anyway. Jumping and lateral work together.",
+         "wings"),
+    _pos("post", "Post", "basketball", "frontcourt",
+         ("post", "center", "centre", "c", "power forward", "pf", "4", "5", "big"),
+         mix(gen_squat=4, gen_squat_jump=4, gen_tuck_jump=3, gen_push_up=3,
+             gen_lunge=3, gen_side_plank=2, gen_glute_bridge=2, gen_lateral_bound=1),
+         "Hold your ground, then go up twice. Strength before anything else.",
+         "posts"),
+)
+
+SOCCER: tuple[Position, ...] = (
+    _pos("goalkeeper", "Goalkeeper", "soccer", "goalie",
+         ("goalkeeper", "keeper", "gk", "goalie", "goal", "1"),
+         mix(gen_lateral_bound=5, gen_squat_jump=3, gen_push_up=3, gen_lunge=3,
+             gen_side_plank=2, gen_plank=2, gen_burpee=2, gen_squat=2),
+         "Explode sideways off one foot, then get straight back up.",
+         "goalkeepers"),
+    _pos("defender", "Defender", "soccer", "defence",
+         ("defender", "defence", "defense", "centre back", "center back", "cb",
+          "full back", "fullback", "lb", "rb", "back", "d"),
+         mix(gen_lateral_bound=4, gen_squat=3, gen_lunge=3, gen_high_knees=3,
+             gen_glute_bridge=3, gen_squat_jump=2, gen_plank=2, gen_side_plank=2),
+         "Turn and go with someone quicker than you, over and over.",
+         "defenders"),
+    _pos("midfielder", "Midfielder", "soccer", "midfield",
+         ("midfielder", "midfield", "mid", "cm", "cdm", "cam", "m", "8", "6", "10"),
+         mix(gen_high_knees=4, gen_burpee=3, gen_lunge=3, gen_glute_bridge=3,
+             gen_squat=2, gen_mountain_climber=2, gen_plank=2, gen_lateral_bound=2),
+         "You run further than anyone on the pitch. Build the engine.",
+         "midfielders"),
+    _pos("forward", "Forward", "soccer", "attack",
+         ("forward", "striker", "st", "cf", "winger", "wing", "attacker", "9", "7", "11"),
+         mix(gen_squat_jump=4, gen_high_knees=4, gen_lateral_bound=3, gen_lunge=3,
+             gen_glute_bridge=3, gen_squat=2, gen_plank=1, gen_tuck_jump=1),
+         "First five yards, and being able to do it again in the 80th minute.",
+         "forwards"),
+)
+
+VOLLEYBALL: tuple[Position, ...] = (
+    _pos("setter", "Setter", "volleyball", "back",
+         ("setter", "s", "set"),
+         mix(gen_lateral_bound=4, gen_squat_jump=3, gen_push_up=3, gen_plank=3,
+             gen_lunge=3, gen_side_plank=2, gen_wall_sit=2, gen_dead_bug=2),
+         "Get to the ball early and be balanced when you arrive.",
+         "setters"),
+    _pos("hitter", "Hitter", "volleyball", "front",
+         ("hitter", "outside", "outside hitter", "oh", "opposite", "opp", "right side",
+          "rs", "attacker", "spiker"),
+         mix(gen_tuck_jump=5, gen_squat_jump=4, gen_squat=3, gen_lunge=2,
+             gen_side_plank=2, gen_hollow_hold=2, gen_glute_bridge=2, gen_push_up=1),
+         "Jump high, land safe, do it forty more times.",
+         "hitters"),
+    _pos("middle", "Middle Blocker", "volleyball", "front",
+         ("middle", "middle blocker", "mb", "middle hitter", "blocker"),
+         mix(gen_tuck_jump=5, gen_lateral_bound=4, gen_squat_jump=3, gen_squat=3,
+             gen_glute_bridge=2, gen_side_plank=2, gen_plank=1, gen_lunge=1),
+         "Sideways along the net, then straight up. Both, every rally.",
+         "middle blockers"),
+    _pos("libero", "Libero", "volleyball", "back",
+         ("libero", "l", "ds", "defensive specialist", "back row"),
+         mix(gen_lateral_bound=5, gen_wall_sit=3, gen_lunge=3, gen_mountain_climber=3,
+             gen_burpee=2, gen_plank=2, gen_squat=2, gen_high_knees=2),
+         "Low the whole time, and off the floor fast when you hit it.",
+         "liberos"),
+)
+
+BASEBALL_POSITIONS = (
+    ("pitcher", "Pitcher", ("pitcher", "p", "rhp", "lhp", "starter", "reliever"),
+     mix(gen_glute_bridge=4, gen_side_plank=4, gen_lunge=3, gen_dead_bug=3,
+         gen_squat=2, gen_plank=2, gen_push_up=1, gen_lateral_bound=1),
+     "Everything you throw comes up from the ground through your middle.",
+     "pitchers"),
+    ("catcher", "Catcher", ("catcher", "c", "backstop"),
+     mix(gen_wall_sit=5, gen_squat=4, gen_lunge=3, gen_lateral_bound=3,
+         gen_glute_bridge=2, gen_side_plank=2, gen_push_up=2, gen_plank=1),
+     "You are in a squat for two hours. Build legs that can take it.",
+     "catchers"),
+    ("infield", "Infield", ("infield", "infielder", "shortstop", "ss", "second base",
+                            "2b", "third base", "3b", "first base", "1b", "middle infield"),
+     mix(gen_lateral_bound=5, gen_wall_sit=3, gen_lunge=3, gen_side_plank=3,
+         gen_squat=2, gen_mountain_climber=2, gen_glute_bridge=2, gen_plank=1),
+     "First step sideways, low hands, and a throw from anywhere.",
+     "infielders"),
+    ("outfield", "Outfield", ("outfield", "outfielder", "center field", "cf",
+                              "left field", "lf", "right field", "rf"),
+     mix(gen_high_knees=4, gen_glute_bridge=4, gen_lunge=3, gen_squat_jump=3,
+         gen_lateral_bound=3, gen_side_plank=2, gen_squat=1, gen_plank=1),
+     "Long sprints from standing, then throw hard at the end of one.",
+     "outfielders"),
+)
+
+BASEBALL: tuple[Position, ...] = tuple(
+    _pos(k, label, "baseball", "field" if k in ("infield", "outfield") else k,
+         aliases, emphasis, focus, plural)
+    for k, label, aliases, emphasis, focus, plural in BASEBALL_POSITIONS
+)
+
+SOFTBALL: tuple[Position, ...] = tuple(
+    _pos(k, label, "softball", "field" if k in ("infield", "outfield") else k,
+         aliases, emphasis, focus, plural)
+    for k, label, aliases, emphasis, focus, plural in BASEBALL_POSITIONS
+)
+
+CHEER: tuple[Position, ...] = (
+    _pos("base", "Base", "cheer", "bases",
+         ("base", "main base", "side base", "bases"),
+         mix(gen_squat=5, gen_wall_sit=3, gen_lunge=3, gen_push_up=3,
+             gen_side_plank=3, gen_glute_bridge=2, gen_plank=2, gen_dead_bug=1),
+         "Someone else's safety is your legs and your grip. Strength first.",
+         "bases"),
+    _pos("flyer", "Flyer", "cheer", "flyers",
+         ("flyer", "flier", "top girl", "top"),
+         mix(gen_hollow_hold=5, gen_side_plank=4, gen_dead_bug=3, gen_plank=3,
+             gen_lunge=2, gen_glute_bridge=2, gen_wall_sit=2, gen_tuck_jump=1),
+         "Stay tight and still. Everything is core control and balance.",
+         "flyers"),
+    _pos("backspot", "Backspot", "cheer", "bases",
+         ("backspot", "back spot", "back", "spotter"),
+         mix(gen_squat=4, gen_glute_bridge=3, gen_side_plank=3, gen_push_up=3,
+             gen_plank=3, gen_lunge=3, gen_dead_bug=2, gen_wall_sit=2),
+         "You catch what goes wrong. Strong back, strong middle, quick feet.",
+         "backspots"),
+    _pos("tumbler", "Tumbler", "cheer", "tumbling",
+         ("tumbler", "tumbling", "tumble"),
+         mix(gen_hollow_hold=4, gen_tuck_jump=4, gen_squat_jump=3, gen_push_up=3,
+             gen_dead_bug=2, gen_lunge=2, gen_glute_bridge=2, gen_side_plank=2),
+         "Pop off the floor, then hold a shape in the air.",
+         "tumblers"),
+)
+
+DANCE: tuple[Position, ...] = (
+    _pos("ballet", "Ballet", "dance", "technique",
+         ("ballet", "classical", "pointe"),
+         mix(gen_lunge=4, gen_hollow_hold=3, gen_glute_bridge=3, gen_dead_bug=3,
+             gen_side_plank=3, gen_wall_sit=2, gen_plank=2, gen_squat=2),
+         "Control and single-leg strength. Effortless is built, not born.",
+         "ballet dancers"),
+    _pos("contemporary", "Contemporary", "dance", "technique",
+         ("contemporary", "modern", "lyrical", "jazz"),
+         mix(gen_lunge=4, gen_glute_bridge=3, gen_hollow_hold=3, gen_side_plank=3,
+             gen_squat_jump=2, gen_dead_bug=2, gen_push_up=2, gen_plank=2),
+         "Getting to the floor and back up without it costing you anything.",
+         "contemporary dancers"),
+    _pos("hip_hop", "Hip Hop", "dance", "power",
+         ("hip hop", "hiphop", "street", "breaking", "b boy", "b girl"),
+         mix(gen_squat_jump=4, gen_push_up=4, gen_mountain_climber=3, gen_plank=3,
+             gen_burpee=2, gen_lunge=2, gen_hollow_hold=2, gen_side_plank=2),
+         "Power off the floor and weight through your hands.",
+         "hip hop dancers"),
+    _pos("pom", "Pom & Team", "dance", "power",
+         ("pom", "poms", "dance team", "kick", "drill team"),
+         mix(gen_tuck_jump=4, gen_lunge=3, gen_hollow_hold=3, gen_squat_jump=3,
+             gen_glute_bridge=3, gen_dead_bug=2, gen_side_plank=2, gen_squat=1),
+         "Sharp, high, and identical to the seven people next to you.",
+         "pom dancers"),
+)
+
+SWIMMING: tuple[Position, ...] = (
+    _pos("sprint", "Sprint Freestyle", "swimming", "sprint",
+         ("sprint", "sprinter", "freestyle", "free", "50", "100", "sprint free"),
+         mix(gen_squat_jump=4, gen_pull_up=4, gen_hollow_hold=3, gen_push_up=3,
+             gen_glute_bridge=2, gen_dead_bug=2, gen_side_plank=2, gen_squat=2),
+         "The start and the walls. Explosive legs and a strong pull.",
+         "sprinters"),
+    _pos("distance", "Distance", "swimming", "distance",
+         ("distance", "distance free", "500", "1000", "1650", "mid distance", "open water"),
+         mix(gen_pull_up=4, gen_hollow_hold=4, gen_plank=3, gen_dead_bug=3,
+             gen_glute_bridge=3, gen_push_up=2, gen_side_plank=2, gen_squat=1),
+         "Hold your line when you are tired. That is where races are lost.",
+         "distance swimmers"),
+    _pos("stroke", "Stroke", "swimming", "stroke",
+         ("stroke", "butterfly", "fly", "backstroke", "back", "breaststroke", "breast", "im"),
+         mix(gen_pull_up=4, gen_hollow_hold=4, gen_push_up=3, gen_side_plank=3,
+             gen_glute_bridge=3, gen_squat_jump=2, gen_dead_bug=2, gen_plank=1),
+         "Shoulders that last and a middle that does not wriggle.",
+         "stroke swimmers"),
+)
+
+TRACK: tuple[Position, ...] = (
+    _pos("sprints", "Sprints", "track", "speed",
+         ("sprints", "sprint", "sprinter", "100", "200", "400", "relay", "hurdles", "hurdler"),
+         mix(gen_high_knees=5, gen_glute_bridge=4, gen_squat_jump=3, gen_lunge=3,
+             gen_hollow_hold=2, gen_squat=2, gen_dead_bug=1, gen_side_plank=1),
+         "Knees up, ground contact short, hamstrings strong enough to take it.",
+         "sprinters"),
+    _pos("middle_distance", "Middle Distance", "track", "endurance",
+         ("middle distance", "mid distance", "800", "1500", "mile", "1600"),
+         mix(gen_high_knees=4, gen_lunge=4, gen_glute_bridge=3, gen_burpee=2,
+             gen_plank=2, gen_side_plank=2, gen_dead_bug=2, gen_squat=2),
+         "Form that holds when it hurts, and legs that hold you up on one foot.",
+         "middle distance runners"),
+    _pos("distance", "Distance", "track", "endurance",
+         ("distance", "3200", "5000", "10000", "3k", "5k", "10k", "steeple"),
+         mix(gen_lunge=4, gen_glute_bridge=4, gen_side_plank=3, gen_dead_bug=3,
+             gen_plank=2, gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
+         "Single-leg strength and hip control. That is what stops injuries.",
+         "distance runners"),
+    _pos("jumps", "Jumps", "track", "power",
+         ("jumps", "jumper", "long jump", "high jump", "triple jump", "pole vault", "vault"),
+         mix(gen_squat_jump=5, gen_tuck_jump=4, gen_lunge=3, gen_glute_bridge=3,
+             gen_hollow_hold=2, gen_squat=2, gen_lateral_bound=2, gen_side_plank=1),
+         "One foot, all your speed, straight up. Land it safely too.",
+         "jumpers"),
+    _pos("throws", "Throws", "track", "power",
+         ("throws", "thrower", "shot", "shot put", "discus", "javelin", "hammer"),
+         mix(gen_squat=5, gen_side_plank=4, gen_push_up=3, gen_glute_bridge=3,
+             gen_dead_bug=3, gen_lunge=2, gen_squat_jump=2, gen_pull_up=2),
+         "Legs and rotation. The arm is the last thing that happens.",
+         "throwers"),
+)
+
+FOOTBALL: tuple[Position, ...] = (
+    _pos("quarterback", "Quarterback", "football", "skill",
+         ("quarterback", "qb", "signal caller"),
+         mix(gen_side_plank=4, gen_lunge=3, gen_glute_bridge=3, gen_dead_bug=3,
+             gen_lateral_bound=3, gen_squat=2, gen_plank=2, gen_push_up=1),
+         "Throw from a base that does not move, and move when it has to.",
+         "quarterbacks"),
+    _pos("skill", "Running Back & Receiver", "football", "skill",
+         ("running back", "rb", "halfback", "tailback", "fullback", "wide receiver",
+          "wr", "receiver", "tight end", "te", "slot", "athlete"),
+         mix(gen_lateral_bound=4, gen_high_knees=4, gen_squat_jump=3, gen_lunge=3,
+             gen_glute_bridge=3, gen_squat=2, gen_plank=1, gen_mountain_climber=1),
+         "Cut without slowing down, and be there again the next play.",
+         "skill players"),
+    _pos("line", "Line", "football", "line",
+         ("offensive line", "o line", "ol", "lineman", "line", "guard", "tackle",
+          "center", "defensive line", "d line", "dl", "defensive end", "de", "nose"),
+         mix(gen_squat=5, gen_push_up=4, gen_lunge=3, gen_wall_sit=3,
+             gen_glute_bridge=3, gen_side_plank=2, gen_plank=2, gen_burpee=1),
+         "Low, strong, and still strong in the fourth quarter.",
+         "linemen"),
+    _pos("linebacker", "Linebacker", "football", "front_seven",
+         ("linebacker", "lb", "mike", "will", "sam", "backer"),
+         mix(gen_lateral_bound=4, gen_squat=3, gen_burpee=3, gen_lunge=3,
+             gen_mountain_climber=3, gen_squat_jump=2, gen_plank=2, gen_push_up=2),
+         "Read it, then be somewhere else fast. Sideways more than forwards.",
+         "linebackers"),
+    _pos("defensive_back", "Defensive Back", "football", "secondary",
+         ("defensive back", "db", "cornerback", "corner", "cb", "safety", "free safety",
+          "strong safety", "nickel"),
+         mix(gen_lateral_bound=5, gen_high_knees=4, gen_squat_jump=3, gen_lunge=3,
+             gen_glute_bridge=3, gen_plank=1, gen_squat=1, gen_side_plank=1),
+         "Backpedal, flip your hips, and run with someone who knows where they are going.",
+         "defensive backs"),
+)
+
+GYMNASTICS: tuple[Position, ...] = (
+    _pos("all_around", "All Around", "gymnastics", "all",
+         ("all around", "all-around", "aa", "all rounder"),
+         mix(gen_hollow_hold=4, gen_pull_up=4, gen_push_up=3, gen_tuck_jump=3,
+             gen_side_plank=2, gen_dead_bug=2, gen_lunge=2, gen_squat_jump=2),
+         "Everything at once. Hollow shape, pulling strength, and a pop off the floor.",
+         "all-arounders"),
+    _pos("bars", "Bars & Rings", "gymnastics", "upper",
+         ("bars", "uneven bars", "ub", "high bar", "rings", "parallel bars", "pommel"),
+         mix(gen_pull_up=6, gen_hollow_hold=4, gen_push_up=3, gen_dead_bug=2,
+             gen_side_plank=2, gen_plank=2, gen_glute_bridge=1),
+         "Your whole body hangs off your hands, and stays in one shape while it does.",
+         "bars gymnasts"),
+    _pos("floor_vault", "Floor & Vault", "gymnastics", "power",
+         ("floor", "vault", "tumbling", "fx", "vt"),
+         mix(gen_tuck_jump=5, gen_squat_jump=4, gen_hollow_hold=3, gen_lunge=3,
+             gen_push_up=2, gen_glute_bridge=2, gen_dead_bug=2, gen_side_plank=1),
+         "Speed into power, then a shape held tight in the air.",
+         "floor gymnasts"),
+    _pos("beam", "Beam", "gymnastics", "balance",
+         ("beam", "balance beam", "bb"),
+         mix(gen_lunge=4, gen_hollow_hold=4, gen_dead_bug=3, gen_side_plank=3,
+             gen_glute_bridge=3, gen_plank=2, gen_tuck_jump=2, gen_wall_sit=1),
+         "Single-leg control and a middle that does not wobble.",
+         "beam gymnasts"),
+)
+
+TENNIS: tuple[Position, ...] = (
+    _pos("singles", "Singles", "tennis", "court",
+         ("singles", "single", "baseline", "baseliner"),
+         mix(gen_lateral_bound=5, gen_side_plank=4, gen_lunge=3, gen_high_knees=3,
+             gen_glute_bridge=2, gen_wall_sit=2, gen_dead_bug=2, gen_squat=1),
+         "Cover the width of the court, then hit a ball while balanced.",
+         "singles players"),
+    _pos("doubles", "Doubles", "tennis", "court",
+         ("doubles", "double", "net", "serve volley", "volleyer"),
+         mix(gen_lateral_bound=4, gen_squat_jump=3, gen_side_plank=3, gen_lunge=3,
+             gen_wall_sit=3, gen_mountain_climber=2, gen_push_up=2, gen_plank=2),
+         "Short, sharp, reactive. Most of it happens inside two steps.",
+         "doubles players"),
+)
+
+CROSS_COUNTRY: tuple[Position, ...] = (
+    _pos("distance", "Distance Runner", "cross_country", "endurance",
+         ("distance", "runner", "distance runner", "harrier", "5k", "varsity", "jv"),
+         mix(gen_lunge=4, gen_glute_bridge=4, gen_side_plank=3, gen_dead_bug=3,
+             gen_plank=2, gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
+         "Hills and single-leg strength. Most running injuries start at the hip.",
+         "distance runners"),
+)
+
+HOCKEY: tuple[Position, ...] = (
+    _pos("forward", "Forward", "hockey", "skaters",
+         ("forward", "centre", "center", "c", "winger", "wing", "lw", "rw", "f"),
+         mix(gen_lateral_bound=5, gen_wall_sit=3, gen_squat=3, gen_lunge=3,
+             gen_glute_bridge=3, gen_squat_jump=2, gen_side_plank=2, gen_plank=1),
+         "Skating is a sideways push. Build that, and legs that last a shift.",
+         "forwards"),
+    _pos("defence", "Defence", "hockey", "skaters",
+         ("defence", "defense", "defenceman", "defenseman", "d", "blue line", "blueliner"),
+         mix(gen_lateral_bound=5, gen_squat=4, gen_wall_sit=3, gen_glute_bridge=3,
+             gen_lunge=3, gen_side_plank=2, gen_push_up=2, gen_plank=1),
+         "Backwards as fast as most people go forwards, and strong in a battle.",
+         "defencemen"),
+    _pos("goaltender", "Goaltender", "hockey", "goalie",
+         ("goaltender", "goalie", "goal", "g", "netminder", "keeper"),
+         mix(gen_lateral_bound=5, gen_lunge=4, gen_wall_sit=3, gen_glute_bridge=3,
+             gen_side_plank=3, gen_dead_bug=2, gen_squat=2, gen_mountain_climber=2),
+         "Down and up, sideways, on one hip. Groins and hips need real work.",
+         "goaltenders"),
+)
+
+RUGBY: tuple[Position, ...] = (
+    _pos("front_row", "Front Row", "rugby", "forwards",
+         ("front row", "prop", "hooker", "loosehead", "tighthead", "1", "2", "3"),
+         mix(gen_squat=5, gen_push_up=4, gen_wall_sit=3, gen_glute_bridge=3,
+             gen_side_plank=3, gen_lunge=2, gen_plank=2, gen_pull_up=1),
+         "Scrummaging is a squat against another person. Legs, back, neck.",
+         "front rowers"),
+    _pos("second_row", "Second & Back Row", "rugby", "forwards",
+         ("second row", "lock", "back row", "flanker", "flank", "number 8", "no 8",
+          "4", "5", "6", "7", "8"),
+         mix(gen_squat=4, gen_burpee=3, gen_pull_up=3, gen_lunge=3,
+             gen_mountain_climber=3, gen_push_up=2, gen_squat_jump=2, gen_plank=2),
+         "Up and down all game. Get off the floor and into the next one.",
+         "forwards"),
+    _pos("half_back", "Half Backs", "rugby", "backs",
+         ("half back", "halfback", "scrum half", "scrumhalf", "fly half", "flyhalf",
+          "9", "10"),
+         mix(gen_lateral_bound=4, gen_side_plank=4, gen_lunge=3, gen_high_knees=3,
+             gen_glute_bridge=2, gen_dead_bug=2, gen_squat=2, gen_plank=2),
+         "Pass off both hands from anywhere, and be moving when you do it.",
+         "half backs"),
+    _pos("backs", "Centres & Back Three", "rugby", "backs",
+         ("centre", "center", "wing", "winger", "fullback", "full back", "back three",
+          "outside back", "11", "12", "13", "14", "15"),
+         mix(gen_high_knees=4, gen_lateral_bound=4, gen_squat_jump=3, gen_lunge=3,
+             gen_glute_bridge=3, gen_squat=2, gen_side_plank=2, gen_plank=1),
+         "Straight-line speed, and the ability to change your mind mid-stride.",
+         "backs"),
+)
+
+
+BY_SPORT: dict[str, tuple[Position, ...]] = {
+    "lacrosse": LACROSSE,
+    "basketball": BASKETBALL,
+    "soccer": SOCCER,
+    "volleyball": VOLLEYBALL,
+    "baseball": BASEBALL,
+    "softball": SOFTBALL,
+    "cheer": CHEER,
+    "dance": DANCE,
+    "swimming": SWIMMING,
+    "track": TRACK,
+    "football": FOOTBALL,
+    "gymnastics": GYMNASTICS,
+    "tennis": TENNIS,
+    "cross_country": CROSS_COUNTRY,
+    "hockey": HOCKEY,
+    "rugby": RUGBY,
+}
+
+#: Every position across every sport, for tests and admin tooling.
+ALL_POSITIONS: tuple[Position, ...] = tuple(
+    position for group in BY_SPORT.values() for position in group
+) + (GENERIC,)
 
 
 def for_sport(sport: str | None) -> tuple[Position, ...]:

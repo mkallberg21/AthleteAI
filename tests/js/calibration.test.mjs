@@ -56,7 +56,16 @@ const SWEEP = {
   gen_burpee:        { lo: 0.12,  hi: 0.92, kind: 'body' },
   gen_squat_jump:    { lo: 0.38,  hi: 1.05, kind: 'body' },
   gen_lateral_bound: { lo: -0.20, hi: 0.20, kind: 'ankles' },
+  gen_lunge:         { lo: 88,    hi: 168,  kind: 'knee' },
+  gen_glute_bridge:  { lo: 105,   hi: 172,  kind: 'hip' },
+  gen_mountain_climber: { lo: -0.10, hi: 0.34, kind: 'knee_rel' },
+  gen_tuck_jump:     { lo: 0.36,  hi: 1.08,  kind: 'body' },
+  gen_dead_bug:      { lo: 92,    hi: 168,  kind: 'hip' },
 };
+
+// Hold drills score time in a valid band rather than a rep cycle, so a swept
+// sine says nothing about them. They are covered by tests/test_drills.py.
+const HOLD_DRILLS = new Set(SPECS.filter((d) => d.metric === 'hold').map((d) => d.key));
 
 function frame(kind, v) {
   const pts = base();
@@ -81,6 +90,9 @@ function frame(kind, v) {
     pts[IDX.right_wrist] = { x: 0.58, y: 0.35 - v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'knee_h') {
     pts[IDX.left_knee] = { x: 0.46, y: 0.60 - v * TORSO, z: 0, visibility: 0.95 };
+  } else if (kind === 'knee_rel') {
+    // Knee height measured against the hip rather than the shoulders.
+    pts[IDX.left_knee] = { x: 0.46, y: 0.60 - v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'body') {
     const ground = 0.95;
     const hipY = ground - v * TORSO;
@@ -94,6 +106,16 @@ function frame(kind, v) {
   }
   return pts;
 }
+
+// A drill with no sweep entry used to be skipped in silence, which meant a
+// newly added drill was unguarded and looked green. Now it fails.
+test('every rep-counted drill has a calibration sweep', () => {
+  const missing = SPECS
+    .filter((d) => !HOLD_DRILLS.has(d.key) && !SWEEP[d.key])
+    .map((d) => d.key);
+  assert.deepEqual(missing, [],
+    `these drills are not calibration-tested: ${missing.join(', ')}`);
+});
 
 for (const drill of SPECS) {
   const sweep = SWEEP[drill.key];

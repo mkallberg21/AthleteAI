@@ -94,10 +94,15 @@ class TestTheRegistryIsInternallySound:
             assert pos.group in P.GROUP_LABELS
 
     def test_a_sport_with_no_model_gets_silence_not_a_guess(self):
-        """Soccer should not receive lacrosse emphasis with the labels changed."""
-        assert P.for_sport("soccer") == ()
-        assert P.normalize("striker", sport="soccer") is None
-        assert P.resolve("striker", sport="soccer").key == "general"
+        """Curling should not receive lacrosse emphasis with the labels changed.
+
+        This used to say soccer, which now has its own positions -- the whole
+        point of going multi-sport. The rule it protects is unchanged: an
+        unmodelled sport gets nothing rather than somebody else's positions.
+        """
+        assert P.for_sport("curling") == ()
+        assert P.normalize("skip", sport="curling") is None
+        assert P.resolve("skip", sport="curling").key == "general"
 
 
 class TestUnrecognised:
@@ -160,3 +165,94 @@ class TestCrossSportTransfer:
         from athleteiq import transfer
         assert transfer.for_drill("gen_nonexistent") == []
         assert transfer.blurb("gen_nonexistent") == ""
+
+
+class TestEverySportIsWiredUpProperly:
+    """The failure this catches is silent: a sport whose positions reference a
+    drill that does not exist, or whose weights do not add up, looks fine until
+    an athlete opens the app and sees an empty mix."""
+
+    SPORTS = (
+        "lacrosse", "basketball", "soccer", "volleyball", "baseball", "softball",
+        "cheer", "dance", "swimming", "track", "football", "gymnastics",
+        "tennis", "cross_country", "hockey", "rugby",
+    )
+
+    @pytest.mark.parametrize("sport", SPORTS)
+    def test_the_sport_has_positions(self, sport):
+        assert P.for_sport(sport), sport
+
+    @pytest.mark.parametrize("sport", SPORTS)
+    def test_the_sport_is_in_the_signup_catalog(self, sport):
+        from athleteiq import sports
+        assert sports.BY_KEY.get(sport) is not None, sport
+
+    def test_every_position_only_names_drills_that_exist(self):
+        for position in P.ALL_POSITIONS:
+            for key in position.emphasis:
+                assert key in DRILLS_BY_KEY, f"{position.sport}/{position.key} -> {key}"
+
+    def test_every_emphasis_sums_to_one(self):
+        for position in P.ALL_POSITIONS:
+            assert sum(position.emphasis.values()) == pytest.approx(1.0), position.key
+
+    def test_every_position_says_something_useful(self):
+        for position in P.ALL_POSITIONS:
+            assert len(position.focus) > 20, position.key
+            assert position.plural and position.plural != position.label
+
+    def test_no_alias_is_claimed_by_two_positions_in_the_same_sport(self):
+        """A shared alias silently sorts athletes into the wrong peer group."""
+        for sport, group in P.BY_SPORT.items():
+            owner: dict[str, str] = {}
+            for position in group:
+                for alias in (position.key, position.label, *position.aliases):
+                    cleaned = P._clean(alias)
+                    assert owner.get(cleaned, position.key) == position.key, \
+                        f"{sport}: {cleaned!r} claimed twice"
+                    owner[cleaned] = position.key
+
+    def test_the_same_shorthand_can_mean_different_things_in_different_sports(self):
+        """'C' is a centre in basketball and a catcher in baseball. Positions
+        are resolved per sport for exactly this reason."""
+        assert P.normalize("C", "basketball").key == "post"
+        assert P.normalize("C", "baseball").key == "catcher"
+        assert P.normalize("D", "lacrosse").key == "defense"
+        assert P.normalize("D", "hockey").key == "defence"
+
+    @pytest.mark.parametrize("sport,raw,expected", [
+        ("basketball", "PG", "guard"), ("basketball", "Small Forward", "wing"),
+        ("soccer", "GK", "goalkeeper"), ("soccer", "Striker", "forward"),
+        ("volleyball", "Libero", "libero"), ("volleyball", "OH", "hitter"),
+        ("baseball", "SS", "infield"), ("softball", "Pitcher", "pitcher"),
+        ("cheer", "Flyer", "flyer"), ("cheer", "Back Spot", "backspot"),
+        ("dance", "Hip Hop", "hip_hop"), ("swimming", "Butterfly", "stroke"),
+        ("track", "Shot Put", "throws"), ("track", "800", "middle_distance"),
+        ("football", "QB", "quarterback"), ("football", "Wide Receiver", "skill"),
+        ("gymnastics", "Uneven Bars", "bars"), ("tennis", "Doubles", "doubles"),
+        ("cross_country", "Runner", "distance"), ("hockey", "Goalie", "goaltender"),
+        ("rugby", "Prop", "front_row"), ("rugby", "Fullback", "backs"),
+    ])
+    def test_the_shorthand_a_coach_types(self, sport, raw, expected):
+        assert P.normalize(raw, sport).key == expected
+
+    def test_weak_hand_is_only_compared_where_a_drill_reports_it(self):
+        """Only the two stick drills report a left/right split, so ranking any
+        other sport on it would rank every child on zero."""
+        for position in P.ALL_POSITIONS:
+            if position.sport not in ("lacrosse", "general"):
+                assert position.offhand_matters is False, position.key
+
+    def test_a_sport_with_no_model_still_gets_honest_silence(self):
+        assert P.for_sport("underwater basket weaving") == ()
+        assert P.resolve("striker", sport="curling").key == "general"
+
+
+class TestTheMixHelper:
+
+    def test_it_normalises_relative_weights(self):
+        assert P.mix(a=3, b=1) == {"a": 0.75, "b": 0.25}
+
+    def test_it_refuses_an_empty_position(self):
+        with pytest.raises(ValueError):
+            P.mix()

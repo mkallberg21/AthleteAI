@@ -7,10 +7,19 @@ the browser on the athlete's device** — the video never leaves the phone. Only
 derived counts (reps, which hand, timing, confidence) are uploaded, scored into
 XP, and rolled up for coaches and leaderboards.
 
-Built for youth lacrosse first — the flagship drill counts wall-ball
-throw/catch cycles and attributes each one to the hand on top of the stick —
-but the drill system is sport-agnostic and ships with general strength, speed,
-agility, and conditioning exercises.
+**Sixteen sports.** A program picks its sport at signup and the app fits itself
+around it: Lacrosse, Basketball, Soccer, Volleyball, Baseball, Softball, Cheer,
+Dance, Swimming, Track & Field, Football, Gymnastics, Tennis, Cross Country,
+Ice Hockey and Rugby. Each ships with its own positions — 61 in total — and each
+position with its own suggested mix of work and a line saying what that mix is
+for. A volleyball middle blocker and a rugby prop get genuinely different plans.
+
+Lacrosse came first and still has the only sport-specific counted drills: the
+flagship one counts wall-ball throw/catch cycles and attributes each to the hand
+on top of the stick. Everything else is built on eighteen bodyweight movements
+that work for any sport, and the app tells athletes which *other* sports each
+one carries over into — because a twelve-year-old doing lateral bounds should
+know that is a basketball slide and a tennis recovery step too.
 
 Coaches assign work and see who did it. Athletes get nudged when a streak is on
 the line. Every session is scored for **form quality**, not just rep count, and
@@ -64,7 +73,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1168 tests
+python -m pytest tests/ -q          # 1319 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -802,10 +811,53 @@ whose status is `unknown` or `building`, where a nudge is still useful; once
 they are at `good` or above it disappears rather than becoming a reason to add
 sessions.
 
+### The drill catalog, and what is deliberately missing
+
+Twenty drills: two lacrosse stick drills and eighteen bodyweight movements that
+work for any sport — squats, lunges, glute bridges, push-ups, pull-ups, planks,
+side planks, hollow holds, wall sits, dead bugs, mountain climbers, burpees,
+squat jumps, tuck jumps, lateral bounds, high knees, jumping jacks, sit-ups.
+
+**There are no dribbling, juggling, serving or shooting drills, on purpose.**
+Those need the *ball* tracked, not the body, and a drill that miscounts is worse
+than one that does not exist. Everything shipped has an unambiguous pose signal
+and is driven by the calibration harness — which caught a real error while this
+was being written: mountain climbers were declared with a `target_rom` of 0.33
+when a textbook rep measures 0.42, which would have handed out full depth for a
+half rep.
+
+Sport-specific *skill* work is coached through film clips and assignments
+instead, which is where a coach's eye belongs anyway.
+
+The harness also used to skip any drill with no calibration sweep, silently — so
+a newly added drill was unguarded and looked green. It now fails instead.
+
 ### Position benchmarks
 
 Three problems sit between a `position` column and a useful benchmark, and the
 first two are the ones usually skipped.
+
+**Sixteen sports ship with positions.** Lacrosse, Basketball, Soccer,
+Volleyball, Baseball, Softball, Cheer, Dance, Swimming, Track & Field, Football,
+Gymnastics, Tennis, Cross Country, Ice Hockey and Rugby — 61 positions, each
+with its own drill mix and its own one-line focus. A program picks its sport at
+signup and the app fits itself around it.
+
+Positions resolve **per sport**, which matters more than it sounds: "C" is a
+centre in basketball and a catcher in baseball, "D" is a defender in lacrosse
+and a defenceman in hockey. Sports without a meaningful position (cross country)
+still get one entry describing the sport's own demands, rather than falling back
+to a generic mix that knows nothing about distance running.
+
+Emphasis weights are written as relative numbers and normalised by a `mix()`
+helper, because the alternative is a hundred hand-balanced dicts of decimals
+where one typo silently leaves a position adding up to 0.97 and nobody notices.
+
+Weak-hand parity stays a **lacrosse-only** comparison. It is computed from the
+left/right split a drill reports, and the only drills that report one are the
+two stick drills — so `offhand_matters` is False everywhere else. That is not a
+claim that bilateral skill is unimportant in basketball; it is a refusal to rank
+children on a number that would be zero for all of them.
 
 **The column is free text.** A single roster import contains "Middie",
 "midfield", "MF", "M" and "Mid" for the same position. `WHERE position =
