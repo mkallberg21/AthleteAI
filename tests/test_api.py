@@ -2001,3 +2001,59 @@ class TestSesWebhookEndpoint:
             headers={"Content-Type": "application/json"},
         )
         assert res.status_code == 401
+
+
+class TestPositionEndpoints:
+
+    def test_the_join_form_can_offer_a_list_instead_of_a_text_box(self, client, program):
+        """Normalising free text is repair work; a dropdown means no repair."""
+        body = client.get("/api/positions", headers=program["athletes"][0]["headers"]).json()
+        assert body["sport"] == "lacrosse"
+        keys = {p["key"] for p in body["positions"]}
+        assert {"attack", "midfield", "defense", "lsm", "fogo", "goalie"} == keys
+        for position in body["positions"]:
+            assert position["focus"] and position["plural"]
+            assert abs(sum(position["emphasis"].values()) - 1.0) < 1e-9
+
+    def test_an_athlete_gets_position_guidance_with_no_peers_at_all(self, client, program):
+        athlete = program["athletes"][0]
+        client.post(
+            "/api/teams/join",
+            json={"join_code": program["team"]["join_code"], "position": "Goalie"},
+            headers=athlete["headers"],
+        )
+        # Long enough for the mix to have a shape: three token sessions are
+        # a session count, not a training pattern.
+        for seed in (1, 2, 3):
+            do_session(client, athlete["headers"], seed=seed, count=700)
+
+        report = client.get("/api/benchmarks", headers=athlete["headers"]).json()
+        assert report["position"]["key"] == "goalie"
+        assert report["mix"]["ready"] is True
+        assert report["mix"]["suggestions"]
+        # Two athletes in the program is nowhere near a peer group.
+        assert report["peer_pool"]["scope"] == "band"
+        assert report["comparisons"] == []
+
+    def test_the_coach_sees_the_squad_by_position(self, client, program):
+        for athlete, position in zip(program["athletes"], ("Middie", "wingback")):
+            client.post(
+                "/api/teams/join",
+                json={"join_code": program["team"]["join_code"], "position": position},
+                headers=athlete["headers"],
+            )
+        body = client.get("/api/coach/budgets", headers=program["director"]).json()
+        counts = {p["key"]: p["count"] for p in body["positions"]}
+        assert counts["midfield"] == 1
+        assert counts["unrecognised"] == 1
+        assert body["unrecognised_positions"] == ["wingback"]
+
+    def test_an_unrecognised_position_is_flagged_at_roster_import(self, client, program):
+        """It is not cosmetic: it drops the athlete out of every position feature."""
+        csv = "name,birth_year,position\nAlex T.,2011,Middie\nRiley K.,2011,wingback\n"
+        plan = client.post(
+            "/api/coach/roster/preview", json={"content": csv}, headers=program["director"]
+        ).json()
+        rows = {a["display_name"]: a for a in plan["athletes"]}
+        assert not rows["Alex T."]["warnings"]
+        assert any("not recognised" in w for w in rows["Riley K."]["warnings"])

@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 877 tests
+python -m pytest tests/ -q          # 948 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -89,6 +89,7 @@ athleteiq/
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
   load.py           Workload ratio, throwing volume, rest days, advisories
   benchmarks.py     Age-banded weekly time budgets and peer context
+  positions.py      Canonical positions, aliases, and per-position drill mix
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
   digest.py         Weekly team KPIs and the coach email
@@ -782,9 +783,11 @@ contains "must", "behind", or "only".
 
 ### Peer comparison, deliberately narrowed
 
-Comparison is restricted to the same age band (optionally the same position) and
-suppressed entirely below `MIN_PEER_GROUP` (8), so a small squad cannot turn into
-a two-person race.
+Comparison never crosses age bands: telling a twelve-year-old they rank below
+the seventeen-year-olds is information about their birthday, not their training.
+Within the band it narrows to position where the numbers allow (see **Position
+benchmarks** below) and is suppressed entirely below `MIN_PEER_GROUP` (8) even
+at full band width, so a small squad cannot turn into a two-person race.
 
 **Volume is never compared.** Ranking kids by minutes trained is precisely the
 mechanic that produces the twelve-year-old training four evenings a week. What
@@ -794,10 +797,66 @@ whose status is `unknown` or `building`, where a nudge is still useful; once
 they are at `good` or above it disappears rather than becoming a reason to add
 sessions.
 
+### Position benchmarks
+
+Three problems sit between a `position` column and a useful benchmark, and the
+first two are the ones usually skipped.
+
+**The column is free text.** A single roster import contains "Middie",
+"midfield", "MF", "M" and "Mid" for the same position. `WHERE position =
+'midfield'` matches none of them, which is how a position filter ends up
+looking implemented and grouping nobody. `positions.py` normalises on read —
+case, punctuation, parenthetical qualifiers ("Goalie (JV)"), dual entries
+("attackman/midfield" takes the first, by convention the primary), and
+placeholders. Placeholders are checked *first*, because some are actively
+dangerous: "N/A" splits on the slash into `["N", "A"]`, and "A" is a perfectly
+good alias for Attack. Unrecognised is a real answer — it widens the peer pool
+rather than inventing a position, and it is reported to the coach, because an
+unresolved position silently drops that athlete out of every position feature.
+
+**A team does not have eight goalies.** So the peer pool widens in steps —
+position, then position family, then simply the age band — and the answer says
+which step it settled on. The athlete reads "compared with 11 midfielders your
+age", not an unqualified percentile. On one realistic U13 squad all three tiers
+fire: midfielders compare within position, attackers within *attackers and
+midfielders*, and the lone face-off specialist against the age band.
+
+Families pool attack with midfield, and defense with LSM — a long-stick
+midfielder is a defender who runs, and the stick work they practise is a
+defender's.
+
+**Comparison is the less useful half.** What a defender should do with a
+driveway hour does not depend on how many other defenders logged sessions this
+week. So each position carries an `emphasis` — a drill mix expressed as
+*shares of solo time*, never as an amount — and the athlete sees their actual
+mix against it. This needs no peer group at all: a goalie spending every
+session on wall ball gets told so on a team of one, on day one.
+
+Every suggestion is a **swap**: *"Swap some of your wall ball time for quick
+stick. Same minutes, and it is what goalies lean on."* "Also do lateral bounds"
+would quietly raise the weekly total the budget just finished capping, so the
+tests assert no suggestion contains "add", "more", "extra" or "also", and that
+every one contains "same minutes". Suggestions are suppressed entirely when an
+athlete is over their ceiling — there, the only message that should land is
+"stop", and a second task alongside it blunts the first.
+
+Position also decides *what is worth comparing*. Weak-hand parity is a goal for
+field players and not for a goalie, whose stick work is two-handed save
+mechanics and an outlet pass; ranking a goalie on left/right balance would score
+them on something they are not building, and worse, make them chase it. So the
+off-hand board is withheld from goalies specifically.
+
+`/api/positions` exists so the join form can offer a list instead of a text box.
+Normalising free text is repair work; a dropdown means there is nothing to
+repair. A sport with no position model returns an empty list and the form falls
+back to free text — honest silence rather than another sport's positions with
+the labels changed.
+
 ### What the coach sees
 
-`program_summary()` returns counts across all five states plus an explicit
-`over_budget` list. Over-training surfaces as prominently as under-training, on
+`program_summary()` returns counts across all five states, an explicit
+`over_budget` list, the squad's position breakdown, and any position strings
+that did not resolve. Over-training surfaces as prominently as under-training, on
 the same screen — a coach should find out that a kid is grinding every night in
 the same glance that tells them who has not started.
 
@@ -1048,50 +1107,57 @@ contact with a real driveway:
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
    battery.
-3. **The age bands are heuristics, not a clinical instrument.** They are drawn
+3. **Positions are modelled for lacrosse only.** Another sport gets honest
+   silence — `for_sport` returns nothing, athletes fall back to the generic
+   mix, and the join form falls back to free text. Adding a sport means adding
+   its positions *and* the sport-specific drills their emphasis would point at;
+   half of that is worse than neither, since a soccer emphasis built only from
+   the general strength drills would recommend the same mix to every position
+   on the pitch.
+4. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-4. **Handedness is inferred from wrist height**, which is reliable for standard
+5. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-5. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+6. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-6. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+7. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-7. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+8. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-8. **Revocation soft-fails by default**, though pre-fetched staples make strict
+9. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-9. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+10. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-10. **No payment processor.** The billing model, entitlements, and invoicing are
+11. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-11. **Offline slots are per-drill.** A drill you have never opened online has no
+12. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-12. **Web Push needs credentials.** Notifications generate and display in-app
+13. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-13. **Form quality is pose-only.** It reads how the body moved, not where the
+14. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-14. **Guardian identity is proven by the invite code alone.** There is no email
+15. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-15. **Roster import reads delimited text only.** CSV, TSV, and
+16. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-16. **Load coefficients are reasoned estimates, not measured values.** The
+17. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

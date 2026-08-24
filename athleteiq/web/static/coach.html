@@ -111,6 +111,7 @@
     </p>
     <div id="budget-spread"></div>
     <div id="budget-over"></div>
+    <div id="budget-positions"></div>
   </div>
 
   <div class="card hidden" id="load-card">
@@ -699,6 +700,8 @@ function renderBudgets(data) {
     </div>`;
   }).join('');
 
+  renderPositions(data);
+
   const over = data.over_budget || [];
   $('budget-over').innerHTML = over.length === 0 ? '' : `
     <p class="small" style="margin-top:14px">
@@ -710,6 +713,28 @@ function renderBudgets(data) {
         <div>${esc(a.display_name)} &mdash; ${Math.round(a.minutes)} minutes this week
           <em>${esc(a.band)} band tops out around ${a.weekly_max}</em></div>
       </div>`).join('')}`;
+}
+
+function renderPositions(data) {
+  const rows = (data.positions || []).filter((p) => p.key !== 'none');
+  const bad = data.unrecognised_positions || [];
+  if (!rows.length && !bad.length) { $('budget-positions').innerHTML = ''; return; }
+
+  const total = rows.reduce((n, p) => n + p.count, 0) || 1;
+  $('budget-positions').innerHTML = `
+    <p class="small" style="margin-top:14px"><b>Squad by position</b></p>
+    ${rows.map((p) => `<div class="budget-row">
+        <span class="budget-label">${esc(p.label)}</span>
+        <span class="budget-n">${p.count}</span>
+        <span class="small muted">${Math.round((p.count / total) * 100)}%</span>
+      </div>`).join('')}
+    ${bad.length ? `<div class="advisory caution" style="margin-top:10px">
+        <span class="dotmark"></span>
+        <div>${bad.length} position${bad.length === 1 ? '' : 's'} on this roster
+          did not match anything we know: ${bad.map(esc).join(', ')}.
+          <em>Those athletes still train and still count everywhere else, but they
+          sit out position comparisons until the spelling is fixed.</em></div>
+      </div>` : ''}`;
 }
 
 function renderLoadWatch(athletes) {

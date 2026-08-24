@@ -23,6 +23,7 @@ from . import digest as digest_mod
 from . import mailer
 from . import staple as staple_mod
 from . import webhooks as webhooks_mod
+from . import positions as positions_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
 from . import notifications as notify
@@ -1155,7 +1156,10 @@ def preview_roster(
 
     Nothing is written. Applying is a separate, explicit call.
     """
-    plan = store.resolve_import(principal.org_id, roster_mod.parse(body.content))
+    plan = store.resolve_import(
+        principal.org_id,
+        roster_mod.parse(body.content, sport=_org_sport(store, principal.org_id)),
+    )
     return plan.to_dict()
 
 
@@ -1179,7 +1183,10 @@ def import_roster(
     """
     if not principal.can_see_team(body.team_id):
         raise HTTPException(status_code=403, detail="you are not assigned to that team")
-    plan = store.resolve_import(principal.org_id, roster_mod.parse(body.content))
+    plan = store.resolve_import(
+        principal.org_id,
+        roster_mod.parse(body.content, sport=_org_sport(store, principal.org_id)),
+    )
     result = store.apply_import(
         principal.org_id, body.team_id, plan, principal.id,
         issue_guardian_invites=body.invite_guardians,
@@ -1414,11 +1421,40 @@ def team_budgets(
     athletes = coach_roster(
         store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
     )
+    sport = _org_sport(store, principal.org_id)
     return {
         **benchmarks_mod.program_summary(
-            store.conn, [a["athlete_id"] for a in athletes]
+            store.conn, [a["athlete_id"] for a in athletes], sport=sport
         ),
         "bands": [b.to_dict() for b in benchmarks_mod.AGE_BANDS],
+        "sport": sport,
+    }
+
+
+def _org_sport(store: Store, org_id: int) -> str:
+    row = store.conn.execute(
+        "SELECT sport FROM organizations WHERE id = ?", (org_id,)
+    ).fetchone()
+    return (row["sport"] if row else None) or "lacrosse"
+
+
+@app.get("/api/positions")
+def list_positions(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The positions this org's sport actually models.
+
+    Exists so the join form can offer a list instead of a text box. Free-text
+    positions are normalised on read, but normalising a guess is repair work;
+    a dropdown means there is nothing to repair. A sport with no position
+    model returns an empty list, and the form falls back to free text rather
+    than showing another sport's positions.
+    """
+    sport = _org_sport(store, principal.org_id)
+    return {
+        "sport": sport,
+        "positions": [p.to_dict() for p in positions_mod.for_sport(sport)],
     }
 
 

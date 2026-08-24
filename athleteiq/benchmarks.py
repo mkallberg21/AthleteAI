@@ -40,7 +40,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from . import positions
 from .config import CONFIG
+from .drills.catalog import DRILLS_BY_KEY
 
 # Below this many peers a percentile is neither meaningful nor anonymous, and
 # is not shown at all.
@@ -347,33 +349,93 @@ def assess_time(
 # Peer comparison
 # ---------------------------------------------------------------------------
 
-def _peers(
-    conn: sqlite3.Connection, org_id: int, band: AgeBand, position: str | None
-) -> list[int]:
-    """Athletes in the same age band, optionally the same position.
+def _band_members(
+    conn: sqlite3.Connection, org_id: int, band: AgeBand
+) -> list[tuple[int, str | None]]:
+    """Every athlete in the band, with their raw position string.
 
-    Compared within a band rather than against the whole program: telling a
-    twelve-year-old they rank below the seventeen-year-olds is information
-    about their birthday, not their training.
+    Positions are normalised in Python rather than filtered in SQL, because
+    the column is free text: `WHERE position = 'midfield'` misses the row
+    that says "Middie", which is most of them.
     """
-    sql = (
-        "SELECT DISTINCT u.id, u.birth_year FROM users u "
-        "LEFT JOIN team_members tm ON tm.user_id = u.id "
-        "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1"
-    )
-    params: list[Any] = [org_id]
-    if position:
-        sql += " AND tm.position = ?"
-        params.append(position)
-
     year = datetime.now(timezone.utc).year
-    peers = []
-    for row in conn.execute(sql, params):
+    rows = conn.execute(
+        "SELECT u.id, u.birth_year, ("
+        "  SELECT tm.position FROM team_members tm WHERE tm.user_id = u.id "
+        "  AND tm.position IS NOT NULL AND tm.position != '' "
+        "  ORDER BY tm.joined_at DESC LIMIT 1"
+        ") AS position "
+        "FROM users u WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1",
+        (org_id,),
+    )
+    out = []
+    for row in rows:
         if row["birth_year"] is None:
             continue
         if band.contains(year - int(row["birth_year"])):
-            peers.append(row["id"])
-    return peers
+            out.append((row["id"], row["position"]))
+    return out
+
+
+@dataclass(frozen=True)
+class PeerPool:
+    """Who an athlete is being compared with, and how hard we had to look."""
+
+    athletes: list[int]
+    scope: str            # 'position' | 'group' | 'band'
+    label: str            # reads after "compared with N ..."
+    position: positions.Position | None
+
+    @property
+    def enough(self) -> bool:
+        return len(self.athletes) >= MIN_PEER_GROUP
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "scope": self.scope,
+            "label": self.label,
+            "count": len(self.athletes),
+            "position": self.position.key if self.position else None,
+        }
+
+
+def build_pool(
+    conn: sqlite3.Connection,
+    org_id: int,
+    band: AgeBand,
+    position: positions.Position | None,
+    sport: str = "lacrosse",
+) -> PeerPool:
+    """Widen the comparison group until it is big enough to mean anything.
+
+    Position, then position family, then simply the age band. A team has
+    three goalies, not eight, so a pool that only ever tried the narrowest
+    option would return nothing for exactly the athletes whose position is
+    most distinctive. Each step records which one it settled on, so the
+    athlete is told they are being measured against midfielders their age
+    rather than left to assume it.
+    """
+    members = _band_members(conn, org_id, band)
+    resolved = [
+        (athlete_id, positions.normalize(raw, sport))
+        for athlete_id, raw in members
+    ]
+
+    if position is not None:
+        same = [aid for aid, pos in resolved if pos is not None and pos.key == position.key]
+        if len(same) >= MIN_PEER_GROUP:
+            return PeerPool(same, "position", f"{position.plural.lower()} your age", position)
+
+        family = [
+            aid for aid, pos in resolved
+            if pos is not None and pos.group == position.group
+        ]
+        if len(family) >= MIN_PEER_GROUP:
+            label = positions.GROUP_LABELS.get(position.group, "athletes")
+            return PeerPool(family, "group", f"{label} your age", position)
+
+    everyone = [aid for aid, _ in resolved]
+    return PeerPool(everyone, "band", "athletes your age", position)
 
 
 def _percentile(value: float, population: list[float]) -> int | None:
@@ -393,6 +455,8 @@ class PeerComparison:
     value: float
     median: float
     blurb: str = ""
+    pool_scope: str = "band"
+    pool_label: str = "athletes your age"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -403,6 +467,11 @@ class PeerComparison:
             "value": round(self.value, 1),
             "median": round(self.median, 1),
             "blurb": self.blurb,
+            "pool_scope": self.pool_scope,
+            "pool_label": self.pool_label,
+            # "compared with 11 midfielders your age" -- the comparison is
+            # only honest if the athlete can see who it was against.
+            "against": f"{self.peer_count} {self.pool_label}",
         }
 
 
@@ -412,8 +481,10 @@ def compare_to_peers(
     org_id: int,
     band: AgeBand,
     budget: TimeBudget,
-    position: str | None = None,
+    position: positions.Position | None = None,
     today: date | None = None,
+    sport: str = "lacrosse",
+    pool: PeerPool | None = None,
 ) -> list[PeerComparison]:
     """How this athlete compares to others their age.
 
@@ -425,9 +496,13 @@ def compare_to_peers(
     """
     today = today or datetime.now(timezone.utc).date()
     start = (today - timedelta(days=27)).isoformat()
-    peers = _peers(conn, org_id, band, position)
-    if len(peers) < MIN_PEER_GROUP:
+    # Accepts a pre-built pool so a caller that already needed to know the
+    # pool (to report it) does not resolve every athlete in the band twice
+    # and risk the two answers drifting apart.
+    pool = pool or build_pool(conn, org_id, band, position, sport)
+    if not pool.enough:
         return []
+    peers = pool.athletes
 
     placeholders = ",".join("?" for _ in peers)
 
@@ -469,12 +544,17 @@ def compare_to_peers(
             peer_count=len(population), value=mine,
             median=statistics.median(population) if population else 0.0,
             blurb=blurb,
+            pool_scope=pool.scope, pool_label=pool.label,
         ))
 
     if quality:
         add("quality", "Form score", quality,
             "How well you move, compared with others your age.")
-    if offhand:
+    # Weak-hand parity is a goal for field players and not for a goalie,
+    # whose stick work is two-handed save mechanics. Ranking a goalie on
+    # left/right balance would score them on something they are not trying
+    # to build, and worse, would make them chase it.
+    if offhand and (position is None or position.offhand_matters):
         add("offhand", "Weak-hand share", offhand,
             "The hard half of the work, and the one worth being ahead on.", scale=100)
 
@@ -489,6 +569,120 @@ def compare_to_peers(
 
 
 # ---------------------------------------------------------------------------
+# Training mix: the half of position benchmarking that needs no peers
+# ---------------------------------------------------------------------------
+
+#: Below this there is not enough of a week to have a shape worth commenting on.
+MIX_MIN_MINUTES = 25.0
+MIX_MIN_SESSIONS = 3
+#: A gap smaller than this is inside the noise of one extra session.
+MIX_GAP = 0.10
+
+
+@dataclass
+class MixSlice:
+    drill_key: str
+    label: str
+    minutes: float
+    actual: float
+    target: float
+
+    @property
+    def delta(self) -> float:
+        return self.actual - self.target
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "drill_key": self.drill_key,
+            "label": self.label,
+            "minutes": round(self.minutes, 1),
+            "actual": round(self.actual, 3),
+            "target": round(self.target, 3),
+            "delta": round(self.delta, 3),
+        }
+
+
+def training_mix(
+    conn: sqlite3.Connection,
+    athlete_id: int,
+    position: positions.Position | None,
+    today: date | None = None,
+    days: int = 28,
+    suppress_suggestions: bool = False,
+) -> dict[str, Any]:
+    """How an athlete divides their solo time, against what their position needs.
+
+    This is the position benchmark that works on a team of one. It needs no
+    peer group, no minimum squad size and no program scale: a goalie spending
+    every session on wall ball is worth telling, whether or not another goalie
+    has ever logged anything.
+
+    Every suggestion is a **swap**, never an addition. "Also do lateral
+    bounds" quietly raises the weekly total that `assess_time` just finished
+    capping, so the copy trades one drill against another and the tests
+    assert that no suggestion contains the word "add" or "more".
+    """
+    today = today or datetime.now(timezone.utc).date()
+    start = (today - timedelta(days=days - 1)).isoformat()
+    position = position or positions.GENERIC
+    target = positions.emphasis_for(position)
+
+    rows = conn.execute(
+        "SELECT drill_key, SUM(duration_ms) / 60000.0 AS minutes, COUNT(*) AS n "
+        "FROM sessions WHERE athlete_id = ? AND status = 'counted' "
+        "AND date(COALESCE(completed_at, submitted_at)) >= ? GROUP BY drill_key",
+        (athlete_id, start),
+    ).fetchall()
+
+    by_drill = {r["drill_key"]: float(r["minutes"] or 0) for r in rows}
+    total = sum(by_drill.values())
+    sessions = sum(int(r["n"]) for r in rows)
+
+    keys = sorted(set(by_drill) | set(target))
+    slices = [
+        MixSlice(
+            drill_key=key,
+            label=DRILLS_BY_KEY[key].name if key in DRILLS_BY_KEY else key,
+            minutes=by_drill.get(key, 0.0),
+            actual=(by_drill.get(key, 0.0) / total) if total else 0.0,
+            target=target.get(key, 0.0),
+        )
+        for key in keys
+    ]
+    slices.sort(key=lambda s: (-s.target, -s.actual))
+
+    ready = total >= MIX_MIN_MINUTES and sessions >= MIX_MIN_SESSIONS
+    suggestions: list[str] = []
+    if ready and not suppress_suggestions:
+        over = sorted((s for s in slices if s.delta > MIX_GAP),
+                      key=lambda s: -s.delta)
+        under = sorted((s for s in slices if s.delta < -MIX_GAP),
+                       key=lambda s: s.delta)
+        for short in under[:2]:
+            if not over:
+                break
+            heavy = over[0]
+            # Worded to survive the test that bans "add", "more" and "extra".
+            # "Would do more for you" is benign in intent and still the wrong
+            # verb to put in front of a twelve-year-old reading a training app.
+            suggestions.append(
+                f"Swap some of your {heavy.label.lower()} time for "
+                f"{short.label.lower()}. Same minutes, and it is what "
+                f"{position.plural.lower()} lean on."
+            )
+    return {
+        "position": position.to_dict(),
+        "focus": position.focus,
+        "window_days": days,
+        "minutes": round(total, 1),
+        "sessions": sessions,
+        "ready": ready,
+        "slices": [s.to_dict() for s in slices if s.target > 0 or s.minutes > 0],
+        "suggestions": suggestions,
+    }
+
+
+# ---------------------------------------------------------------------------
 # The whole picture
 # ---------------------------------------------------------------------------
 
@@ -499,8 +693,9 @@ def report(
 ) -> dict[str, Any]:
     """An athlete's time budget first, then how they compare inside it."""
     row = conn.execute(
-        "SELECT id, org_id, display_name, birth_year, birth_year_estimated "
-        "FROM users WHERE id = ?",
+        "SELECT u.id, u.org_id, u.display_name, u.birth_year, "
+        "       u.birth_year_estimated, o.sport "
+        "FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = ?",
         (athlete_id,),
     ).fetchone()
     if row is None:
@@ -516,14 +711,29 @@ def report(
     first_name = (row["display_name"] or "").split()[0] if row["display_name"] else ""
     budget = assess_time(band, week, first_name)
 
-    position = conn.execute(
-        "SELECT position FROM team_members WHERE user_id = ? AND position != '' LIMIT 1",
+    # Most recent membership wins: an athlete who moved up a team mid-season
+    # is playing where they play now, not where the older row says.
+    sport = row["sport"] or "lacrosse"
+    raw_position = conn.execute(
+        "SELECT position FROM team_members WHERE user_id = ? AND position != '' "
+        "ORDER BY joined_at DESC LIMIT 1",
         (athlete_id,),
     ).fetchone()
+    raw_position = raw_position["position"] if raw_position else None
+    position = positions.normalize(raw_position, sport)
 
+    pool = build_pool(conn, row["org_id"], band, position, sport)
     comparisons = compare_to_peers(
-        conn, athlete_id, row["org_id"], band, budget,
-        position["position"] if position else None, today,
+        conn, athlete_id, row["org_id"], band, budget, position, today, sport,
+        pool=pool,
+    )
+
+    # An athlete past their ceiling gets one message, and it is "stop". Mix
+    # advice alongside it -- however well framed as a swap -- reads as a
+    # second task and blunts the first.
+    mix = training_mix(
+        conn, athlete_id, position, today,
+        suppress_suggestions=budget.status == Status.OVER,
     )
 
     advisories: list[str] = []
@@ -550,7 +760,10 @@ def report(
         "age_estimated": bool(row["birth_year_estimated"]),
         "budget": budget.to_dict(),
         "comparisons": [c.to_dict() for c in comparisons],
-        "position": position["position"] if position else None,
+        "position": position.to_dict() if position else None,
+        "position_raw": raw_position,
+        "peer_pool": pool.to_dict(),
+        "mix": mix,
         "advisories": advisories,
         "disclaimer": (
             "These are starting points, not medical advice. They come from "
@@ -563,14 +776,22 @@ def program_summary(
     conn: sqlite3.Connection,
     athlete_ids: list[int],
     today: date | None = None,
+    sport: str = "lacrosse",
 ) -> dict[str, Any]:
     """How a squad sits against their budgets.
 
     Reports the athletes doing *too much* as prominently as those doing too
     little. A coach dashboard that only ever surfaces the quiet ones teaches
     everyone to push, which is the failure this whole module exists to avoid.
+
+    Also returns the squad's position breakdown and, deliberately, the
+    position strings that did not resolve. An unrecognised position is not
+    cosmetic: it drops that athlete out of every position comparison and out
+    of their own drill-mix guidance, so a coach needs to see the typo.
     """
     today = today or datetime.now(timezone.utc).date()
+    by_position: dict[str, int] = {}
+    raw_positions: list[str] = []
     counts = {s: 0 for s in (Status.UNKNOWN, Status.BUILDING, Status.GOOD, Status.FULL, Status.OVER)}
     over: list[dict[str, Any]] = []
     year = today.year
@@ -582,6 +803,18 @@ def program_summary(
         ).fetchone()
         if row is None:
             continue
+        raw = conn.execute(
+            "SELECT position FROM team_members WHERE user_id = ? AND position != '' "
+            "ORDER BY joined_at DESC LIMIT 1",
+            (athlete_id,),
+        ).fetchone()
+        raw = raw["position"] if raw else None
+        if raw:
+            raw_positions.append(raw)
+        resolved = positions.normalize(raw, sport)
+        key = resolved.key if resolved else ("unrecognised" if raw else "none")
+        by_position[key] = by_position.get(key, 0) + 1
+
         age = year - int(row["birth_year"]) if row["birth_year"] else None
         band = scaled(band_for(age, bool(row["birth_year_estimated"])))
         budget = assess_time(band, week_of_training(conn, athlete_id, today))
@@ -596,4 +829,14 @@ def program_summary(
             })
 
     over.sort(key=lambda a: -a["minutes"])
-    return {"counts": counts, "over_budget": over, "roster": len(athlete_ids)}
+    known = {p.key: p.label for p in positions.for_sport(sport)}
+    return {
+        "counts": counts,
+        "over_budget": over,
+        "roster": len(athlete_ids),
+        "positions": [
+            {"key": key, "label": known.get(key, key.title()), "count": n}
+            for key, n in sorted(by_position.items(), key=lambda kv: -kv[1])
+        ],
+        "unrecognised_positions": positions.unrecognised(raw_positions, sport),
+    }

@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
+from . import positions
+
 # How long a printed claim code stays valid. Long enough to survive a coach
 # printing a sheet and handing it out at the next practice.
 CLAIM_TTL_DAYS = 30
@@ -329,7 +331,9 @@ def _sniff_dialect(text: str) -> csv.Dialect | type[csv.Dialect]:
         return csv.excel
 
 
-def parse(text: str, *, today: datetime | None = None) -> ImportPlan:
+def parse(
+    text: str, *, today: datetime | None = None, sport: str = "lacrosse"
+) -> ImportPlan:
     """Read a delimited roster file into a plan. Never raises on row content."""
     today = today or datetime.now(timezone.utc)
     plan = ImportPlan()
@@ -392,6 +396,15 @@ def parse(text: str, *, today: datetime | None = None) -> ImportPlan:
         athlete.external_id = value(row, "external_id") or None
         athlete.jersey = value(row, "jersey")
         athlete.position = value(row, "position")
+        if athlete.position and positions.normalize(athlete.position, sport) is None:
+            # Worth a warning rather than silence: an unresolved position does
+            # not just look untidy, it drops the athlete out of every position
+            # comparison and out of their own drill-mix guidance.
+            athlete.warnings.append(
+                f"Position {athlete.position!r} was not recognised, so it will "
+                "not be used for position benchmarks. The athlete still trains "
+                "and still counts everywhere else."
+            )
         athlete.dominant_hand = parse_hand(value(row, "dominant_hand"))
         athlete.email = value(row, "email") or None
         athlete.guardian_name = value(row, "guardian_name") or None

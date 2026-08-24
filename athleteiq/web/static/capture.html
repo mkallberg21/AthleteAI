@@ -39,6 +39,14 @@
       </div>
       <p class="budget-detail" id="budget-detail"></p>
       <div id="budget-advisories"></div>
+      <div id="mix-suggestions"></div>
+      <details style="margin-top:10px" id="mix-details">
+        <summary class="small muted" style="cursor:pointer">
+          What <span id="mix-position">your position</span> works on
+        </summary>
+        <p class="small muted" id="mix-focus" style="margin:8px 0 4px"></p>
+        <div id="mix-bars"></div>
+      </details>
       <details style="margin-top:10px">
         <summary class="small muted" style="cursor:pointer">How you compare</summary>
         <div id="budget-peers" style="margin-top:8px"></div>
@@ -353,11 +361,48 @@ async function loadBudget() {
         <div class="peer">
           <b>${esc(p.label)}</b>
           <span class="pct">${p.percentile === null ? '&mdash;' : `${p.percentile}<small>th</small>`}</span>
-          <span>${esc(p.blurb)} Compared with ${p.peer_count} others your age.</span>
+          <span>${esc(p.blurb)} Compared with ${esc(p.against || `${p.peer_count} others your age`)}.</span>
         </div>`).join('')
       + `<p class="small muted" style="margin-top:10px">${esc(report.disclaimer)}</p>`
     : `<p class="small muted">Not enough athletes your age in the program to compare
        yet. ${esc(report.disclaimer)}</p>`;
+
+  renderMix(report.mix);
+}
+
+// The position half of the picture. Unlike the peer board this needs no other
+// athletes at all, so it renders for a squad of one.
+function renderMix(mix) {
+  const details = $('mix-details');
+  if (!mix || !mix.slices || !mix.slices.length) {
+    details.classList.add('hidden');
+    $('mix-suggestions').innerHTML = '';
+    return;
+  }
+  details.classList.remove('hidden');
+  $('mix-position').textContent = (mix.position.plural || 'athletes').toLowerCase();
+  $('mix-focus').textContent = mix.focus;
+
+  const scale = Math.max(...mix.slices.map((s) => Math.max(s.actual, s.target)), 0.01);
+  $('mix-bars').innerHTML = mix.slices.map((s) => `
+    <div class="mix-row">
+      <span class="mix-label">${esc(s.label)}</span>
+      <span class="mix-track">
+        <i class="mix-target" style="width:${(s.target / scale) * 100}%"></i>
+        <i class="mix-actual" style="width:${(s.actual / scale) * 100}%"></i>
+      </span>
+      <span class="small muted">${Math.round(s.actual * 100)}%</span>
+    </div>`).join('')
+    + `<p class="small muted" style="margin-top:8px">
+        Solid is what you did over the last ${mix.window_days} days; the outline is
+        the mix that suits your position. Neither is a target for how <em>long</em>
+        you train &mdash; that is the bar above.</p>`;
+
+  // Suppressed while an athlete is over their ceiling: there, the only
+  // message that should land is "stop".
+  $('mix-suggestions').innerHTML = (mix.suggestions || []).map((text) => `
+    <div class="advisory info"><span class="dotmark"></span><div>${esc(text)}</div></div>
+  `).join('');
 }
 
 // ------------------------------------------------------------ training load

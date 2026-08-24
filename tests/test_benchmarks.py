@@ -42,7 +42,8 @@ def add_athlete(store, program, name, age, position="Midfield"):
     return athlete
 
 
-def train(store, athlete_id, on: date, minutes: float, seed=1, quality_rom_cv=0.08):
+def train(store, athlete_id, on: date, minutes: float, seed=1, quality_rom_cv=0.08,
+          drill="lax_wall_ball"):
     """Log a session of a given wall-clock length.
 
     Rep timings are jittered rather than evenly spaced: the integrity checks
@@ -50,7 +51,7 @@ def train(store, athlete_id, on: date, minutes: float, seed=1, quality_rom_cv=0.
     review, so a helper without jitter silently produces sessions that never
     count and tests that fail for the wrong reason.
     """
-    slot = store.start_session(athlete_id, "lax_wall_ball")
+    slot = store.start_session(athlete_id, drill)
     rng = random.Random(seed)
     duration_ms = int(minutes * 60_000)
     reps = []
@@ -400,3 +401,169 @@ class TestTheCopyReadsLikeEnglish:
             text = f"{budget['headline']} {budget['detail']}".lower()
             for word in banned:
                 assert word not in text, (minutes, word, text)
+
+
+# ---------------------------------------------------------------------------
+# Position benchmarks
+# ---------------------------------------------------------------------------
+
+def squad(store, program, spec, age=12, drill="lax_wall_ball", minutes=12, days=3):
+    """Build a roster written the way a coach types it: {'Middie': 9, 'D': 5}."""
+    ids = {}
+    for label, n in spec.items():
+        for i in range(n):
+            name = f"{label}{i}"
+            athlete = add_athlete(store, program, name, age, position=label)
+            ids[name] = athlete["id"]
+            for d in range(days):
+                train(store, athlete["id"], TODAY - timedelta(days=d), minutes=minutes,
+                      seed=abs(hash(name)) % 997 + d, drill=drill)
+    return ids
+
+
+class TestThePeerPoolWidensUntilItMeansSomething:
+    """A team has three goalies. A pool that only tried the narrowest option
+    would return nothing for exactly the athletes whose position is most
+    distinctive."""
+
+    def test_a_deep_position_is_compared_within_itself(self, store, program):
+        ids = squad(store, program, {"Middie": 9, "D": 5})
+        pool = B.report(store.conn, ids["Middie0"], TODAY)["peer_pool"]
+        assert pool["scope"] == "position"
+        assert pool["count"] == 9
+        assert pool["label"] == "midfielders your age"
+
+    def test_a_thin_position_widens_to_its_family(self, store, program):
+        """Five attackers is too few; attackers and midfielders together is not."""
+        ids = squad(store, program, {"Middie": 9, "Attack": 5})
+        pool = B.report(store.conn, ids["Attack0"], TODAY)["peer_pool"]
+        assert pool["scope"] == "group"
+        assert pool["count"] == 14
+        assert pool["label"] == "attackers and midfielders your age"
+
+    def test_a_lone_specialist_widens_all_the_way_to_the_age_band(self, store, program):
+        ids = squad(store, program, {"Middie": 9, "FOGO": 1})
+        pool = B.report(store.conn, ids["FOGO0"], TODAY)["peer_pool"]
+        assert pool["scope"] == "band"
+        assert pool["label"] == "athletes your age"
+
+    def test_an_unrecognised_position_still_gets_compared(self, store, program):
+        """A roster typo must not quietly remove a kid from the board."""
+        ids = squad(store, program, {"Middie": 9, "TBD": 1})
+        report = B.report(store.conn, ids["TBD0"], TODAY)
+        assert report["position"] is None
+        assert report["peer_pool"]["scope"] == "band"
+        assert report["comparisons"], "a kid with a typo'd position still compares"
+
+    def test_the_athlete_is_told_who_they_were_measured_against(self, store, program):
+        ids = squad(store, program, {"Middie": 9})
+        for comparison in B.report(store.conn, ids["Middie0"], TODAY)["comparisons"]:
+            assert comparison["against"] == "9 midfielders your age"
+
+    def test_spelling_variants_land_in_the_same_pool(self, store, program):
+        """The whole feature turns on this: 'Middie' and 'MF' are one group."""
+        ids = squad(store, program, {"Middie": 3, "MF": 3, "M": 2, "midfielder": 1})
+        pool = B.report(store.conn, ids["Middie0"], TODAY)["peer_pool"]
+        assert pool["scope"] == "position"
+        assert pool["count"] == 9
+
+    def test_volume_is_still_never_compared_at_any_pool_width(self, store, program):
+        for spec in ({"Middie": 9}, {"Middie": 9, "Attack": 5}, {"Middie": 9, "FOGO": 1}):
+            ids = squad(store, program, spec)
+            who = "FOGO0" if "FOGO" in spec else list(ids)[0]
+            metrics = {c["metric"] for c in B.report(store.conn, ids[who], TODAY)["comparisons"]}
+            assert "volume" not in metrics and "minutes" not in metrics
+
+
+class TestPositionDecidesWhatIsWorthComparing:
+
+    def test_a_goalie_is_not_ranked_on_weak_hand_balance(self, store, program):
+        """Their stick work is two-handed save mechanics. Ranking it would
+        make them chase a number that measures nothing they are building."""
+        ids = squad(store, program, {"Goalie": 9})
+        metrics = {c["metric"] for c in B.report(store.conn, ids["Goalie0"], TODAY)["comparisons"]}
+        assert "offhand" not in metrics
+        assert "quality" in metrics
+
+    def test_a_field_player_is(self, store, program):
+        ids = squad(store, program, {"Middie": 9})
+        metrics = {c["metric"] for c in B.report(store.conn, ids["Middie0"], TODAY)["comparisons"]}
+        assert "offhand" in metrics
+
+
+class TestTheMixWorksWithNoPeersAtAll:
+    """The half of position benchmarking that a team of one still gets."""
+
+    def test_a_goalie_who_only_does_wall_ball_is_told_so(self, store, program):
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        mix = B.report(store.conn, athlete["id"], TODAY)["mix"]
+        assert mix["ready"]
+        assert mix["position"]["key"] == "goalie"
+        assert mix["suggestions"], "one goalie, no peers, still actionable"
+        assert "quick stick" in " ".join(mix["suggestions"]).lower()
+
+    def test_every_suggestion_is_a_swap_and_never_an_addition(self, store, program):
+        """'Also do lateral bounds' quietly undoes the weekly budget."""
+        banned = ("add", "more", "extra", "also", "as well", "on top")
+        for position in ("Goalie", "Attack", "D", "FOGO", "LSM", "Middie"):
+            athlete = add_athlete(store, program, f"S{position}", 12, position=position)
+            for d in range(3):
+                train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 7)
+            for suggestion in B.report(store.conn, athlete["id"], TODAY)["mix"]["suggestions"]:
+                low = suggestion.lower()
+                assert "same minutes" in low
+                for word in banned:
+                    assert word not in low, (position, word, suggestion)
+
+    def test_nothing_is_suggested_from_a_single_short_session(self, store, program):
+        """One session is not a mix, it is a session."""
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        train(store, athlete["id"], TODAY, minutes=8, seed=3)
+        mix = B.report(store.conn, athlete["id"], TODAY)["mix"]
+        assert mix["ready"] is False
+        assert mix["suggestions"] == []
+
+    def test_an_athlete_past_their_ceiling_hears_stop_and_nothing_else(self, store, program):
+        """Mix advice next to 'stop' reads as a second task and blunts the first."""
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        for d in range(6):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=30, seed=d + 11)
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["budget"]["status"] == B.Status.OVER
+        assert report["mix"]["suggestions"] == []
+        assert report["mix"]["slices"], "the chart still shows; only the nudge goes"
+
+    def test_an_athlete_with_no_position_gets_general_guidance(self, store, program):
+        athlete = add_athlete(store, program, "Sam", 12, position="TBD")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 5)
+        mix = B.report(store.conn, athlete["id"], TODAY)["mix"]
+        assert mix["position"]["key"] == "general"
+        assert mix["focus"]
+
+    def test_the_mix_never_recommends_a_drill_that_does_not_exist(self, store, program):
+        from athleteiq.drills.catalog import DRILLS_BY_KEY
+        athlete = add_athlete(store, program, "Sam", 12, position="Attack")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 2)
+        for item in B.report(store.conn, athlete["id"], TODAY)["mix"]["slices"]:
+            assert item["drill_key"] in DRILLS_BY_KEY
+
+
+class TestWhatTheCoachSeesAboutPositions:
+
+    def test_the_squad_breaks_down_by_position(self, store, program):
+        ids = squad(store, program, {"Middie": 4, "Attack": 2, "Goalie": 1})
+        summary = B.program_summary(store.conn, list(ids.values()), TODAY)
+        counts = {p["key"]: p["count"] for p in summary["positions"]}
+        assert counts == {"midfield": 4, "attack": 2, "goalie": 1}
+
+    def test_roster_typos_are_surfaced_rather_than_swallowed(self, store, program):
+        """An unresolved position drops that kid out of every position feature."""
+        ids = squad(store, program, {"Middie": 2, "wingback": 1})
+        summary = B.program_summary(store.conn, list(ids.values()), TODAY)
+        assert summary["unrecognised_positions"] == ["wingback"]
+        counts = {p["key"]: p["count"] for p in summary["positions"]}
+        assert counts["unrecognised"] == 1
