@@ -479,6 +479,57 @@ class TestPrivacy:
                     assert media_type == "application/json", \
                         f"{method.upper()} {path} accepts {media_type}"
 
+    def test_the_review_module_has_no_network_path(self, client):
+        """Self-review keeps footage on the phone, so it must not be able to
+        send anything anywhere -- checked structurally rather than promised."""
+        import re
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parent.parent
+            / "athleteiq" / "web" / "static" / "review.js"
+        ).read_text()
+
+        # Comments describe the guarantee; the code must not contain a way to
+        # break it.
+        code = re.sub(r"/\*[\s\S]*?\*/|//.*", "", source)
+        for forbidden in (
+            "fetch(", "XMLHttpRequest", "WebSocket", "sendBeacon",
+            "navigator.send", "FormData", "/api/", "http://", "https://",
+        ):
+            assert forbidden not in code, f"review.js can reach the network: {forbidden!r}"
+
+    def test_the_capture_app_never_posts_video(self, client):
+        """The submit payload is counts. A recording must not ride along.
+
+        Checked on what is actually handed to the API client and the offline
+        queue, rather than on the file as a whole -- `video:` legitimately
+        appears in the camera constraints, and a test that cannot tell those
+        apart fails on correct code.
+        """
+        import re
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parent.parent
+            / "athleteiq" / "web" / "static" / "capture.html"
+        ).read_text()
+        code = re.sub(r"<!--[\s\S]*?-->|/\*[\s\S]*?\*/|//.*", "", source)
+
+        # Everything passed to api(), enqueue(), or flush(): the three ways
+        # anything can leave this page.
+        sends = re.findall(
+            r"\b(?:api|enqueue|flush)\s*\(((?:[^()]|\([^()]*\))*)\)", code
+        )
+        assert sends, "found no API calls to inspect — has the call shape changed?"
+
+        for call in sends:
+            lowered = call.lower()
+            for forbidden in ("recorder", "blob", "objecturl", ".poses", "chunks"):
+                assert forbidden not in lowered, (
+                    f"footage reaches the network in: {call.strip()[:120]!r}"
+                )
+
     def test_submissions_store_no_imagery(self, client, program):
         do_session(client, program["athletes"][0]["headers"])
         conn = api_module._store.conn

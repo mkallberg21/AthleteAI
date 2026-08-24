@@ -112,6 +112,47 @@
     </div>
   </section>
 
+  <!-- ---------- Self review ---------- -->
+  <section id="view-review" class="hidden">
+    <div class="card" style="padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <b>Watch it back</b>
+        <button class="secondary inline" id="review-close">Done</button>
+      </div>
+
+      <div class="review-stage">
+        <video id="review-video" playsinline></video>
+        <canvas id="review-overlay"></canvas>
+      </div>
+
+      <div class="scrub">
+        <input type="range" id="review-scrub" min="0" max="1000" value="0" step="1">
+        <div class="scrub-marks" id="review-marks"></div>
+      </div>
+
+      <div class="review-controls">
+        <button class="secondary inline" id="review-play">Play</button>
+        <label style="display:flex;gap:6px;align-items:center;font-size:.8rem">
+          <input type="checkbox" id="review-skeleton" checked
+                 style="width:auto;min-height:auto;margin:0">
+          Show skeleton
+        </label>
+        <span class="small muted" id="review-time" style="margin-left:auto"></span>
+      </div>
+
+      <div class="marker-list" id="review-markers"></div>
+
+      <div class="review-note" id="review-note">
+        This clip is on your phone only. It was never uploaded, your coach
+        cannot see it, and it is deleted the moment you leave this screen.
+      </div>
+
+      <button class="secondary" id="review-save" style="margin-top:10px">
+        Save to my phone
+      </button>
+    </div>
+  </section>
+
   <!-- ---------- Result ---------- -->
   <section id="view-result" class="hidden">
     <div class="card">
@@ -126,7 +167,10 @@
       <table style="margin-top:14px"><tbody id="r-breakdown"></tbody></table>
       <div id="r-notes" class="small muted" style="margin-top:12px"></div>
       <div id="r-badges" class="badge-grid" style="margin-top:14px"></div>
-      <button style="margin-top:14px" id="done">Done</button>
+      <button class="secondary hidden" id="r-review" style="margin-top:14px">
+        Watch it back
+      </button>
+      <button style="margin-top:10px" id="done">Done</button>
     </div>
   </section>
 </div>
@@ -138,6 +182,10 @@ import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
   registerServiceWorker, takeSlot, topUp,
 } from './offline.js';
+import {
+  SessionRecorder, buildMarkers, drawPose, formatBytes, isSupported as canRecord,
+  poseAt,
+} from './review.js';
 
 const CLIENT_VERSION = 'web-0.1.0';
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
@@ -147,7 +195,10 @@ const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/'
 if (!getToken()) location.href = 'index.html';
 
 const $ = (id) => document.getElementById(id);
-const views = { home: $('view-home'), capture: $('view-capture'), result: $('view-result') };
+const views = {
+  home: $('view-home'), capture: $('view-capture'),
+  result: $('view-result'), review: $('view-review'),
+};
 function show(name) {
   for (const [key, el] of Object.entries(views)) el.classList.toggle('hidden', key !== name);
 }
@@ -163,6 +214,9 @@ let rafId = null;
 let startedAt = 0;
 let lastVideoTime = -1;
 let activeDrill = null;
+let recorder = null;
+let reviewMarkers = [];
+let reviewRaf = null;
 
 const BADGE_ICONS = {
   first_session: '\u{1F3C1}', wall_100: '\u{1F3AF}', wall_1000: '\u{1F525}',
@@ -533,6 +587,7 @@ function renderLoop() {
 
     const t = performance.now() - startedAt;
     counter.push(landmarks, t);
+    if (recorder) recorder.samplePose(landmarks, t);
 
     if (activeDrill.metric === 'hold') {
       $('reps').textContent = Math.floor(counter.holdMs / 1000);
@@ -606,6 +661,14 @@ async function startSession() {
 
   counter.reset();
   startedAt = performance.now();
+
+  // Recorded to memory so the athlete can watch it back. Never uploaded, and
+  // released the moment they leave the review screen.
+  if (canRecord() && stream) {
+    recorder = new SessionRecorder(stream);
+    if (!recorder.start(startedAt)) recorder = null;
+  }
+
   running = true;
   $('startstop').textContent = 'Finish';
   $('startstop').classList.add('danger');
@@ -629,7 +692,11 @@ async function finishSession() {
   // Durable first, network second. Once it is in IndexedDB the session cannot
   // be lost by a dropped connection, a closed tab, or a dead battery.
   await enqueue(payload);
-  stopCamera();
+  if (recorder) await recorder.stop();
+  reviewMarkers = buildMarkers(counter.reps, {
+    tracksHandedness: activeDrill.tracks_handedness,
+  });
+  stopCamera({ keepRecording: true });
 
   try {
     const result = await api('/api/sessions/submit', { method: 'POST', body: payload });
@@ -656,7 +723,7 @@ async function finishSession() {
   refreshConnBanner();
 }
 
-function stopCamera() {
+function stopCamera({ keepRecording = false } = {}) {
   running = false;
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
@@ -666,6 +733,26 @@ function stopCamera() {
   }
   $('video').srcObject = null;
   $('startstop').classList.remove('danger');
+  if (!keepRecording) discardRecording();
+}
+
+/** Drop the recording and everything derived from it. */
+function discardRecording() {
+  if (recorder) {
+    recorder.release();
+    recorder = null;
+  }
+  reviewMarkers = [];
+  if (reviewRaf) {
+    cancelAnimationFrame(reviewRaf);
+    reviewRaf = null;
+  }
+  const video = $('review-video');
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
 }
 
 // ---------------------------------------------------------------- result
@@ -709,6 +796,10 @@ function renderQuality(quality) {
 
 function showResult(result) {
   show('result');
+  // Offered only when there is something to watch: a session too short to
+  // record, or a browser without MediaRecorder, simply does not show it.
+  const reviewable = recorder && recorder.blob();
+  $('r-review').classList.toggle('hidden', !reviewable);
   const titles = {
     counted: 'Logged. Nice work.',
     review: 'Sent to your coach for review',
@@ -749,11 +840,167 @@ function showResult(result) {
     </div>`).join('');
 }
 
+// ----------------------------------------------------------------- review
+
+function formatClock(seconds) {
+  if (!Number.isFinite(seconds)) return '0:00';
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+function openReview() {
+  const url = recorder && recorder.url();
+  if (!url) return;
+
+  show('review');
+  const video = $('review-video');
+  video.src = url;
+  video.currentTime = 0;
+
+  $('review-note').innerHTML =
+    'This clip is on your phone only. It was never uploaded, your coach cannot '
+    + 'see it, and it is deleted the moment you leave this screen.'
+    + (recorder.truncated
+      ? `<br><br>The session ran long, so the first ${formatBytes(recorder.droppedBytes)} `
+        + 'was dropped to save memory. Everything from there on is here.'
+      : '');
+
+  $('review-markers').innerHTML = reviewMarkers.length
+    ? reviewMarkers.map((m, i) => `
+        <button class="marker-btn ${esc(m.kind)}" data-marker="${i}">
+          <span><b>${esc(m.label)}</b><span>${esc(m.detail)}</span></span>
+          <time>${formatClock(m.t_ms / 1000)}</time>
+        </button>`).join('')
+    : '<p class="small muted">Not enough reps to pick out moments this time.</p>';
+
+  $('review-markers').querySelectorAll('[data-marker]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const marker = reviewMarkers[Number(btn.dataset.marker)];
+      // Backed up a little: the interesting part of a rep is the run-up to it,
+      // not the instant the counter fired.
+      video.currentTime = Math.max(0, marker.t_ms / 1000 - 1.2);
+      video.pause();
+      $('review-play').textContent = 'Play';
+      paintOverlay();
+    });
+  });
+
+  video.addEventListener('loadedmetadata', () => {
+    renderScrubMarks(video.duration);
+    paintOverlay();
+  }, { once: true });
+}
+
+function renderScrubMarks(duration) {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    $('review-marks').innerHTML = '';
+    return;
+  }
+  $('review-marks').innerHTML = reviewMarkers.map((m, i) => {
+    const pct = Math.max(0, Math.min(100, (m.t_ms / 1000 / duration) * 100));
+    return `<span class="scrub-mark ${esc(m.kind)}" data-jump="${i}"
+             style="left:${pct}%" title="${esc(m.label)}"></span>`;
+  }).join('');
+
+  $('review-marks').querySelectorAll('[data-jump]').forEach((mark) => {
+    mark.addEventListener('click', () => {
+      const marker = reviewMarkers[Number(mark.dataset.jump)];
+      $('review-video').currentTime = Math.max(0, marker.t_ms / 1000 - 1.2);
+      paintOverlay();
+    });
+  });
+}
+
+function paintOverlay() {
+  const video = $('review-video');
+  const canvas = $('review-overlay');
+  const ctx = canvas.getContext('2d');
+
+  if (canvas.width !== video.videoWidth && video.videoWidth) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
+
+  if (!$('review-skeleton').checked) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  } else {
+    // From the stored track rather than re-detecting, so scrubbing is instant.
+    drawPose(
+      ctx, poseAt(recorder ? recorder.poses : [], video.currentTime * 1000),
+      canvas.width, canvas.height,
+    );
+  }
+
+  const duration = video.duration;
+  if (Number.isFinite(duration) && duration > 0) {
+    $('review-scrub').value = String(Math.round((video.currentTime / duration) * 1000));
+    $('review-time').textContent =
+      `${formatClock(video.currentTime)} / ${formatClock(duration)}`;
+  }
+}
+
+function reviewLoop() {
+  reviewRaf = requestAnimationFrame(reviewLoop);
+  const video = $('review-video');
+  if (!video.paused && !video.ended) paintOverlay();
+}
+
+$('review-play').addEventListener('click', () => {
+  const video = $('review-video');
+  if (video.paused) {
+    video.play();
+    $('review-play').textContent = 'Pause';
+  } else {
+    video.pause();
+    $('review-play').textContent = 'Play';
+  }
+});
+
+$('review-scrub').addEventListener('input', () => {
+  const video = $('review-video');
+  if (!Number.isFinite(video.duration)) return;
+  video.currentTime = (Number($('review-scrub').value) / 1000) * video.duration;
+  paintOverlay();
+});
+
+$('review-skeleton').addEventListener('change', paintOverlay);
+$('review-video').addEventListener('ended', () => {
+  $('review-play').textContent = 'Play';
+});
+
+$('review-save').addEventListener('click', () => {
+  // Saving puts the file on the athlete's own device. It is their video of
+  // themselves, and nothing about it reaches a server either way.
+  const blob = recorder && recorder.blob();
+  if (!blob) return;
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${activeDrill ? activeDrill.key : 'session'}-${Date.now()}.${
+    (recorder.mimeType || '').includes('mp4') ? 'mp4' : 'webm'}`;
+  link.click();
+  // Revoked on the next tick so the download has started but nothing lingers.
+  setTimeout(() => URL.revokeObjectURL(link.href), 30_000);
+});
+
+$('review-close').addEventListener('click', async () => {
+  discardRecording();
+  await Promise.all([
+    loadHome(), loadAssignments(), loadNotifications(), loadTrainingLoad(),
+  ]);
+  show('home');
+});
+
+$('r-review').addEventListener('click', () => {
+  openReview();
+  if (!reviewRaf) reviewLoop();
+});
+
 // ---------------------------------------------------------------- wiring
 
 $('startstop').addEventListener('click', () => (running ? finishSession() : startSession()));
 $('back').addEventListener('click', () => { stopCamera(); show('home'); });
 $('done').addEventListener('click', async () => {
+  discardRecording();
   await Promise.all([
     loadHome(), loadAssignments(), loadNotifications(), loadTrainingLoad(),
   ]);
@@ -797,7 +1044,13 @@ onConnectivityChange((online) => {
 // Stopping the camera when the app is backgrounded matters on a phone: the
 // recording indicator staying lit is exactly the thing that makes a parent
 // distrust the privacy claim.
-window.addEventListener('pagehide', stopCamera);
+// Backgrounding the app drops the recording too: footage is not meant to
+// outlive the moment, and a clip surviving in memory while the phone is in a
+// pocket is exactly what the privacy promise says does not happen.
+window.addEventListener('pagehide', () => {
+  stopCamera();
+  discardRecording();
+});
 
 (async () => {
   try {

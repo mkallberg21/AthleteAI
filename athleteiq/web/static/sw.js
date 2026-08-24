@@ -19,6 +19,7 @@ const SHELL = [
   'styles.css',
   'api.js',
   'counter.js',
+  'review.js',
   'offline.js',
   'manifest.webmanifest',
 ];

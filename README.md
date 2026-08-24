@@ -64,10 +64,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 836 tests
+python -m pytest tests/ -q          # 838 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
+  node --test tests/js/*.test.mjs   # 40 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -105,6 +105,7 @@ athleteiq/
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
+    review.js       Self-review recording, markers, pose track (never uploaded)
     offline.js      IndexedDB slot pool + submission queue
     sw.js           Service worker: app-shell cache and push delivery
     capture.html    Athlete capture app
@@ -601,6 +602,57 @@ trained seventeen days without a rest day, that is the first thing on the page.
 Parents also get a **weekly digest**, because parents will not log into a
 dashboard — so the dashboard goes to them, framed around what their child did
 rather than where they rank.
+
+---
+
+## Self review
+
+Video is the one thing a rep count cannot give an athlete: seeing what their own
+release actually looked like on the rep where the range collapsed. The whole
+product rests on that footage never leaving the phone, so this feature exists
+entirely on the device — **no endpoint, no upload, no field on any request.**
+
+After a session the athlete can watch it back with the skeleton drawn over it,
+and jump straight to the moments worth watching:
+
+- **Your best rep** — fullest range of the session
+- **Shortest rep** — only shown when it is meaningfully worse than the best, so
+  a consistent set is not handed something to feel bad about
+- **Form started slipping** — the first rep in the back half that fell well
+  below the early median and did not recover
+- **Best left / best right hand** on drills that track handedness
+
+Every marker comes from rep data the client already has, so the whole feature
+costs no request and no server round trip. Scrubbing a ten-minute clip to find
+the rep that went wrong is work nobody does twice.
+
+Three constraints hold it to the privacy promise:
+
+**It cannot upload.** The recording is a Blob in memory. `review.js` contains no
+`fetch`, no `XMLHttpRequest`, no `sendBeacon`, and no URL — asserted by a test
+that strips comments first, so the guarantee is checked structurally rather than
+promised in prose. A second test inspects every `api()`, `enqueue()`, and
+`flush()` call in the capture app and fails if a recorder, Blob, or pose track
+ever reaches one.
+
+**It does not outlive the moment.** The Blob and its object URL are released
+when the athlete leaves the review screen, taps Done, starts another session, or
+backgrounds the app. A clip sitting in memory while the phone is in a pocket is
+exactly what the promise says does not happen.
+
+**It does not grow without bound.** A long session is capped at 60MB, oldest
+footage dropped first — an athlete who trains twenty minutes can still review
+the last ten, and the end of a set is the part worth watching anyway. The app
+says when that happened rather than silently showing a shorter clip.
+
+Alongside the video it keeps a compact pose track — twelve body landmarks at
+15fps, about 120KB a minute — so the skeleton can be scrubbed instantly instead
+of re-running detection on every drag. **Face landmarks are not stored**, and a
+landmark that was not visible is recorded as absent rather than guessed, so the
+overlay never claims the athlete was somewhere they were not.
+
+Saving the clip puts it on the athlete's own phone. It is their video of
+themselves and nothing about it reaches a server either way.
 
 ---
 
