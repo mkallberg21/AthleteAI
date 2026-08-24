@@ -64,8 +64,36 @@ export const WORK_WIDTH = 480;
  */
 export const MIN_RESOLVABLE_RADIUS_PX = 2.2;
 
-/** A lacrosse ball is 6.35cm; a youth torso, shoulder to hip, is about 45cm. */
-export const BALL_TO_TORSO = 6.35 / 45;
+/** A youth torso, shoulder to hip. Every size prior is measured against it. */
+export const TORSO_CM = 45;
+
+/** A lacrosse ball is 6.35cm. Kept for callers that predate the registry. */
+export const BALL_TO_TORSO = 6.35 / TORSO_CM;
+
+/**
+ * Regulated ball diameters, in centimetres.
+ *
+ * This table is the reason a purpose-built detector beats a general one. Every
+ * one of these is fixed by rule, so combined with the athlete's torso in the
+ * same frame the ball's size in pixels is *computed* rather than guessed --
+ * and a basketball that measures the size of a lacrosse ball is not a
+ * basketball, it is something orange in the background.
+ *
+ * Where a sport has youth sizes the middle one is used; the spread across
+ * sizes is about ten percent, which the radius tolerance absorbs several
+ * times over.
+ */
+export const BALLS = {
+  lacrosse: { diameterCm: 6.35, colour: 'white' },
+  // Sizes 5-7 run 22.0 to 24.3cm.
+  basketball: { diameterCm: 23.0, colour: 'basketball' },
+  // Sizes 3-5 run 18.5 to 22.0cm.
+  soccer: { diameterCm: 20.5, colour: 'white' },
+  volleyball: { diameterCm: 21.0, colour: 'white' },
+  baseball: { diameterCm: 7.4, colour: 'white' },
+  softball: { diameterCm: 9.7, colour: 'optic' },
+  tennis: { diameterCm: 6.7, colour: 'optic' },
+};
 
 /** Accept a blob between these multiples of the radius the pose implies. */
 export const RADIUS_TOLERANCE = [0.45, 2.2];
@@ -97,6 +125,13 @@ export const PRESETS = {
   // point in this space -- so it is matched on brightness and leans entirely
   // on the motion gate to tell it from the wall behind it.
   white: { kind: 'bright', minLuma: 170, maxSpread: 0.055 },
+  // A basketball is orange-brown and so is brick, which sits only 0.056 away
+  // -- the tightest separation in this table by some margin. The tolerance is
+  // set to half that, and the size, shape and motion gates carry the rest.
+  basketball: { kind: 'chroma', nr: 0.565, ng: 0.304, tol: 0.030, minLuma: 45 },
+  // Tennis and softball optic yellow, which is greener than a yellow lacrosse
+  // ball and needs its own centroid rather than a widened one.
+  optic: { kind: 'chroma', nr: 0.418, ng: 0.446, tol: 0.050, minLuma: 55 },
 };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -174,7 +209,7 @@ export function calibrate(image, box) {
  * away anything is. Returns null when the pose is not usable, and the caller
  * then falls back to an unconstrained search rather than a wrong constraint.
  */
-export function radiusFromPose(landmarks, index) {
+export function radiusFromPose(landmarks, index, diameterCm = 6.35) {
   if (!landmarks) return null;
   const shoulder = landmarks[index.left_shoulder] || landmarks[index.right_shoulder];
   const hip = landmarks[index.left_hip] || landmarks[index.right_hip];
@@ -183,7 +218,7 @@ export function radiusFromPose(landmarks, index) {
 
   const torso = Math.hypot(shoulder.x - hip.x, shoulder.y - hip.y);
   if (torso < 0.05) return null;
-  return (torso * BALL_TO_TORSO) / 2;
+  return (torso * (diameterCm / TORSO_CM)) / 2;
 }
 
 /**
@@ -218,6 +253,49 @@ export class BallVision {
   tooSmall(expectedRadius, height) {
     if (!expectedRadius) return false;
     return expectedRadius * height < MIN_RESOLVABLE_RADIUS_PX;
+  }
+
+  /**
+   * Whether a measured blob is shaped and sized like the ball.
+   *
+   * Shared by both refinement attempts so the colour-first and motion-only
+   * measurements are judged identically -- otherwise the fallback could be
+   * accepted on terms the primary was refused on.
+   */
+  _accept(blob, { reach, cx, cy, width, height, expectedRadius }) {
+    const { count, minX, maxX, minY, maxY } = blob;
+    const boxW = maxX - minX + 1, boxH = maxY - minY + 1;
+
+    // Measured across the blob rather than from the matched-pixel count. A
+    // panelled ball -- a soccer ball's black hexagons, a baseball's stitching
+    // -- matches on maybe 70% of its own area, and a count-derived radius
+    // would report it 16% small every time. The panels still reach the edges,
+    // so the box spans the real ball.
+    const radiusPx = Math.max(boxW, boxH) / 2;
+
+    // Pixels running to the edge of the search window mean the object
+    // continues past it, so its size is unknown and larger than measured.
+    const edge = 1;
+    if (expectedRadius && (
+      minX <= clamp(cx - reach, 0, width) + edge
+      || maxX >= clamp(cx + reach, 0, width) - 1 - edge
+      || minY <= clamp(cy - reach, 0, height) + edge
+      || maxY >= clamp(cy + reach, 0, height) - 1 - edge)) {
+      return false;
+    }
+
+    // A disc fills its own circle. A jacket sleeve or a strip of sunlight of
+    // the same colour does not.
+    if (count / (Math.PI * radiusPx * radiusPx) < MIN_FILL) return false;
+    if (Math.min(boxW, boxH) / Math.max(boxW, boxH) < 0.55) return false;
+
+    if (expectedRadius) {
+      const ratio = (radiusPx / height) / expectedRadius;
+      // The filter no general detector can apply: a ball's diameter is fixed
+      // by rule, and the athlete's own torso says how big that is here.
+      if (ratio < RADIUS_TOLERANCE[0] || ratio > RADIUS_TOLERANCE[1]) return false;
+    }
+    return true;
   }
 
   /**
@@ -258,9 +336,12 @@ export class BallVision {
     // and measured the ball as the size of the wall.
     if (!this.mask || this.mask.length !== width * height) {
       this.mask = new Float32Array(width * height);
+      this.moved = new Uint8Array(width * height);
     }
     const mask = this.mask;
+    const moved = this.moved;
     mask.fill(0);
+    moved.fill(0);
 
     const cell = 4;
     const cols = Math.ceil(width / cell);
@@ -271,6 +352,14 @@ export class BallVision {
         const i = (y * width + x) * 4;
         const score = matchPixel(data[i], data[i + 1], data[i + 2], this.profile);
         if (score <= 0) continue;
+        // Colour and motion are recorded separately rather than combined.
+        // Combining them broke large balls: a basketball moving at a normal
+        // speed overlaps itself almost completely between frames, so only a
+        // thin crescent changes and the ball measured as a sliver. Motion is
+        // for working out *where* to look; colour and shape are for measuring
+        // what is there.
+        mask[y * width + x] = score;
+        let changed = true;
         if (previous && this.useMotion) {
           // A ball is moving. A painted line of the same colour is not, and
           // this is the only thing separating them for a white ball.
@@ -282,16 +371,19 @@ export class BallVision {
             const lumaNow = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
             const lumaWas = 0.299 * previous[i] + 0.587 * previous[i + 1]
               + 0.114 * previous[i + 2];
-            if (lumaNow - lumaWas < this.motionThreshold) continue;
+            changed = lumaNow - lumaWas >= this.motionThreshold;
           } else {
-            const moved = Math.abs(data[i] - previous[i])
+            const delta = Math.abs(data[i] - previous[i])
               + Math.abs(data[i + 1] - previous[i + 1])
               + Math.abs(data[i + 2] - previous[i + 2]);
-            if (moved < this.motionThreshold) continue;
+            changed = delta >= this.motionThreshold;
           }
         }
-        mask[y * width + x] = score;
-        grid[((y / cell) | 0) * cols + ((x / cell) | 0)] += score;
+        if (changed) {
+          moved[y * width + x] = 1;
+          // Only moving pixels vote for where to look.
+          grid[((y / cell) | 0) * cols + ((x / cell) | 0)] += score;
+        }
       }
     }
 
@@ -313,21 +405,48 @@ export class BallVision {
       8, Math.round((expectedRadius || 0.03) * height * RADIUS_TOLERANCE[1] * 1.6),
     );
 
-    let sx = 0, sy = 0, weight = 0, count = 0;
-    let minX = width, maxX = 0, minY = height, maxY = 0;
-    for (let y = clamp(cy - reach, 0, height); y < clamp(cy + reach, 0, height); y += 1) {
-      for (let x = clamp(cx - reach, 0, width); x < clamp(cx + reach, 0, width); x += 1) {
-        const score = mask[(y | 0) * width + (x | 0)];
-        if (score <= 0) continue;
-        sx += x * score; sy += y * score; weight += score; count += 1;
-        if (x < minX) minX = x; if (x > maxX) maxX = x;
-        if (y < minY) minY = y; if (y > maxY) maxY = y;
+    // Measure the whole blob by colour first. If colour alone over-segments --
+    // a white ball in front of a white wall, where everything matches -- fall
+    // back to the moving pixels only. Preferring colour is what keeps a large
+    // ball from being measured as the crescent that changed; the fallback is
+    // what keeps a white ball findable against a wall.
+    const measure = (motionOnly) => {
+      let sx = 0, sy = 0, weight = 0, count = 0;
+      let minX = width, maxX = 0, minY = height, maxY = 0;
+      for (let y = clamp(cy - reach, 0, height); y < clamp(cy + reach, 0, height); y += 1) {
+        for (let x = clamp(cx - reach, 0, width); x < clamp(cx + reach, 0, width); x += 1) {
+          const at = (y | 0) * width + (x | 0);
+          const score = mask[at];
+          if (score <= 0) continue;
+          if (motionOnly && !moved[at]) continue;
+          sx += x * score; sy += y * score; weight += score; count += 1;
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+      return { sx, sy, weight, count, minX, maxX, minY, maxY };
+    };
+
+    const attempts = this.useMotion && previous ? [false, true] : [false];
+    let chosen = null;
+    for (const motionOnly of attempts) {
+      const blob = measure(motionOnly);
+      if (blob.count < MIN_PIXELS || blob.weight <= 0) continue;
+      if (this._accept(blob, { reach, cx, cy, width, height, expectedRadius })) {
+        chosen = blob;
+        break;
       }
     }
-    if (count < MIN_PIXELS || weight <= 0) return null;
+    if (!chosen) return null;
+    const { sx, sy, weight, count, minX, maxX, minY, maxY } = chosen;
 
-    const radiusPx = Math.sqrt(count / Math.PI);
     const boxW = maxX - minX + 1, boxH = maxY - minY + 1;
+    // Measured across the blob rather than from the matched-pixel count.
+    // A panelled ball -- a soccer ball's black hexagons, a baseball's
+    // stitching -- matches on maybe 70% of its own area, and a count-derived
+    // radius would report it 16% small every time. The white panels still
+    // reach the edges, so the box spans the real ball.
+    const radiusPx = Math.max(boxW, boxH) / 2;
 
     // Matched pixels running to the edge of the search window mean the object
     // continues beyond it, so its real size is unknown and larger than this.
@@ -342,7 +461,7 @@ export class BallVision {
 
     // A disc fills its own circle. A jacket sleeve or a strip of sunlight of
     // the same colour does not, and this is what rejects them.
-    const fill = count / (Math.PI * Math.pow(Math.max(boxW, boxH) / 2, 2));
+    const fill = count / (Math.PI * radiusPx * radiusPx);
     if (fill < MIN_FILL) return null;
     const aspect = Math.min(boxW, boxH) / Math.max(boxW, boxH);
     if (aspect < 0.55) return null;

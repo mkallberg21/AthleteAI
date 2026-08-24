@@ -299,9 +299,14 @@ class BallSpec:
     #:             uses the athlete's own torso to know how big the ball
     #:             should be -- which the general model cannot do.
     detector: str = "model"
-    #: Default colour preset when the athlete has not calibrated: white,
-    #: yellow or orange. Only meaningful for the vision detector.
+    #: Default colour preset when the athlete has not calibrated. Only
+    #: meaningful for the vision detector.
     colour: str = "white"
+    #: Regulated diameter in centimetres. With the athlete's torso in the same
+    #: frame this makes the ball's size in pixels a computed quantity rather
+    #: than a guess, which is the single strongest filter the vision detector
+    #: has and the one a general model cannot use at all.
+    diameter_cm: float = 6.35
 
     @property
     def counts(self) -> bool:
@@ -323,6 +328,7 @@ class BallSpec:
             "min_track_quality": self.min_track_quality,
             "detector": self.detector,
             "colour": self.colour,
+            "diameter_cm": self.diameter_cm,
         }
 
 

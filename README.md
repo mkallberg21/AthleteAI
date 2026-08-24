@@ -126,7 +126,7 @@ athleteiq/
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
     ball.js         Ball tracking: detect-then-track, contacts, ball reps
-    ballvision.js   The lacrosse-specific detector: colour, size, motion
+    ballvision.js   Purpose-built ball detector: colour, regulated size, motion
     review.js       Self-review recording, markers, pose track (never uploaded)
     offline.js      IndexedDB slot pool + submission queue
     sw.js           Service worker: app-shell cache and push delivery
@@ -1091,11 +1091,12 @@ juggle if a foot is next to it and a dribble if nothing is. There is a test
 driving the same trajectory into both drills and asserting each counts it — and
 that a foot placed elsewhere counts nothing.
 
-### The lacrosse-specific detector
+### The purpose-built detector
 
-The general model knows "sports ball" from photographs of basketballs and
-tennis balls. It does not reliably see a 6cm ball moving at speed against a
-wall, which left wall-ball confirmation firing only sometimes.
+The general model knows "sports ball" from photographs. It does not reliably
+see a 6cm ball moving at speed against a wall, and it cannot tell a basketball
+from an orange thing in the background because it has no idea how far away
+anything is. Every ball drill now uses the purpose-built detector instead.
 
 **`ballvision.js` is classical computer vision, not a trained model.** No
 network was trained and none is downloaded. That is a deliberate choice, not a
@@ -1105,19 +1106,45 @@ uploading exactly the footage the architecture promises never to upload. It
 exploits four things about a lacrosse ball instead, none of which a general
 model can use.
 
-**Its size is regulated.** A lacrosse ball is 6.35cm, always. Pose gives the
-athlete's torso in the same frame and a youth torso is about 45cm, so the ball's
-expected radius in pixels is *computed*, not guessed — and anything twice or
-half that is not the ball. A general detector cannot do this because it has no
-idea how far away anything is.
+**Its size is regulated.** Every ball in the table below has a diameter fixed by
+rule. Pose gives the athlete's torso in the same frame and a youth torso is about
+45cm, so the expected radius in pixels is *computed*, not guessed — and anything
+twice or half that is not the ball. A general detector cannot do this.
 
-**Its colour is regulated too.** Centroids for white, yellow and orange are
-measured from real ball colours in sun and shade, in illumination-normalised
-chroma so a ball in shadow matches the same point as one in sun. Tolerances are
-set from the distance to the nearest thing that is *not* a ball — skin at 0.134
-for yellow, brick at 0.120 for orange — with better than twice that margin, and
-a test asserts the separation. Better still, "Show the app your ball" samples
-the athlete's actual ball under their actual light.
+| Sport | Ball | Colour profile |
+|---|---|---|
+| Lacrosse | 6.35cm | white |
+| Tennis | 6.7cm | optic |
+| Baseball | 7.4cm | white |
+| Softball | 9.7cm | optic |
+| Soccer | 20.5cm | white |
+| Volleyball | 21cm | white |
+| Basketball | 23cm | basketball |
+
+Where a sport has youth sizes the middle one is used; the spread is about ten
+percent, which the radius tolerance absorbs several times over. A basketball is
+nearly four times a lacrosse ball across, so using one number for everything
+would have made the size gate useless.
+
+**Its colour is regulated too.** Five profiles — white, yellow, orange,
+basketball and optic — with centroids measured from real ball colours in sun and
+shade, in illumination-normalised chroma so a ball in shadow lands on the same
+point as one in sun. Tolerances come from the distance to the nearest thing that
+is *not* a ball, and a test asserts every ball matches its profile while no
+distractor matches any:
+
+| Profile | Nearest distractor | Distance | Tolerance |
+|---|---|---|---|
+| Yellow | skin | 0.134 | 0.055 |
+| Orange | brick | 0.120 | 0.050 |
+| Optic | skin | 0.126 | 0.050 |
+| **Basketball** | **brick** | **0.056** | **0.030** |
+
+Basketball is the tight one, and worth naming: an orange-brown ball against an
+orange-brown wall is the least separable pair in the product, so it leans hardest
+on size and shape. Better than any preset, "Show the app your ball" samples the
+athlete's actual ball under their actual light — which is also the answer for a
+purple soccer ball or anything else the presets do not anticipate.
 
 **It is a solid disc**, so matched pixels must fill the circle they imply. A
 yellow jacket sleeve matches on every pixel and is rejected for being a streak.
@@ -1136,6 +1163,15 @@ it — a pale wall matches the white profile *better* than the ball does. The
 motion gate carries it, and it is **directional**: a bright ball arriving makes a
 pixel brighter, a bright ball leaving makes it darker, and a plain
 change-magnitude test followed the hole the ball left instead of the ball.
+
+**Motion decides where to look; colour and shape measure what is there.** That
+split matters more than it sounds. Gating pixels on motion directly worked for
+small fast balls and quietly broke large ones: a basketball moving at normal
+speed overlaps itself almost completely between frames, so only a thin crescent
+changes and the ball measured as a sliver — detection sat at 41%. Measuring by
+colour first and falling back to the moving pixels only when colour
+over-segments fixed it, and detection across every sport on a normal background
+is now 100% in simulation.
 
 ### Two modes: counting, and confirming
 
@@ -1739,73 +1775,91 @@ contact with a real driveway:
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
    the calibration against hand-counted ground truth remains the
    highest-value next task, and the reason the specs are data rather than code.
-6. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
-   motion without tracking the ball, so a convincing shadow-throw with no ball
-   counts. Ball detection would close that, at real cost in model size and
-   battery.
-7. **Multi-sport participation is self-reported and unverified.** An athlete
+6. **The ball detector is validated on synthetic frames, not real footage.**
+   Rendered discs on rendered backgrounds prove the logic — colour separation,
+   the size gate, shape rejection, motion direction, the large-ball fix — and
+   say nothing about motion blur on a hard throw, a ball leaving frame between
+   detections, or a cluttered garden. Filming real athletes and measuring the
+   detection rate is the highest-value next task, exactly as it is for the pose
+   thresholds. Treat every detection percentage quoted above as arithmetic
+   rather than evidence.
+7. **A large white ball against a pale wall is the weakest case.** Colour
+   cannot separate them, and a big ball barely displaces itself between frames
+   so the motion fallback has little to work with: in simulation soccer and
+   volleyball detect at about 55% against a pale indoor wall, against 100% on
+   grass or anything with contrast. Still above the quality floor, so those
+   drills count, but indoor volleyball is where this is thinnest. Small balls
+   are unaffected — a lacrosse or tennis ball fully displaces itself between
+   frames, so motion sees all of it.
+8. **A session with no ball at all is still counted.** Wall-ball confirmation
+   only ever penalises on positive evidence, so an athlete who films with no
+   ball in shot, or against a background where it is never detected, gets a
+   note and full credit. That is the deliberate trade — the alternative marks
+   down every kid whose lighting is poor — but it means the shadow-throwing
+   hole is narrowed, not sealed.
+9. **Multi-sport participation is self-reported and unverified.** An athlete
    who ticks three sports gets an earlier specialisation gate and a lighter
    weekly budget, and nothing stops them ticking sports they do not play. The
    incentive is weak in both directions — the reward is a different drill mix,
    not points or a leaderboard place, and the lighter budget asks *less* of
    them — and a coach sees the list on the roster, which is the check that
    matters. But it is a self-report, and the gate treats it as fact.
-8. **Seasons are a coarse proxy for training load.** Three seasons of
+10. **Seasons are a coarse proxy for training load.** Three seasons of
    recreational soccer and three seasons of travel soccer score identically,
    though they are not remotely the same week. Capturing sessions per week per
    sport would sharpen it, at the cost of a form a twelve-year-old will not
    fill in — which is the trade the season picker deliberately takes.
-9. **Positions are modelled for lacrosse only.** Another sport gets honest
+11. **Positions are modelled for lacrosse only.** Another sport gets honest
    silence — `for_sport` returns nothing, athletes fall back to the generic
    mix, and the join form falls back to free text. Adding a sport means adding
    its positions *and* the sport-specific drills their emphasis would point at;
    half of that is worse than neither, since a soccer emphasis built only from
    the general strength drills would recommend the same mix to every position
    on the pitch.
-10. **The age bands are heuristics, not a clinical instrument.** They are drawn
+12. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-11. **Handedness is inferred from wrist height**, which is reliable for standard
+13. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-12. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+14. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-13. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+15. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-14. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+16. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-15. **Revocation soft-fails by default**, though pre-fetched staples make strict
+17. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-16. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+18. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-17. **No payment processor.** The billing model, entitlements, and invoicing are
+19. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-18. **Offline slots are per-drill.** A drill you have never opened online has no
+20. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-19. **Web Push needs credentials.** Notifications generate and display in-app
+21. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-20. **Form quality is pose-only.** It reads how the body moved, not where the
+22. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-21. **Guardian identity is proven by the invite code alone.** There is no email
+23. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-22. **Roster import reads delimited text only.** CSV, TSV, and
+24. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-23. **Load coefficients are reasoned estimates, not measured values.** The
+25. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

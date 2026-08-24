@@ -1319,7 +1319,12 @@ function detectByVision() {
   let image;
   try { image = workFrame(); } catch { return null; }
   const landmarks = lastLandmarks;
-  const expectedRadius = radiusFromPose(landmarks, LANDMARK_INDEX);
+  // Each drill's own ball, not a lacrosse ball for everything: a basketball
+  // is nearly four times the diameter, and the size gate is only a filter if
+  // it is filtering on the right size.
+  const expectedRadius = radiusFromPose(
+    landmarks, LANDMARK_INDEX, (activeDrill.ball && activeDrill.ball.diameter_cm) || 6.35,
+  );
   const near = ballCounter && ballCounter.tracker.visible
     ? { x: ballCounter.tracker.x, y: ballCounter.tracker.y }
     : null;

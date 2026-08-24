@@ -10,12 +10,13 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
 import {
-  BallVision, PRESETS, calibrate, matchPixel, radiusFromPose,
-  BALL_TO_TORSO, RADIUS_TOLERANCE,
+  BallVision, PRESETS, BALLS, calibrate, matchPixel, radiusFromPose,
+  BALL_TO_TORSO, TORSO_CM, RADIUS_TOLERANCE,
 } from '../../athleteiq/web/static/ballvision.js';
 import { LANDMARK_INDEX } from '../../athleteiq/web/static/ball.js';
 
 const W = 192, H = 108;
+const SPECS = JSON.parse(process.env.DRILL_SPECS);
 
 /** A frame: flat background, optional discs, optional noise. */
 function frame({ bg = [70, 90, 70], discs = [], noise = 0, seed = 1 } = {}) {
@@ -174,11 +175,95 @@ test('calibrating on a white ball produces the brightness profile', () => {
   assert.equal(profile.kind, 'bright');
 });
 
-test('the colour presets separate every ball from every distractor', () => {
+
+
+/** A ball with panels: a base colour plus darker patches, like a real one. */
+function panelled(x, y, r, base, patch) {
+  const discs = [{ x, y, r, colour: base }];
+  // Three patches, covering roughly a quarter of the face.
+  discs.unshift(
+    { x: x - r * 0.4, y: y - r * 0.3, r: r * 0.32, colour: patch },
+    { x: x + r * 0.45, y: y + r * 0.2, r: r * 0.28, colour: patch },
+  );
+  return discs;
+}
+
+test('every sport in the registry has a regulated diameter and a colour', () => {
+  for (const [sport, ball] of Object.entries(BALLS)) {
+    assert.ok(ball.diameterCm > 5 && ball.diameterCm < 30, sport);
+    assert.ok(PRESETS[ball.colour], `${sport} names an unknown preset`);
+  }
+});
+
+test('the size prior follows the sport, not a lacrosse ball for everything', () => {
+  const landmarks = [];
+  landmarks[LANDMARK_INDEX.left_shoulder] = { x: 0.45, y: 0.30, visibility: 0.9 };
+  landmarks[LANDMARK_INDEX.left_hip] = { x: 0.45, y: 0.60, visibility: 0.9 };
+
+  const lax = radiusFromPose(landmarks, LANDMARK_INDEX, BALLS.lacrosse.diameterCm);
+  const basket = radiusFromPose(landmarks, LANDMARK_INDEX, BALLS.basketball.diameterCm);
+  // A basketball is nearly four times a lacrosse ball across, and the gate is
+  // only a filter if it filters on the right size.
+  assert.ok(basket / lax > 3.5 && basket / lax < 3.9, `ratio ${basket / lax}`);
+  assert.ok(Math.abs(basket - (0.30 * (23.0 / TORSO_CM)) / 2) < 1e-9);
+});
+
+test('it finds a basketball and is not fooled by brick', () => {
+  // The tightest colour separation in the table: basketball orange-brown sits
+  // 0.056 from brick, so this one leans hardest on colour precision.
+  const vision = new BallVision({ profile: PRESETS.basketball, useMotion: false });
+  const expected = 9 / H;
+
+  const ball = vision.detect(
+    frame({ bg: [120, 130, 120], discs: [{ x: 96, y: 54, r: 9, colour: [205, 110, 45] }] }),
+    { expectedRadius: expected },
+  );
+  assert.ok(ball, 'lost the basketball');
+  assert.ok(Math.abs(ball.x * W - 96) < 4);
+
+  const brickOnly = vision.detect(
+    frame({ bg: [150, 80, 60] }), { expectedRadius: expected },
+  );
+  assert.equal(brickOnly, null, 'a brick wall is not a basketball');
+});
+
+test('a panelled soccer ball is measured across the ball, not the white bits', () => {
+  // A count-derived radius reports a panelled ball 16% small every time,
+  // because the patches match nothing. The box still spans the real ball.
+  const vision = new BallVision({ profile: PRESETS.white, useMotion: false });
+  const r = 9;
+  const found = vision.detect(
+    frame({ bg: [70, 110, 70], discs: panelled(96, 54, r, [242, 244, 240], [30, 30, 32]) }),
+  );
+  assert.ok(found, 'lost a panelled ball entirely');
+  const measured = found.r * H;
+  assert.ok(measured > r * 0.8 && measured < r * 1.2,
+    `measured ${measured.toFixed(1)} for a true ${r}`);
+});
+
+test('a stitched baseball is still round enough', () => {
+  const vision = new BallVision({ profile: PRESETS.white, useMotion: false });
+  const found = vision.detect(
+    frame({ bg: [70, 110, 70], discs: panelled(96, 54, 7, [246, 244, 236], [170, 40, 40]) }),
+  );
+  assert.ok(found, 'stitching should not lose the ball');
+});
+
+test('a tennis ball is found on a court and not confused with a lacrosse yellow', () => {
+  const vision = new BallVision({ profile: PRESETS.optic, useMotion: false });
+  const found = vision.detect(
+    frame({ bg: [110, 90, 80], discs: [{ x: 130, y: 60, r: 5, colour: [222, 232, 58] }] }),
+  );
+  assert.ok(found && Math.abs(found.x * W - 130) < 4);
+});
+
+test('each preset separates its own balls from every distractor', () => {
   const balls = {
-    yellow: [[245, 220, 30], [180, 165, 35], [230, 220, 40], [222, 232, 58]],
+    yellow: [[245, 220, 30], [180, 165, 35], [230, 220, 40]],
     orange: [[255, 120, 20], [190, 90, 25]],
-    white: [[238, 240, 235], [180, 182, 178]],
+    white: [[238, 240, 235], [180, 182, 178], [242, 244, 240]],
+    basketball: [[205, 110, 45], [180, 95, 40], [225, 125, 60], [160, 85, 35]],
+    optic: [[222, 232, 58], [205, 220, 70], [180, 200, 55], [230, 240, 90]],
   };
   const distractors = [
     [60, 120, 50], [210, 160, 130], [40, 60, 200], [200, 40, 40],
@@ -192,4 +277,51 @@ test('the colour presets separate every ball from every distractor', () => {
       assert.equal(matchPixel(...other, profile), 0, `${name} matched ${other}`);
     }
   }
+});
+
+test('every ball drill names a preset and a diameter that exist', () => {
+  for (const drill of SPECS.filter((d) => d.ball && d.ball.detector === 'vision')) {
+    assert.ok(PRESETS[drill.ball.colour], `${drill.key} -> ${drill.ball.colour}`);
+    assert.ok(drill.ball.diameter_cm > 5, drill.key);
+    const known = BALLS[drill.sport];
+    if (known) {
+      assert.equal(drill.ball.diameter_cm, known.diameterCm, drill.key);
+      assert.equal(drill.ball.colour, known.colour, drill.key);
+    }
+  }
+});
+
+
+test('a large slow ball is measured whole, not as the crescent that moved', () => {
+  // The regression this guards is subtle and was found end to end, not here:
+  // a basketball moving at a normal speed overlaps itself almost completely
+  // between frames, so under a pixel-level motion gate only a thin crescent
+  // changed and the ball measured as a sliver. Detection was 41%. Motion is
+  // now used to decide *where* to look, and colour and shape to measure what
+  // is there.
+  const vision = new BallVision({ profile: PRESETS.basketball, useMotion: true });
+  const r = 20;
+  const expected = r / H;
+  const ball = (x) => frame({ bg: [95, 120, 95], discs: [{ x, y: 54, r, colour: [205, 110, 45] }] });
+
+  vision.detect(ball(80), { expectedRadius: expected });
+  // Moved by a fifth of its own radius: heavy self-overlap.
+  const found = vision.detect(ball(84), { expectedRadius: expected });
+  assert.ok(found, 'lost a large ball that barely moved');
+  const measured = found.r * H;
+  assert.ok(measured > r * 0.8 && measured < r * 1.25,
+    `measured ${measured.toFixed(1)} for a true ${r}`);
+});
+
+test('the white-wall fallback still works after that change', () => {
+  // The two requirements pull against each other: measuring by colour first
+  // is what fixes the large ball, and falling back to motion is what keeps a
+  // white ball findable against a wall that matches it.
+  const wall = [200, 201, 199];
+  const vision = new BallVision({ profile: PRESETS.white, useMotion: true });
+  const ball = (x) => frame({ bg: wall, discs: [{ x, y: 50, r: 4, colour: [248, 250, 246] }] });
+  vision.detect(ball(60), { expectedRadius: 4 / H });
+  const found = vision.detect(ball(95), { expectedRadius: 4 / H });
+  assert.ok(found, 'lost the ball against the wall');
+  assert.ok(Math.abs(found.x * W - 95) < 6, `x was ${found.x * W}`);
 });
