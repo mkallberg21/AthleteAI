@@ -181,13 +181,15 @@ test('a track that vanishes is dropped rather than extrapolated', () => {
   assert.equal(tracker.visible, false, 'a ball is not invented through a gap');
 });
 
-test('every ball drill requires the ball and declares a quality floor', () => {
+test('every ball drill declares parts and a quality floor', () => {
   const ballDrills = SPECS.filter((d) => d.ball);
-  assert.ok(ballDrills.length >= 5);
+  assert.ok(ballDrills.length >= 6);
   for (const drill of ballDrills) {
-    assert.equal(drill.ball.required, true, drill.key);
     assert.ok(drill.ball.min_track_quality > 0, drill.key);
     assert.ok(drill.ball.parts.length > 0, drill.key);
+    // Count mode cannot work without the ball; confirm mode must never
+    // require it, because not seeing one proves nothing.
+    assert.equal(drill.ball.required, drill.ball.mode === 'count', drill.key);
   }
 });
 
@@ -213,13 +215,13 @@ test('every ball drill is exercised by this file', () => {
   // The mirror of the calibration harness rule: a ball drill added without a
   // test here would be unguarded in both files and look green in both.
   const covered = new Set(['soc_juggle', 'bkb_dribble', 'vb_set',
-                           'bb_wall_throw', 'ten_wall_rally']);
+                           'bb_wall_throw', 'ten_wall_rally', 'lax_wall_ball']);
   const missing = SPECS.filter((d) => d.ball && !covered.has(d.key)).map((d) => d.key);
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
 });
 
-test('every ball drill can actually count through its own spec', () => {
-  for (const drill of SPECS.filter((d) => d.ball)) {
+test('every count-mode drill can actually count through its own spec', () => {
+  for (const drill of SPECS.filter((d) => d.ball && d.ball.mode === 'count')) {
     const counter = new BallRepCounter(drill);
     const ground = drill.ball.contact === 'ground';
     // A dribble bounces off the actual floor with the hands up above it; a
@@ -235,4 +237,31 @@ test('every ball drill can actually count through its own spec', () => {
     run(counter, path, pose(parts));
     assert.ok(counter.count > 0, `${drill.key} counted nothing from a real bounce`);
   }
+});
+
+
+test('wall ball corroborates rather than counting', () => {
+  // Its reps come from the pose counter, so the ball counter's job is to
+  // report how much it saw -- not to produce a number of its own.
+  const drill = spec('lax_wall_ball');
+  assert.equal(drill.ball.mode, 'confirm');
+
+  const counter = new BallRepCounter(drill);
+  run(counter, bounce({ floor: 0.45, apex: 1.5, every: 2, frames: 300 }),
+      pose({ left_wrist: { x: 0.52, y: 0.45 }, right_wrist: { x: 0.60, y: 0.45 } }));
+
+  const confirmation = counter.confirmation();
+  assert.ok(confirmation.ball_contacts > 0, 'saw the ball being thrown');
+  assert.ok(confirmation.track_quality > 0);
+  assert.deepEqual(Object.keys(confirmation).sort(), ['ball_contacts', 'track_quality']);
+});
+
+test('a wall ball session with no ball reports zero contacts, not zero reps', () => {
+  // The whole point of confirm mode. The pose counter is untouched by any of
+  // this; the ball counter simply reports that it saw nothing.
+  const counter = new BallRepCounter(spec('lax_wall_ball'));
+  const landmarks = pose({ left_wrist: { x: 0.52, y: 0.45 } });
+  for (let f = 0; f < 600; f += 1) counter.push(null, landmarks, f * DT * 1000);
+  assert.equal(counter.confirmation().ball_contacts, 0);
+  assert.equal(counter.confirmation().track_quality, 0);
 });

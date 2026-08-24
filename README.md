@@ -76,7 +76,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1415 tests
+python -m pytest tests/ -q          # 1425 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -1089,6 +1089,48 @@ checks body landmarks before the floor, so a ball bouncing at ankle height is a
 juggle if a foot is next to it and a dribble if nothing is. There is a test
 driving the same trajectory into both drills and asserting each counts it — and
 that a foot placed elsewhere counts nothing.
+
+### Two modes: counting, and confirming
+
+A ball spec does one of two jobs, and which one matters more than any threshold
+in it.
+
+**`count`** — the ball *is* the rep. Juggling with no ball is not juggling, so
+these refuse below the quality floor. The five new drills.
+
+**`confirm`** — the body still counts the reps and the ball corroborates them.
+`lax_wall_ball` works this way. Its pose signal already counts throw–catch
+cycles well and attributes the top hand; replacing that with contact counting
+would break every existing athlete's history for no gain. What the ball adds is
+the one thing pose cannot see: that there was no ball.
+
+The rule is **deliberately asymmetric**, and the asymmetry is the design.
+
+| What happened | Result |
+|---|---|
+| Client sent no ball data at all | Counts exactly as before ball tracking existed |
+| Ball never detected | Counts, with a note saying so — **no penalty** |
+| Ball tracked, throws corroborated | Counts quietly |
+| Ball tracked clearly, involved in <25% of throws | **Held for review** |
+
+Not seeing a ball proves nothing. A lacrosse ball is outside COCO's vocabulary —
+the detector knows basketballs and tennis balls, not a 6cm ball moving at speed
+against a wall — so a miss is at least as likely to be the model's blind spot as
+the athlete's honesty, and it never costs them anything. Seeing the ball clearly
+for a whole session and watching it never leave a hand while the arms threw
+forty times proves quite a lot. Penalising only on positive evidence is what
+stops this becoming a feature that quietly marks down every kid whose ball
+happens to be white.
+
+Short sessions are never judged this way, an older client that predates ball
+tracking is unaffected, and the count-mode checks (metronomic timing, an
+impossible left/right split) do not apply — wall-ball reps come from pose, which
+has its own integrity layer for that.
+
+The capture screen never nags on a confirm drill either. It says "Ball
+confirmed" when it can see one and stays silent when it cannot, because telling
+a child to fix a detector's blind spot is asking them to solve something they
+cannot.
 
 ### When it cannot see the ball, it says so
 

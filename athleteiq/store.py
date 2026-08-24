@@ -1310,6 +1310,7 @@ class Store:
         device_label: str = "",
         completed_at: str | None = None,
         track_quality: float | None = None,
+        ball_contacts: int | None = None,
     ) -> dict[str, Any]:
         """Validate, score, and record a completed session.
 
@@ -1376,10 +1377,14 @@ class Store:
                 ],
                 track_quality,
                 claim.duration_ms,
+                ball_contacts=ball_contacts,
             )
             if not ball_review.ok:
                 verdict.status = "review"
-                verdict.notes = list(verdict.notes) + ball_review.reasons
+            # Notes are shown either way. In confirm mode "we could not see a
+            # ball" is information, not an accusation, and hiding it would
+            # leave an athlete wondering why nothing happened.
+            verdict.notes = list(verdict.notes) + ball_review.reasons + ball_review.notes
 
         hand = self._dominant_hand(athlete_id)
 

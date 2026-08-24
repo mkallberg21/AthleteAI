@@ -78,6 +78,23 @@ WALL_BALL = DrillSpec(
         min_duration_ms=15_000,
     ),
     tracks_handedness=True,
+    ball=BallSpec(
+        mode="confirm",
+        # Never required. A lacrosse ball is not in the detector's vocabulary
+        # -- it knows basketballs and tennis balls, not a 6cm ball moving at
+        # speed against a wall -- so failing to see one is at least as likely
+        # to be the detector's blind spot as the athlete's honesty. Requiring
+        # it would punish children for a model's limitation. What it *can* do
+        # is catch the opposite case: a session where the ball was tracked
+        # clearly and never once left a hand.
+        required=False,
+        contact="body",
+        parts=("left_wrist", "right_wrist"),
+        min_gap_ms=400,
+        min_speed=0.40,
+        attribute_side=False,
+        min_track_quality=0.30,
+    ),
     setup_hint=(
         "Stand side-on to the phone, 8-10 feet back, full body and stick head "
         "in frame. Both feet visible."

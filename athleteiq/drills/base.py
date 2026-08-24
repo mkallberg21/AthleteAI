@@ -265,7 +265,17 @@ class BallSpec:
     which is worse than having no feature at all.
     """
 
-    #: A rep is impossible without seeing the ball.
+    #: What the ball is for on this drill.
+    #:
+    #: 'count'   -- the ball *is* the rep. Juggling with no ball is not
+    #:              juggling, so these refuse below the quality floor.
+    #: 'confirm' -- the body still counts the reps and the ball corroborates.
+    #:              For a drill whose pose signal already works, replacing the
+    #:              counter would break every existing athlete's history for no
+    #:              gain; the ball's job there is to catch the one thing pose
+    #:              cannot see, which is that there was no ball.
+    mode: str = "count"
+    #: A rep is impossible without seeing the ball. Never true in confirm mode.
     required: bool = True
     #: Which contacts count. 'body' for juggling, 'ground' for dribbling.
     contact: str = "body"
@@ -281,8 +291,17 @@ class BallSpec:
     #: this the session is held for review rather than counted.
     min_track_quality: float = 0.35
 
+    @property
+    def counts(self) -> bool:
+        return self.mode == "count"
+
+    @property
+    def confirms(self) -> bool:
+        return self.mode == "confirm"
+
     def to_dict(self) -> dict[str, Any]:
         return {
+            "mode": self.mode,
             "required": self.required,
             "contact": self.contact,
             "parts": list(self.parts),
@@ -334,7 +353,13 @@ class DrillSpec:
 
     @property
     def needs_ball(self) -> bool:
-        return self.ball is not None and self.ball.required
+        """Whether a rep is impossible without seeing the ball."""
+        return self.ball is not None and self.ball.counts and self.ball.required
+
+    @property
+    def confirms_ball(self) -> bool:
+        """Whether the ball corroborates a rep the body already counted."""
+        return self.ball is not None and self.ball.confirms
 
     @property
     def scores_quality(self) -> bool:

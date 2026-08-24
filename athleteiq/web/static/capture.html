@@ -326,6 +326,7 @@ let homeSport = null;
 let landmarker = null;
 let ballDetector = null;
 let ballCounter = null;
+let ballConfirms = false;
 let lastBallDetectAt = 0;
 let stream = null;
 let counter = null;
@@ -1095,7 +1096,9 @@ async function ensureLandmarker() {
 async function openCapture(drill) {
   activeDrill = drill;
   counter = new RepCounter(drill);
+  // Count mode replaces the pose counter; confirm mode runs alongside it.
   ballCounter = drill.ball ? new BallRepCounter(drill) : null;
+  ballConfirms = Boolean(drill.ball && drill.ball.mode === 'confirm');
   lastBallDetectAt = 0;
   $('ball-readout').classList.toggle('hidden', !drill.ball);
   if (drill.ball) {
@@ -1104,9 +1107,15 @@ async function openCapture(drill) {
       await ensureBallDetector();
       setBanner('');
     } catch {
-      // Refused rather than degraded. Counting juggles off the body alone
-      // would report a number for a kid standing still holding a phone.
-      setBanner('Could not load the ball detector — this drill needs it.', true);
+      // Only fatal for a drill the ball actually counts. In confirm mode the
+      // body counts the reps, so a missing detector just means no
+      // corroboration -- exactly how this drill worked before.
+      if (drill.ball.mode === 'confirm') {
+        ballCounter = null;
+        setBanner('');
+      } else {
+        setBanner('Could not load the ball detector — this drill needs it.', true);
+      }
     }
   }
   session = null;
@@ -1219,12 +1228,14 @@ function renderLoop() {
       ballCounter.push(detection, landmarks, t);
       if (detection) drawBall(ctx, detection, canvas.width, canvas.height);
       updateBallReadout();
+      // In confirm mode the body is still what counts. The ball is watching.
+      if (ballConfirms) counter.push(landmarks, t);
     } else {
       counter.push(landmarks, t);
     }
     if (recorder) recorder.samplePose(landmarks, t);
 
-    if (ballCounter) {
+    if (ballCounter && !ballConfirms) {
       $('reps').textContent = ballCounter.count;
       if (activeDrill.tracks_handedness) {
         const { left, right } = ballCounter.handCounts();
@@ -1283,6 +1294,15 @@ function updateBallReadout() {
   const el = $('ball-quality');
   el.textContent = `Ball seen in ${Math.round(quality * 100)}% of frames`;
   el.className = ballCounter.trusted ? 'small muted' : 'small warn-text';
+  if (ballConfirms) {
+    // Never nag on a confirm drill. A lacrosse ball the detector cannot see
+    // is the detector's problem, and telling a child to fix it would be
+    // asking them to solve something they cannot.
+    el.className = 'small muted';
+    $('ball-help').textContent = ballCounter.trusted
+      ? 'Ball confirmed.' : '';
+    return;
+  }
   $('ball-help').textContent = ballCounter.trusted
     ? ''
     : 'Move the phone so the ball and your whole body are in shot.';
@@ -1353,8 +1373,11 @@ async function finishSession() {
 
   // Whichever counter was actually running. A ball drill never fed the pose
   // counter, so submitting from it would post an empty session.
-  const source = ballCounter || counter;
+  const source = ballConfirms ? counter : (ballCounter || counter);
   const payload = source.toSubmission(session.session_id, session.nonce, duration, {
+    // Confirm mode merges the ball's corroboration into the pose counter's
+    // submission; the reps stay the pose counter's.
+    ...(ballConfirms && ballCounter ? ballCounter.confirmation() : {}),
     client_version: CLIENT_VERSION,
     device_label: navigator.platform || '',
     // The device's own clock decides which day this counts for. A session

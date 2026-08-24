@@ -367,6 +367,9 @@ class SubmitSessionRequest(BaseModel):
     # drills; on a ball drill its absence is itself a reason to hold the
     # session, since a real client always knows this number.
     track_quality: float | None = Field(default=None, ge=0.0, le=1.0)
+    # Confirm-mode drills only: how many contacts the ball tracker saw while
+    # the body counted the reps. Used to tell a real session from a mime.
+    ball_contacts: int | None = Field(default=None, ge=0, le=20_000)
 
 
 @app.post("/api/sessions/submit")
@@ -389,6 +392,7 @@ def submit_session(
             device_label=body.device_label,
             completed_at=body.completed_at,
             track_quality=body.track_quality,
+            ball_contacts=body.ball_contacts,
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

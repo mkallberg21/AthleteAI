@@ -419,6 +419,20 @@ export class BallRepCounter {
   }
 
   /**
+   * Corroboration for a drill whose reps the *body* counted.
+   *
+   * Returned as fields to merge into the pose counter's submission rather
+   * than a submission of its own: in confirm mode the reps belong to the pose
+   * counter and this only ever adds to them.
+   */
+  confirmation() {
+    return {
+      track_quality: Math.round(this.trackQuality * 1000) / 1000,
+      ball_contacts: this.detector.contacts.length,
+    };
+  }
+
+  /**
    * The payload posted to /api/sessions/submit. Counts only, same as the pose
    * counter -- plus the track quality, which the server checks against the
    * drill's own floor rather than taking the client's word for.

@@ -40,6 +40,15 @@ HARD_QUALITY_FLOOR = 0.15
 SUSPICIOUS_BALANCE = 0.002
 BALANCE_MIN_REPS = 40
 
+#: Confirm mode. Below this share of reps corroborated by a ball contact --
+#: on a session where the ball *was* clearly visible -- the reps did not
+#: involve a ball.
+CONFIRM_MIN_SHARE = 0.25
+
+#: And not judged at all below this many reps: a handful of throws where the
+#: detector happened to miss the ball is noise, not evidence.
+CONFIRM_MIN_REPS = 15
+
 
 @dataclass
 class BallReview:
@@ -48,16 +57,24 @@ class BallReview:
     reasons: list[str] = field(default_factory=list)
     quality: float = 0.0
 
+    #: Things worth saying that are not accusations. Kept separate from
+    #: `reasons` so a note can never hold a session by accident.
+    notes: list[str] = field(default_factory=list)
+
     def flag(self, reason: str, hold: bool = True) -> None:
         self.reasons.append(reason)
         self.ok = False
         self.hold = self.hold or hold
+
+    def note(self, message: str) -> None:
+        self.notes.append(message)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "ok": self.ok,
             "hold": self.hold,
             "reasons": list(self.reasons),
+            "notes": list(self.notes),
             "quality": round(self.quality, 3),
         }
 
@@ -67,11 +84,14 @@ def review(
     reps: list[dict[str, Any]],
     track_quality: float | None,
     duration_ms: int,
+    ball_contacts: int | None = None,
 ) -> BallReview:
     """Decide whether a ball-tracked submission can be counted."""
     result = BallReview(quality=float(track_quality or 0.0))
     if spec.ball is None:
         return result
+    if spec.ball.confirms:
+        return _review_confirmation(spec, reps, track_quality, ball_contacts, result)
 
     if track_quality is None:
         result.flag(
@@ -149,3 +169,48 @@ def summarise(reps: list[dict[str, Any]]) -> dict[str, Any]:
         "median_speed": round(statistics.median(speeds), 3) if speeds else 0.0,
         "parts": parts,
     }
+
+
+def _review_confirmation(
+    spec: DrillSpec,
+    reps: list[dict[str, Any]],
+    track_quality: float | None,
+    ball_contacts: int | None,
+    result: BallReview,
+) -> BallReview:
+    """Confirm mode: the body counted the reps, the ball corroborates them.
+
+    Deliberately asymmetric, and that asymmetry is the whole design. Not
+    seeing a ball proves nothing -- a lacrosse ball is outside the detector's
+    vocabulary, the light was bad, the phone was too far back -- so it never
+    costs the athlete anything. Seeing the ball clearly and watching it never
+    leave a hand while the arms threw forty times proves quite a lot.
+
+    Penalising only on positive evidence is what stops this becoming a feature
+    that quietly marks down every kid whose ball happens to be white.
+    """
+    if track_quality is None:
+        # An older client, or one that never loaded the detector. Counts
+        # exactly as it did before ball tracking existed.
+        return result
+
+    result.note(
+        f"Ball visible in {result.quality:.0%} of frames."
+    )
+    if result.quality < spec.ball.min_track_quality:
+        result.note(
+            "Not enough to confirm a ball was used, which is common with a "
+            "lacrosse ball — it does not count against the session."
+        )
+        return result
+
+    if len(reps) < CONFIRM_MIN_REPS or ball_contacts is None:
+        return result
+
+    share = ball_contacts / len(reps)
+    if share < CONFIRM_MIN_SHARE:
+        result.flag(
+            f"The ball was tracked clearly for this session but was involved "
+            f"in only {share:.0%} of the {len(reps)} throws counted."
+        )
+    return result
