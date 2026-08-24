@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 763 tests
+python -m pytest tests/ -q          # 787 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -95,6 +95,7 @@ athleteiq/
   mailer.py         Outbound queue: retries, suppression, unsubscribe
   webhooks.py       Inbound delivery events: verification, bounce handling
   sns.py            SNS certificate verification for SES notifications
+  chain.py          X.509 path validation against pinned Amazon roots
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -363,12 +364,34 @@ signature alone establishes only that the sender has an AWS account. The topic
 ARN is checked against `ATHLETEIQ_SNS_TOPIC_ARNS`, and an empty allowlist
 disables the endpoint rather than accepting everything.
 
+**Trusting the certificate because of how it arrived.** Checking the URL and
+fetching over TLS is a real argument, but it is a single point of failure: it
+assumes every fetcher in every deployment validates TLS properly, and that no
+certificate is ever misissued for an AWS hostname. So the signing certificate is
+also verified to **chain to a trusted root**, independently of transport.
+
+Anchors are pinned to Amazon rather than the system store. A host trusts around
+150 root CAs; trusting all of them to vouch for an AWS signing certificate would
+mean a misissuance by any one is enough. Filtering to Amazon's four roots and the
+Starfield roots that cross-sign them takes that from 137 anchors to 6. They are
+read from the system trust store at runtime rather than embedded, so nothing goes
+stale — `scripts/fetch_amazon_roots.py` builds a pinned bundle for images whose
+CA store is minimal.
+
+Path validation is explicit rather than delegated, because the library's built-in
+validator is built for *server* certificates and applies policy this use does not
+want — hostname matching and a TLS-server-auth EKU requirement would reject a
+perfectly good signing certificate for the wrong reason. It verifies every
+signature link, every certificate's validity window, path-length constraints, and
+that each issuer actually carries `CA=TRUE`. That last check is the classic hole:
+without it, any certificate an attacker legitimately owns can sign a forged
+intermediate that walks all the way up to a genuine root.
+
 Both signature versions are supported — v1 is SHA1, v2 is SHA256, and AWS still
-emits v1 for older topics. Certificate validity dates are checked, certificates
-are cached for an hour so a bounce storm is not one HTTPS round trip per bounce,
-and `SubscriptionConfirmation` is handled by visiting the confirm URL — which is
-host-checked again, being a second attacker-supplied URL this server would
-otherwise fetch on command.
+emits v1 for older topics. Certificates are cached for an hour so a bounce storm
+is not one HTTPS round trip per bounce, and `SubscriptionConfirmation` is handled
+by visiting the confirm URL — which is host-checked again, being a second
+attacker-supplied URL this server would otherwise fetch on command.
 
 Network access is injected rather than imported, so all of this is tested
 against a generated keypair without touching the internet.
@@ -843,10 +866,10 @@ contact with a real driveway:
    than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **SNS certificates are not chained to a trust root.** The signing
-   certificate is fetched over TLS from a verified AWS host and its validity
-   dates are checked, but it is not validated against Amazon's CA chain. The
-   host restriction plus TLS is what carries the trust here.
+7. **No certificate revocation checking.** The chain is validated and validity
+   dates are enforced, but a revoked-but-unexpired certificate would still pass;
+   CRL and OCSP are not consulted. The short-lived nature of SNS signing
+   certificates and the topic allowlist limit what that is worth to an attacker.
 8. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.

@@ -241,6 +241,23 @@ class Config:
             if arn.strip()
         )
     )
+    # Chain validation for SNS signing certificates. On by default: without it
+    # the only thing establishing the certificate's provenance is the TLS
+    # connection it arrived over.
+    sns_verify_chain: bool = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_VERIFY_CHAIN", "1") != "0"
+    )
+    # Optional PEM bundle of trust anchors. Empty reads the system store.
+    sns_ca_bundle: str = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_CA_BUNDLE", "")
+    )
+    # Restrict anchors to Amazon's roots rather than every CA on the machine.
+    # A host trusts ~150 roots; trusting all of them to vouch for an AWS
+    # signing certificate makes the pinning pointless.
+    sns_pin_amazon_roots: bool = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_PIN_AMAZON", "1") != "0"
+    )
+
     # Whether to auto-confirm an SNS subscription for an allowlisted topic.
     sns_auto_confirm: bool = field(
         default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_AUTO_CONFIRM", "1") != "0"

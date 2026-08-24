@@ -24,27 +24,46 @@ TOPIC = "arn:aws:sns:us-east-1:123456789012:athleteiq-bounces"
 CERT_URL = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc123.pem"
 
 
-def make_cert(days=(-1, 365)):
-    """A self-signed RSA certificate standing in for AWS's."""
+def _issue(cn, issuer_key=None, issuer_cert=None, *, ca=False, days=(-1, 365)):
     from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import NameOID
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "sns.amazonaws.com")])
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
     now = datetime.datetime.now(datetime.timezone.utc)
     certificate = (
         x509.CertificateBuilder()
-        .subject_name(name)
-        .issuer_name(name)
+        .subject_name(subject)
+        .issuer_name(issuer_cert.subject if issuer_cert else subject)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now + datetime.timedelta(days=days[0]))
         .not_valid_after(now + datetime.timedelta(days=days[1]))
-        .sign(key, hashes.SHA256())
+        .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+        .sign(issuer_key or key, hashes.SHA256())
     )
-    return key, certificate.public_bytes(serialization.Encoding.PEM)
+    return key, certificate
+
+
+def make_cert(days=(-1, 365)):
+    """A leaf certificate and the root that issued it.
+
+    A real chain rather than a self-signed certificate, because SNS
+    verification now requires the leaf to chain to a trusted anchor -- a test
+    that bypassed that would stop exercising the thing it is there to check.
+
+    Returns (leaf_key, pem_bundle, anchors).
+    """
+    from cryptography.hazmat.primitives import serialization
+
+    root_key, root = _issue("Test Amazon Root CA", ca=True)
+    leaf_key, leaf = _issue("sns.amazonaws.com", root_key, root, days=days)
+    bundle = b"".join(
+        c.public_bytes(serialization.Encoding.PEM) for c in (leaf, root)
+    )
+    return leaf_key, bundle, [root]
 
 
 def sign(key, message: dict, version="2") -> dict:
@@ -76,9 +95,13 @@ def notification(topic=TOPIC, email="coach@example.com", cert_url=CERT_URL) -> d
 
 
 @pytest.fixture
-def signer():
-    key, pem = make_cert()
+def signer(monkeypatch):
+    """A signing key, its certificate bundle, and a fetcher serving it."""
+    key, pem, anchors = make_cert()
     sns.clear_cert_cache()
+    # The chain must terminate at this test hierarchy's root rather than
+    # Amazon's, so the anchors are pinned for the duration of the test.
+    monkeypatch.setattr(sns, "trust_anchors", lambda reload=False: anchors)
     return key, pem, (lambda url: pem)
 
 
@@ -105,7 +128,7 @@ class TestCertificateUrl:
     def test_everything_else_is_refused(self, url):
         assert not sns.is_aws_url(url)
 
-    def test_a_bad_url_is_refused_before_any_fetch(self, signer):
+    def test_a_bad_url_is_refused_before_any_fetch(self):
         """The check has to happen before the request, not after."""
         fetched = []
 
@@ -119,6 +142,7 @@ class TestCertificateUrl:
 
     def test_certificates_are_cached(self, signer):
         _, pem, _ = signer
+        sns.clear_cert_cache()
         calls = []
 
         def fetcher(url):
@@ -216,9 +240,9 @@ class TestVerification:
             sns.verify(message, allowed_topics=[TOPIC], fetcher=fetcher)
 
     def test_a_different_key_does_not_verify(self, signer):
-        """Even a genuine-looking certificate URL cannot rescue a foreign key."""
+        """Even a genuine certificate cannot rescue a foreign signing key."""
         _, pem, _ = signer
-        other_key, _ = make_cert()
+        other_key, _, _ = make_cert()
         sns.clear_cert_cache()
         with pytest.raises(sns.SnsError, match="signature does not match"):
             sns.verify(
@@ -227,12 +251,12 @@ class TestVerification:
             )
 
     def test_an_expired_certificate_is_refused(self):
-        key, pem = make_cert(days=(-800, -400))
+        key, pem, anchors = make_cert(days=(-800, -400))
         sns.clear_cert_cache()
-        with pytest.raises(sns.SnsError, match="not currently valid"):
+        with pytest.raises(sns.SnsError, match="not currently valid|chain rejected"):
             sns.verify(
-                sign(key, notification()),
-                allowed_topics=[TOPIC], fetcher=lambda url: pem,
+                sign(key, notification()), allowed_topics=[TOPIC],
+                fetcher=lambda url: pem, anchors=anchors,
             )
 
     def test_an_unsigned_message_is_refused(self, signer):
@@ -252,7 +276,7 @@ class TestVerification:
     def test_an_unparseable_certificate_is_refused(self, signer):
         key, _, _ = signer
         sns.clear_cert_cache()
-        with pytest.raises(sns.SnsError, match="could not be parsed"):
+        with pytest.raises(sns.SnsError, match="could not be parsed|chain rejected"):
             sns.verify(
                 sign(key, notification()),
                 allowed_topics=[TOPIC], fetcher=lambda url: b"not a certificate",
@@ -320,6 +344,53 @@ class TestSubscriptionConfirmation:
             sign(key, notification()), allowed_topics=[TOPIC], fetcher=fetcher
         )
         assert sns.confirm_subscription(verified) is False
+
+
+class TestChainValidation:
+    """The leaf must chain to a trusted anchor, however it arrived."""
+
+    def test_a_self_signed_certificate_is_refused(self):
+        """What the previous version accepted on the strength of TLS alone."""
+        from cryptography.hazmat.primitives import serialization
+
+        key, certificate = _issue("sns.amazonaws.com")
+        pem = certificate.public_bytes(serialization.Encoding.PEM)
+        _, _, anchors = make_cert()
+        sns.clear_cert_cache()
+        with pytest.raises(sns.SnsError, match="chain rejected"):
+            sns.verify(
+                sign(key, notification()), allowed_topics=[TOPIC],
+                fetcher=lambda url: pem, anchors=anchors,
+            )
+
+    def test_a_certificate_from_another_root_is_refused(self):
+        key, pem, _ = make_cert()
+        _, _, other_anchors = make_cert()
+        sns.clear_cert_cache()
+        with pytest.raises(sns.SnsError, match="chain rejected"):
+            sns.verify(
+                sign(key, notification()), allowed_topics=[TOPIC],
+                fetcher=lambda url: pem, anchors=other_anchors,
+            )
+
+    def test_chain_validation_can_be_disabled_explicitly(self):
+        """An escape hatch, but never the default."""
+        from cryptography.hazmat.primitives import serialization
+
+        key, certificate = _issue("sns.amazonaws.com")
+        pem = certificate.public_bytes(serialization.Encoding.PEM)
+        sns.clear_cert_cache()
+        result = sns.verify(
+            sign(key, notification()), allowed_topics=[TOPIC],
+            fetcher=lambda url: pem, verify_chain=False,
+        )
+        assert result.type == "Notification"
+
+    def test_the_default_configuration_verifies_the_chain(self):
+        from athleteiq.config import CONFIG
+
+        assert CONFIG.sns_verify_chain is True
+        assert CONFIG.sns_pin_amazon_roots is True
 
 
 class TestWebhookIntegration:

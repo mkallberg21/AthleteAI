@@ -1869,7 +1869,7 @@ class TestSesWebhookEndpoint:
         ).decode()
         return json.dumps(message)
 
-    def _configure(self, monkeypatch, pem, topics=None):
+    def _configure(self, monkeypatch, pem, anchors, topics=None):
         import athleteiq.api as api_mod
         import athleteiq.sns as sns_mod
         import athleteiq.webhooks as webhooks_mod
@@ -1878,15 +1878,18 @@ class TestSesWebhookEndpoint:
         config = Config(sns_topic_arns=tuple(topics if topics is not None else [self.TOPIC]))
         monkeypatch.setattr(api_mod, "CONFIG", config)
         monkeypatch.setattr(webhooks_mod, "CONFIG", config)
+        monkeypatch.setattr(sns_mod, "CONFIG", config)
         monkeypatch.setattr(sns_mod, "default_fetcher", lambda url: pem)
+        # The chain terminates at this test hierarchy's root, not Amazon's.
+        monkeypatch.setattr(sns_mod, "trust_anchors", lambda reload=False: anchors)
         sns_mod.clear_cert_cache()
 
     def test_a_genuine_ses_bounce_suppresses_the_address(self, client, program, monkeypatch):
         from athleteiq import mailer
         from tests.test_sns import make_cert
 
-        key, pem = make_cert()
-        self._configure(monkeypatch, pem)
+        key, pem, anchors = make_cert()
+        self._configure(monkeypatch, pem, anchors)
         res = client.post(
             "/api/webhooks/email/ses", content=self._signed(key),
             headers={"Content-Type": "application/json"},
@@ -1900,8 +1903,8 @@ class TestSesWebhookEndpoint:
         from athleteiq import mailer
         from tests.test_sns import make_cert
 
-        key, pem = make_cert()
-        self._configure(monkeypatch, pem)
+        key, pem, anchors = make_cert()
+        self._configure(monkeypatch, pem, anchors)
         res = client.post(
             "/api/webhooks/email/ses",
             content=self._signed(key, topic="arn:aws:sns:us-east-1:999:attacker"),
@@ -1913,9 +1916,9 @@ class TestSesWebhookEndpoint:
     def test_a_foreign_signing_key_is_rejected(self, client, program, monkeypatch):
         from tests.test_sns import make_cert
 
-        _, our_pem = make_cert()
-        attacker_key, _ = make_cert()
-        self._configure(monkeypatch, our_pem)
+        _, our_pem, our_anchors = make_cert()
+        attacker_key, _, _ = make_cert()
+        self._configure(monkeypatch, our_pem, our_anchors)
         res = client.post(
             "/api/webhooks/email/ses", content=self._signed(attacker_key),
             headers={"Content-Type": "application/json"},
@@ -1925,8 +1928,23 @@ class TestSesWebhookEndpoint:
     def test_no_configured_topics_disables_the_endpoint(self, client, program, monkeypatch):
         from tests.test_sns import make_cert
 
-        key, pem = make_cert()
-        self._configure(monkeypatch, pem, topics=[])
+        key, pem, anchors = make_cert()
+        self._configure(monkeypatch, pem, anchors, topics=[])
+        res = client.post(
+            "/api/webhooks/email/ses", content=self._signed(key),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 401
+
+    def test_a_certificate_from_an_untrusted_root_is_rejected(
+        self, client, program, monkeypatch
+    ):
+        """A signature that verifies against a certificate we do not trust."""
+        from tests.test_sns import make_cert
+
+        key, pem, _ = make_cert()
+        _, _, other_anchors = make_cert()
+        self._configure(monkeypatch, pem, other_anchors)
         res = client.post(
             "/api/webhooks/email/ses", content=self._signed(key),
             headers={"Content-Type": "application/json"},

@@ -558,6 +558,8 @@ def _handle_ses(
     topics: Iterable[str] | None = None,
     fetcher: sns.Fetcher | None = None,
     auto_confirm: bool | None = None,
+    anchors: list | None = None,
+    verify_chain: bool | None = None,
 ) -> dict[str, Any]:
     """SES, delivered through SNS.
 
@@ -575,7 +577,10 @@ def _handle_ses(
 
     allowed = CONFIG.sns_topic_arns if topics is None else topics
     try:
-        message = sns.verify(envelope, allowed_topics=allowed, fetcher=fetcher)
+        message = sns.verify(
+            envelope, allowed_topics=allowed, fetcher=fetcher,
+            anchors=anchors, verify_chain=verify_chain,
+        )
     except sns.SnsError as exc:
         # Surfaced as a verification failure so the endpoint answers 401 the
         # same way it does for every other provider.

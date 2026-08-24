@@ -32,6 +32,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 from urllib.parse import urlparse
 
+from . import chain as chain_mod
+from .config import CONFIG
+
 log = logging.getLogger(__name__)
 
 # The only hosts a signing certificate may come from. Covers the standard
@@ -195,13 +198,60 @@ def _validity_window(certificate) -> tuple[float, float]:
     return stamp("not_valid_before"), stamp("not_valid_after")
 
 
-def _load_certificate(pem: bytes):
+_anchors_cache: list | None = None
+
+
+def trust_anchors(reload: bool = False) -> list:
+    """The pinned trust anchors, loaded once.
+
+    Cached because parsing a system CA bundle on every bounce would be
+    noticeable during a bounce storm and the answer never changes.
+    """
+    global _anchors_cache
+    if _anchors_cache is None or reload:
+        _anchors_cache = chain_mod.load_anchors(
+            CONFIG.sns_ca_bundle or None,
+            pin_to_amazon=CONFIG.sns_pin_amazon_roots,
+        )
+    return _anchors_cache
+
+
+def clear_anchor_cache() -> None:
+    global _anchors_cache
+    _anchors_cache = None
+
+
+def _load_certificate(
+    pem: bytes,
+    *,
+    anchors: list | None = None,
+    verify_chain: bool | None = None,
+    now: float | None = None,
+):
+    """Parse the fetched bundle and return its leaf certificate.
+
+    The leaf is verified to chain to a pinned anchor, so its provenance does
+    not rest solely on the TLS connection it arrived over -- that would assume
+    every fetcher in every deployment validates TLS properly, and that no
+    certificate is ever misissued for an AWS hostname.
+    """
     from cryptography import x509
 
+    should_verify = CONFIG.sns_verify_chain if verify_chain is None else verify_chain
+
+    if not should_verify:
+        try:
+            return x509.load_pem_x509_certificate(pem)
+        except Exception as exc:  # noqa: BLE001 -- any parse failure is a rejection
+            raise SnsError(
+                f"certificate could not be parsed: {type(exc).__name__}"
+            ) from None
+
     try:
-        return x509.load_pem_x509_certificate(pem)
-    except Exception as exc:  # noqa: BLE001 -- any parse failure is a rejection
-        raise SnsError(f"certificate could not be parsed: {type(exc).__name__}") from None
+        path = chain_mod.validate_pem(pem, anchors or trust_anchors(), now=now)
+    except chain_mod.ChainError as exc:
+        raise SnsError(f"certificate chain rejected: {exc}") from None
+    return path[0]
 
 
 def verify(
@@ -210,6 +260,8 @@ def verify(
     allowed_topics: Iterable[str],
     fetcher: Fetcher | None = None,
     now: float | None = None,
+    anchors: list | None = None,
+    verify_chain: bool | None = None,
 ) -> VerifiedMessage:
     """Verify an SNS message, or raise SnsError explaining what failed.
 
@@ -240,7 +292,9 @@ def verify(
         raise SnsError(f"unsupported signature version: {version!r}")
 
     pem = fetch_certificate(cert_url, fetcher)
-    certificate = _load_certificate(pem)
+    certificate = _load_certificate(
+        pem, anchors=anchors, verify_chain=verify_chain, now=now
+    )
 
     # An expired certificate means either a misconfiguration or a replay of a
     # very old capture; neither should verify.
