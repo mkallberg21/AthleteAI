@@ -83,6 +83,13 @@ def main() -> int:
     total = sum(made.values())
     print(f"generated {total}: " + ", ".join(f"{k}={v}" for k, v in made.items()))
 
+    # Health data about a child is not kept because it might be interesting
+    # later. Only resolved reports are eligible; an open one is a live thing
+    # about a body that still hurts.
+    purged = notify.purge_old_wellness(conn)
+    if purged:
+        print(f"purged {purged} wellness rows past the retention window")
+
     # The coach digest goes out once a week. Gated on the weekday rather than on
     # a separate cron entry so there is one scheduled job to configure, and
     # deduped by week so running it twice on a Monday is harmless.

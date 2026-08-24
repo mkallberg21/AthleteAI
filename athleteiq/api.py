@@ -25,6 +25,7 @@ from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import positions as positions_mod
 from . import sports as sports_mod
+from . import wellness as wellness_mod
 from . import transfer as transfer_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
@@ -177,6 +178,34 @@ def list_drills(sport: str | None = None) -> dict[str, Any]:
         "drills": [
             {**d.to_dict(), **transfer_mod.describe(d.key, sport)} for d in ALL_DRILLS
         ],
+    }
+
+
+@app.get("/api/me/drills")
+def my_drills(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The catalog, with anything loading a sore area marked unavailable.
+
+    Held back rather than forbidden: the drill still appears and can still be
+    started. This app is not anyone's physio and should not pretend it can
+    stop a determined thirteen-year-old -- but it should not put a sore knee
+    on the home screen with a button next to it either.
+    """
+    sport = _org_sport(store, principal.org_id)
+    status = store.wellness_status(principal.id)
+    return {
+        "sport": sport,
+        "drills": [
+            {
+                **d.to_dict(),
+                **transfer_mod.describe(d.key, sport),
+                **wellness_mod.drill_availability(status, d.key, d.load.tissue),
+            }
+            for d in ALL_DRILLS
+        ],
+        "wellness": status.to_dict(),
     }
 
 
@@ -1504,6 +1533,136 @@ class SportEntry(BaseModel):
 
 class AthleteSports(BaseModel):
     sports: list[SportEntry] = Field(default_factory=list, max_length=12)
+
+
+class CheckIn(BaseModel):
+    soreness: Literal["fine", "niggle", "sore", "hurts"]
+
+
+class DiscomfortReport(BaseModel):
+    area: str
+    severity: Literal["fine", "niggle", "sore", "hurts"]
+    side: Literal["left", "right", "both", ""] = ""
+    flags: list[str] = Field(default_factory=list, max_length=8)
+    note: str = Field(default="", max_length=500)
+
+
+@app.get("/api/wellness/form")
+def wellness_form() -> dict[str, Any]:
+    """The vocabulary the check-in form is built from.
+
+    Public, like the drill catalog: it is a list of body parts and four
+    phrasings of "how bad is it", and holding it behind auth would buy nothing.
+    """
+    return {
+        "severities": [
+            {"key": key, "prompt": wellness_mod.Severity.PROMPTS[key]}
+            for key in wellness_mod.Severity.ORDER
+        ],
+        "areas": [a.to_dict() for a in wellness_mod.AREAS],
+        "flags": [{"key": k, "prompt": v} for k, v in wellness_mod.FLAGS.items()],
+        "sides": ["left", "right", "both"],
+        "promise": (
+            "Telling us you are sore never costs you a streak, points, or a "
+            "place on any board. Your coach sees which area and how bad. "
+            "Anything you type in the notes box is seen by you and your "
+            "parent or guardian only."
+        ),
+    }
+
+
+@app.get("/api/wellness")
+def my_wellness(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return store.wellness_status(principal.id).to_dict()
+
+
+@app.post("/api/wellness/checkin")
+def post_checkin(
+    body: CheckIn,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    result = store.check_in(principal.id, body.soreness)
+    return {**result, **store.wellness_status(principal.id).to_dict()}
+
+
+@app.post("/api/wellness/discomfort", status_code=201)
+def post_discomfort(
+    body: DiscomfortReport,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Report something that hurts.
+
+    Escalation to a guardian happens here rather than in a nightly job: a head
+    knock or a joint that gives way is not a thing to tell a parent about
+    tomorrow morning.
+    """
+    try:
+        saved = store.report_discomfort(
+            principal.id, body.area, body.severity,
+            side=body.side, flags=body.flags, note=body.note,
+        )
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    status = store.wellness_status(principal.id)
+    for report, assessment in zip(status.reports, status.assessments):
+        if report.id == saved["id"]:
+            notify.notify_discomfort(store.conn, principal.id, report, assessment)
+            store.conn.commit()
+            break
+    return status.to_dict()
+
+
+@app.post("/api/wellness/discomfort/{report_id}/resolved")
+def resolve_discomfort(
+    report_id: int,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    store.resolve_discomfort(principal.id, report_id)
+    return store.wellness_status(principal.id).to_dict()
+
+
+@app.get("/api/coach/wellness")
+def team_wellness(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Who on this squad is carrying something.
+
+    Coaches get what changes a training decision -- area, severity band, how
+    long, which way it is going. They do not get the athlete's own note; that
+    is the athlete's and their guardian's. The split is enforced here rather
+    than in the client, because a client-side filter is a suggestion.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
+    )
+    carrying, counts = [], {}
+    for athlete in athletes:
+        status = store.wellness_status(athlete["athlete_id"])
+        if not status.reports:
+            continue
+        counts[status.action] = counts.get(status.action, 0) + 1
+        carrying.append({
+            "athlete_id": athlete["athlete_id"],
+            "display_name": athlete["display_name"],
+            "action": status.action,
+            **{k: v for k, v in status.to_dict(include_notes=False).items()
+               if k in ("open_reports", "blocked_tissues")},
+        })
+
+    carrying.sort(key=lambda a: -wellness_mod.Action.rank(a["action"]))
+    return {"athletes": carrying, "counts": counts, "roster": len(athletes)}
 
 
 @app.get("/api/sports")

@@ -115,6 +115,45 @@ CREATE TABLE IF NOT EXISTS athlete_sports (
 );
 CREATE INDEX IF NOT EXISTS idx_athlete_sports ON athlete_sports(athlete_id);
 
+-- A daily "how do you feel". Deliberately one row and one word: a check-in a
+-- kid completes in two taps gets completed, and a six-question wellness
+-- questionnaire gets clicked through at random.
+--
+-- Counts toward a streak exactly as a recovery day does. An athlete who loses
+-- something by reporting soreness stops reporting soreness, and the data then
+-- becomes a record saying everyone is healthy.
+CREATE TABLE IF NOT EXISTS wellness_checkins (
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day         TEXT NOT NULL,
+    soreness    TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (athlete_id, day)
+);
+
+-- Something specific that hurts. `note` is the athlete's own words and is
+-- readable by them and their guardian only -- never by a coach, and the form
+-- says so before they type.
+CREATE TABLE IF NOT EXISTS discomfort_reports (
+    id          INTEGER PRIMARY KEY,
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    area        TEXT NOT NULL,
+    side        TEXT NOT NULL DEFAULT '',
+    severity    TEXT NOT NULL,
+    flags       TEXT NOT NULL DEFAULT '',
+    note        TEXT NOT NULL DEFAULT '',
+    -- Severity before the most recent change, so direction of travel
+    -- survives. Repeat reports on one area update the row rather than stacking
+    -- new ones, so without this there is no earlier row to compare against and
+    -- "getting worse" -- the signal that matters most -- can never fire.
+    previous_severity TEXT,
+    started_on  TEXT NOT NULL,
+    reported_on TEXT NOT NULL,
+    resolved_on TEXT,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_discomfort_open
+    ON discomfort_reports(athlete_id, resolved_on);
+
 -- One recording. Contains no video and no frames -- only derived counts.
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY,
@@ -542,6 +581,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "organizations": [
         ("position_emphasis_min_age", "INTEGER NOT NULL DEFAULT 15"),
+    ],
+    "discomfort_reports": [
+        ("previous_severity", "TEXT"),
     ],
 }
 

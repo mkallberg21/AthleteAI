@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1036 tests
+python -m pytest tests/ -q          # 1089 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -88,6 +88,7 @@ athleteiq/
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
   load.py           Workload ratio, throwing volume, rest days, advisories
+  wellness.py       Soreness and injury reporting, and what it holds back
   benchmarks.py     Age-banded weekly time budgets and peer context
   positions.py      Canonical positions, aliases, and per-position drill mix
   sports.py         Other sports played, and how single-sport a year is
@@ -994,6 +995,101 @@ that did not resolve. Over-training surfaces as prominently as under-training, o
 the same screen — a coach should find out that a kid is grinding every night in
 the same glance that tells them who has not started.
 
+## Soreness and injury reporting
+
+The most sensitive data in the product: health information about children.
+Three failure modes decided the design, and two of them are not privacy
+failures at all.
+
+### Telling the truth is free
+
+**A kid who loses something by reporting pain will stop reporting pain.** If a
+check-in costs a streak, XP, or a place on a board, athletes learn within a
+fortnight to tick "fine" — and the data becomes worse than useless, because it
+becomes a record saying everyone is healthy.
+
+So a wellness check-in **protects the streak exactly as a recovery day does**,
+awards nothing, costs nothing, and never appears on any leaderboard. Reporting
+something that hurts *is* a check-in, so a kid who just described a sore knee is
+not then asked to tick a mood face. There is a test asserting the streak
+survives, one asserting XP does not move, and a structural one that greps the
+leaderboard and standings payloads for any trace of it — the same shape as the
+no-video rule.
+
+### It never says what it is
+
+Nothing here names a condition. No "tendinitis", no "probable strain", no
+severity score out of ten a parent can search. Every output is a thing to do or
+a thing to notice. Two tests enforce it across every area × severity × flag
+combination: one bans a vocabulary of diagnoses, the other requires each message
+to contain an actual instruction.
+
+Severity is four phrasings rather than a number, because a ten-point scale
+invites a twelve-year-old to compare their 6 with a teammate's 8:
+
+| | |
+|---|---|
+| `fine` | All good |
+| `niggle` | I notice it, but it doesn't stop me |
+| `sore` | It changes how I move |
+| `hurts` | I can't do it properly |
+
+### The note is not the coach's
+
+Coaches get what changes a training decision — area, side, severity band, days
+running, direction of travel, and which flags were ticked. The free-text note
+the athlete writes goes to them and their guardian, and nobody else. The form
+says so before they type.
+
+The coach shape **omits the key entirely** rather than blanking it: an empty box
+invites someone to ask what it said. The split is enforced server-side, because
+a client-side filter is a suggestion.
+
+### Head and neck are not on the ladder
+
+Any report there stops training outright and escalates to an adult, **at any
+severity**, with no gradations and no algorithm — the mildest possible head
+report still names the hospital question. Being wrong about a head knock in a
+twelve-year-old is not symmetrical with an unnecessary rest day.
+
+### What escalates, and what it holds back
+
+Flags escalate regardless of how bad it feels — a niggle that gives way is not a
+niggle. So does "I can't do it properly", anything getting worse, and anything
+dragging past a week.
+
+| Assessment | Guardian told | Drills held |
+|---|---|---|
+| `monitor` | no | none |
+| `ease_off` | no | that area's tissues |
+| `tell_someone` | **yes** | that area's tissues |
+| `stop` | **yes** | everything |
+
+Holds map through the existing `Tissue` taxonomy on each `DrillSpec`, so a sore
+shoulder hides wall ball and leaves squats, and a sore knee does the reverse.
+Held drills are **dimmed and sorted last, not removed** — the app is not anyone's
+physio and should not pretend it can stop a determined thirteen-year-old, but it
+should not put a sore knee on the home screen with a button next to it either.
+
+Guardian escalation fires on the *assessment*, not the severity, and happens on
+the request rather than in a nightly job — a joint that gives way is not a thing
+to mention to a parent tomorrow morning. The athlete's note is **not** in the
+notification: a guardian can read it in the app, logged in as themselves, but a
+push notification is read on a lock screen in front of whoever is standing there.
+
+### Keeping it only as long as it is useful
+
+Repeat reports on one area update that area's row rather than stacking new ones,
+so "day 4" stays meaningful and a coach does not see a wall of duplicates.
+Direction of travel is persisted alongside, and only moves when the severity
+actually changes — otherwise a kid correcting a typo would erase the trend.
+
+An open report goes stale after 10 days and stops blocking, because a kid who
+got better and forgot to close it should not be locked out forever. Resolved
+reports are purged after 400 days by the notifications cron; open ones never
+are, since an open report is a live thing about a body that still hurts.
+Everything is in the guardian export and is deleted by the erase path.
+
 ## Load management and overuse protection
 
 Stated plainly, because it is the reason this exists: **everything else in this
@@ -1231,79 +1327,85 @@ the main compliance gap between this and a shippable product.
 Stated plainly, because these are the things that decide whether this survives
 contact with a real driveway:
 
-1. **Thresholds are calibrated against synthetic motion, not real athletes.**
+1. **Soreness reporting is not a medical device and must not be relied on as
+   one.** It is a prompt to involve an adult, and its most important output is
+   "tell someone" rather than any assessment of its own. It cannot see an
+   athlete who says nothing, it takes every report at face value, and a child
+   who is hurt and silent looks identical to one who is fine. Nothing in it
+   should ever delay getting a young athlete looked at.
+2. **Thresholds are calibrated against synthetic motion, not real athletes.**
    The calibration harness makes every drill self-consistent — a textbook rep
    counts and measures what its spec claims — but "textbook" is still a
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
    the calibration against hand-counted ground truth remains the
    highest-value next task, and the reason the specs are data rather than code.
-2. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
+3. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
    battery.
-3. **Multi-sport participation is self-reported and unverified.** An athlete
+4. **Multi-sport participation is self-reported and unverified.** An athlete
    who ticks three sports gets an earlier specialisation gate and a lighter
    weekly budget, and nothing stops them ticking sports they do not play. The
    incentive is weak in both directions — the reward is a different drill mix,
    not points or a leaderboard place, and the lighter budget asks *less* of
    them — and a coach sees the list on the roster, which is the check that
    matters. But it is a self-report, and the gate treats it as fact.
-4. **Seasons are a coarse proxy for training load.** Three seasons of
+5. **Seasons are a coarse proxy for training load.** Three seasons of
    recreational soccer and three seasons of travel soccer score identically,
    though they are not remotely the same week. Capturing sessions per week per
    sport would sharpen it, at the cost of a form a twelve-year-old will not
    fill in — which is the trade the season picker deliberately takes.
-5. **Positions are modelled for lacrosse only.** Another sport gets honest
+6. **Positions are modelled for lacrosse only.** Another sport gets honest
    silence — `for_sport` returns nothing, athletes fall back to the generic
    mix, and the join form falls back to free text. Adding a sport means adding
    its positions *and* the sport-specific drills their emphasis would point at;
    half of that is worse than neither, since a soccer emphasis built only from
    the general strength drills would recommend the same mix to every position
    on the pitch.
-6. **The age bands are heuristics, not a clinical instrument.** They are drawn
+7. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-7. **Handedness is inferred from wrist height**, which is reliable for standard
+8. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-8. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+9. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-9. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+10. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-10. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+11. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-11. **Revocation soft-fails by default**, though pre-fetched staples make strict
+12. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-12. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+13. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-13. **No payment processor.** The billing model, entitlements, and invoicing are
+14. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-14. **Offline slots are per-drill.** A drill you have never opened online has no
+15. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-15. **Web Push needs credentials.** Notifications generate and display in-app
+16. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-16. **Form quality is pose-only.** It reads how the body moved, not where the
+17. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-17. **Guardian identity is proven by the invite code alone.** There is no email
+18. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-18. **Roster import reads delimited text only.** CSV, TSV, and
+19. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-19. **Load coefficients are reasoned estimates, not measured values.** The
+20. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

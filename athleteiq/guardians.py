@@ -396,6 +396,16 @@ def export_athlete(conn: sqlite3.Connection, athlete_id: int) -> dict[str, Any]:
         "recovery_days": rows(
             "SELECT day, reason FROM recovery_days WHERE athlete_id = ? ORDER BY day"
         ),
+        # Health data, so it is exported in full -- including the athlete's own
+        # note, which a coach never sees but which is unambiguously theirs and
+        # their guardian's to have a copy of.
+        "wellness_checkins": rows(
+            "SELECT day, soreness FROM wellness_checkins WHERE athlete_id = ? ORDER BY day"
+        ),
+        "discomfort_reports": rows(
+            "SELECT area, side, severity, flags, note, started_on, reported_on, "
+            "resolved_on FROM discomfort_reports WHERE athlete_id = ? ORDER BY id"
+        ),
     }
 
 
@@ -427,6 +437,8 @@ def erase_athlete(
             "DELETE FROM xp_ledger WHERE athlete_id = ?",
             "DELETE FROM badges WHERE athlete_id = ?",
             "DELETE FROM recovery_days WHERE athlete_id = ?",
+            "DELETE FROM wellness_checkins WHERE athlete_id = ?",
+            "DELETE FROM discomfort_reports WHERE athlete_id = ?",
             "DELETE FROM notifications WHERE user_id = ?",
             "DELETE FROM push_subscriptions WHERE user_id = ?",
         ):

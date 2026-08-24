@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from . import wellness
 from .config import CONFIG
 from .scoring import compute_streak
 
@@ -41,6 +42,7 @@ class Kind:
     INACTIVE = "inactive"
     REST_DAY = "rest_day"
     GUARDIAN_DIGEST = "guardian_digest"
+    DISCOMFORT = "discomfort"
     COACH_DIGEST = "coach_digest"
 
 
@@ -632,3 +634,68 @@ def run_all(conn: sqlite3.Connection, today: date | None = None) -> dict[str, in
         "inactive": notify_inactive(conn, today=today),
         "guardian_digests": generate_guardian_digests(conn, today),
     }
+
+
+def notify_discomfort(
+    conn: sqlite3.Connection,
+    athlete_id: int,
+    report: "wellness.Report",
+    assessment: "wellness.Assessment",
+) -> int:
+    """Tell this athlete's guardians that something needs an adult.
+
+    Sent on the assessment, not on the severity: a "niggle" with swelling
+    escalates and a "sore" thigh does not, and that judgement belongs in one
+    place rather than being re-derived by every caller.
+
+    The athlete's own note is not included. A guardian can read it in the app,
+    where they are logged in as themselves -- a push notification is read on a
+    lock screen in front of whoever is standing there.
+    """
+    if not assessment.tell_guardian:
+        return 0
+
+    athlete = conn.execute(
+        "SELECT display_name FROM users WHERE id = ?", (athlete_id,)
+    ).fetchone()
+    name = (athlete["display_name"] if athlete else "Your athlete").split()[0]
+    side = f"{report.side} " if report.side in ("left", "right") else ""
+    where = f"{side}{report.area.label.lower()}".strip()
+
+    sent = 0
+    for row in conn.execute(
+        "SELECT guardian_id FROM guardians WHERE athlete_id = ?", (athlete_id,)
+    ).fetchall():
+        created = enqueue(
+            conn,
+            row["guardian_id"],
+            Kind.DISCOMFORT,
+            f"{name} reported their {where}",
+            assessment.headline,
+            link="/parent",
+            # One per area per day: an athlete correcting a typo in their own
+            # report should not buzz a parent's phone twice.
+            dedupe_key=f"discomfort:{athlete_id}:{report.area.key}:{report.reported_on}",
+        )
+        sent += 1 if created else 0
+    return sent
+
+
+def purge_old_wellness(conn: sqlite3.Connection, today: "date | None" = None) -> int:
+    """Delete resolved reports past the retention window.
+
+    Health data about a child is not kept because it might be interesting
+    later. Only resolved rows are eligible -- an open report is still a live
+    thing about a body that still hurts.
+    """
+    cutoff = wellness.purge_cutoff(today)
+    with conn:
+        removed = conn.execute(
+            "DELETE FROM discomfort_reports WHERE resolved_on IS NOT NULL "
+            "AND resolved_on < ?",
+            (cutoff,),
+        ).rowcount
+        removed += conn.execute(
+            "DELETE FROM wellness_checkins WHERE day < ?", (cutoff,)
+        ).rowcount
+    return removed

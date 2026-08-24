@@ -135,6 +135,17 @@
     <div id="budget-sports"></div>
   </div>
 
+  <div class="card hidden" id="wellness-card">
+    <h2>Carrying something</h2>
+    <p class="small muted">
+      What athletes have told the app themselves. You see the area, how bad, and
+      how long &mdash; anything they wrote in their own notes goes to them and
+      their parent or guardian, and not here. None of this is a diagnosis, and
+      an athlete flagged here has not lost anything by saying so.
+    </p>
+    <div id="wellness-watch"></div>
+  </div>
+
   <div class="card hidden" id="load-card">
     <h2>Workload watch</h2>
     <p class="small muted">
@@ -698,6 +709,11 @@ async function loadAll() {
   renderReview(reviewData.sessions);
   renderLoadWatch(rosterData.athletes);
   try {
+    renderWellnessWatch(await api(
+      `/api/coach/wellness${teamId ? `?team_id=${teamId}` : ''}`,
+    ));
+  } catch { /* nothing reported yet */ }
+  try {
     renderBudgets(await api(`/api/coach/budgets${teamId ? `?team_id=${teamId}` : ''}`));
   } catch { /* nothing logged yet */ }
   await loadAssignments();
@@ -831,6 +847,37 @@ function renderPositions(data) {
           <em>Those athletes still train and still count everywhere else, but they
           sit out position comparisons until the spelling is fixed.</em></div>
       </div>` : ''}`;
+}
+
+const ACTION_LABELS = {
+  stop: 'Stop &mdash; adult now',
+  tell_someone: 'Needs an adult today',
+  ease_off: 'Easing off that area',
+  monitor: 'Keeping an eye on it',
+};
+
+function renderWellnessWatch(data) {
+  const rows = data.athletes || [];
+  $('wellness-card').classList.toggle('hidden', rows.length === 0);
+  if (!rows.length) return;
+
+  $('wellness-watch').innerHTML = rows.map((a) => {
+    const level = a.action === 'stop' ? 'stop'
+      : a.action === 'tell_someone' ? 'warning' : 'caution';
+    const areas = a.open_reports.map((r) => `
+      <div class="small muted">
+        ${esc(r.area_label)}${r.side ? ` (${esc(r.side)})` : ''}
+        &middot; ${esc(r.severity)}
+        ${r.days_running > 1 ? ` &middot; day ${r.days_running}` : ''}
+        ${r.worsening ? ' &middot; <b>getting worse</b>' : ''}
+        ${r.flags.length ? `<br><em>${r.flags.map(esc).join('; ')}</em>` : ''}
+      </div>`).join('');
+    return `<div class="advisory ${level}" style="align-items:flex-start">
+      <span class="dotmark"></span>
+      <div><b>${esc(a.display_name)}</b> &mdash; ${ACTION_LABELS[a.action] || ''}
+        ${areas}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderLoadWatch(athletes) {

@@ -15,6 +15,7 @@ from typing import Any
 
 from .config import CONFIG
 from . import sports
+from . import wellness
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
 from . import assignments as assignments_mod
@@ -216,6 +217,154 @@ class Store:
                 "SELECT sport, seasons, is_primary FROM athlete_sports "
                 "WHERE athlete_id = ? ORDER BY is_primary DESC, sport",
                 (athlete_id,),
+            )
+        ]
+
+    # ------------------------------------------------------------------
+    # Soreness and injury
+    # ------------------------------------------------------------------
+
+    def check_in(
+        self, athlete_id: int, soreness: str, day: date | None = None
+    ) -> dict[str, Any]:
+        """Record how an athlete feels today.
+
+        Awards nothing and costs nothing. It protects the streak the same way
+        a recovery day does, which is the point: an athlete who loses a streak
+        by admitting they are sore learns to tick "fine", and then the whole
+        feature is a machine for producing false reassurance.
+        """
+        if soreness not in wellness.Severity.ORDER:
+            raise StoreError(f"unknown soreness value: {soreness}")
+        day = day or _now().date()
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO wellness_checkins(athlete_id, day, soreness, "
+                "created_at) VALUES (?,?,?,?)",
+                (athlete_id, day.isoformat(), soreness, _iso(_now())),
+            )
+        return {"day": day.isoformat(), "soreness": soreness, "counts_toward_streak": True}
+
+    def report_discomfort(
+        self,
+        athlete_id: int,
+        area: str,
+        severity: str,
+        *,
+        side: str = "",
+        flags: list[str] | None = None,
+        note: str = "",
+        started_on: date | None = None,
+        day: date | None = None,
+    ) -> dict[str, Any]:
+        """Log something that hurts, or update today's report for that area.
+
+        One open report per area: a second report on the same knee is the same
+        knee, and stacking rows would make "days running" meaningless and the
+        coach view a wall of duplicates.
+        """
+        if area not in wellness.AREAS_BY_KEY:
+            raise StoreError(f"unknown body area: {area}")
+        if severity not in wellness.Severity.ORDER:
+            raise StoreError(f"unknown severity: {severity}")
+        if side not in wellness.SIDES:
+            raise StoreError(f"unknown side: {side}")
+
+        day = day or _now().date()
+        kept = [f for f in (flags or []) if f in wellness.FLAGS]
+        open_row = self.conn.execute(
+            "SELECT id, severity, previous_severity, started_on FROM discomfort_reports "
+            "WHERE athlete_id = ? AND area = ? AND resolved_on IS NULL "
+            "ORDER BY reported_on DESC LIMIT 1",
+            (athlete_id, area),
+        ).fetchone()
+
+        with transaction(self.conn) as conn:
+            if open_row is not None:
+                # Only moved when the severity actually changes: a kid fixing a
+                # typo in today's report must not overwrite the real previous
+                # reading and erase the trend.
+                previous = (
+                    open_row["severity"] if open_row["severity"] != severity
+                    else open_row["previous_severity"]
+                )
+                conn.execute(
+                    "UPDATE discomfort_reports SET severity = ?, side = ?, flags = ?, "
+                    "note = ?, reported_on = ?, previous_severity = ? WHERE id = ?",
+                    (severity, side, ",".join(kept), note, day.isoformat(),
+                     previous, open_row["id"]),
+                )
+                report_id = int(open_row["id"])
+            else:
+                cur = conn.execute(
+                    "INSERT INTO discomfort_reports(athlete_id, area, side, severity, "
+                    "flags, note, started_on, reported_on, created_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (athlete_id, area, side, severity, ",".join(kept), note,
+                     (started_on or day).isoformat(), day.isoformat(), _iso(_now())),
+                )
+                report_id = int(cur.lastrowid)
+
+        # Reporting it is itself a check-in. Asking a kid who just described a
+        # sore knee to also tick a mood face is friction with no information
+        # behind it, and friction is what stops the next report happening.
+        self.check_in(athlete_id, max(severity, "sore", key=wellness.Severity.rank), day)
+
+        previous = open_row["severity"] if open_row is not None else None
+        return {"id": report_id, "previous": previous}
+
+    def resolve_discomfort(
+        self, athlete_id: int, report_id: int, day: date | None = None
+    ) -> bool:
+        day = day or _now().date()
+        with transaction(self.conn) as conn:
+            changed = conn.execute(
+                "UPDATE discomfort_reports SET resolved_on = ? "
+                "WHERE id = ? AND athlete_id = ? AND resolved_on IS NULL",
+                (day.isoformat(), report_id, athlete_id),
+            ).rowcount
+        return bool(changed)
+
+    def wellness_status(
+        self, athlete_id: int, today: date | None = None
+    ) -> wellness.Status:
+        """Open reports for an athlete, with what to do about each."""
+        today = today or _now().date()
+        stale = (today - timedelta(days=wellness.STALE_AFTER_DAYS)).isoformat()
+        rows = self.conn.execute(
+            "SELECT * FROM discomfort_reports WHERE athlete_id = ? "
+            "AND resolved_on IS NULL AND reported_on >= ? ORDER BY reported_on DESC",
+            (athlete_id, stale),
+        ).fetchall()
+
+        reports, assessments = [], []
+        for row in rows:
+            report = wellness.Report(
+                id=int(row["id"]),
+                athlete_id=athlete_id,
+                area=wellness.AREAS_BY_KEY[row["area"]],
+                side=row["side"] or "",
+                severity=row["severity"],
+                started_on=date.fromisoformat(row["started_on"]),
+                reported_on=date.fromisoformat(row["reported_on"]),
+                flags=tuple(f for f in (row["flags"] or "").split(",") if f),
+                note=row["note"] or "",
+                previous=row["previous_severity"],
+            )
+            reports.append(report)
+            assessments.append(wellness.assess(report))
+
+        checked = self.conn.execute(
+            "SELECT 1 FROM wellness_checkins WHERE athlete_id = ? AND day = ?",
+            (athlete_id, today.isoformat()),
+        ).fetchone()
+        return wellness.Status(reports, assessments, checked is not None)
+
+    def _checkin_days(self, athlete_id: int) -> list[date]:
+        return [
+            date.fromisoformat(r["day"])
+            for r in self.conn.execute(
+                "SELECT day FROM wellness_checkins WHERE athlete_id = ?", (athlete_id,)
             )
         ]
 
@@ -1022,7 +1171,14 @@ class Store:
         ]
         if not CONFIG.load.recovery_day_protects_streak:
             return trained
-        return sorted(set(trained) | set(self._recovery_days(athlete_id)))
+        # Wellness check-ins count too. This is the promise the whole soreness
+        # feature rests on: saying "my knee hurts" must never cost a streak,
+        # or athletes learn to say "fine" and the data stops meaning anything.
+        return sorted(
+            set(trained)
+            | set(self._recovery_days(athlete_id))
+            | set(self._checkin_days(athlete_id))
+        )
 
     def quality_trend(self, athlete_id: int, window: int = 10) -> dict[str, Any]:
         """Recent form scores, and whether they are moving.

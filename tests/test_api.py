@@ -1,6 +1,7 @@
 """End-to-end API behaviour: onboarding, capture, scoring, leaderboards, access control."""
 from __future__ import annotations
 
+import json
 import random
 
 import pytest
@@ -2281,3 +2282,118 @@ class TestMultiSportEndpoints:
         )
         summary = client.get("/api/coach/budgets", headers=program["director"]).json()
         assert summary["specialisation"].get("moderate") or summary["specialisation"].get("low")
+
+
+class TestWellnessEndpoints:
+
+    def _hurt(self, client, athlete, **kwargs):
+        body = {"area": "knee", "severity": "sore", **kwargs}
+        return client.post("/api/wellness/discomfort", json=body, headers=athlete["headers"])
+
+    def test_the_form_states_the_promise_up_front(self, client):
+        body = client.get("/api/wellness/form").json()
+        promise = body["promise"].lower()
+        assert "never costs you a streak" in promise
+        assert "parent or guardian only" in promise
+        assert {a["key"] for a in body["areas"]} >= {"head", "knee", "shoulder"}
+
+    def test_an_athlete_reports_and_is_told_what_to_do(self, client, program):
+        athlete = program["athletes"][0]
+        body = self._hurt(client, athlete).json()
+        assert body["action"] == "ease_off"
+        assert body["guidance"][0]["detail"]
+        assert "lower_body" in body["blocked_tissues"]
+
+    def test_sore_areas_hide_the_drills_that_load_them(self, client, program):
+        athlete = program["athletes"][0]
+        self._hurt(client, athlete, area="shoulder")
+        drills = {d["key"]: d for d in client.get(
+            "/api/me/drills", headers=athlete["headers"]
+        ).json()["drills"]}
+        assert drills["lax_wall_ball"]["available"] is False
+        assert "shoulder" in drills["lax_wall_ball"]["reason"]
+        assert drills["gen_squat"]["available"] is True
+
+    def test_a_drill_that_is_held_back_can_still_be_recorded(self, client, program):
+        """The app is not anyone's physio and should not pretend it can stop a
+        determined thirteen-year-old."""
+        athlete = program["athletes"][0]
+        self._hurt(client, athlete)
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "gen_squat"},
+            headers=athlete["headers"],
+        )
+        assert started.status_code == 201
+
+    def test_a_coach_sees_the_area_but_never_the_note(self, client, program):
+        athlete = program["athletes"][0]
+        self._hurt(client, athlete, note="my dad shouted at me about it")
+        body = client.get("/api/coach/wellness", headers=program["director"]).json()
+        assert body["counts"]["ease_off"] == 1
+        row = body["athletes"][0]
+        assert row["open_reports"][0]["area_label"] == "Knee"
+        assert "note" not in row["open_reports"][0]
+        assert "shouted" not in json.dumps(body)
+
+    def test_the_athlete_can_still_read_their_own_note(self, client, program):
+        athlete = program["athletes"][0]
+        self._hurt(client, athlete, note="mine")
+        body = client.get("/api/wellness", headers=athlete["headers"]).json()
+        assert body["open_reports"][0]["note"] == "mine"
+
+    def test_one_athlete_cannot_read_anothers(self, client, program):
+        one, two = program["athletes"]
+        self._hurt(client, one, note="mine")
+        body = client.get("/api/wellness", headers=two["headers"]).json()
+        assert body["open_reports"] == []
+
+    def test_a_coach_cannot_report_on_an_athletes_behalf(self, client, program):
+        """It is the athlete's own body and their own account."""
+        assert client.post(
+            "/api/wellness/discomfort", json={"area": "knee", "severity": "sore"},
+            headers=program["director"],
+        ).status_code == 403
+
+    def test_resolving_it_puts_the_drills_back(self, client, program):
+        athlete = program["athletes"][0]
+        report_id = self._hurt(client, athlete).json()["open_reports"][0]["id"]
+        after = client.post(
+            f"/api/wellness/discomfort/{report_id}/resolved", headers=athlete["headers"]
+        ).json()
+        assert after["open_reports"] == []
+        drills = {d["key"]: d for d in client.get(
+            "/api/me/drills", headers=athlete["headers"]
+        ).json()["drills"]}
+        assert all(d["available"] for d in drills.values())
+
+    def test_junk_is_a_400_not_a_500(self, client, program):
+        athlete = program["athletes"][0]
+        assert self._hurt(client, athlete, area="spleen").status_code == 400
+        assert client.post(
+            "/api/wellness/discomfort", json={"area": "knee", "severity": "agony"},
+            headers=athlete["headers"],
+        ).status_code == 422
+
+    def test_a_checkin_costs_nothing_end_to_end(self, client, program):
+        athlete = program["athletes"][0]
+        do_session(client, athlete["headers"], seed=3)
+        before = client.get("/api/me", headers=athlete["headers"]).json()
+        client.post(
+            "/api/wellness/checkin", json={"soreness": "hurts"}, headers=athlete["headers"]
+        )
+        after = client.get("/api/me", headers=athlete["headers"]).json()
+        assert after["total_xp"] == before["total_xp"]
+        assert after["streak"] >= before["streak"]
+
+    def test_soreness_never_reaches_a_leaderboard(self, client, program):
+        """Structural, like the no-video rule: checked against the payload
+        rather than trusted to stay true."""
+        athlete = program["athletes"][0]
+        do_session(client, athlete["headers"], seed=3)
+        self._hurt(client, athlete, note="private")
+        for path in ("/api/leaderboard?window=week", "/api/standings?window=week"):
+            payload = json.dumps(
+                client.get(path, headers=athlete["headers"]).json()
+            ).lower()
+            for leak in ("knee", "sore", "discomfort", "wellness", "private", "injur"):
+                assert leak not in payload, (path, leak)

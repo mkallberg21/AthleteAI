@@ -25,6 +25,37 @@
   <section id="view-home">
     <div class="conn" id="conn"><i></i><span id="conn-text">Online</span></div>
 
+    <div class="card" id="wellness-card">
+      <div class="budget-head">
+        <b>How do you feel today?</b>
+        <span class="small muted" id="wellness-state"></span>
+      </div>
+      <div class="feel-row" id="feel-row"></div>
+      <div id="wellness-guidance"></div>
+      <div id="wellness-open"></div>
+      <details style="margin-top:10px" id="hurt-details">
+        <summary class="small muted" style="cursor:pointer">
+          Something specific hurts
+        </summary>
+        <p class="small muted" style="margin:8px 0" id="hurt-promise"></p>
+        <label for="hurt-area">Where?</label>
+        <select id="hurt-area"></select>
+        <label for="hurt-side">Which side?</label>
+        <select id="hurt-side">
+          <option value="">Not sure / both</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+        <label for="hurt-severity">How bad?</label>
+        <select id="hurt-severity"></select>
+        <div id="hurt-flags" class="small" style="margin:8px 0"></div>
+        <label for="hurt-note">Anything else? (optional)</label>
+        <textarea id="hurt-note" rows="2"
+          placeholder="Only you and your parent or guardian can read this."></textarea>
+        <button class="secondary" id="hurt-save" style="margin-top:8px">Tell the app</button>
+      </details>
+    </div>
+
     <div class="card hidden" id="budget-card">
       <div class="budget-head">
         <b id="budget-headline"></b>
@@ -335,14 +366,23 @@ async function loadDrills() {
   // The sport is passed so the athlete's own is left out of the transfer
   // notes: telling a lacrosse player that wall ball helps at lacrosse is
   // noise, and noise is what teaches kids to skip the text.
-  const data = await api(`/api/drills${homeSport ? `?sport=${encodeURIComponent(homeSport)}` : ''}`);
+  // The athlete-scoped list: same catalog, but it knows which areas are being
+  // rested. Sore drills are marked, sorted last, and still openable.
+  const data = await api('/api/me/drills');
   drills = data.drills;
-  $('drill-list').innerHTML = drills.map((d, i) => `
-    <button class="drill-btn" data-i="${i}">
+  const ordered = [...drills.keys()].sort(
+    (a, b) => (drills[a].available === false) - (drills[b].available === false),
+  );
+  $('drill-list').innerHTML = ordered.map((i) => {
+    const d = drills[i];
+    const held = d.available === false;
+    return `<button class="drill-btn ${held ? 'held' : ''}" data-i="${i}">
       <b>${esc(d.name)}</b>
       <span>${esc(d.description)}</span>
-      ${d.blurb ? `<span class="transfer-inline">${esc(d.blurb)}</span>` : ''}
-    </button>`).join('');
+      ${held ? `<span class="held-note">${esc(d.reason)}</span>`
+        : d.blurb ? `<span class="transfer-inline">${esc(d.blurb)}</span>` : ''}
+    </button>`;
+  }).join('');
   $('drill-list').querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => openCapture(drills[Number(btn.dataset.i)]));
   });
@@ -401,6 +441,108 @@ async function loadBudget() {
 }
 
 let sportCatalog = null;
+let wellnessForm = null;
+
+const FEELINGS = [
+  ['fine', '🙂', 'Good'],
+  ['niggle', '😐', 'A bit sore'],
+  ['sore', '😖', 'Quite sore'],
+  ['hurts', '🤕', 'Something hurts'],
+];
+
+async function loadWellness() {
+  if (!wellnessForm) {
+    try { wellnessForm = await api('/api/wellness/form'); } catch { return; }
+    $('hurt-promise').textContent = wellnessForm.promise;
+    $('hurt-area').innerHTML = wellnessForm.areas
+      .map((a) => `<option value="${esc(a.key)}">${esc(a.label)}</option>`).join('');
+    $('hurt-severity').innerHTML = wellnessForm.severities
+      .filter((s) => s.key !== 'fine')
+      .map((s) => `<option value="${esc(s.key)}">${esc(s.prompt)}</option>`).join('');
+    $('hurt-flags').innerHTML = wellnessForm.flags.map((f) => `
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0">
+        <input type="checkbox" data-flag="${esc(f.key)}"
+          style="width:auto;min-height:auto;margin:2px 0 0">
+        <span>${esc(f.prompt)}</span>
+      </label>`).join('');
+    $('feel-row').innerHTML = FEELINGS.map(([key, face, label]) => `
+      <button class="feel" data-feel="${esc(key)}">
+        <span class="feel-face">${face}</span><span>${esc(label)}</span>
+      </button>`).join('');
+  }
+
+  let status;
+  try { status = await api('/api/wellness'); } catch { return; }
+  renderWellness(status);
+  return status;
+}
+
+function renderWellness(status) {
+  $('wellness-state').textContent = status.checked_in_today
+    ? 'Logged today — thanks'
+    : 'Two taps. It never costs you anything.';
+
+  $('wellness-guidance').innerHTML = (status.guidance || []).map((g) => `
+    <div class="advisory ${g.action === 'stop' ? 'stop'
+      : g.action === 'tell_someone' ? 'warning' : 'caution'}">
+      <span class="dotmark"></span>
+      <div><b>${esc(g.headline)}</b><em>${esc(g.detail)}</em></div>
+    </div>`).join('');
+
+  $('wellness-open').innerHTML = (status.open_reports || []).map((r) => `
+    <div class="open-report">
+      <span>${esc(r.area_label)}${r.side ? ` (${esc(r.side)})` : ''}
+        &middot; ${esc(r.severity)}${r.days_running > 1 ? ` &middot; day ${r.days_running}` : ''}
+        ${r.worsening ? ' &middot; <b>worse</b>' : ''}</span>
+      <button class="secondary inline" data-resolved="${r.id}">Better now</button>
+    </div>`).join('');
+}
+
+$('feel-row').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-feel]');
+  if (!button) return;
+  const feel = button.dataset.feel;
+  if (feel === 'hurts') { $('hurt-details').open = true; }
+  try {
+    renderWellness(await api('/api/wellness/checkin', {
+      method: 'POST', body: { soreness: feel },
+    }));
+    // Held-back drills change with this, so the list is rebuilt rather than
+    // left offering a squat to someone who just said their knee hurts.
+    await loadDrills();
+  } catch (e) { showError(e.message); }
+});
+
+$('hurt-save').addEventListener('click', async () => {
+  const flags = [...document.querySelectorAll('#hurt-flags input:checked')]
+    .map((i) => i.dataset.flag);
+  try {
+    renderWellness(await api('/api/wellness/discomfort', {
+      method: 'POST',
+      body: {
+        area: $('hurt-area').value,
+        side: $('hurt-side').value,
+        severity: $('hurt-severity').value,
+        flags,
+        note: $('hurt-note').value.trim(),
+      },
+    }));
+    $('hurt-note').value = '';
+    $('hurt-details').open = false;
+    await loadDrills();
+  } catch (e) { showError(e.message); }
+});
+
+$('wellness-open').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-resolved]');
+  if (!button) return;
+  try {
+    renderWellness(await api(
+      `/api/wellness/discomfort/${button.dataset.resolved}/resolved`, { method: 'POST' },
+    ));
+    await loadDrills();
+  } catch (e) { showError(e.message); }
+});
 
 // Self-reported, and deliberately low-friction: a season checkbox is something
 // a twelve-year-old will actually fill in, where "hours per year" is not.
@@ -1275,6 +1417,7 @@ window.addEventListener('pagehide', () => {
     // can be left out of the "this also pays off in..." notes.
     const boot = await api('/api/me');
     homeSport = boot.sport || null;
+    await loadWellness();
     await loadDrills();
     await loadHome(boot);
     show('home');

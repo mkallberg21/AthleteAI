@@ -544,3 +544,24 @@ tbody tr:hover { background: var(--surface-2); }
 .season { display: flex; flex-direction: column; align-items: center;
           font-size: 10px; color: var(--muted); cursor: pointer; }
 .season input { width: auto; min-height: auto; margin: 0; }
+
+/* Daily check-in. Four faces, one tap: a six-question wellness form gets
+   clicked through at random, which is worse than not asking. */
+.feel-row { display: flex; gap: 8px; margin: 10px 0; }
+.feel { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+        padding: 10px 4px; font-size: 11px; background: var(--surface-2);
+        border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); }
+.feel-face { font-size: 22px; line-height: 1; }
+.open-report { display: flex; align-items: center; justify-content: space-between;
+               gap: 8px; padding: 8px 0; border-top: 1px solid var(--border);
+               font-size: 13px; }
+/* Held back, not forbidden: dimmed and sorted last, still openable. */
+.drill-btn.held { opacity: .55; }
+.held-note { display: block; margin-top: 4px; font-size: 12px; color: var(--warn); }
+
+/* A stop notice must not look like a sore ankle notice. Head and neck reports
+   land here, and this is the one message on the screen that should interrupt. */
+.advisory.stop { background: rgba(255, 92, 92, .10); border-radius: 10px;
+                 padding: 10px; border-bottom: none; }
+.advisory.stop .dotmark { background: var(--danger); }
+.advisory.stop b { color: var(--danger); }
