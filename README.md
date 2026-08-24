@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 948 tests
+python -m pytest tests/ -q          # 977 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -90,6 +90,7 @@ athleteiq/
   load.py           Workload ratio, throwing volume, rest days, advisories
   benchmarks.py     Age-banded weekly time budgets and peer context
   positions.py      Canonical positions, aliases, and per-position drill mix
+  transfer.py       What each drill is worth in an athlete's other sports
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
   digest.py         Weekly team KPIs and the coach email
@@ -814,6 +815,10 @@ good alias for Attack. Unrecognised is a real answer — it widens the peer pool
 rather than inventing a position, and it is reported to the coach, because an
 unresolved position silently drops that athlete out of every position feature.
 
+All of this applies **only to athletes old enough for it** — see
+**Specialisation is a setting** below, which gates both the drill mix and the
+peer pool.
+
 **A team does not have eight goalies.** So the peer pool widens in steps —
 position, then position family, then simply the age band — and the answer says
 which step it settled on. The athlete reads "compared with 11 midfielders your
@@ -851,6 +856,70 @@ Normalising free text is repair work; a dropdown means there is nothing to
 repair. A sport with no position model returns an empty list and the form falls
 back to free text — honest silence rather than another sport's positions with
 the labels changed.
+
+### Specialisation is a setting, and it defaults late
+
+Position guidance is **off below an age the program sets**, default 15. Under it
+every athlete gets the all-round mix regardless of the position on their jersey.
+
+This is the one place the tool could do real harm by being good at its job. A
+twelve-year-old labelled a goalie, handed a goalie drill mix and a goalie
+leaderboard, is being specialised by software — and early single-sport,
+single-role specialisation is the pattern youth sports medicine warns about most
+consistently. So the gate applies to *both* halves of the position feature: below
+the threshold the athlete gets the general mix **and** is pooled against their
+whole age band rather than their position.
+
+A useful consequence falls out of that: the off-hand board is withheld from
+goalies who specialise, but a *young* goalie still gets it. They may not be a
+goalie at sixteen, and both hands are worth building either way.
+
+`PUT /api/org/specialisation` moves the line — directors only, since it is a
+judgement about how children in this program are developed. Options are all
+ages, 13+, 15+ (recommended), 17+, or never. Setting it to never keeps an entire
+program on the all-round plan permanently, which is a legitimate thing for a rec
+league to want. Existing databases migrate to 15.
+
+Position is still **recorded** below the threshold — on the roster, in the coach
+view, and named back to the athlete:
+
+> **You are down as goalie, and your coach knows it.** Your training plan is the
+> all-round one until you are 15. The best players your age are the ones who can
+> run, jump, land and change direction — that is what turns into being good at
+> goalie later, and it is worth more right now than practising one job.
+
+Saying nothing here would read as the app not knowing what position they play,
+and a kid who believes that will go and do position work anyway.
+
+### What a drill is worth in the sports they also play
+
+Every drill carries what it transfers to, with the athlete's own sport filtered
+out — on the drill picker, and again on the summary screen right after they
+finish, which is when they are most likely to read it.
+
+| Drill | Reads as |
+|---|---|
+| Lateral Bounds | *Basketball* — staying in front of the player you are guarding is this exact move |
+| Squat Jumps | *Basketball* — the second jump on a rebound, which wins most of them |
+| Burpees | *Soccer* — the 80th minute |
+| Plank Hold | *Baseball* — a bat swing comes from your middle, not your arms |
+
+This is not decoration. It is the argument for the gating above, written where an
+athlete will actually read it — and it is the argument they will repeat to a
+parent who asks why the lacrosse app has them doing squats. So for an athlete
+below the threshold, the mix suggestion itself is argued by other sports rather
+than by position:
+
+> Swap some of your wall ball time for push-ups. Same minutes, and it pays off in
+> Swimming, Wrestling and Football too.
+
+Two rules keep it honest, both tested. The athlete's own sport is never listed
+back to them. And a drill that genuinely does not transfer says so: the stick
+drills get two entries, not a padded four, because a claim a kid can check and
+find false costs every other claim on the screen. Every `why` names a moment in a
+sport rather than a quality — the test bans "helps with", "good for", "improves
+your" and friends, since length is a poor proxy ("the 80th minute" is fifteen
+characters and one of the most concrete lines in the table).
 
 ### What the coach sees
 
@@ -1107,57 +1176,64 @@ contact with a real driveway:
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
    battery.
-3. **Positions are modelled for lacrosse only.** Another sport gets honest
+3. **The specialisation age is one number for a whole program.** It cannot
+   distinguish an athlete who plays three sports from one who plays only this
+   one, which is the distinction the research actually turns on. A multi-sport
+   fourteen-year-old is arguably fine to specialise by position within one of
+   them; a single-sport one is not. Capturing other sports played would let
+   the gate key off that instead, and would also let the transfer notes name
+   the sports that athlete actually plays rather than a general list.
+4. **Positions are modelled for lacrosse only.** Another sport gets honest
    silence — `for_sport` returns nothing, athletes fall back to the generic
    mix, and the join form falls back to free text. Adding a sport means adding
    its positions *and* the sport-specific drills their emphasis would point at;
    half of that is worse than neither, since a soccer emphasis built only from
    the general strength drills would recommend the same mix to every position
    on the pitch.
-4. **The age bands are heuristics, not a clinical instrument.** They are drawn
+5. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-5. **Handedness is inferred from wrist height**, which is reliable for standard
+6. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-6. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+7. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-7. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+8. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-8. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+9. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-9. **Revocation soft-fails by default**, though pre-fetched staples make strict
+10. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-10. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+11. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-11. **No payment processor.** The billing model, entitlements, and invoicing are
+12. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-12. **Offline slots are per-drill.** A drill you have never opened online has no
+13. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-13. **Web Push needs credentials.** Notifications generate and display in-app
+14. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-14. **Form quality is pose-only.** It reads how the body moved, not where the
+15. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-15. **Guardian identity is proven by the invite code alone.** There is no email
+16. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-16. **Roster import reads delimited text only.** CSV, TSV, and
+17. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-17. **Load coefficients are reasoned estimates, not measured values.** The
+18. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

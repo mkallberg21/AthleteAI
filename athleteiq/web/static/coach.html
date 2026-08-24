@@ -102,6 +102,26 @@
     <div id="attention"></div>
   </div>
 
+  <div class="card hidden" id="specialisation-card">
+    <h2>When position training starts</h2>
+    <p class="small muted">
+      Below this age every athlete gets the all-round plan, whatever position is
+      on their jersey. Position is still recorded and still shown &mdash; it just
+      does not narrow what they practise. Early single-role specialisation is the
+      pattern youth sports medicine warns about most consistently, so the default
+      is deliberately late. This is your call, not ours.
+    </p>
+    <label for="spec-age">Position guidance applies from</label>
+    <select id="spec-age">
+      <option value="0">All ages</option>
+      <option value="13">Age 13 and up</option>
+      <option value="15">Age 15 and up (recommended)</option>
+      <option value="17">Age 17 and up</option>
+      <option value="99">Never — everyone stays on the all-round plan</option>
+    </select>
+    <div id="spec-status" class="small muted" style="margin-top:8px"></div>
+  </div>
+
   <div class="card hidden" id="budget-card">
     <h2>Time outside practice</h2>
     <p class="small muted">
@@ -286,8 +306,19 @@
 
         <label for="new-athlete">New athlete name</label>
         <input id="new-athlete" placeholder="Jordan P.">
+        <label for="new-birth-year">Birth year</label>
+        <input id="new-birth-year" type="number" inputmode="numeric"
+               min="1900" max="2100" placeholder="2013">
+        <p class="small muted" style="margin:-4px 0 8px">
+          Everything is scaled by age &mdash; the weekly time budget, when position
+          training starts, and whether their full name shows on shared boards.
+          Without it they are treated as a minor on the safest settings.
+        </p>
         <label for="new-hand">Dominant hand</label>
         <select id="new-hand"><option value="right">Right</option><option value="left">Left</option></select>
+        <label for="new-position">Position</label>
+        <select id="new-position"><option value="">Not set</option></select>
+        <p class="small muted" style="margin:-4px 0 8px" id="new-position-note"></p>
         <label for="new-code">Join code (optional)</label>
         <input id="new-code" placeholder="ABC123">
         <label style="display:flex;gap:8px;align-items:center;font-size:.85rem">
@@ -715,6 +746,38 @@ function renderBudgets(data) {
       </div>`).join('')}`;
 }
 
+async function loadPositionSettings(isDirector) {
+  let data;
+  try { data = await api('/api/positions'); } catch { return; }
+
+  const select = $('new-position');
+  select.innerHTML = '<option value="">Not set</option>'
+    + data.positions.map((p) => `<option value="${esc(p.key)}">${esc(p.label)}</option>`).join('');
+  // A sport with no position model keeps the free-text path rather than
+  // offering another sport's positions with the labels changed.
+  select.parentElement && select.classList.toggle('hidden', data.positions.length === 0);
+  $('new-position-note').textContent = data.note || '';
+
+  // Only a director may change it; a coach sees where the line sits.
+  $('specialisation-card').classList.toggle('hidden', !data.positions.length);
+  $('spec-age').value = String(data.position_emphasis_min_age);
+  $('spec-age').disabled = !isDirector;
+  $('spec-status').textContent = isDirector
+    ? data.applies_from
+    : `${data.applies_from} — a director can change this.`;
+}
+
+$('spec-age').addEventListener('change', async (event) => {
+  try {
+    const res = await api('/api/org/specialisation', {
+      method: 'PUT',
+      body: { position_emphasis_min_age: Number(event.target.value) },
+    });
+    $('spec-status').textContent = `Saved — ${res.applies_from}.`;
+    await loadAll();
+  } catch (e) { showError(e.message); }
+});
+
 function renderPositions(data) {
   const rows = (data.positions || []).filter((p) => p.key !== 'none');
   const bad = data.unrecognised_positions || [];
@@ -1087,9 +1150,11 @@ $('add-athlete').addEventListener('click', async () => {
       method: 'POST',
       body: {
         display_name: name,
+        birth_year: Number($('new-birth-year').value) || null,
         dominant_hand: $('new-hand').value,
         guardian_consent: $('new-consent').checked,
         join_code: $('new-code').value.trim() || null,
+        position: $('new-position').value,
       },
     });
     // Shown once and never retrievable -- the server stores only a hash.
@@ -1098,6 +1163,7 @@ $('add-athlete').addEventListener('click', async () => {
        <code style="word-break:break-all">${esc(res.token)}</code>`;
     $('new-token').classList.remove('hidden');
     $('new-athlete').value = '';
+    $('new-birth-year').value = '';
     await Promise.all([loadTeams(), loadAll()]);
   } catch (e) { showError(e.message); }
 });
@@ -1185,6 +1251,7 @@ $('signout').addEventListener('click', logout);
 
     await loadBilling();
     await loadStaff(orgs.role === 'director');
+    await loadPositionSettings(orgs.role === 'director');
     await loadTeams();
     await loadDrillOptions();
     defaultAssignmentDates();

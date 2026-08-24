@@ -24,6 +24,7 @@ from . import mailer
 from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import positions as positions_mod
+from . import transfer as transfer_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
 from . import notifications as notify
@@ -33,7 +34,7 @@ from .guardians import GuardianError
 from .roster import RosterError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
 from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
-from .store import Principal, Store, StoreError
+from .store import Principal, Store, StoreError, transaction
 
 app = FastAPI(
     title="AthleteIQ",
@@ -160,16 +161,29 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/api/drills")
-def list_drills() -> dict[str, Any]:
-    """The full drill catalog, including the counting spec the client runs."""
-    return {"drills": [d.to_dict() for d in ALL_DRILLS]}
+def list_drills(sport: str | None = None) -> dict[str, Any]:
+    """The full drill catalog, including the counting spec the client runs.
+
+    Each drill also carries what it is worth in *other* sports. Pass `sport` to
+    leave the athlete's own out -- telling a lacrosse player that wall ball
+    helps at lacrosse is noise, and noise teaches kids to skip the text.
+
+    Stays unauthenticated: this is reference data, the counting spec ships to
+    every browser anyway, and the transfer notes are the same for everyone.
+    """
+    return {
+        "sport": sport,
+        "drills": [
+            {**d.to_dict(), **transfer_mod.describe(d.key, sport)} for d in ALL_DRILLS
+        ],
+    }
 
 
 @app.get("/api/drills/{drill_key}")
-def get_drill_spec(drill_key: str) -> dict[str, Any]:
+def get_drill_spec(drill_key: str, sport: str | None = None) -> dict[str, Any]:
     if drill_key not in DRILLS_BY_KEY:
         raise HTTPException(status_code=404, detail=f"unknown drill: {drill_key}")
-    return DRILLS_BY_KEY[drill_key].to_dict()
+    return {**DRILLS_BY_KEY[drill_key].to_dict(), **transfer_mod.describe(drill_key, sport)}
 
 
 # ----------------------------------------------------------------------
@@ -1438,6 +1452,49 @@ def _org_sport(store: Store, org_id: int) -> str:
     return (row["sport"] if row else None) or "lacrosse"
 
 
+class SpecialisationSetting(BaseModel):
+    #: 0 means position guidance from the youngest band; 99 keeps every
+    #: athlete on the general mix permanently. Anything between is an age.
+    position_emphasis_min_age: int = Field(ge=0, le=99)
+
+
+@app.put("/api/org/specialisation")
+def set_specialisation_age(
+    body: SpecialisationSetting,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """When position-specific training guidance switches on for this program.
+
+    Directors only. It is a judgement about how children in this program should
+    be developed, which is squarely a director's call and not an assistant
+    coach's -- and not ours either, which is why it is a setting rather than a
+    constant. The default of 15 is the conservative end of it.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can change when position training starts",
+        )
+    with transaction(store.conn) as conn:
+        conn.execute(
+            "UPDATE organizations SET position_emphasis_min_age = ? WHERE id = ?",
+            (body.position_emphasis_min_age, principal.org_id),
+        )
+    return {
+        "position_emphasis_min_age": body.position_emphasis_min_age,
+        "applies_from": _specialisation_label(body.position_emphasis_min_age),
+    }
+
+
+def _specialisation_label(age: int) -> str:
+    if age >= 99:
+        return "Never — every athlete stays on the all-round plan"
+    if age <= 0:
+        return "All ages"
+    return f"Age {age} and up"
+
+
 @app.get("/api/positions")
 def list_positions(
     principal: Principal = Depends(_principal),
@@ -1452,9 +1509,24 @@ def list_positions(
     than showing another sport's positions.
     """
     sport = _org_sport(store, principal.org_id)
+    row = store.conn.execute(
+        "SELECT position_emphasis_min_age FROM organizations WHERE id = ?",
+        (principal.org_id,),
+    ).fetchone()
+    min_age = 15 if row is None or row[0] is None else int(row[0])
     return {
         "sport": sport,
         "positions": [p.to_dict() for p in positions_mod.for_sport(sport)],
+        "position_emphasis_min_age": min_age,
+        "applies_from": _specialisation_label(min_age),
+        # So the join form can say what recording a position will and will not
+        # do, instead of implying it changes training for everyone.
+        "note": (
+            "Position is recorded for every athlete. It shapes training "
+            f"guidance from age {min_age}." if min_age < 99 else
+            "Position is recorded for every athlete, and this program keeps "
+            "all ages on the all-round training plan."
+        ),
     }
 
 

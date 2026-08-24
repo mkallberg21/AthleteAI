@@ -2057,3 +2057,129 @@ class TestPositionEndpoints:
         rows = {a["display_name"]: a for a in plan["athletes"]}
         assert not rows["Alex T."]["warnings"]
         assert any("not recognised" in w for w in rows["Riley K."]["warnings"])
+
+
+class TestSpecialisationSetting:
+    """When position work starts is a judgement about how children in this
+    program are developed. It belongs to the director."""
+
+    def test_it_defaults_late(self, client, program):
+        body = client.get("/api/positions", headers=program["director"]).json()
+        assert body["position_emphasis_min_age"] == 15
+        assert body["applies_from"] == "Age 15 and up"
+        assert "from age 15" in body["note"]
+
+    def test_a_director_can_move_it(self, client, program):
+        res = client.put(
+            "/api/org/specialisation",
+            json={"position_emphasis_min_age": 13},
+            headers=program["director"],
+        )
+        assert res.status_code == 200
+        assert res.json()["applies_from"] == "Age 13 and up"
+        after = client.get("/api/positions", headers=program["director"]).json()
+        assert after["position_emphasis_min_age"] == 13
+
+    def test_a_director_can_switch_it_off_entirely(self, client, program):
+        res = client.put(
+            "/api/org/specialisation",
+            json={"position_emphasis_min_age": 99},
+            headers=program["director"],
+        ).json()
+        assert "Never" in res["applies_from"]
+        note = client.get("/api/positions", headers=program["director"]).json()["note"]
+        assert "all-round training plan" in note
+
+    def test_a_coach_cannot(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Two Hats"}
+        ).json()
+        api_module._store.add_membership(
+            program["org"]["director"]["id"], rival["org_id"], "coach"
+        )
+        headers = {**program["director"], "X-Org-Id": str(rival["org_id"])}
+        res = client.put(
+            "/api/org/specialisation",
+            json={"position_emphasis_min_age": 0}, headers=headers,
+        )
+        assert res.status_code == 403
+
+    def test_an_age_outside_the_range_is_rejected(self, client, program):
+        for value in (-1, 120):
+            res = client.put(
+                "/api/org/specialisation",
+                json={"position_emphasis_min_age": value},
+                headers=program["director"],
+            )
+            assert res.status_code == 422
+
+
+class TestDrillsCarryTheirCrossSportValue:
+
+    def test_the_catalog_stays_public(self, client):
+        """Reference data. The counting spec ships to every browser anyway."""
+        assert client.get("/api/drills").status_code == 200
+        assert client.get("/api/drills/not_a_drill").status_code == 404
+
+    def test_every_drill_names_other_sports_it_pays_off_in(self, client):
+        for drill in client.get("/api/drills").json()["drills"]:
+            assert drill["transfers"], drill["key"]
+            assert drill["blurb"], drill["key"]
+
+    def test_the_athletes_own_sport_is_left_out(self, client):
+        body = client.get("/api/drills", params={"sport": "lacrosse"}).json()
+        for drill in body["drills"]:
+            assert all(t["sport"].lower() != "lacrosse" for t in drill["transfers"])
+
+    def test_a_single_drill_carries_it_too(self, client):
+        body = client.get(
+            "/api/drills/gen_lateral_bound", params={"sport": "lacrosse"}
+        ).json()
+        sports = [t["sport"] for t in body["transfers"]]
+        assert "Basketball" in sports
+        assert body["counter"], "still the full counting spec"
+
+
+class TestAYoungAthleteIsNotSpecialisedThroughTheApi:
+
+    def test_they_get_the_all_round_plan_and_are_told_why(self, client, program):
+        athlete = program["athletes"][0]
+        client.post(
+            "/api/teams/join",
+            json={"join_code": program["team"]["join_code"], "position": "Goalie"},
+            headers=athlete["headers"],
+        )
+        for seed in (1, 2, 3):
+            do_session(client, athlete["headers"], seed=seed, count=700)
+
+        # The fixture's athletes are born 2011, so they are young for the
+        # default threshold of 15 until the mid-2020s roll far enough on.
+        client.put(
+            "/api/org/specialisation",
+            json={"position_emphasis_min_age": 99},
+            headers=program["director"],
+        )
+        report = client.get("/api/benchmarks", headers=athlete["headers"]).json()
+        assert report["specialising"] is False
+        assert report["position"]["key"] == "goalie", "still recorded"
+        assert report["mix"]["position"]["key"] == "general"
+        assert "goalie" in report["specialisation"]["headline"].lower()
+
+    def test_turning_the_setting_on_changes_what_they_see(self, client, program):
+        athlete = program["athletes"][0]
+        client.post(
+            "/api/teams/join",
+            json={"join_code": program["team"]["join_code"], "position": "Goalie"},
+            headers=athlete["headers"],
+        )
+        for seed in (1, 2, 3):
+            do_session(client, athlete["headers"], seed=seed, count=700)
+
+        client.put(
+            "/api/org/specialisation",
+            json={"position_emphasis_min_age": 0}, headers=program["director"],
+        )
+        report = client.get("/api/benchmarks", headers=athlete["headers"]).json()
+        assert report["specialising"] is True
+        assert report["mix"]["position"]["key"] == "goalie"
+        assert report["specialisation"] is None

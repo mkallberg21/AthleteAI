@@ -41,6 +41,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import positions
+from . import transfer
 from .config import CONFIG
 from .drills.catalog import DRILLS_BY_KEY
 
@@ -586,6 +587,10 @@ class MixSlice:
     minutes: float
     actual: float
     target: float
+    #: Which other sports this drill pays off in. Carried on the slice rather
+    #: than fetched separately by the client so the "it is not just lacrosse"
+    #: argument is never one failed request away from disappearing.
+    transfers: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def delta(self) -> float:
@@ -599,6 +604,7 @@ class MixSlice:
             "actual": round(self.actual, 3),
             "target": round(self.target, 3),
             "delta": round(self.delta, 3),
+            "transfers": self.transfers,
         }
 
 
@@ -609,6 +615,7 @@ def training_mix(
     today: date | None = None,
     days: int = 28,
     suppress_suggestions: bool = False,
+    home_sport: str | None = None,
 ) -> dict[str, Any]:
     """How an athlete divides their solo time, against what their position needs.
 
@@ -646,6 +653,7 @@ def training_mix(
             minutes=by_drill.get(key, 0.0),
             actual=(by_drill.get(key, 0.0) / total) if total else 0.0,
             target=target.get(key, 0.0),
+            transfers=[t.to_dict() for t in transfer.for_drill(key, home_sport)],
         )
         for key in keys
     ]
@@ -665,10 +673,21 @@ def training_mix(
             # Worded to survive the test that bans "add", "more" and "extra".
             # "Would do more for you" is benign in intent and still the wrong
             # verb to put in front of a twelve-year-old reading a training app.
+            #
+            # The reason changes with who is reading. An athlete old enough for
+            # position work is told what their position leans on. A younger one
+            # is told which *other sports* the drill pays off in, because that
+            # is the honest argument for why they are not doing position work
+            # yet -- and it is the argument they will repeat to a parent.
+            cross = transfer.blurb(short.drill_key, home_sport, limit=3)
+            if position.key == positions.GENERIC.key and cross:
+                reason = cross.replace("This one pays off", "it pays off")
+            else:
+                reason = f"it is what {position.plural.lower()} lean on"
             suggestions.append(
                 f"Swap some of your {heavy.label.lower()} time for "
-                f"{short.label.lower()}. Same minutes, and it is what "
-                f"{position.plural.lower()} lean on."
+                f"{short.label.lower()}. Same minutes, and {reason}"
+                f"{'' if reason.endswith('.') else '.'}"
             )
     return {
         "position": position.to_dict(),
@@ -686,6 +705,36 @@ def training_mix(
 # The whole picture
 # ---------------------------------------------------------------------------
 
+def _specialisation_note(
+    position: positions.Position | None,
+    age: int | None,
+    min_age: int,
+    specialising: bool,
+) -> dict[str, Any] | None:
+    """Why a young athlete is not getting position-specific work.
+
+    Silence here would read as an oversight, or worse, as the app not knowing
+    what position they play -- and a twelve-year-old who thinks the app has
+    forgotten they are a goalie will go and do goalie work anyway. So the
+    position is named back to them, and the reason is given in terms of what
+    they gain rather than what they are being denied.
+    """
+    if position is None or specialising:
+        return None
+    return {
+        "position": position.label,
+        "min_age": min_age,
+        "headline": f"You are down as {position.label.lower()}, and your coach knows it",
+        "detail": (
+            f"Your training plan is the all-round one until you are {min_age}. "
+            "The best players your age are the ones who can run, jump, land and "
+            "change direction — that is what turns into being good at "
+            f"{position.label.lower()} later, and it is worth more right now than "
+            "practising one job."
+        ),
+    }
+
+
 def report(
     conn: sqlite3.Connection,
     athlete_id: int,
@@ -694,7 +743,7 @@ def report(
     """An athlete's time budget first, then how they compare inside it."""
     row = conn.execute(
         "SELECT u.id, u.org_id, u.display_name, u.birth_year, "
-        "       u.birth_year_estimated, o.sport "
+        "       u.birth_year_estimated, o.sport, o.position_emphasis_min_age "
         "FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = ?",
         (athlete_id,),
     ).fetchone()
@@ -722,9 +771,19 @@ def report(
     raw_position = raw_position["position"] if raw_position else None
     position = positions.normalize(raw_position, sport)
 
-    pool = build_pool(conn, row["org_id"], band, position, sport)
+    # Below the program's threshold the position stays on the jersey and off
+    # the training plan. Position is still recorded, still shown, still on the
+    # roster -- it just does not narrow what this athlete practises or who
+    # they are measured against, because narrowing both at twelve is exactly
+    # the specialisation the age bands exist to slow down.
+    min_age = row["position_emphasis_min_age"]
+    min_age = 15 if min_age is None else int(min_age)
+    specialising = position is not None and age is not None and age >= min_age
+    applied = position if specialising else None
+
+    pool = build_pool(conn, row["org_id"], band, applied, sport)
     comparisons = compare_to_peers(
-        conn, athlete_id, row["org_id"], band, budget, position, today, sport,
+        conn, athlete_id, row["org_id"], band, budget, applied, today, sport,
         pool=pool,
     )
 
@@ -732,8 +791,9 @@ def report(
     # advice alongside it -- however well framed as a swap -- reads as a
     # second task and blunts the first.
     mix = training_mix(
-        conn, athlete_id, position, today,
+        conn, athlete_id, applied, today,
         suppress_suggestions=budget.status == Status.OVER,
+        home_sport=sport,
     )
 
     advisories: list[str] = []
@@ -762,6 +822,8 @@ def report(
         "comparisons": [c.to_dict() for c in comparisons],
         "position": position.to_dict() if position else None,
         "position_raw": raw_position,
+        "specialising": specialising,
+        "specialisation": _specialisation_note(position, age, min_age, specialising),
         "peer_pool": pool.to_dict(),
         "mix": mix,
         "advisories": advisories,

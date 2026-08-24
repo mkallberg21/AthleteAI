@@ -39,6 +39,7 @@
       </div>
       <p class="budget-detail" id="budget-detail"></p>
       <div id="budget-advisories"></div>
+      <div id="specialisation-note" class="hidden"></div>
       <div id="mix-suggestions"></div>
       <details style="margin-top:10px" id="mix-details">
         <summary class="small muted" style="cursor:pointer">
@@ -195,6 +196,7 @@
       <table style="margin-top:14px"><tbody id="r-breakdown"></tbody></table>
       <div id="r-notes" class="small muted" style="margin-top:12px"></div>
       <div id="r-badges" class="badge-grid" style="margin-top:14px"></div>
+      <div id="r-transfer" class="transfer-note hidden"></div>
       <button class="secondary hidden" id="r-review" style="margin-top:14px">
         Watch it back
       </button>
@@ -233,6 +235,7 @@ function show(name) {
 
 let drills = [];
 let profile = null;
+let homeSport = null;
 let landmarker = null;
 let stream = null;
 let counter = null;
@@ -255,8 +258,12 @@ const BADGE_ICONS = {
 
 // ---------------------------------------------------------------- home
 
-async function loadHome() {
-  profile = await api('/api/me');
+// `prefetched` is passed only at boot, where the profile is fetched ahead of
+// the drill list. Every later call refetches, because this is what refreshes
+// XP and the streak after a session.
+async function loadHome(prefetched) {
+  profile = prefetched || await api('/api/me');
+  homeSport = profile.sport || null;
   $('whoami').textContent = profile.display_name;
   $('greeting').textContent = profile.streak > 0
     ? `${profile.streak}-day streak`
@@ -311,12 +318,16 @@ async function loadHome() {
 }
 
 async function loadDrills() {
-  const data = await api('/api/drills');
+  // The sport is passed so the athlete's own is left out of the transfer
+  // notes: telling a lacrosse player that wall ball helps at lacrosse is
+  // noise, and noise is what teaches kids to skip the text.
+  const data = await api(`/api/drills${homeSport ? `?sport=${encodeURIComponent(homeSport)}` : ''}`);
   drills = data.drills;
   $('drill-list').innerHTML = drills.map((d, i) => `
     <button class="drill-btn" data-i="${i}">
       <b>${esc(d.name)}</b>
       <span>${esc(d.description)}</span>
+      ${d.blurb ? `<span class="transfer-inline">${esc(d.blurb)}</span>` : ''}
     </button>`).join('');
   $('drill-list').querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => openCapture(drills[Number(btn.dataset.i)]));
@@ -367,7 +378,21 @@ async function loadBudget() {
     : `<p class="small muted">Not enough athletes your age in the program to compare
        yet. ${esc(report.disclaimer)}</p>`;
 
+  renderSpecialisation(report.specialisation);
   renderMix(report.mix);
+}
+
+// Why a young athlete is on the all-round plan. Saying nothing here would read
+// as the app not knowing what position they play, and a kid who believes that
+// will go and do position work anyway.
+function renderSpecialisation(note) {
+  const box = $('specialisation-note');
+  if (!note) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="advisory info">
+      <span class="dotmark"></span>
+      <div><b>${esc(note.headline)}</b><em>${esc(note.detail)}</em></div>
+    </div>`;
 }
 
 // The position half of the picture. Unlike the peer board this needs no other
@@ -917,6 +942,24 @@ function showResult(result) {
     queued: 'Saved. It will send itself.',
   };
   $('result-title').textContent = titles[result.status] || 'Session complete';
+
+  // The moment a kid is most likely to read it: they just finished the work,
+  // so this is where "that was not only lacrosse" actually lands.
+  const done = activeDrill && drills.find((d) => d.key === activeDrill.key);
+  const box = $('r-transfer');
+  if (done && done.transfers && done.transfers.length) {
+    box.classList.remove('hidden');
+    box.innerHTML = `<b>That was not just ${esc(homeSport || 'one sport')} work.</b>`
+      + done.transfers.map((t) => `
+        <div class="transfer-row">
+          <span class="transfer-sport">${esc(t.sport)}</span>
+          <span>${esc(t.why)}</span>
+        </div>`).join('');
+  } else {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+  }
+
   $('r-reps').textContent = result.reps_total;
   $('r-left').textContent = result.reps_left;
   $('r-right').textContent = result.reps_right;
@@ -1167,8 +1210,12 @@ window.addEventListener('pagehide', () => {
 (async () => {
   try {
     registerServiceWorker();
+    // Profile first: the drill list needs the athlete's sport so its own sport
+    // can be left out of the "this also pays off in..." notes.
+    const boot = await api('/api/me');
+    homeSport = boot.sport || null;
     await loadDrills();
-    await loadHome();
+    await loadHome(boot);
     show('home');
     // Non-blocking: a queued backlog or a slow feed must not hold up the
     // screen an athlete opened in order to train.

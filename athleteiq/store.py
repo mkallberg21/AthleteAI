@@ -777,7 +777,8 @@ class Store:
 
     def athlete_profile(self, athlete_id: int) -> dict[str, Any]:
         user = self.conn.execute(
-            "SELECT id, display_name, dominant_hand, birth_year FROM users WHERE id=?",
+            "SELECT u.id, u.display_name, u.dominant_hand, u.birth_year, o.sport "
+            "FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = ?",
             (athlete_id,),
         ).fetchone()
         if user is None:
@@ -819,6 +820,9 @@ class Store:
             "athlete_id": user["id"],
             "display_name": user["display_name"],
             "dominant_hand": user["dominant_hand"],
+            # The client needs this to leave the athlete's own sport out of
+            # the cross-sport transfer notes on every drill.
+            "sport": user["sport"],
             "level": prog.level,
             "total_xp": prog.total_xp,
             "xp_into_level": prog.xp_into_level,

@@ -407,7 +407,14 @@ class TestTheCopyReadsLikeEnglish:
 # Position benchmarks
 # ---------------------------------------------------------------------------
 
-def squad(store, program, spec, age=12, drill="lax_wall_ball", minutes=12, days=3):
+#: Old enough for position guidance under the default program setting. The
+#: position suites use this rather than 12, because at 12 the whole point is
+#: that position does *not* apply -- that is its own suite below.
+SPECIALISING_AGE = 16
+
+
+def squad(store, program, spec, age=SPECIALISING_AGE, drill="lax_wall_ball",
+          minutes=12, days=3):
     """Build a roster written the way a coach types it: {'Middie': 9, 'D': 5}."""
     ids = {}
     for label, n in spec.items():
@@ -495,7 +502,7 @@ class TestTheMixWorksWithNoPeersAtAll:
     """The half of position benchmarking that a team of one still gets."""
 
     def test_a_goalie_who_only_does_wall_ball_is_told_so(self, store, program):
-        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        athlete = add_athlete(store, program, "Sam", SPECIALISING_AGE, position="Goalie")
         for d in range(3):
             train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
         mix = B.report(store.conn, athlete["id"], TODAY)["mix"]
@@ -508,7 +515,7 @@ class TestTheMixWorksWithNoPeersAtAll:
         """'Also do lateral bounds' quietly undoes the weekly budget."""
         banned = ("add", "more", "extra", "also", "as well", "on top")
         for position in ("Goalie", "Attack", "D", "FOGO", "LSM", "Middie"):
-            athlete = add_athlete(store, program, f"S{position}", 12, position=position)
+            athlete = add_athlete(store, program, f"S{position}", SPECIALISING_AGE, position=position)
             for d in range(3):
                 train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 7)
             for suggestion in B.report(store.conn, athlete["id"], TODAY)["mix"]["suggestions"]:
@@ -519,7 +526,7 @@ class TestTheMixWorksWithNoPeersAtAll:
 
     def test_nothing_is_suggested_from_a_single_short_session(self, store, program):
         """One session is not a mix, it is a session."""
-        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        athlete = add_athlete(store, program, "Sam", SPECIALISING_AGE, position="Goalie")
         train(store, athlete["id"], TODAY, minutes=8, seed=3)
         mix = B.report(store.conn, athlete["id"], TODAY)["mix"]
         assert mix["ready"] is False
@@ -527,16 +534,17 @@ class TestTheMixWorksWithNoPeersAtAll:
 
     def test_an_athlete_past_their_ceiling_hears_stop_and_nothing_else(self, store, program):
         """Mix advice next to 'stop' reads as a second task and blunts the first."""
-        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        athlete = add_athlete(store, program, "Sam", SPECIALISING_AGE, position="Goalie")
+        # Past the 15-16 band's 180-minute ceiling, not merely at it.
         for d in range(6):
-            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=30, seed=d + 11)
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=40, seed=d + 11)
         report = B.report(store.conn, athlete["id"], TODAY)
         assert report["budget"]["status"] == B.Status.OVER
         assert report["mix"]["suggestions"] == []
         assert report["mix"]["slices"], "the chart still shows; only the nudge goes"
 
     def test_an_athlete_with_no_position_gets_general_guidance(self, store, program):
-        athlete = add_athlete(store, program, "Sam", 12, position="TBD")
+        athlete = add_athlete(store, program, "Sam", SPECIALISING_AGE, position="TBD")
         for d in range(3):
             train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 5)
         mix = B.report(store.conn, athlete["id"], TODAY)["mix"]
@@ -545,7 +553,7 @@ class TestTheMixWorksWithNoPeersAtAll:
 
     def test_the_mix_never_recommends_a_drill_that_does_not_exist(self, store, program):
         from athleteiq.drills.catalog import DRILLS_BY_KEY
-        athlete = add_athlete(store, program, "Sam", 12, position="Attack")
+        athlete = add_athlete(store, program, "Sam", SPECIALISING_AGE, position="Attack")
         for d in range(3):
             train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 2)
         for item in B.report(store.conn, athlete["id"], TODAY)["mix"]["slices"]:
@@ -567,3 +575,130 @@ class TestWhatTheCoachSeesAboutPositions:
         assert summary["unrecognised_positions"] == ["wingback"]
         counts = {p["key"]: p["count"] for p in summary["positions"]}
         assert counts["unrecognised"] == 1
+
+
+class TestYoungAthletesAreNotSpecialised:
+    """A twelve-year-old labelled a goalie who then trains only goalie work is
+    how early specialisation starts. Below the program's threshold the position
+    stays on the jersey and off the training plan."""
+
+    def test_a_young_athlete_gets_the_all_round_mix(self, store, program):
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["specialising"] is False
+        assert report["mix"]["position"]["key"] == "general"
+
+    def test_the_position_is_still_recorded_and_named_back_to_them(self, store, program):
+        """Silence would read as the app having forgotten, and a kid who thinks
+        that will go and do position work anyway."""
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["position"]["key"] == "goalie"
+        note = report["specialisation"]
+        assert note["position"] == "Goalie"
+        assert "goalie" in note["headline"].lower()
+        assert str(note["min_age"]) in note["detail"]
+
+    def test_an_older_athlete_in_the_same_program_does_specialise(self, store, program):
+        athlete = add_athlete(store, program, "Alex", 17, position="Goalie")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["specialising"] is True
+        assert report["mix"]["position"]["key"] == "goalie"
+        assert report["specialisation"] is None
+
+    def test_a_young_goalie_is_still_measured_on_both_hands(self, store, program):
+        """The off-hand board is withheld from goalies who specialise. A twelve
+        year old goalie may not be a goalie at sixteen, and should be building
+        both hands regardless."""
+        ids = squad(store, program, {"Goalie": 9}, age=12)
+        metrics = {c["metric"] for c in B.report(store.conn, ids["Goalie0"], TODAY)["comparisons"]}
+        assert "offhand" in metrics
+
+    def test_a_young_athlete_is_not_pooled_by_position(self, store, program):
+        """Comparing a twelve-year-old only against other midfielders is the
+        same narrowing, applied to the leaderboard instead of the drills."""
+        ids = squad(store, program, {"Middie": 9, "Attack": 5}, age=12)
+        pool = B.report(store.conn, ids["Middie0"], TODAY)["peer_pool"]
+        assert pool["scope"] == "band"
+        assert pool["count"] == 14
+
+    def test_the_director_can_move_the_line(self, store, program):
+        athlete = add_athlete(store, program, "Sam", 13, position="Goalie")
+        assert B.report(store.conn, athlete["id"], TODAY)["specialising"] is False
+
+        store.conn.execute(
+            "UPDATE organizations SET position_emphasis_min_age = 13 WHERE id = ?",
+            (program["org"],),
+        )
+        store.conn.commit()
+        assert B.report(store.conn, athlete["id"], TODAY)["specialising"] is True
+
+    def test_a_director_can_turn_it_off_for_everyone(self, store, program):
+        athlete = add_athlete(store, program, "Alex", 17, position="Goalie")
+        store.conn.execute(
+            "UPDATE organizations SET position_emphasis_min_age = 99 WHERE id = ?",
+            (program["org"],),
+        )
+        store.conn.commit()
+        report = B.report(store.conn, athlete["id"], TODAY)
+        assert report["specialising"] is False
+        assert report["mix"]["position"]["key"] == "general"
+
+    def test_an_athlete_of_unknown_age_is_not_specialised(self, store, program):
+        """Guessing low is the safe direction to be wrong in, here as elsewhere."""
+        athlete = store.create_user(
+            program["org"], "athlete", "Nameless", birth_year=None, dominant_hand="right"
+        )
+        store.join_team(program["team"]["join_code"], athlete["id"], position="Goalie")
+        assert B.report(store.conn, athlete["id"], TODAY)["specialising"] is False
+
+
+class TestTheDrillIsNotJustForThisSport:
+    """A kid who thinks lateral bounds are lacrosse homework is a kid being
+    quietly taught to specialise."""
+
+    def test_every_slice_carries_what_it_is_worth_elsewhere(self, store, program):
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        slices = B.report(store.conn, athlete["id"], TODAY)["mix"]["slices"]
+        general = [s for s in slices if s["drill_key"].startswith("gen_")]
+        assert general, "the young athlete's mix is general drills"
+        for item in general:
+            assert item["transfers"], item["drill_key"]
+            for entry in item["transfers"]:
+                assert entry["sport"] and entry["why"]
+
+    def test_the_athletes_own_sport_is_never_listed_back_to_them(self, store, program):
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        for item in B.report(store.conn, athlete["id"], TODAY)["mix"]["slices"]:
+            sports = {t["sport"].lower() for t in item["transfers"]}
+            assert "lacrosse" not in sports
+
+    def test_a_young_athletes_swap_is_argued_by_other_sports(self, store, program):
+        """The reason a twelve-year-old is not doing position work, said in the
+        one place they will actually read it."""
+        athlete = add_athlete(store, program, "Sam", 12, position="Goalie")
+        for d in range(3):
+            train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 1)
+        suggestions = B.report(store.conn, athlete["id"], TODAY)["mix"]["suggestions"]
+        assert suggestions
+        assert any("pays off in" in s for s in suggestions)
+
+    def test_those_swaps_are_still_swaps(self, store, program):
+        banned = ("add", "more", "extra", "also", "as well", "on top")
+        for position in ("Goalie", "Attack", "D"):
+            athlete = add_athlete(store, program, f"Y{position}", 12, position=position)
+            for d in range(3):
+                train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 4)
+            for suggestion in B.report(store.conn, athlete["id"], TODAY)["mix"]["suggestions"]:
+                low = suggestion.lower()
+                assert "same minutes" in low
+                for word in banned:
+                    assert word not in low, (position, word, suggestion)

@@ -105,3 +105,58 @@ class TestUnrecognised:
     def test_typos_are_reported_once_each_for_a_coach_to_fix(self):
         raw = ["Middie", "TBD", "Goalie", "TBD", "wingback", ""]
         assert P.unrecognised(raw) == ["TBD", "wingback"]
+
+
+
+class TestCrossSportTransfer:
+    """The honest argument for not specialising, written where a kid reads it."""
+
+    def test_every_drill_in_the_catalog_has_a_transfer_entry(self):
+        """A drill with no entry silently renders a blank where the reason goes."""
+        from athleteiq import transfer
+        for key in DRILLS_BY_KEY:
+            assert key in transfer.TRANSFERS, key
+            assert transfer.TRANSFERS[key], key
+
+    def test_the_home_sport_is_filtered_out(self):
+        from athleteiq import transfer
+        for key in DRILLS_BY_KEY:
+            for item in transfer.for_drill(key, "lacrosse", limit=0):
+                assert item.sport.lower() != "lacrosse"
+
+    def test_a_reason_is_given_not_just_a_sport_name(self):
+        """Every 'why' names a moment in the sport, not a quality.
+
+        Length is a poor proxy for this -- "the 80th minute" is fifteen
+        characters and one of the most concrete lines in the table -- so the
+        test bans the filler phrasings instead.
+        """
+        from athleteiq import transfer
+        filler = ("helps with", "good for", "improves your", "builds your",
+                  "is useful", "great for", "works your")
+        for key, items in transfer.TRANSFERS.items():
+            for item in items:
+                assert item.sport.strip(), key
+                assert item.why.strip(), key
+                for phrase in filler:
+                    assert phrase not in item.why.lower(), (key, item.why)
+
+    def test_stick_drills_are_not_padded_out(self):
+        """A claim a kid can check and find false costs every other claim."""
+        from athleteiq import transfer
+        assert len(transfer.TRANSFERS["lax_quick_stick"]) <= 2
+        assert len(transfer.TRANSFERS["lax_wall_ball"]) <= 2
+
+    def test_the_blurb_reads_as_a_sentence(self):
+        from athleteiq import transfer
+        assert transfer.blurb("gen_lateral_bound", "lacrosse") == (
+            "This one pays off in Basketball, Soccer and Tennis too."
+        )
+        assert transfer.blurb("lax_wall_ball", "lacrosse") == (
+            "This one pays off in Baseball and Hockey too."
+        )
+
+    def test_an_unknown_drill_says_nothing_rather_than_guessing(self):
+        from athleteiq import transfer
+        assert transfer.for_drill("gen_nonexistent") == []
+        assert transfer.blurb("gen_nonexistent") == ""

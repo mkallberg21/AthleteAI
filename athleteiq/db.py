@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS organizations (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL,
     sport       TEXT NOT NULL DEFAULT 'lacrosse',
+    -- Age at which position-specific training guidance switches on. Below it,
+    -- every athlete gets the general-athlete drill mix regardless of the
+    -- position on their jersey.
+    --
+    -- Defaults to 15 because early single-sport, single-role specialisation is
+    -- the pattern youth sports medicine warns about most consistently, and a
+    -- twelve-year-old labelled a goalie who then trains only goalie work is
+    -- how that starts. It is a program setting rather than a constant because
+    -- the right answer differs between a rec league and a high-school program,
+    -- and that call belongs to the director, not to us. Set above the oldest
+    -- band (99) to keep every athlete on the general mix permanently.
+    position_emphasis_min_age INTEGER NOT NULL DEFAULT 15,
     created_at  TEXT NOT NULL
 );
 
@@ -510,6 +522,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("claim_code_hash", "TEXT"),
         ("claim_expires_at", "TEXT"),
         ("birth_year_estimated", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    "organizations": [
+        ("position_emphasis_min_age", "INTEGER NOT NULL DEFAULT 15"),
     ],
 }
 
