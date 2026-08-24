@@ -135,6 +135,41 @@
     <div id="budget-sports"></div>
   </div>
 
+  <div class="card" id="recognition-card">
+    <h2>Automatic recognition</h2>
+    <p class="small muted">
+      When an athlete logs a session at home, these go out in your name, on the
+      day. Write them once in your own voice &mdash; the shipped wording is a
+      placeholder, and it will read like one. Use
+      <code>{first_name}</code>, <code>{streak}</code>, <code>{coach}</code> or
+      <code>{team}</code> and they get filled in.
+    </p>
+    <div id="voice-box" style="margin-bottom:14px">
+      <label for="voice-name">Someone senior who signs the big ones (optional)</label>
+      <input id="voice-name" placeholder="Marcus Vale">
+      <input id="voice-title" placeholder="Director of Player Development, former pro">
+      <p class="small muted" style="margin:4px 0 8px">
+        Reserved for the long streaks by default. A note from someone like that
+        means something because it does not arrive every week &mdash; putting
+        their name on a three-day streak spends exactly what made it worth
+        having. Leave it blank and everything comes from the athlete's coach.
+      </p>
+      <button class="secondary inline" id="voice-save">Save</button>
+    </div>
+    <div id="recognition-list"></div>
+  </div>
+
+  <div class="card hidden" id="shared-clips-card">
+    <h2>Clips sent to you</h2>
+    <p class="small muted">
+      Sent by an athlete, one at a time, and only where a parent has turned on
+      coach video. They expire after 30 days, a parent can withdraw them at any
+      moment, and every time you open one the athlete and their parent can see
+      that you did.
+    </p>
+    <div id="shared-clips"></div>
+  </div>
+
   <div class="card hidden" id="ball-card">
     <h2>Skill work</h2>
     <p class="small muted">
@@ -755,6 +790,12 @@ async function loadAll() {
   renderReview(reviewData.sessions);
   renderLoadWatch(rosterData.athletes);
   await loadFilm(teamId);
+  await loadRecognition();
+  try {
+    renderSharedClips(await api(
+      `/api/coach/clips-shared${teamId ? `?team_id=${teamId}` : ''}`,
+    ));
+  } catch { /* none shared */ }
   try {
     renderBallDrills(await api(`/api/coach/ball${teamId ? `?team_id=${teamId}` : ''}`));
   } catch { /* no skill work logged yet */ }
@@ -956,6 +997,85 @@ $('wellness-watch').addEventListener('click', async (event) => {
     await loadAll();
   } catch (e) { showError(e.message); }
 });
+
+async function loadRecognition() {
+  let data;
+  try { data = await api('/api/coach/recognition'); } catch { return; }
+  $('voice-name').value = data.voice.name || '';
+  $('voice-title').value = data.voice.title || '';
+  $('voice-box').classList.toggle('hidden', Boolean(data.is_family));
+
+  $('recognition-list').innerHTML = data.milestones.map((m) => `
+    <div class="recog" data-milestone="${esc(m.key)}">
+      <label style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" data-recog-on ${m.enabled ? 'checked' : ''}
+               style="width:auto;min-height:auto;margin:0">
+        <b>${esc(m.label)}</b>
+        ${m.customised ? '' : '<span class="small muted">&middot; default wording</span>'}
+      </label>
+      <textarea rows="2" data-recog-body>${esc(m.body)}</textarea>
+      ${data.is_family ? '' : `<label class="small muted"
+        style="display:flex;gap:6px;align-items:center;margin-top:4px">
+        <input type="checkbox" data-recog-voice ${
+          m.from_voice === 'voice' ? 'checked' : ''}
+          style="width:auto;min-height:auto;margin:0">
+        Sign this one with the senior name above
+      </label>`}
+      <button class="secondary inline" data-recog-save>Save</button>
+    </div>`).join('');
+}
+
+$('voice-save').addEventListener('click', async () => {
+  try {
+    await api('/api/coach/voice', {
+      method: 'PUT',
+      body: { name: $('voice-name').value.trim(), title: $('voice-title').value.trim() },
+    });
+    await loadRecognition();
+  } catch (e) { showError(e.message); }
+});
+
+$('recognition-list').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-recog-save]');
+  if (!button) return;
+  const row = button.closest('[data-milestone]');
+  try {
+    await api('/api/coach/recognition', {
+      method: 'PUT',
+      body: {
+        milestone: row.dataset.milestone,
+        body: row.querySelector('[data-recog-body]').value,
+        enabled: row.querySelector('[data-recog-on]').checked,
+        from_voice: row.querySelector('[data-recog-voice]')
+          && row.querySelector('[data-recog-voice]').checked ? 'voice' : 'coach',
+      },
+    });
+    button.textContent = 'Saved';
+    setTimeout(() => { button.textContent = 'Save'; }, 1500);
+    await loadRecognition();
+  } catch (e) { showError(e.message); }
+});
+
+function renderSharedClips(data) {
+  const clips = data.clips || [];
+  $('shared-clips-card').classList.toggle('hidden', clips.length === 0);
+  $('shared-clips').innerHTML = clips.map((c) => `
+    <div class="shared-clip">
+      <div class="budget-head">
+        <b>${esc(c.display_name)}</b>
+        <span class="small muted">${esc(c.shared_at.slice(0, 10))}</span>
+      </div>
+      ${c.note ? `<p class="small">${esc(c.note)}</p>` : ''}
+      <video controls playsinline preload="none"
+             src="/api/coach/clips-shared/${c.id}/video"></video>
+      <p class="small muted">
+        ${c.views.length
+          ? `Watched ${c.views.length} time${c.views.length === 1 ? '' : 's'}.`
+          : 'Not watched yet.'}
+        Expires ${esc(c.expires_at.slice(0, 10))}.
+      </p>
+    </div>`).join('');
+}
 
 function renderBallDrills(data) {
   const rows = data.athletes || [];

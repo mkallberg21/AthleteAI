@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- and that call belongs to the director, not to us. Set above the oldest
     -- band (99) to keep every athlete on the general mix permanently.
     position_emphasis_min_age INTEGER NOT NULL DEFAULT 15,
+    -- A senior figure in the program whose recognition carries extra weight --
+    -- a director of player development, a former professional. Optional, and
+    -- absent means every message comes from the athlete's own coach.
+    voice_name  TEXT NOT NULL DEFAULT '',
+    voice_title TEXT NOT NULL DEFAULT '',
+    -- Whether this org is a club or school ('program') or one family running
+    -- the app for their own children ('family').
+    kind        TEXT NOT NULL DEFAULT 'program',
     created_at  TEXT NOT NULL
 );
 
@@ -246,6 +254,57 @@ CREATE TABLE IF NOT EXISTS clip_watches (
 );
 CREATE INDEX IF NOT EXISTS idx_clip_watches_day ON clip_watches(athlete_id, day);
 
+-- A coach's own words for a milestone. Absent means the shipped default is
+-- used, so a program that never opens this screen still sends something.
+-- A clip an athlete chose to send their coach for feedback.
+--
+-- This is the one place in the product where video leaves a phone, and it only
+-- does so when a guardian has turned on the `coach_video` consent AND the
+-- athlete has picked one specific clip. Nothing here is automatic: there is no
+-- path that uploads a recording because a session happened.
+--
+-- Stored with an expiry, purged by the same cron that sends notifications, and
+-- deleted outright the moment consent is withdrawn.
+CREATE TABLE IF NOT EXISTS shared_clips (
+    id          INTEGER PRIMARY KEY,
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id  INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+    drill_key   TEXT NOT NULL DEFAULT '',
+    mime        TEXT NOT NULL DEFAULT 'video/webm',
+    bytes       BLOB NOT NULL,
+    size_bytes  INTEGER NOT NULL,
+    note        TEXT NOT NULL DEFAULT '',
+    shared_at   TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shared_clips_athlete ON shared_clips(athlete_id);
+
+-- Who watched a shared clip and when. A child's video being viewed is exactly
+-- the kind of thing a parent may want to ask about later.
+CREATE TABLE IF NOT EXISTS shared_clip_views (
+    id         INTEGER PRIMARY KEY,
+    clip_id    INTEGER NOT NULL REFERENCES shared_clips(id) ON DELETE CASCADE,
+    viewer_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    viewer_name TEXT NOT NULL DEFAULT '',
+    viewed_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shared_clip_views ON shared_clip_views(clip_id);
+
+CREATE TABLE IF NOT EXISTS recognition_templates (
+    org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    milestone   TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    -- Whose name goes on it. 'coach' is the athlete's own coach; 'voice' is
+    -- the program's senior figure, set below. Reserving the rarer milestones
+    -- for the second is the point: a note from a former pro means something
+    -- because it does not arrive every week.
+    from_voice  TEXT NOT NULL DEFAULT 'coach',
+    updated_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (org_id, milestone)
+);
+
 -- One recording. Contains no video and no frames -- only derived counts.
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY,
@@ -371,6 +430,17 @@ CREATE TABLE IF NOT EXISTS notifications (
     -- Collapses repeat nudges: one "streak at risk" per athlete per day, not
     -- one per cron tick.
     dedupe_key  TEXT NOT NULL,
+    -- Which athlete this is about. Set on a guardian's copy so a parent with
+    -- two children can tell which one a message concerns, and on the
+    -- athlete's own row so the two can be matched up.
+    about_athlete_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    -- True on the guardian's copy. Every message an athlete receives is
+    -- mirrored to their guardians, and the copy says so rather than reading
+    -- as a message addressed to the parent.
+    is_copy     INTEGER NOT NULL DEFAULT 0,
+    -- Who it is from, when it is from a person. Recognition messages carry a
+    -- coach's name because being noticed by a person is the point.
+    from_name   TEXT NOT NULL DEFAULT '',
     UNIQUE (user_id, dedupe_key)
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at);
@@ -673,6 +743,17 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "organizations": [
         ("position_emphasis_min_age", "INTEGER NOT NULL DEFAULT 15"),
+        ("voice_name", "TEXT NOT NULL DEFAULT ''"),
+        ("voice_title", "TEXT NOT NULL DEFAULT ''"),
+        ("kind", "TEXT NOT NULL DEFAULT 'program'"),
+    ],
+    "recognition_templates": [
+        ("from_voice", "TEXT NOT NULL DEFAULT 'coach'"),
+    ],
+    "notifications": [
+        ("about_athlete_id", "INTEGER"),
+        ("is_copy", "INTEGER NOT NULL DEFAULT 0"),
+        ("from_name", "TEXT NOT NULL DEFAULT ''"),
     ],
     "discomfort_reports": [
         ("previous_severity", "TEXT"),

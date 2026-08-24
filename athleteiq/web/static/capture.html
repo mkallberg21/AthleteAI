@@ -243,6 +243,10 @@
       <button class="secondary" id="review-save" style="margin-top:10px">
         Save to my phone
       </button>
+      <button class="secondary hidden" id="review-send" style="margin-top:8px">
+        Send this one to my coach
+      </button>
+      <div class="small muted" id="review-send-note" style="margin-top:6px"></div>
     </div>
   </section>
 
@@ -1669,6 +1673,7 @@ function showResult(result) {
   // record, or a browser without MediaRecorder, simply does not show it.
   const reviewable = recorder && recorder.blob();
   $('r-review').classList.toggle('hidden', !reviewable);
+  offerToSend();
   const titles = {
     counted: 'Logged. Nice work.',
     review: 'Sent to your coach for review',
@@ -1867,6 +1872,62 @@ $('review-save').addEventListener('click', () => {
   link.click();
   // Revoked on the next tick so the download has started but nothing lingers.
   setTimeout(() => URL.revokeObjectURL(link.href), 30_000);
+});
+
+/**
+ * Offer to send this clip, only where a parent has allowed it.
+ *
+ * The button is absent rather than present-and-failing when permission is off,
+ * because a child tapping something that tells them their parent said no is a
+ * conversation the app should not start.
+ */
+async function offerToSend() {
+  const button = $('review-send');
+  const note = $('review-send-note');
+  button.classList.add('hidden');
+  note.textContent = '';
+  if (!recorder || !recorder.blob()) return;
+  try {
+    const me = await api('/api/me');
+    if (!me.consents || !me.consents.coach_video) return;
+  } catch { return; }
+  button.classList.remove('hidden');
+  note.textContent = 'One clip, chosen by you. Your coach will see you sent it, '
+    + 'and so will your parent.';
+}
+
+$('review-send').addEventListener('click', async () => {
+  const blob = recorder && recorder.blob();
+  if (!blob) return;
+  const button = $('review-send');
+  button.disabled = true;
+  button.textContent = 'Sending…';
+  try {
+    // Read as base64 rather than posted as a file: the API accepts JSON only,
+    // which is the guard that stops anything else becoming an upload route.
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    await api('/api/clips', {
+      method: 'POST',
+      body: {
+        data,
+        mime: (recorder.mimeType || '').includes('mp4') ? 'video/mp4' : 'video/webm',
+        drill_key: activeDrill ? activeDrill.key : '',
+        session_id: session ? session.session_id : null,
+      },
+    });
+    button.textContent = 'Sent';
+    $('review-send-note').textContent =
+      'Your coach has it. You or your parent can take it back any time.';
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = 'Send this one to my coach';
+    showError(e.message);
+  }
 });
 
 $('review-close').addEventListener('click', async () => {

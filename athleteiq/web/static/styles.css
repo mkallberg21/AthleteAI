@@ -600,3 +600,17 @@ tbody tr:hover { background: var(--surface-2); }
 .framing.ok::before { background: var(--warn); }
 .framing.bad { color: var(--warn); }
 .framing.bad::before { background: var(--danger); }
+
+/* Parent's copy of what their athlete was sent. No reply box, because there is
+   no reply path -- these messages go one way by design. */
+.msg-list { display: flex; flex-direction: column; gap: 10px; }
+.msg { padding: 10px; border-radius: var(--radius); background: var(--surface-2); }
+.msg p { margin: 4px 0; font-size: .85rem; }
+
+/* Coach recognition editor and the clips an athlete chose to send. */
+.recog { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.recog textarea { margin-top: 8px; }
+.recog:last-child { border-bottom: none; }
+.shared-clip { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.shared-clip video { width: 100%; margin-top: 8px; border-radius: var(--radius);
+                     background: #000; }

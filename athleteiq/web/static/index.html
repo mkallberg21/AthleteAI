@@ -60,6 +60,22 @@
   </div>
 
   <div class="card">
+    <h2>Just your own family?</h2>
+    <p class="small muted">
+      No club needed. You take the coach's place: you set what they work on,
+      write the messages they get, and see everything. Everything the app does
+      for a team works for a household.
+    </p>
+    <label for="fam-parent">Your name</label>
+    <input id="fam-parent" placeholder="Dana Pierce" autocomplete="name">
+    <label for="fam-name">Family name (optional)</label>
+    <input id="fam-name" placeholder="The Pierces">
+    <div id="ferr" class="err hidden"></div>
+    <button class="secondary" id="create-family">Create a family account</button>
+    <div id="fam-token" class="small hidden" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
     <h2>Starting a program?</h2>
     <p class="small muted">
       Set up your club or school here. Pick your sport and the app fits itself
@@ -112,6 +128,31 @@ function describeSport() {
 }
 
 $('org-sport').addEventListener('change', describeSport);
+
+$('create-family').addEventListener('click', async () => {
+  const parent = $('fam-parent').value.trim();
+  $('ferr').classList.add('hidden');
+  if (!parent) {
+    $('ferr').textContent = 'Your name, please.';
+    $('ferr').classList.remove('hidden');
+    return;
+  }
+  try {
+    const res = await api('/api/family', {
+      method: 'POST',
+      body: { parent_name: parent, family_name: $('fam-name').value.trim() },
+    });
+    // Shown once and never retrievable -- only a hash is stored.
+    $('fam-token').innerHTML =
+      `You are set up. This is your code &mdash; copy it now, it is not shown
+       again:<br><code style="word-break:break-all">${res.parent.token}</code>
+       <br>Sign in with it above, then add your children.`;
+    $('fam-token').classList.remove('hidden');
+  } catch (e) {
+    $('ferr').textContent = e.message;
+    $('ferr').classList.remove('hidden');
+  }
+});
 
 $('create-org').addEventListener('click', async () => {
   const name = $('org-name').value.trim();

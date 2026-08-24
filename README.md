@@ -7,6 +7,11 @@ the browser on the athlete's device** — the video never leaves the phone. Only
 derived counts (reps, which hand, timing, confidence) are uploaded, scored into
 XP, and rolled up for coaches and leaderboards.
 
+There is exactly one exception, and it is opt-in twice over: an athlete can send
+**one clip they choose** to their coach, and only where a guardian has turned
+that on. Off by default, deleted on withdrawal, gone after 30 days. See
+**Coach video** below.
+
 **Sixteen sports.** A program picks its sport at signup and the app fits itself
 around it: Lacrosse, Basketball, Soccer, Volleyball, Baseball, Softball, Cheer,
 Dance, Swimming, Track & Field, Football, Gymnastics, Tennis, Cross Country,
@@ -76,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1435 tests
+python -m pytest tests/ -q          # 1490 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -112,6 +117,7 @@ athleteiq/
   roster.py         Bulk import: header detection, parsing, claim codes
   digest.py         Weekly team KPIs and the coach email
   billing.py        Plans, seats, entitlements, invoicing seam
+  recognition.py    Milestones, coach templates, and who signs them
   mailer.py         Outbound queue: retries, suppression, unsubscribe
   webhooks.py       Inbound delivery events: verification, bounce handling
   sns.py            SNS certificate verification for SES notifications
@@ -561,6 +567,131 @@ A parent email column issues guardian invites in the same pass, so importing a
 roster also onboards the parents.
 
 ---
+
+## Recognition, and who it comes from
+
+A kid who does wall ball in the driveway on a Tuesday gets a number on a
+dashboard their coach might look at on Friday. What they wanted was for someone
+to notice. This makes someone notice, on the day, by name.
+
+Milestones fire the moment a session is counted — not from a nightly job,
+because "well done" an hour later lands and the same words next morning are a
+report. First session, then three, five, ten, thirty and a hundred days in a
+row.
+
+**Once per run, not once per day.** A ten-day streak is worth saying something
+about; saying it again on day eleven is how a child learns to ignore the app.
+Milestones dedupe on the streak they belong to, so an athlete who breaks a
+streak and rebuilds it is congratulated again — which is right, because doing it
+twice is harder than doing it once. The first version derived the run's start by
+counting back from *today*, so the key moved every day the streak continued and
+the same message went out three days running. Caught end-to-end, and now the run
+start comes from the training days themselves.
+
+**The words are the coach's.** Every milestone ships with a default that reads
+like the placeholder it is, editable per milestone with `{first_name}`,
+`{streak}`, `{coach}` and `{team}`. Any milestone can be switched off.
+
+### A senior voice, used sparingly
+
+Programs often have someone above the coach — a director of player development,
+a former professional. A director can name one, and assign specific milestones
+to them: by default only the thirty- and hundred-day streaks.
+
+The restraint is the design. A note from someone like that means something
+*because it does not arrive every week*, and putting their name on a three-day
+streak spends exactly what made it worth having. A program that never names one
+has every message signed by the athlete's own coach, rather than by nobody.
+
+## Families running it themselves
+
+A household can sign up with no club behind it. The parent takes the coach's
+place: they set the training, write the recognition, and see everything.
+
+**A family is a program with one household in it.** Building it that way rather
+than as a parallel account type means every feature written for a club —
+assignments, budgets, recognition, wellness, return-to-play, the lot — works for
+a family on the day it ships, with no second code path to keep in step. There is
+a test asserting a family can reach the same endpoints a club can.
+
+The parent ends up wearing both hats: director of their own small program, and
+guardian of their own children. Those stay **two records rather than one blurred
+super-role**, because one sets the training and the other consents to it, and
+merging them is what would quietly make the consent checks meaningless. The
+guardian link is made directly rather than through an invite code — a code
+posted to yourself is theatre — and participation consent is recorded as given
+by the parent who just created the account, so the child can train immediately.
+
+Recognition in a family comes from the parent by name. The senior-voice control
+is hidden there, because there is no chain of command in a household to be
+higher up. The `family` plan is priced at zero for now: the whole product works
+for a family the day they sign up, and what they eventually pay is a business
+decision that has not been made, so it is set in one place rather than assumed
+across the code.
+
+## Messages go one way
+
+Every message an athlete receives is copied to their guardians, and that happens
+inside `enqueue` rather than at each call site — the difference between a rule
+and an intention. A kind of message invented next year inherits it without
+anyone remembering to, and there is a test that fires several unrelated kinds
+and checks the parent got all of them.
+
+The copy is marked as one and points at the parent portal, so a parent reads it
+as *"here is what your child was sent"* rather than as something addressed to
+them. Messages to coaches are not mirrored anywhere.
+
+**Nobody can reply — including the parent.** Not a policy note: there is no
+write path into the message stream from an athlete or a guardian, and a test
+walks the OpenAPI schema asserting no such route exists. Nothing to moderate,
+because there is nothing to send.
+
+## Coach video: the one exception, and what it costs
+
+Everywhere else in this product, video never leaves the phone. This is the
+exception, and it is worth being blunt about the trade rather than burying it.
+
+An athlete can send **one clip they choose** to their coaching staff, and only
+when a guardian has turned on the `coach_video` consent — which is **off unless
+a parent turns it on**. There is no path that uploads a recording because a
+session happened, and a test asserts a completed session leaves nothing behind.
+
+| | |
+|---|---|
+| Consent | Off by default, guardian-granted, revocable |
+| Selection | One clip, chosen by the athlete, never automatic |
+| Retention | 30 days, purged by the notifications cron |
+| Revocation | **Deletes the clips**, in the same transaction as the decision |
+| Audit | Every view logged, visible to the athlete and their parent |
+| Scope | Staff in that athlete's own program only |
+
+Withdrawing permission deletes the video rather than hiding it. Anything less
+makes the consent a preference rather than a permission: a parent who turns it
+off has to be able to believe the clips are gone. Consent is also re-checked
+when a clip is played, so a permission withdrawn this morning cannot serve last
+night's clip this afternoon.
+
+On the athlete's screen the send button is **absent** rather than
+present-and-failing when permission is off, because a child tapping something
+that tells them their parent said no is a conversation the app should not start.
+
+**This changed the product's headline claim, and four separate structural tests
+caught it** — which is what they were for. The database now has its first
+athlete-facing binary column, named explicitly in the allowlist rather than
+pattern-matched away. One of those tests also exposed a loophole it could not
+have caught before: a 20MB string field named `data` sailed through every
+name-based check, so oversized request fields now have to be named with a
+reason, and that immediately turned up the roster CSV as well.
+
+## What a parent sees
+
+Everything. The same drill log a coach gets, for their own child: every session
+across every drill, what was trained, how it scored, and what was held for
+review — **held sessions shown rather than hidden**, because a parent finding out
+from their child that something was queried is worse than reading it here.
+
+Plus every message their athlete has been sent, and the permissions screen where
+any of it can be withdrawn.
 
 ## Parent accounts
 
@@ -1806,38 +1937,51 @@ the main compliance gap between this and a shippable product.
 Stated plainly, because these are the things that decide whether this survives
 contact with a real driveway:
 
-1. **Film study sends a child's browser to a third party.** Everywhere else
+1. **Coach video is a real hole in the on-device promise, by request.** The
+   default is off and every gate above is enforced, but a program that turns
+   it on is storing children's video in a database — with the retention,
+   backup and breach exposure that implies. The clips live as BLOBs in SQLite
+   with no encryption at rest beyond whatever the host provides. A program
+   with meaningful obligations here should keep the consent off, or host
+   somewhere that encrypts the volume.
+2. **Recognition can be gamed by a determined athlete.** Streaks count days
+   with a counted session, and the integrity layer decides what counts — so
+   the same weaknesses it has, this inherits. A kid who can fool the rep
+   counter can fool the milestone. Nothing here awards anything a coach would
+   otherwise have to withhold, so the cost of being wrong is a nice message
+   somebody did not earn.
+3. **Film study sends a child's browser to a third party.** Everywhere else
    in this product video never leaves the phone; film is the exception, and
    the privacy-enhanced host is a mitigation rather than a fix. Programs with
    obligations around third-party embeds — schools especially — should check
    them before enabling it, and self-host with the `link` provider if in
    doubt. Clip availability is also outside our control: an uploader can
    disable embedding or delete a video, and a curated clip can go dead.
-2. **Attention scoring can be fooled by someone determined.** It catches the
+4. **Attention scoring can be fooled by someone determined.** It catches the
    ordinary ways of not watching — muted, backgrounded, scrubbed, raced — but
    a kid who leaves a clip playing at normal speed with the sound on and walks
    away is indistinguishable from one who watched it. The comprehension
    question is the better signal, and it is optional per clip.
-3. **Nothing here is a medical device, and the return ramp least of all.** The
+5. **Nothing here is a medical device, and the return ramp least of all.** The
    stages are a load schedule, not a protocol, and completing one means the
    athlete pressed a button five times over five symptom-free days — not that
    any tissue has healed. The app records that a human cleared them and cannot
    verify that the human was right, that a named clinician exists, or that the
    athlete answered honestly. It should never be the reason a young athlete
    goes back, and finishing a ramp should never be the reason one is picked.
-4. **Soreness reporting is not a medical device and must not be relied on as
+6. **Soreness reporting is not a medical device and must not be relied on as
    one.** It is a prompt to involve an adult, and its most important output is
    "tell someone" rather than any assessment of its own. It cannot see an
    athlete who says nothing, it takes every report at face value, and a child
    who is hurt and silent looks identical to one who is fine. Nothing in it
    should ever delay getting a young athlete looked at.
-5. **Thresholds are calibrated against synthetic motion, not real athletes.**
+7. **Thresholds are calibrated against synthetic motion, not real athletes.**
    The calibration harness makes every drill self-consistent — a textbook rep
    counts and measures what its spec claims — but "textbook" is still a
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
    the calibration against hand-counted ground truth remains the
    highest-value next task, and the reason the specs are data rather than code.
-6. **The ball detector is validated on synthetic frames, not real footage.**
+8. **The ball detector is validated on synthetic frames, not real footage.**
    Rendered discs on rendered backgrounds prove the logic — colour separation,
    the size gate, shape rejection, motion direction, the large-ball fix — and
    say nothing about motion blur on a hard throw, a ball leaving frame between
@@ -1845,7 +1989,7 @@ contact with a real driveway:
    detection rate is the highest-value next task, exactly as it is for the pose
    thresholds. Treat every detection percentage quoted above as arithmetic
    rather than evidence.
-7. **A large white ball against a pale wall is the weakest case.** Colour
+9. **A large white ball against a pale wall is the weakest case.** Colour
    cannot separate them, and a big ball barely displaces itself between frames
    so the motion fallback has little to work with: in simulation soccer and
    volleyball detect at about 55% against a pale indoor wall, against 100% on
@@ -1853,75 +1997,75 @@ contact with a real driveway:
    drills count, but indoor volleyball is where this is thinnest. Small balls
    are unaffected — a lacrosse or tennis ball fully displaces itself between
    frames, so motion sees all of it.
-8. **A session with no ball at all is still counted.** Wall-ball confirmation
+10. **A session with no ball at all is still counted.** Wall-ball confirmation
    only ever penalises on positive evidence, so an athlete who films with no
    ball in shot, or against a background where it is never detected, gets a
    note and full credit. That is the deliberate trade — the alternative marks
    down every kid whose lighting is poor — but it means the shadow-throwing
    hole is narrowed, not sealed.
-9. **Multi-sport participation is self-reported and unverified.** An athlete
+11. **Multi-sport participation is self-reported and unverified.** An athlete
    who ticks three sports gets an earlier specialisation gate and a lighter
    weekly budget, and nothing stops them ticking sports they do not play. The
    incentive is weak in both directions — the reward is a different drill mix,
    not points or a leaderboard place, and the lighter budget asks *less* of
    them — and a coach sees the list on the roster, which is the check that
    matters. But it is a self-report, and the gate treats it as fact.
-10. **Seasons are a coarse proxy for training load.** Three seasons of
+12. **Seasons are a coarse proxy for training load.** Three seasons of
    recreational soccer and three seasons of travel soccer score identically,
    though they are not remotely the same week. Capturing sessions per week per
    sport would sharpen it, at the cost of a form a twelve-year-old will not
    fill in — which is the trade the season picker deliberately takes.
-11. **Positions are modelled for lacrosse only.** Another sport gets honest
+13. **Positions are modelled for lacrosse only.** Another sport gets honest
    silence — `for_sport` returns nothing, athletes fall back to the generic
    mix, and the join form falls back to free text. Adding a sport means adding
    its positions *and* the sport-specific drills their emphasis would point at;
    half of that is worse than neither, since a soccer emphasis built only from
    the general strength drills would recommend the same mix to every position
    on the pitch.
-12. **The age bands are heuristics, not a clinical instrument.** They are drawn
+14. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-13. **Handedness is inferred from wrist height**, which is reliable for standard
+15. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-14. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+16. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-15. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+17. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-16. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+18. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-17. **Revocation soft-fails by default**, though pre-fetched staples make strict
+19. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-18. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+20. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-19. **No payment processor.** The billing model, entitlements, and invoicing are
+21. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-20. **Offline slots are per-drill.** A drill you have never opened online has no
+22. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-21. **Web Push needs credentials.** Notifications generate and display in-app
+23. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-22. **Form quality is pose-only.** It reads how the body moved, not where the
+24. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-23. **Guardian identity is proven by the invite code alone.** There is no email
+25. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-24. **Roster import reads delimited text only.** CSV, TSV, and
+26. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-25. **Load coefficients are reasoned estimates, not measured values.** The
+27. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

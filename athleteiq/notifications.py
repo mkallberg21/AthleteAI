@@ -44,6 +44,7 @@ class Kind:
     GUARDIAN_DIGEST = "guardian_digest"
     DISCOMFORT = "discomfort"
     COACH_DIGEST = "coach_digest"
+    RECOGNITION = "recognition"
 
 
 def _now() -> datetime:
@@ -67,24 +68,78 @@ def enqueue(
     *,
     link: str = "",
     dedupe_key: str | None = None,
+    from_name: str = "",
+    about_athlete_id: int | None = None,
+    mirror: bool = True,
 ) -> int | None:
     """Record a notification. Returns its id, or None if it was a duplicate.
 
     Duplicate suppression is the whole reason `dedupe_key` exists: generators
     are expected to run repeatedly over the same state.
+
+    **Every message an athlete receives is copied to their guardians**, and
+    that happens here rather than at each call site. Putting it in the one
+    function every notification passes through is the difference between a
+    rule and an intention: a new kind of message added next year inherits it
+    without anyone remembering to.
     """
     key = dedupe_key or f"{kind}:{_now().date().isoformat()}"
+    about = about_athlete_id
+    if about is None:
+        row = conn.execute(
+            "SELECT role FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if row is not None and row["role"] == "athlete":
+            about = user_id
     try:
         cur = conn.execute(
-            "INSERT INTO notifications(user_id, kind, title, body, link, created_at, dedupe_key) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (user_id, kind, title, body, link, _iso(_now()), key),
+            "INSERT INTO notifications(user_id, kind, title, body, link, created_at, "
+            "dedupe_key, about_athlete_id, is_copy, from_name) "
+            "VALUES (?,?,?,?,?,?,?,?,0,?)",
+            (user_id, kind, title, body, link, _iso(_now()), key, about, from_name),
         )
-        conn.commit()
-        return int(cur.lastrowid)
+        made = int(cur.lastrowid)
     except sqlite3.IntegrityError:
         # Already sent this exact nudge to this user.
         return None
+
+    if mirror and about == user_id:
+        _mirror_to_guardians(conn, user_id, kind, title, body, key, from_name)
+    conn.commit()
+    return made
+
+
+def _mirror_to_guardians(
+    conn: sqlite3.Connection,
+    athlete_id: int,
+    kind: str,
+    title: str,
+    body: str,
+    key: str,
+    from_name: str,
+) -> int:
+    """Give every guardian a copy of what their athlete just received.
+
+    The copy is marked as one and points at the parent portal rather than the
+    athlete's screen, so a parent reads it as "here is what your child was
+    sent" rather than as something addressed to them.
+    """
+    sent = 0
+    for row in conn.execute(
+        "SELECT guardian_id FROM guardians WHERE athlete_id = ?", (athlete_id,)
+    ).fetchall():
+        try:
+            conn.execute(
+                "INSERT INTO notifications(user_id, kind, title, body, link, created_at, "
+                "dedupe_key, about_athlete_id, is_copy, from_name) "
+                "VALUES (?,?,?,?,?,?,?,?,1,?)",
+                (row["guardian_id"], kind, title, body, "/parent", _iso(_now()),
+                 f"copy:{athlete_id}:{key}", athlete_id, from_name),
+            )
+            sent += 1
+        except sqlite3.IntegrityError:
+            continue
+    return sent
 
 
 def unread_count(conn: sqlite3.Connection, user_id: int) -> int:
@@ -699,3 +754,16 @@ def purge_old_wellness(conn: sqlite3.Connection, today: "date | None" = None) ->
             "DELETE FROM wellness_checkins WHERE day < ?", (cutoff,)
         ).rowcount
     return removed
+
+
+def purge_expired_clips(conn: sqlite3.Connection, now: "datetime | None" = None) -> int:
+    """Delete shared clips past their expiry.
+
+    A child's video is kept for as long as it is useful for feedback and not
+    a day longer. Runs from the same cron as everything else.
+    """
+    cutoff = _iso(now or _now())
+    with conn:
+        return conn.execute(
+            "DELETE FROM shared_clips WHERE expires_at < ?", (cutoff,)
+        ).rowcount

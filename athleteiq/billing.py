@@ -76,6 +76,25 @@ class Plan:
 # a club budgets in and the number a director already knows.
 PLANS: tuple[Plan, ...] = (
     Plan(
+        code="family",
+        name="Family",
+        # Priced at zero for now. The whole product works for a family the day
+        # they sign up, and what they eventually pay is a business decision
+        # that has not been made -- so it is set here rather than assumed
+        # anywhere else in the code.
+        price_cents=0,
+        # A household, with room for siblings and a generous margin.
+        included_seats=6,
+        extra_seat_cents=0,
+        max_teams=1,
+        max_staff=1,
+        blurb=(
+            "One family, running it themselves. A parent takes the coach's "
+            "place: they set the training, write the recognition, and see "
+            "everything."
+        ),
+    ),
+    Plan(
         code="free",
         name="Single Team",
         price_cents=0,

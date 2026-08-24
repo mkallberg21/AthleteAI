@@ -55,6 +55,7 @@ class Scope:
     PARTICIPATION = "participation"        # the athlete may use the app at all
     LEADERBOARD_NAME = "leaderboard_name"  # full name on shared leaderboards
     DATA_RETENTION = "data_retention"      # keep granular per-rep timings
+    COACH_VIDEO = "coach_video"            # a coach may watch a clip the athlete shares
 
 
 SCOPES = (
@@ -69,6 +70,15 @@ SCOPES = (
         "Show their full name on team leaderboards",
         "Without this they still appear and still compete, under an initial and "
         "jersey number instead of their full name.",
+    ),
+    (
+        Scope.COACH_VIDEO,
+        "Let a coach watch a clip your athlete chooses to send",
+        "Off unless you turn it on. Everywhere else in this app video stays on "
+        "your athlete's phone and is never uploaded. With this on, they can "
+        "choose to send one specific clip to their coach for feedback — never "
+        "automatically, always one at a time. Clips are deleted after 30 days, "
+        "and turning this off deletes any that are still there straight away.",
     ),
     (
         Scope.DATA_RETENTION,
@@ -305,6 +315,13 @@ def set_consent(
                 _iso(_now()), POLICY_VERSION, method,
             ),
         )
+        # Withdrawing video permission deletes the video, in the same
+        # transaction as the decision itself. Anything less would make this a
+        # preference rather than a permission: a parent who turns it off has
+        # to be able to believe the clips are gone, not merely hidden.
+        if scope == Scope.COACH_VIDEO and not granted:
+            c.execute("DELETE FROM shared_clips WHERE athlete_id = ?", (athlete_id,))
+
         # `users.guardian_consent_at` is a denormalized cache of the
         # leaderboard-name decision, read by the leaderboard query. Kept in step
         # here so the two can never disagree.

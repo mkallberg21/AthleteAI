@@ -110,6 +110,24 @@ function renderAthlete(a) {
     </div>
 
     ${assignments ? `<h3 style="margin:18px 0 4px;font-size:.95rem">From their coach</h3>${assignments}` : ''}
+
+    <details style="margin-top:18px" data-messages="${a.athlete_id}">
+      <summary class="small muted" style="cursor:pointer">
+        Messages your athlete has been sent
+      </summary>
+      <div class="small muted" style="margin:8px 0">
+        You see everything they are sent. Messages are one-way &mdash; nobody
+        can reply through the app, including you.
+      </div>
+      <div class="msg-list">Loading&hellip;</div>
+    </details>
+
+    <details style="margin-top:10px" data-drills="${a.athlete_id}">
+      <summary class="small muted" style="cursor:pointer">
+        Everything they have trained
+      </summary>
+      <div class="drill-log">Loading&hellip;</div>
+    </details>
     ${badges ? `<h3 style="margin:18px 0 8px;font-size:.95rem">Recent badges</h3>
                 <div class="badge-grid">${badges}</div>` : ''}
 
@@ -143,7 +161,71 @@ async function load() {
   wire();
 }
 
+// Loaded on open rather than up front: a parent with three children should
+// not wait for three training histories to see the top of the page.
+function wireDetails() {
+  document.querySelectorAll('[data-messages]').forEach((box) => {
+    box.addEventListener('toggle', async () => {
+      if (!box.open || box.dataset.loaded) return;
+      box.dataset.loaded = '1';
+      const target = box.querySelector('.msg-list');
+      try {
+        const { messages } = await api(
+          `/api/parent/athletes/${box.dataset.messages}/messages`,
+        );
+        target.innerHTML = messages.length ? messages.map((m) => `
+          <div class="msg">
+            <b>${esc(m.title)}</b>
+            <p>${esc(m.body)}</p>
+            <span class="small muted">${esc(m.created_at.slice(0, 10))}${
+              m.from_name ? ` &middot; ${esc(m.from_name)}` : ''}</span>
+          </div>`).join('')
+          : '<p class="small muted">Nothing yet.</p>';
+      } catch (e) { target.textContent = e.message; }
+    });
+  });
+
+  document.querySelectorAll('[data-drills]').forEach((box) => {
+    box.addEventListener('toggle', async () => {
+      if (!box.open || box.dataset.loaded) return;
+      box.dataset.loaded = '1';
+      const target = box.querySelector('.drill-log');
+      try {
+        const data = await api(`/api/parent/athletes/${box.dataset.drills}/drills`);
+        const t = data.totals;
+        target.innerHTML = `
+          <div class="stat-row" style="margin:8px 0">
+            <div class="stat"><b>${t.sessions}</b><span>Sessions</span></div>
+            <div class="stat"><b>${t.days_trained}</b><span>Days</span></div>
+            <div class="stat"><b>${t.reps.toLocaleString()}</b><span>Reps</span></div>
+            <div class="stat"><b>${t.minutes}</b><span>Minutes</span></div>
+          </div>
+          ${data.by_drill.map((d) => `<div class="budget-row">
+              <span class="budget-label">${esc(d.drill)}</span>
+              <span class="budget-n">${d.reps || d.sessions}</span>
+              <span class="small muted">${d.sessions} session${
+                d.sessions === 1 ? '' : 's'}${d.held ? ` &middot; ${d.held} held` : ''}</span>
+            </div>`).join('')}
+          ${t.held ? `<p class="small muted" style="margin-top:10px">
+            ${t.held} session${t.held === 1 ? ' was' : 's were'} held for a coach to
+            look at. That is usually a framing or a signal problem, not a
+            suggestion anyone did anything wrong.</p>` : ''}
+          <table style="margin-top:12px"><tbody>
+          ${data.sessions.slice(0, 25).map((sn) => `<tr>
+            <td class="small muted">${esc(sn.day)}</td>
+            <td>${esc(sn.drill)}</td>
+            <td class="num">${sn.reps || (sn.hold_s ? `${sn.hold_s}s` : '&mdash;')}</td>
+            <td class="small ${sn.status === 'counted' ? 'muted' : 'warn-text'}">${
+              esc(sn.status)}</td>
+          </tr>`).join('')}
+          </tbody></table>`;
+      } catch (e) { target.textContent = e.message; }
+    });
+  });
+}
+
 function wire() {
+  wireDetails();
   document.querySelectorAll('[data-consent]').forEach((box) => {
     box.addEventListener('change', async () => {
       box.disabled = true;

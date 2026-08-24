@@ -1,6 +1,7 @@
 """End-to-end API behaviour: onboarding, capture, scoring, leaderboards, access control."""
 from __future__ import annotations
 
+import base64
 import json
 import random
 
@@ -490,6 +491,26 @@ class TestPrivacy:
                         assert 0 < limit <= 2_000, \
                             f"{field} has no length cap, so it could carry a payload"
 
+        # A large string field can carry a video whatever it is called, and
+        # `SharedClip.data` proved it: named neither video nor clip, it sailed
+        # through the name checks above with a 20MB cap. So every oversized
+        # field has to be named here with a reason.
+        big_fields_allowed = {
+            # A short recording an athlete chose to send, gated on a
+            # guardian's consent. See TestCoachVideoNeedsAParent.
+            "SharedClip.data",
+            # A pasted roster CSV, on preview and on apply. Text, and the
+            # parser never treats a cell as anything but a string.
+            "RosterFile.content",
+            "RosterImport.content",
+        }
+        for name, model in schema.get("components", {}).get("schemas", {}).items():
+            for prop, spec in (model.get("properties") or {}).items():
+                limit = spec.get("maxLength") or 0
+                if limit > 8192:
+                    assert f"{name}.{prop}" in big_fields_allowed, \
+                        f"{name}.{prop} accepts {limit} characters with no stated reason"
+
         # And no endpoint may accept a binary/multipart body at all. This is
         # the guard that actually stops an upload, whatever anything is named.
         for path, methods in schema["paths"].items():
@@ -543,12 +564,31 @@ class TestPrivacy:
         )
         assert sends, "found no API calls to inspect — has the call shape changed?"
 
+        # `/api/clips` is the one route that may carry a recording, and it
+        # exists because a guardian turned on coach video and the athlete
+        # picked this clip. Every *other* call stays under the absolute rule.
+        clip_calls = [c for c in sends if "/api/clips" in c]
+        assert len(clip_calls) == 1, (
+            f"expected exactly one route to carry a clip, found {len(clip_calls)}"
+        )
+
         for call in sends:
+            if "/api/clips" in call:
+                continue
             lowered = call.lower()
             for forbidden in ("recorder", "blob", "objecturl", ".poses", "chunks"):
                 assert forbidden not in lowered, (
                     f"footage reaches the network in: {call.strip()[:120]!r}"
                 )
+
+        # And that one route has to be behind the consent check, not merely
+        # near it. A send button offered to a child whose parent said no is
+        # the failure this whole gate exists to prevent.
+        gate = re.search(r"async function offerToSend\(\)[\s\S]*?\n}", code)
+        assert gate, "the send button is offered with no gate function at all"
+        assert "coach_video" in gate.group(0), (
+            "the send button is not gated on the guardian consent"
+        )
 
     def test_submissions_store_no_imagery(self, client, program):
         """No table can hold a video, whatever its columns are called.
@@ -558,10 +598,18 @@ class TestPrivacy:
         what a guarantee should not have. This checks type affinity instead:
         SQLite cannot store a video without a BLOB column, so there are none.
         """
-        # Binary is allowed in exactly one place, and it holds DER-encoded
-        # OCSP responses for certificate checking. Named rather than pattern
-        # matched, so adding a second binary column fails this test loudly.
-        binary_allowed = {"ocsp_staples"}
+        # Binary is allowed in exactly two places, both named rather than
+        # pattern matched, so a third fails this test loudly.
+        #
+        #   ocsp_staples  -- DER-encoded OCSP responses for certificate checks.
+        #                    Nothing to do with athletes.
+        #   shared_clips  -- the one place a child's video is stored, and the
+        #                    reason the headline claim is now "video never
+        #                    leaves the phone unless a guardian turns coach
+        #                    video on and the athlete picks a clip". Guarded by
+        #                    TestCoachVideoNeedsAParent below, which is the
+        #                    test that actually matters here.
+        binary_allowed = {"ocsp_staples", "shared_clips"}
 
         do_session(client, program["athletes"][0]["headers"])
         conn = api_module._store.conn
@@ -2847,3 +2895,358 @@ class TestCoachBallDrillView:
             payload = json.dumps(body)
             assert athlete["display_name"] not in payload, path
             assert not body.get("athletes"), path
+
+
+class TestCoachVideoNeedsAParent:
+    """The one place a child's video leaves their phone. Every assertion here
+    is about the gate, not the feature."""
+
+    CLIP = base64.b64encode(b"\x1aE\xdf\xa3" + b"x" * 4096).decode()
+
+    def _guardian(self, store, athlete_id, name="A Parent"):
+        from athleteiq import guardians
+        invite = guardians.create_invite(store.conn, athlete_id, created_by=athlete_id)
+        person = guardians.redeem_invite(store.conn, invite["code"], name)
+        store.conn.commit()
+        return person
+
+    def _allow(self, store, athlete_id, guardian_id, granted=True):
+        from athleteiq import guardians
+        guardians.set_consent(
+            store.conn, athlete_id, guardian_id, guardians.Scope.COACH_VIDEO, granted,
+        )
+        store.conn.commit()
+
+    def test_without_a_parents_permission_nothing_uploads(self, client, program):
+        athlete = program["athletes"][0]
+        res = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        )
+        assert res.status_code == 403
+        assert "parent or guardian" in res.json()["detail"]
+
+    def test_with_permission_the_athlete_can_send_one(self, client, program):
+        athlete = program["athletes"][0]
+        store = api_module._store
+        guardian = self._guardian(store, athlete["id"])
+        self._allow(store, athlete["id"], guardian["guardian_id"])
+
+        res = client.post(
+            "/api/clips",
+            json={"data": self.CLIP, "drill_key": "lax_wall_ball",
+                  "note": "Is my top hand right?"},
+            headers=athlete["headers"],
+        )
+        assert res.status_code == 201
+        assert res.json()["size_bytes"] == 4100
+        assert "bytes" not in res.json(), "the payload never comes back"
+
+    def test_the_coach_can_watch_it_and_the_view_is_logged(self, client, program):
+        athlete = program["athletes"][0]
+        store = api_module._store
+        guardian = self._guardian(store, athlete["id"])
+        self._allow(store, athlete["id"], guardian["guardian_id"])
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        ).json()["id"]
+
+        watched = client.get(
+            f"/api/coach/clips-shared/{clip_id}/video", headers=program["director"],
+        )
+        assert watched.status_code == 200
+        assert watched.headers["content-type"].startswith("video/")
+
+        views = client.get("/api/clips", headers=athlete["headers"]).json()["clips"][0]["views"]
+        assert len(views) == 1 and views[0]["viewer_name"]
+
+    def test_withdrawing_permission_deletes_the_video(self, client, program):
+        """Not hides. A parent who turns this off has to be able to believe
+        the clip is gone."""
+        athlete = program["athletes"][0]
+        store = api_module._store
+        guardian = self._guardian(store, athlete["id"])
+        self._allow(store, athlete["id"], guardian["guardian_id"])
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        ).json()["id"]
+
+        self._allow(store, athlete["id"], guardian["guardian_id"], granted=False)
+        assert store.conn.execute(
+            "SELECT COUNT(*) AS n FROM shared_clips"
+        ).fetchone()["n"] == 0
+        assert client.get(
+            f"/api/coach/clips-shared/{clip_id}/video", headers=program["director"],
+        ).status_code == 404
+
+    def test_a_coach_from_another_program_cannot_watch(self, client, program):
+        athlete = program["athletes"][0]
+        store = api_module._store
+        guardian = self._guardian(store, athlete["id"])
+        self._allow(store, athlete["id"], guardian["guardian_id"])
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        ).json()["id"]
+
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+        ).json()
+        assert client.get(
+            f"/api/coach/clips-shared/{clip_id}/video",
+            headers={"Authorization": f"Bearer {rival['director']['token']}"},
+        ).status_code == 404
+
+    def test_the_athlete_can_take_it_back(self, client, program):
+        athlete = program["athletes"][0]
+        store = api_module._store
+        guardian = self._guardian(store, athlete["id"])
+        self._allow(store, athlete["id"], guardian["guardian_id"])
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        ).json()["id"]
+        assert client.delete(
+            f"/api/clips/{clip_id}", headers=athlete["headers"],
+        ).json()["deleted"] is True
+
+    def test_another_athlete_cannot_delete_or_see_it(self, client, program):
+        one, two = program["athletes"]
+        store = api_module._store
+        guardian = self._guardian(store, one["id"])
+        self._allow(store, one["id"], guardian["guardian_id"])
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=one["headers"],
+        ).json()["id"]
+        assert client.delete(
+            f"/api/clips/{clip_id}", headers=two["headers"],
+        ).status_code == 404
+        assert client.get("/api/clips", headers=two["headers"]).json()["clips"] == []
+
+    def test_nothing_uploads_a_clip_automatically(self, client, program):
+        """A session is not a video. There is exactly one route that accepts
+        one and it needs an explicit call."""
+        athlete = program["athletes"][0]
+        store = api_module._store
+        from athleteiq import guardians
+
+        guardian = self._guardian(store, athlete["id"])
+        self._allow(store, athlete["id"], guardian["guardian_id"])
+        guardians.set_consent(
+            store.conn, athlete["id"], guardian["guardian_id"],
+            guardians.Scope.PARTICIPATION, True,
+        )
+        store.conn.commit()
+        do_session(client, athlete["headers"])
+        assert store.conn.execute(
+            "SELECT COUNT(*) AS n FROM shared_clips"
+        ).fetchone()["n"] == 0
+
+    def test_expired_clips_are_purged(self, client, program):
+        from athleteiq.notifications import purge_expired_clips
+        from datetime import datetime, timedelta, timezone
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        guardian = self._guardian(store, athlete["id"])
+        self._allow(store, athlete["id"], guardian["guardian_id"])
+        client.post("/api/clips", json={"data": self.CLIP}, headers=athlete["headers"])
+
+        later = datetime.now(timezone.utc) + timedelta(days=31)
+        assert purge_expired_clips(store.conn, later) == 1
+
+
+class TestMessagesGoOneWay:
+
+    def test_a_parent_sees_everything_their_athlete_was_sent(self, client, program):
+        from athleteiq import guardians, notifications as N
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, athlete["id"], created_by=athlete["id"])
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        store.conn.commit()
+        N.enqueue(store.conn, athlete["id"], N.Kind.RECOGNITION,
+                  "Coach Ada noticed", "Ten days straight.", from_name="Coach Ada")
+
+        headers = {"Authorization": f"Bearer {guardian['token']}"}
+        body = client.get(
+            f"/api/parent/athletes/{athlete['id']}/messages", headers=headers,
+        ).json()
+        assert body["messages"][0]["body"] == "Ten days straight."
+        assert body["messages"][0]["from_name"] == "Coach Ada"
+        assert body["replies_allowed"] is False
+
+    def test_no_endpoint_lets_an_athlete_or_parent_reply(self, client):
+        """Structural, not a policy note. There is no write path into the
+        message stream from either of them, so there is nothing to moderate."""
+        schema = client.get("/openapi.json").json()
+        writable = []
+        for path, methods in schema["paths"].items():
+            for method in methods:
+                if method.lower() not in ("post", "put", "patch"):
+                    continue
+                if any(word in path for word in ("message", "reply", "comment", "chat")):
+                    writable.append(f"{method.upper()} {path}")
+        assert writable == [], f"a reply path exists: {writable}"
+
+    def test_a_parent_cannot_read_another_familys_messages(self, client, program):
+        from athleteiq import guardians
+
+        one, two = program["athletes"]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, one["id"], created_by=one["id"])
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        store.conn.commit()
+        res = client.get(
+            f"/api/parent/athletes/{two['id']}/messages",
+            headers={"Authorization": f"Bearer {guardian['token']}"},
+        )
+        assert res.status_code >= 400
+        assert two["display_name"] not in res.text
+
+
+class TestParentSeesEveryDrill:
+
+    def test_the_whole_drill_log_not_a_summary(self, client, program):
+        from athleteiq import guardians
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, athlete["id"], created_by=athlete["id"])
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        # Linking a guardian pauses training until they say yes, so the parent
+        # tests have to go through the same door a real family does.
+        guardians.set_consent(
+            store.conn, athlete["id"], guardian["guardian_id"],
+            guardians.Scope.PARTICIPATION, True,
+        )
+        store.conn.commit()
+        do_session(client, athlete["headers"], drill="lax_wall_ball", seed=2)
+        do_session(client, athlete["headers"], drill="gen_squat", seed=3, gap=2000)
+
+        body = client.get(
+            f"/api/parent/athletes/{athlete['id']}/drills",
+            headers={"Authorization": f"Bearer {guardian['token']}"},
+        ).json()
+        drills = {d["drill_key"] for d in body["by_drill"]}
+        assert {"lax_wall_ball", "gen_squat"} <= drills
+        assert body["totals"]["sessions"] >= 1
+        assert body["sessions"][0]["drill"], "named, not just keyed"
+
+    def test_held_sessions_are_shown_rather_than_hidden(self, client, program):
+        """A parent finding out from their child that something was queried is
+        worse than reading it here."""
+        from athleteiq import guardians
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, athlete["id"], created_by=athlete["id"])
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        guardians.set_consent(
+            store.conn, athlete["id"], guardian["guardian_id"],
+            guardians.Scope.PARTICIPATION, True,
+        )
+        store.conn.commit()
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "soc_juggle"},
+            headers=athlete["headers"],
+        ).json()
+        client.post(
+            "/api/sessions/submit",
+            json={"session_id": started["session_id"], "nonce": started["nonce"],
+                  "duration_ms": 28_000,
+                  "reps": [{"t_ms": i * 900, "hand": "left", "confidence": 0.4}
+                           for i in range(30)],
+                  "mean_confidence": 0.4, "track_quality": 0.05},
+            headers=athlete["headers"],
+        )
+        body = client.get(
+            f"/api/parent/athletes/{athlete['id']}/drills",
+            headers={"Authorization": f"Bearer {guardian['token']}"},
+        ).json()
+        assert body["totals"]["held"] >= 1
+        held = [s for s in body["sessions"] if s["status"] != "counted"]
+        assert held and held[0]["notes"], "with the reason attached"
+
+
+class TestFamilyAccounts:
+
+    def _family(self, client, parent="Dana Pierce"):
+        made = client.post(
+            "/api/family", json={"parent_name": parent, "family_name": "The Pierces"},
+        ).json()
+        return made, {"Authorization": f"Bearer {made['parent']['token']}"}
+
+    def test_a_family_can_sign_up_with_no_club(self, client):
+        made, headers = self._family(client)
+        assert made["kind"] == "family"
+        assert client.get("/api/orgs/mine", headers=headers).json()["role"] == "director"
+
+    def test_the_parent_adds_their_own_children(self, client):
+        made, headers = self._family(client)
+        child = client.post(
+            "/api/family/athletes",
+            json={"display_name": "Jordan Pierce", "birth_year": 2013,
+                  "dominant_hand": "right"},
+            headers=headers,
+        ).json()
+        assert child["display_name"] == "Jordan Pierce"
+
+        # And can train straight away, because the parent who created the
+        # account has already consented.
+        athlete = {"Authorization": f"Bearer {child['token']}"}
+        assert client.post(
+            "/api/sessions/start", json={"drill_key": "gen_squat"}, headers=athlete,
+        ).status_code == 201
+
+    def test_a_program_cannot_use_the_family_shortcut(self, client, program):
+        """Otherwise a club could bypass the invite flow and link a coach to a
+        child as their guardian."""
+        res = client.post(
+            "/api/family/athletes", json={"display_name": "Someone"},
+            headers=program["director"],
+        )
+        assert res.status_code == 400
+        assert "program account" in res.json()["detail"]
+
+    def test_a_family_sees_the_same_features_a_club_does(self, client):
+        made, headers = self._family(client)
+        child = client.post(
+            "/api/family/athletes",
+            json={"display_name": "Jordan Pierce", "birth_year": 2013},
+            headers=headers,
+        ).json()
+        athlete = {"Authorization": f"Bearer {child['token']}"}
+        do_session(client, athlete, drill="gen_squat", seed=4, gap=2000)
+
+        for path in ("/api/coach/roster?window=week", "/api/coach/budgets",
+                     "/api/coach/recognition", "/api/coach/wellness"):
+            assert client.get(path, headers=headers).status_code == 200, path
+
+    def test_the_recognition_editor_hides_the_senior_voice_for_a_family(self, client):
+        """There is no chain of command in a household to be higher up."""
+        _, headers = self._family(client)
+        body = client.get("/api/coach/recognition", headers=headers).json()
+        assert body["is_family"] is True
+
+    def test_only_a_director_sets_the_program_voice(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Two Hats"},
+        ).json()
+        api_module._store.add_membership(
+            program["org"]["director"]["id"], rival["org_id"], "coach",
+        )
+        res = client.put(
+            "/api/coach/voice", json={"name": "Marcus Vale", "title": "Former pro"},
+            headers={**program["director"], "X-Org-Id": str(rival["org_id"])},
+        )
+        assert res.status_code == 403
+
+    def test_a_director_can_name_one(self, client, program):
+        res = client.put(
+            "/api/coach/voice",
+            json={"name": "Marcus Vale", "title": "Director of Player Development"},
+            headers=program["director"],
+        )
+        assert res.status_code == 200
+        assert client.get(
+            "/api/coach/recognition", headers=program["director"],
+        ).json()["voice"]["name"] == "Marcus Vale"

@@ -7,9 +7,11 @@ even if a future client tried to send it.
 
 from __future__ import annotations
 
+import base64
+
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -25,6 +27,7 @@ from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import positions as positions_mod
 from . import sports as sports_mod
+from . import recognition as recognition_mod
 from . import rtp as rtp_mod
 from . import wellness as wellness_mod
 from . import transfer as transfer_mod
@@ -408,7 +411,15 @@ def me(
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     if principal.role == "athlete":
-        return {"role": principal.role, **store.athlete_profile(principal.id)}
+        return {
+            "role": principal.role,
+            **store.athlete_profile(principal.id),
+            # So the capture screen knows whether to offer sending a clip. The
+            # button is absent rather than present-and-failing when permission
+            # is off: a child tapping something that tells them their parent
+            # said no is a conversation the app should not start.
+            "consents": guardians_mod.current_consents(store.conn, principal.id),
+        }
     return {
         "role": principal.role,
         "athlete_id": principal.id,
@@ -1935,6 +1946,212 @@ def plan_history(
     return {"events": store.plan_history(plan_id)}
 
 
+class RecognitionTemplate(BaseModel):
+    milestone: str
+    body: str = Field(default="", max_length=600)
+    enabled: bool = True
+    from_voice: Literal["coach", "voice"] = "coach"
+
+
+@app.get("/api/parent/athletes/{athlete_id}/drills")
+def parent_drill_log(
+    athlete_id: int,
+    days: int = Query(default=30, ge=1, le=180),
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Everything their athlete has done, across every drill.
+
+    A parent gets the same picture a coach does, for their own child: what was
+    trained, how much, how it was scored, and what was held for review. Held
+    sessions are shown rather than hidden -- a parent finding out from their
+    child that something was queried is worse than reading it here.
+    """
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    return store.drill_log(athlete_id, days)
+
+
+@app.get("/api/parent/athletes/{athlete_id}/messages")
+def parent_messages(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Every message their athlete has been sent.
+
+    A copy of all of it, because a parent should never learn what their child
+    was told from the child. There is no reply field here and no endpoint
+    behind one: these messages go one way by design.
+    """
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    rows = store.conn.execute(
+        "SELECT kind, title, body, from_name, created_at FROM notifications "
+        "WHERE about_athlete_id = ? AND is_copy = 1 ORDER BY id DESC LIMIT 100",
+        (athlete_id,),
+    ).fetchall()
+    return {
+        "messages": [dict(r) for r in rows],
+        "replies_allowed": False,
+        "note": (
+            "You see everything your athlete is sent. Messages here are "
+            "one-way — nobody can reply through the app, including you."
+        ),
+    }
+
+
+@app.get("/api/coach/recognition")
+def recognition_templates(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The milestones, with whatever words this program has written for them."""
+    return {
+        "milestones": store.recognition_templates(principal.org_id),
+        "tokens": list(recognition_mod.TOKENS),
+        "voice": store.program_voice(principal.org_id),
+        "voices": list(recognition_mod.Voice.ALL),
+        "is_family": store.is_family(principal.org_id),
+    }
+
+
+@app.put("/api/coach/recognition")
+def set_recognition_template(
+    body: RecognitionTemplate,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Put a coach's own words on a milestone.
+
+    Staff rather than directors only: the words a coach uses with their own
+    athletes are theirs, and a program that wants that locked down can do it
+    by not making people coaches.
+    """
+    try:
+        return store.set_recognition_template(
+            principal.org_id, body.milestone, body.body, body.enabled, principal.id,
+            from_voice=body.from_voice,
+        )
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class SharedClip(BaseModel):
+    #: Base64 of a short recording the athlete picked. Bounded well above a
+    #: sensible clip and well below anything that could fill a disk.
+    data: str = Field(max_length=20_000_000)
+    mime: Literal["video/webm", "video/mp4"] = "video/webm"
+    session_id: int | None = None
+    drill_key: str = Field(default="", max_length=64)
+    note: str = Field(default="", max_length=400)
+
+
+@app.post("/api/clips", status_code=201)
+def share_clip(
+    body: SharedClip,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Send one clip to the coaching staff.
+
+    The only route in this product that accepts video, and it exists because a
+    parent turned it on and an athlete chose this clip. Nothing calls it
+    automatically.
+    """
+    try:
+        raw = base64.b64decode(body.data, validate=True)
+    except Exception as exc:  # noqa: BLE001 -- any decode failure is the same answer
+        raise HTTPException(status_code=400, detail="that clip did not decode") from exc
+    try:
+        return store.share_clip(
+            principal.id, raw, session_id=body.session_id,
+            drill_key=body.drill_key, mime=body.mime, note=body.note,
+        )
+    except StoreError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@app.get("/api/clips")
+def my_clips(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What this athlete has sent, and who has watched each one."""
+    return {"clips": store.shared_clips_for_athlete(principal.id)}
+
+
+@app.delete("/api/clips/{clip_id}")
+def unshare_clip(
+    clip_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Take it back.
+
+    The athlete or their guardian, at any time, no reason needed.
+    """
+    clip = store.conn.execute(
+        "SELECT athlete_id FROM shared_clips WHERE id = ?", (clip_id,)
+    ).fetchone()
+    if clip is None:
+        raise HTTPException(status_code=404, detail="no clip with that id")
+    athlete_id = int(clip["athlete_id"])
+    allowed = principal.id == athlete_id or guardians_mod.guards(
+        store.conn, principal.id, athlete_id
+    )
+    if not allowed:
+        raise HTTPException(status_code=404, detail="no clip with that id")
+    return {"deleted": store.delete_shared_clip(clip_id)}
+
+
+@app.get("/api/coach/clips-shared")
+def staff_shared_clips(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
+    )
+    return {"clips": store.shared_clips_for_org(
+        principal.org_id, [a["athlete_id"] for a in athletes]
+    )}
+
+
+@app.get("/api/coach/clips-shared/{clip_id}/video")
+def watch_shared_clip(
+    clip_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> Response:
+    """Play a clip an athlete sent.
+
+    Consent is re-checked here rather than trusted from the moment of upload:
+    a parent who withdrew permission this morning must not have last night's
+    clip served this afternoon. Deleting on revocation already makes that
+    true; checking again makes it true even if that ever fails.
+    """
+    try:
+        clip = store.shared_clip(clip_id, with_bytes=True)
+    except StoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    owner = store.conn.execute(
+        "SELECT org_id FROM users WHERE id = ?", (clip["athlete_id"],)
+    ).fetchone()
+    if owner is None or owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=404, detail="no clip with that id")
+    if not store._may_share_video(clip["athlete_id"]):
+        raise HTTPException(
+            status_code=403,
+            detail="a guardian has withdrawn permission for coach video",
+        )
+
+    store.record_clip_view(clip_id, principal.id, principal.display_name)
+    return Response(content=clip["bytes"], media_type=clip["mime"])
+
+
 @app.get("/api/coach/ball")
 def team_ball_drills(
     team_id: int | None = None,
@@ -2050,6 +2267,81 @@ def set_athlete_sports(
     )
     profile = benchmarks_mod.sport_profile(store.conn, athlete_id)
     return {"sports": saved, "profile": profile.to_dict()}
+
+
+class CreateFamily(BaseModel):
+    family_name: str = Field(default="", max_length=200)
+    parent_name: str = Field(min_length=1, max_length=120)
+    email: str | None = None
+
+
+class FamilyAthlete(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    birth_year: int | None = Field(default=None, ge=1900, le=2100)
+    dominant_hand: Literal["left", "right"] | None = None
+
+
+@app.post("/api/family", status_code=201)
+def create_family(body: CreateFamily, store: Store = Depends(get_store)) -> dict[str, Any]:
+    """Set up a household with no club behind it.
+
+    The parent ends up wearing both hats: director of their own small program,
+    and guardian of their own children. Those are genuinely different roles --
+    one sets the training, the other consents to it -- and they stay two
+    records rather than one blurred super-role, so the consent checks keep
+    meaning something even with the same person on both sides.
+    """
+    made = store.create_family(body.family_name, body.parent_name, body.email)
+    return made
+
+
+@app.post("/api/family/athletes", status_code=201)
+def add_family_athlete(
+    body: FamilyAthlete,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Add a child to a family account, guardian link and all."""
+    if not store.is_family(principal.org_id):
+        raise HTTPException(
+            status_code=400,
+            detail="that is a program account — add athletes from the coach dashboard",
+        )
+    team = store.conn.execute(
+        "SELECT join_code FROM teams WHERE org_id = ? ORDER BY id LIMIT 1",
+        (principal.org_id,),
+    ).fetchone()
+    try:
+        return store.add_family_athlete(
+            principal.org_id, principal.id, body.display_name,
+            birth_year=body.birth_year, dominant_hand=body.dominant_hand,
+            join_code=team["join_code"] if team else None,
+        )
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class ProgramVoice(BaseModel):
+    name: str = Field(default="", max_length=120)
+    title: str = Field(default="", max_length=120)
+
+
+@app.put("/api/coach/voice")
+def set_program_voice(
+    body: ProgramVoice,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Name the senior figure whose recognition carries extra weight.
+
+    Directors only: whose name goes on a message to a child is a decision
+    about the program, not about one team.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can set the program voice",
+        )
+    return store.set_program_voice(principal.org_id, body.name, body.title)
 
 
 @app.get("/api/sports/catalog")

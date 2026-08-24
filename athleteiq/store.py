@@ -16,6 +16,8 @@ from typing import Any
 from .config import CONFIG
 from . import sports
 from . import ball as ball_mod
+from . import notifications
+from . import recognition
 from .drills.catalog import ALL_DRILLS
 from . import film
 from . import rtp
@@ -1094,6 +1096,502 @@ class Store:
         }
 
     # ------------------------------------------------------------------
+    # Coach recognition
+    # ------------------------------------------------------------------
+
+    def recognition_templates(self, org_id: int) -> list[dict[str, Any]]:
+        """Every milestone, with the coach's words where they have written any."""
+        rows = {
+            r["milestone"]: r for r in self.conn.execute(
+                "SELECT * FROM recognition_templates WHERE org_id = ?", (org_id,)
+            )
+        }
+        out = []
+        for milestone in recognition.MILESTONES:
+            row = rows.get(milestone.key)
+            entry = milestone.to_dict(
+                body=row["body"] if row else "",
+                customised=row is not None,
+                from_voice=row["from_voice"] if row else "",
+            )
+            entry["enabled"] = bool(row["enabled"]) if row else True
+            out.append(entry)
+        return out
+
+    def set_recognition_template(
+        self, org_id: int, milestone: str, body: str, enabled: bool, actor_id: int,
+        from_voice: str = recognition.Voice.COACH,
+    ) -> dict[str, Any]:
+        if milestone not in recognition.BY_KEY:
+            raise StoreError(f"unknown milestone: {milestone!r}")
+        if from_voice not in recognition.Voice.ALL:
+            raise StoreError(f"unknown voice: {from_voice!r}")
+        text = (body or "").strip()
+        if enabled and not text:
+            raise StoreError("a message needs some words, or turn the milestone off")
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT INTO recognition_templates(org_id, milestone, body, enabled, "
+                "from_voice, updated_by, updated_at) VALUES (?,?,?,?,?,?,?) "
+                "ON CONFLICT(org_id, milestone) DO UPDATE SET "
+                "body = excluded.body, enabled = excluded.enabled, "
+                "from_voice = excluded.from_voice, "
+                "updated_by = excluded.updated_by, updated_at = excluded.updated_at",
+                (org_id, milestone, text, 1 if enabled else 0, from_voice,
+                 actor_id, _iso(_now())),
+            )
+        return {
+            "milestone": milestone, "body": text,
+            "enabled": enabled, "from_voice": from_voice,
+        }
+
+    def set_program_voice(self, org_id: int, name: str, title: str) -> dict[str, Any]:
+        """Name the senior figure whose recognition carries extra weight."""
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE organizations SET voice_name = ?, voice_title = ? WHERE id = ?",
+                (name.strip()[:120], title.strip()[:120], org_id),
+            )
+        return self.program_voice(org_id)
+
+    def program_voice(self, org_id: int) -> dict[str, Any]:
+        row = self.conn.execute(
+            "SELECT voice_name, voice_title FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        return {
+            "name": row["voice_name"] if row else "",
+            "title": row["voice_title"] if row else "",
+        }
+
+    def _recognising_coach(self, athlete_id: int, org_id: int) -> tuple[int | None, str]:
+        """Whose name goes on the message.
+
+        The coach assigned to the athlete's team if there is one, else a
+        director. A name matters more than picking the perfect person: a kid
+        reading "Coach Ada noticed" does not audit the org chart.
+        """
+        row = self.conn.execute(
+            "SELECT u.id, u.display_name FROM team_staff ts "
+            "JOIN users u ON u.id = ts.user_id "
+            "JOIN team_members tm ON tm.team_id = ts.team_id "
+            "WHERE tm.user_id = ? ORDER BY ts.created_at LIMIT 1",
+            (athlete_id,),
+        ).fetchone()
+        if row is None:
+            row = self.conn.execute(
+                "SELECT id, display_name FROM users WHERE org_id = ? AND role = 'director' "
+                "AND active = 1 ORDER BY id LIMIT 1",
+                (org_id,),
+            ).fetchone()
+        if row is None:
+            return None, "Your coach"
+        return int(row["id"]), row["display_name"]
+
+    def _team_name(self, athlete_id: int) -> str:
+        row = self.conn.execute(
+            "SELECT t.name FROM team_members tm JOIN teams t ON t.id = tm.team_id "
+            "WHERE tm.user_id = ? ORDER BY tm.joined_at DESC LIMIT 1",
+            (athlete_id,),
+        ).fetchone()
+        return row["name"] if row else ""
+
+    def award_recognition(
+        self, athlete_id: int, sessions_before: int, today: date | None = None
+    ) -> list[str]:
+        """Send whatever this session just earned. Returns the milestone keys.
+
+        Called from the submit path rather than a nightly job, because "well
+        done" an hour after a driveway session lands and "well done" the next
+        morning is a report.
+
+        `today` is the day the *session* counts for, not the wall clock. A
+        session trained on Sunday in a dead zone and synced on Monday earns
+        Sunday's streak, the same rule the rest of scoring follows.
+        """
+        today = today or _now().date()
+        days = sorted(set(self._streak_days(athlete_id)))
+        streak = compute_streak(days, today)
+
+        # The first day of the current run, derived from the days themselves
+        # rather than counted back from today.
+        #
+        # Counting back from today was a real bug and a nasty one: a run's
+        # start moved by a day every day it continued, so the dedupe key
+        # changed, and a ten-day streak sent the same "ten days straight"
+        # message again on day eleven and day twelve. A child would learn to
+        # ignore the app inside a week.
+        start = None
+        if streak.current > 0 and days:
+            start = days[-1] - timedelta(days=streak.current - 1)
+
+        crossed = recognition.earned(
+            sessions_before=sessions_before,
+            streak=streak.current,
+            streak_start=start,
+        )
+        if not crossed:
+            return []
+
+        athlete = self.conn.execute(
+            "SELECT display_name, org_id FROM users WHERE id = ?", (athlete_id,)
+        ).fetchone()
+        if athlete is None:
+            return []
+        first_name = (athlete["display_name"] or "").split()[0] if athlete["display_name"] else ""
+        coach_id, coach_name = self._recognising_coach(athlete_id, int(athlete["org_id"]))
+        team = self._team_name(athlete_id)
+        templates = {
+            t["key"]: t for t in self.recognition_templates(int(athlete["org_id"]))
+        }
+
+        voice = self.program_voice(int(athlete["org_id"]))
+
+        sent = []
+        for milestone, key in crossed:
+            template = templates.get(milestone.key, {})
+            if not template.get("enabled", True):
+                continue
+
+            # A senior figure's name only where the program has actually named
+            # one. Falling back to the coach means a program that never fills
+            # this in still sends something signed by a real person, rather
+            # than a message from nobody.
+            wants_voice = template.get("from_voice") == recognition.Voice.VOICE
+            if wants_voice and voice["name"]:
+                sender = voice["name"]
+                title = voice["title"]
+            else:
+                sender = coach_name
+                title = ""
+
+            body = recognition.render(
+                template.get("body") or milestone.default_body,
+                first_name=first_name, streak=streak.current,
+                coach=sender, team=team,
+            )
+            made = notifications.enqueue(
+                self.conn,
+                athlete_id,
+                notifications.Kind.RECOGNITION,
+                f"{sender} noticed" if not title else f"{sender}, {title}",
+                body,
+                link="/",
+                dedupe_key=f"recognition:{key}",
+                from_name=sender,
+            )
+            if made:
+                sent.append(milestone.key)
+        return sent
+
+    # ------------------------------------------------------------------
+    # Clips an athlete chooses to send a coach
+    # ------------------------------------------------------------------
+
+    #: Bounded hard. This is a child's video in a database, so it is a short
+    #: clip or it is nothing.
+    MAX_CLIP_BYTES = 12 * 1024 * 1024
+    CLIP_RETENTION_DAYS = 30
+
+    def _may_share_video(self, athlete_id: int) -> bool:
+        return bool(guardians_mod.current_consents(self.conn, athlete_id).get(
+            guardians_mod.Scope.COACH_VIDEO, False
+        ))
+
+    def share_clip(
+        self,
+        athlete_id: int,
+        blob: bytes,
+        *,
+        session_id: int | None = None,
+        drill_key: str = "",
+        mime: str = "video/webm",
+        note: str = "",
+    ) -> dict[str, Any]:
+        """Send one clip to the coaching staff.
+
+        Two gates, both required and both checked here rather than in the
+        client: a guardian has turned the consent on, and the athlete has
+        picked this clip. There is deliberately no path that uploads a
+        recording because a session happened.
+        """
+        if not self._may_share_video(athlete_id):
+            raise StoreError(
+                "A parent or guardian has to turn on coach video in their "
+                "portal before a clip can be sent."
+            )
+        if not blob:
+            raise StoreError("that clip is empty")
+        if len(blob) > self.MAX_CLIP_BYTES:
+            raise StoreError(
+                f"that clip is too big — keep it under "
+                f"{self.MAX_CLIP_BYTES // (1024 * 1024)}MB"
+            )
+        if mime not in ("video/webm", "video/mp4"):
+            raise StoreError(f"unsupported clip format: {mime!r}")
+
+        now = _now()
+        expires = now + timedelta(days=self.CLIP_RETENTION_DAYS)
+        with transaction(self.conn) as conn:
+            cur = conn.execute(
+                "INSERT INTO shared_clips(athlete_id, session_id, drill_key, mime, "
+                "bytes, size_bytes, note, shared_at, expires_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (athlete_id, session_id, drill_key, mime, blob, len(blob),
+                 note.strip()[:400], _iso(now), _iso(expires)),
+            )
+        return self.shared_clip(int(cur.lastrowid), with_bytes=False)
+
+    def shared_clip(self, clip_id: int, with_bytes: bool = False) -> dict[str, Any]:
+        row = self.conn.execute(
+            "SELECT * FROM shared_clips WHERE id = ?", (clip_id,)
+        ).fetchone()
+        if row is None:
+            raise StoreError("no clip with that id")
+        out = {
+            "id": int(row["id"]),
+            "athlete_id": int(row["athlete_id"]),
+            "session_id": row["session_id"],
+            "drill_key": row["drill_key"],
+            "mime": row["mime"],
+            "size_bytes": int(row["size_bytes"]),
+            "note": row["note"],
+            "shared_at": row["shared_at"],
+            "expires_at": row["expires_at"],
+            "views": [
+                dict(v) for v in self.conn.execute(
+                    "SELECT viewer_name, viewed_at FROM shared_clip_views "
+                    "WHERE clip_id = ? ORDER BY id",
+                    (clip_id,),
+                )
+            ],
+        }
+        if with_bytes:
+            out["bytes"] = row["bytes"]
+        return out
+
+    def shared_clips_for_athlete(self, athlete_id: int) -> list[dict[str, Any]]:
+        """Video clips this athlete sent a coach.
+
+        Named `shared_` because `clips_for_athlete` is film study's, and the
+        first version of this shadowed it -- which broke the film shortlist
+        silently rather than loudly, since both take an athlete and return
+        clips.
+        """
+        return [
+            self.shared_clip(int(r["id"]))
+            for r in self.conn.execute(
+                "SELECT id FROM shared_clips WHERE athlete_id = ? ORDER BY id DESC",
+                (athlete_id,),
+            )
+        ]
+
+    def shared_clips_for_org(
+        self, org_id: int, athlete_ids: list[int]
+    ) -> list[dict[str, Any]]:
+        if not athlete_ids:
+            return []
+        marks = ",".join("?" for _ in athlete_ids)
+        return [
+            {**self.shared_clip(int(r["id"])), "display_name": r["display_name"]}
+            for r in self.conn.execute(
+                f"SELECT c.id, u.display_name FROM shared_clips c "
+                f"JOIN users u ON u.id = c.athlete_id "
+                f"WHERE c.athlete_id IN ({marks}) ORDER BY c.id DESC",
+                athlete_ids,
+            )
+        ]
+
+    def record_clip_view(self, clip_id: int, viewer_id: int, viewer_name: str) -> None:
+        """Log that a coach watched it.
+
+        Not optional and not sampled. A child's video being watched is exactly
+        the kind of thing a parent may want to ask about later, and an audit
+        trail that only sometimes records is not one.
+        """
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT INTO shared_clip_views(clip_id, viewer_id, viewer_name, viewed_at) "
+                "VALUES (?,?,?,?)",
+                (clip_id, viewer_id, viewer_name, _iso(_now())),
+            )
+
+    def delete_shared_clip(self, clip_id: int, athlete_id: int | None = None) -> bool:
+        sql = "DELETE FROM shared_clips WHERE id = ?"
+        params: list[Any] = [clip_id]
+        if athlete_id is not None:
+            sql += " AND athlete_id = ?"
+            params.append(athlete_id)
+        with transaction(self.conn) as conn:
+            return bool(conn.execute(sql, params).rowcount)
+
+    def revoke_shared_clips(self, athlete_id: int) -> int:
+        """Delete everything shared for this athlete, now.
+
+        Called the moment a guardian turns the consent off. Withdrawing
+        permission has to mean the video is gone, not that it stops being
+        shown -- anything less makes the consent a preference rather than a
+        permission.
+        """
+        with transaction(self.conn) as conn:
+            return conn.execute(
+                "DELETE FROM shared_clips WHERE athlete_id = ?", (athlete_id,)
+            ).rowcount
+
+    def drill_log(self, athlete_id: int, days: int = 30) -> dict[str, Any]:
+        """Every drill this athlete has done, for a parent or a coach.
+
+        One shape used by both, so a parent is never shown a thinner version
+        of their own child's training than the coach sees.
+        """
+        start = (_now().date() - timedelta(days=days - 1)).isoformat()
+        rows = self.conn.execute(
+            "SELECT id, drill_key, status, reps_total, reps_left, reps_right, "
+            "  hold_ms, duration_ms, quality_score, xp_awarded, integrity_notes, "
+            "  date(COALESCE(completed_at, submitted_at)) AS day "
+            "FROM sessions WHERE athlete_id = ? AND status != 'open' "
+            "AND date(COALESCE(completed_at, submitted_at)) >= ? "
+            "ORDER BY id DESC",
+            (athlete_id, start),
+        ).fetchall()
+
+        sessions, by_drill = [], {}
+        for row in rows:
+            drill = DRILLS_BY_KEY.get(row["drill_key"])
+            entry = {
+                "session_id": int(row["id"]),
+                "drill_key": row["drill_key"],
+                "drill": drill.name if drill else row["drill_key"],
+                "sport": drill.sport if drill else "",
+                "category": drill.category.value if drill else "",
+                "day": row["day"],
+                "status": row["status"],
+                "reps": int(row["reps_total"] or 0),
+                "left": int(row["reps_left"] or 0),
+                "right": int(row["reps_right"] or 0),
+                "hold_s": round(int(row["hold_ms"] or 0) / 1000),
+                "minutes": round(int(row["duration_ms"] or 0) / 60000, 1),
+                "quality": row["quality_score"],
+                "xp": int(row["xp_awarded"] or 0),
+                "notes": json.loads(row["integrity_notes"] or "[]"),
+            }
+            sessions.append(entry)
+            bucket = by_drill.setdefault(row["drill_key"], {
+                "drill_key": row["drill_key"],
+                "drill": entry["drill"], "sport": entry["sport"],
+                "sessions": 0, "reps": 0, "minutes": 0.0, "held": 0,
+            })
+            bucket["sessions"] += 1
+            if row["status"] == "counted":
+                bucket["reps"] += entry["reps"]
+                bucket["minutes"] += entry["minutes"]
+            else:
+                bucket["held"] += 1
+
+        for bucket in by_drill.values():
+            bucket["minutes"] = round(bucket["minutes"], 1)
+        counted = [s for s in sessions if s["status"] == "counted"]
+        return {
+            "days": days,
+            "sessions": sessions[:200],
+            "by_drill": sorted(by_drill.values(), key=lambda d: -d["sessions"]),
+            "totals": {
+                "sessions": len(counted),
+                "reps": sum(s["reps"] for s in counted),
+                "minutes": round(sum(s["minutes"] for s in counted), 1),
+                "days_trained": len({s["day"] for s in counted}),
+                "held": sum(1 for s in sessions if s["status"] != "counted"),
+            },
+        }
+
+    # ------------------------------------------------------------------
+    # Families running it themselves
+    # ------------------------------------------------------------------
+
+    #: A family is a program with one household in it. Building it that way
+    #: rather than as a parallel account type means every feature written for
+    #: a club -- assignments, budgets, recognition, wellness, the lot --
+    #: works for a family on the day it ships, with no second code path to
+    #: keep in step.
+    FAMILY_KIND = "family"
+
+    def create_family(
+        self, family_name: str, parent_name: str, email: str | None = None,
+    ) -> dict[str, Any]:
+        """Set up a household with no club behind it.
+
+        The parent ends up wearing both hats: director of their own tiny
+        program, and guardian of their own children. Those are genuinely
+        different roles -- one sets training, the other consents to it -- and
+        keeping them as two records rather than one blurred super-role is what
+        keeps the consent checks meaningful even when the same person is on
+        both sides of them.
+        """
+        name = (family_name or "").strip() or f"{parent_name.strip()} family"
+        with transaction(self.conn) as conn:
+            cur = conn.execute(
+                "INSERT INTO organizations(name, sport, kind, created_at) "
+                "VALUES (?,?,?,?)",
+                (name[:200], "general", self.FAMILY_KIND, _iso(_now())),
+            )
+            org_id = int(cur.lastrowid)
+
+        parent = self.create_user(org_id, "director", parent_name, email=email)
+        team = self.create_team(org_id, "Home")
+        billing_mod.start_subscription(self.conn, org_id, "family", trial=False)
+        self.conn.commit()
+        return {"org_id": org_id, "parent": parent, "team": team, "kind": self.FAMILY_KIND}
+
+    def add_family_athlete(
+        self,
+        org_id: int,
+        parent_id: int,
+        display_name: str,
+        *,
+        birth_year: int | None = None,
+        dominant_hand: str | None = None,
+        join_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Add a child, and link the parent to them as guardian in one step.
+
+        In a club the guardian link is an invitation a coach sends and a parent
+        redeems, because the two are different people. Here they are the same
+        person and a code posted to yourself is theatre -- so the link is made
+        directly, with participation consent recorded as given by the parent
+        who just created the account.
+        """
+        if not self.is_family(org_id):
+            raise StoreError("that program is not a family account")
+
+        athlete = self.create_user(
+            org_id, "athlete", display_name,
+            birth_year=birth_year, dominant_hand=dominant_hand,
+        )
+        if join_code:
+            self.join_team(join_code, athlete["id"])
+
+        # Linked directly rather than through an invite code. In a club that
+        # code exists because the coach and the parent are different people
+        # and the code is how one proves the other; posting a code to yourself
+        # is theatre.
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO guardians(guardian_id, athlete_id, "
+                "relationship, linked_at) VALUES (?,?,?,?)",
+                (parent_id, athlete["id"], "parent", _iso(_now())),
+            )
+        guardians_mod.set_consent(
+            self.conn, athlete["id"], parent_id,
+            guardians_mod.Scope.PARTICIPATION, True, method="family_account",
+        )
+        return athlete
+
+    def is_family(self, org_id: int) -> bool:
+        row = self.conn.execute(
+            "SELECT kind FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        return bool(row and row["kind"] == self.FAMILY_KIND)
+
+    # ------------------------------------------------------------------
     # Org / team / user setup
     # ------------------------------------------------------------------
 
@@ -1466,6 +1964,14 @@ class Store:
             mean_confidence=float(mean_confidence),
             client_version=client_version,
         )
+        # Counted before this session is written, so "your first one" is
+        # recognised on the session that makes it true rather than the one
+        # after it.
+        sessions_before = int(self.conn.execute(
+            "SELECT COUNT(*) AS n FROM sessions WHERE athlete_id = ? AND status = 'counted'",
+            (athlete_id,),
+        ).fetchone()["n"])
+
         verdict = evaluate(claim, drill)
 
         # Ball drills carry a second verdict. The browser did the tracking, so
@@ -1565,9 +2071,20 @@ class Store:
         new_badges = self._sync_badges(athlete_id)
         notify.notify_badges(self.conn, athlete_id, new_badges)
 
+        # Recognition fires here rather than in a nightly job: "well done" an
+        # hour after a driveway session lands, and the same words the next
+        # morning are a report. Only a counted session earns it -- a held one
+        # has not been established as work yet.
+        recognised: list[str] = []
+        if verdict.status == "counted":
+            recognised = self.award_recognition(
+                athlete_id, sessions_before, date.fromisoformat(today),
+            )
+
         result = {
             "session_id": session_id,
             "status": verdict.status,
+            "recognition": recognised,
             "integrity_score": round(verdict.score, 3),
             "notes": verdict.notes,
             **({"ball": ball_review.to_dict()} if ball_review else {}),

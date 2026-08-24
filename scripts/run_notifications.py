@@ -90,6 +90,12 @@ def main() -> int:
     if purged:
         print(f"purged {purged} wellness rows past the retention window")
 
+    # A child's video is kept for as long as it is useful for feedback and not
+    # a day longer.
+    clips = notify.purge_expired_clips(conn)
+    if clips:
+        print(f"deleted {clips} shared clips past their expiry")
+
     # The coach digest goes out once a week. Gated on the weekday rather than on
     # a separate cron entry so there is one scheduled job to configure, and
     # deduped by week so running it twice on a Monday is harmless.
