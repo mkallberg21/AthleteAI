@@ -197,5 +197,28 @@ class Config:
         default_factory=lambda: os.environ.get("ATHLETEIQ_VAPID_EMAIL", "coach@example.com")
     )
 
+    # SMTP for the weekly digest. Absent these the digest is still computed and
+    # readable in the app -- only the send is skipped, so nothing about the
+    # feature depends on a mail provider being configured.
+    smtp_host: str = field(default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_HOST", ""))
+    smtp_port: int = field(
+        default_factory=lambda: _env_int("ATHLETEIQ_SMTP_PORT", 587)
+    )
+    smtp_user: str = field(default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_USER", ""))
+    smtp_password: str = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_PASSWORD", "")
+    )
+    smtp_from: str = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_FROM", "AthleteIQ <no-reply@example.com>")
+    )
+    # Base URL used for the dashboard link inside the email.
+    app_base_url: str = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_BASE_URL", "")
+    )
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host)
+
 
 CONFIG = Config()

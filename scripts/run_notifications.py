@@ -45,6 +45,14 @@ def main() -> int:
         "--generate-only", action="store_true", help="create notifications but do not deliver"
     )
     parser.add_argument("--quiet", action="store_true", help="suppress the log channel")
+    parser.add_argument(
+        "--digest", action="store_true",
+        help="send the weekly coach digest now, whatever day it is",
+    )
+    parser.add_argument(
+        "--no-email", action="store_true",
+        help="compose digests and post them in-app without sending mail",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -56,6 +64,18 @@ def main() -> int:
     made = notify.run_all(conn)
     total = sum(made.values())
     print(f"generated {total}: " + ", ".join(f"{k}={v}" for k, v in made.items()))
+
+    # The coach digest goes out once a week. Gated on the weekday rather than on
+    # a separate cron entry so there is one scheduled job to configure, and
+    # deduped by week so running it twice on a Monday is harmless.
+    from datetime import date
+
+    if args.digest or date.today().weekday() == 0:
+        result = notify.send_coach_digests(conn, dry_run=args.no_email)
+        print(
+            f"digests: {result['composed']} composed, {result['emailed']} emailed, "
+            f"{result['not_emailed']} not emailed"
+        )
 
     if args.generate_only:
         return 0

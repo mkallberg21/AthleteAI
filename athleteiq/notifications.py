@@ -41,6 +41,7 @@ class Kind:
     INACTIVE = "inactive"
     REST_DAY = "rest_day"
     GUARDIAN_DIGEST = "guardian_digest"
+    COACH_DIGEST = "coach_digest"
 
 
 def _now() -> datetime:
@@ -214,6 +215,89 @@ class WebPushChannel(Channel):
                 else:
                     log.warning("push failed for user %s: %s", payload.user_id, exc)
         return delivered
+
+
+def send_email(to: str, subject: str, html: str, text: str) -> bool:
+    """Send one multipart email over SMTP. Returns False when unconfigured.
+
+    Both parts are sent: some clients prefer plain text, some strip HTML
+    entirely, and a multipart message without a text alternative is filtered as
+    spam noticeably more often.
+    """
+    if not CONFIG.smtp_configured:
+        log.info("SMTP not configured; would have emailed %s: %s", to, subject)
+        return False
+
+    import smtplib
+    from email.message import EmailMessage
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = CONFIG.smtp_from
+    message["To"] = to
+    message.set_content(text)
+    message.add_alternative(html, subtype="html")
+
+    try:
+        with smtplib.SMTP(CONFIG.smtp_host, CONFIG.smtp_port, timeout=20) as server:
+            server.starttls()
+            if CONFIG.smtp_user:
+                server.login(CONFIG.smtp_user, CONFIG.smtp_password)
+            server.send_message(message)
+        return True
+    except Exception as exc:  # noqa: BLE001 -- a mail failure must not break a cron run
+        log.warning("could not email %s: %s", to, exc)
+        return False
+
+
+def send_coach_digests(
+    conn: sqlite3.Connection, today: date | None = None, dry_run: bool = False
+) -> dict[str, int]:
+    """Compose and send the weekly digest to every coach and director.
+
+    One per team they can see, plus a program-wide one for directors, because a
+    varsity coach does not want JV's numbers folded into their own.
+    """
+    from . import digest as digest_mod
+
+    today = today or _now().date()
+    start, _ = digest_mod.last_complete_week(today)
+    sent = composed = skipped = 0
+
+    staff = conn.execute(
+        "SELECT id, org_id, role, display_name, email FROM users "
+        "WHERE role IN ('coach', 'director') AND active = 1"
+    ).fetchall()
+
+    for member in staff:
+        report = digest_mod.compute(conn, member["org_id"], today=today)
+        composed += 1
+
+        dashboard = (
+            f"{CONFIG.app_base_url.rstrip('/')}/app/coach.html"
+            if CONFIG.app_base_url else ""
+        )
+        html = digest_mod.render_html(report, dashboard)
+        text = digest_mod.render_text(report, dashboard)
+        subject = digest_mod.subject_line(report)
+
+        # The in-app copy always lands, so a coach without an email address on
+        # file still gets the digest.
+        enqueue(
+            conn, member["id"], Kind.COACH_DIGEST, subject,
+            report.headline, link="/app/coach.html",
+            dedupe_key=f"{Kind.COACH_DIGEST}:{start.isoformat()}",
+        )
+
+        if dry_run or not member["email"]:
+            skipped += 1
+            continue
+        if send_email(member["email"], subject, html, text):
+            sent += 1
+        else:
+            skipped += 1
+
+    return {"composed": composed, "emailed": sent, "not_emailed": skipped}
 
 
 def dispatch(conn: sqlite3.Connection, channels: list[Channel], limit: int = 200) -> int:

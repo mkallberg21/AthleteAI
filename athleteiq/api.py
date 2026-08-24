@@ -10,13 +10,14 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
+from . import digest as digest_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
 from . import notifications as notify
@@ -630,6 +631,84 @@ def team_load(
         -(a["acwr"] or 0),
     ))
     return {"athletes": out}
+
+
+# ----------------------------------------------------------------------
+# Weekly digest
+# ----------------------------------------------------------------------
+
+@app.get("/api/coach/digest")
+def get_digest(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Last week's team numbers, as data."""
+    report = digest_mod.compute(store.conn, principal.org_id, team_id=team_id)
+    return {"subject": digest_mod.subject_line(report), **report.to_dict()}
+
+
+@app.get("/api/coach/digest/preview", response_class=HTMLResponse)
+def preview_digest(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> str:
+    """The digest exactly as it will arrive by email.
+
+    A coach who wants to forward it, print it, or paste it into a team channel
+    can do so from here without waiting for Monday.
+    """
+    report = digest_mod.compute(store.conn, principal.org_id, team_id=team_id)
+    dashboard = (
+        f"{CONFIG.app_base_url.rstrip('/')}/app/coach.html"
+        if CONFIG.app_base_url else ""
+    )
+    return digest_mod.render_html(report, dashboard)
+
+
+class SendDigestRequest(BaseModel):
+    team_id: int | None = None
+    # Defaults to the requesting coach, so the common case is "send me a copy".
+    to: str | None = Field(default=None, max_length=200)
+
+
+@app.post("/api/coach/digest/send")
+def send_digest(
+    body: SendDigestRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    report = digest_mod.compute(store.conn, principal.org_id, team_id=body.team_id)
+    recipient = body.to or store.conn.execute(
+        "SELECT email FROM users WHERE id = ?", (principal.id,)
+    ).fetchone()["email"]
+
+    if not recipient:
+        raise HTTPException(
+            status_code=400,
+            detail="No email address on file. Add one, or pass an address to send to.",
+        )
+
+    dashboard = (
+        f"{CONFIG.app_base_url.rstrip('/')}/app/coach.html"
+        if CONFIG.app_base_url else ""
+    )
+    delivered = notify.send_email(
+        recipient,
+        digest_mod.subject_line(report),
+        digest_mod.render_html(report, dashboard),
+        digest_mod.render_text(report, dashboard),
+    )
+    return {
+        "to": recipient,
+        "delivered": delivered,
+        "subject": digest_mod.subject_line(report),
+        "note": None if delivered else (
+            "Email is not configured on this server, so nothing was sent. The "
+            "digest is still viewable and printable from the preview."
+        ),
+    }
 
 
 # ----------------------------------------------------------------------

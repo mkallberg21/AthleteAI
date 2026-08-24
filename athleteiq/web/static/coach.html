@@ -41,6 +41,26 @@
 
   <div class="stat-row" id="summary"></div>
 
+  <div class="card" id="digest-card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <h2 style="margin:0">Last week's team numbers</h2>
+      <span class="small muted" id="digest-week"></span>
+    </div>
+    <p class="small muted" style="margin:6px 0 0">
+      This is what goes out in the Monday email. No athlete is named in it, on
+      purpose &mdash; it gets forwarded and read aloud. Names stay on this page.
+    </p>
+    <div id="digest-headline" style="font-size:1.05rem;font-weight:600;margin:14px 0 12px"></div>
+    <div class="kpi-grid" id="digest-kpis"></div>
+    <div id="digest-milestones" style="margin-top:14px"></div>
+    <div id="digest-target" class="target-banner"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="secondary inline" id="digest-preview">Preview the email</button>
+      <button class="secondary inline" id="digest-send">Send it to me now</button>
+    </div>
+    <div id="digest-note" class="small muted hidden" style="margin-top:8px"></div>
+  </div>
+
   <div class="card" id="attention-card">
     <h2>Needs a nudge</h2>
     <div id="attention"></div>
@@ -257,6 +277,52 @@ function showError(message) {
   $('err').classList.remove('hidden');
 }
 
+// ---------------------------------------------------------------- digest
+
+function renderDigest(d) {
+  $('digest-week').textContent = `${d.week_start} to ${d.week_end}`;
+  $('digest-headline').textContent = d.headline;
+
+  $('digest-kpis').innerHTML = d.kpis.map((k) => {
+    const arrow = k.direction === 'up' ? '&#9650;' : k.direction === 'down' ? '&#9660;' : '&ndash;';
+    const cls = k.direction === 'up' ? 'up' : k.direction === 'down' ? 'down' : 'flat';
+    return `<div class="kpi ${cls}">
+      <span class="kpi-label">${esc(k.label)}${
+        k.is_record ? ' <span class="pill ok">record</span>' : ''}</span>
+      <b>${esc(k.display)}</b>
+      <span class="kpi-change ${cls}">${arrow} ${esc(k.change_text)}${
+        k.previous_display ? ` <span class="muted">(was ${esc(k.previous_display)})</span>` : ''}</span>
+      <span class="kpi-blurb">${esc(k.blurb)}</span>
+    </div>`;
+  }).join('');
+
+  $('digest-milestones').innerHTML = d.milestones.length
+    ? d.milestones.map((m) => `<div class="milestone">${esc(m)}</div>`).join('')
+    : '';
+
+  $('digest-target').innerHTML = d.target
+    ? `<span class="eyebrow">Beat this</span>${esc(d.target)}` : '';
+}
+
+$('digest-preview').addEventListener('click', () => {
+  // Opened rather than downloaded so the coach sees it exactly as it arrives,
+  // and can print or forward from their own browser.
+  window.open('/api/coach/digest/preview', '_blank');
+});
+
+$('digest-send').addEventListener('click', async () => {
+  const note = $('digest-note');
+  $('digest-send').disabled = true;
+  try {
+    const res = await api('/api/coach/digest/send', { method: 'POST', body: {} });
+    note.textContent = res.delivered
+      ? `Sent to ${res.to}.`
+      : res.note || 'Email is not configured on this server.';
+  } catch (e) { note.textContent = e.message; }
+  note.classList.remove('hidden');
+  $('digest-send').disabled = false;
+});
+
 // ------------------------------------------------------------- assignments
 
 function dotRow(p) {
@@ -341,6 +407,9 @@ async function loadAll() {
   renderReview(reviewData.sessions);
   renderLoadWatch(rosterData.athletes);
   await loadAssignments();
+  try {
+    renderDigest(await api('/api/coach/digest'));
+  } catch { /* a brand-new program has no week to report yet */ }
 }
 
 function renderLoadWatch(athletes) {

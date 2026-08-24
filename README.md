@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 505 tests
+python -m pytest tests/ -q          # 546 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -90,6 +90,7 @@ athleteiq/
   load.py           Workload ratio, throwing volume, rest days, advisories
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
+  digest.py         Weekly team KPIs and the coach email
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -158,6 +159,66 @@ Two safeguards make it usable in a driveway:
 
 Both are covered by tests (`counter.test.mjs`), including a case that parks the
 signal on the threshold with noise and asserts zero reps.
+
+---
+
+## The weekly coach digest
+
+Coaches will not log into a dashboard, so the dashboard goes to them. But a
+digest is a different object from a dashboard: it gets forwarded to assistant
+coaches, pasted into team channels, and read aloud in the parking lot. That
+changes what belongs in it.
+
+### No athlete is named in it
+
+Not the ones who did nothing, and not the ones who did the most. Naming the
+bottom is obviously corrosive; naming the same top three every week is the same
+mechanism inverted — it tells everyone else, weekly, that they are not one of
+them. Individual detail stays in the dashboard behind a login, where it is a
+working tool rather than a broadcast.
+
+The email reports that *three athletes* didn't log a session and links to the
+dashboard for the names. A test suite class exists solely to enforce this, because
+it is exactly the constraint a later change breaks without anyone noticing until
+a coach forwards an email with a twelve-year-old's name next to "didn't train".
+
+### Numbers a team can move together
+
+| KPI | Why it's on the list |
+|---|---|
+| **Athletes who trained** | The headline. Goes up when the *quiet* kids show up, not when the committed ones do more — the only volume metric here whose marginal contributor is the athlete you actually want to reach |
+| Trained 3+ days | Turning up once is a good week; three times is a habit |
+| Reps outside practice | Every one happened in a driveway or against a wall |
+| Training days logged | Athlete-days across the squad — raw showing up |
+| Work on the weak hand | Share of reps on the hand nobody wants to use |
+| Average form score | How well, not how much |
+| Assigned work completed | Only appears when assignments exist |
+
+Every KPI carries last week's value, the change, and whether it beat the best of
+the trailing twelve weeks. "We beat last week" is what makes a team read the
+same email eight weeks running, so the digest closes with one concrete target —
+*"2 more athletes logging a session takes participation to 100%"* — and the
+program-wide edition ranks teams by XP per athlete so squad size doesn't decide
+it.
+
+Two details that matter more than they look. A change too small to display is
+reported as **"holding steady"**, never "up 0%", which reads as a bug. And a
+**record** requires genuinely beating the previous best, not matching it to four
+decimal places — a record badge on a flat number devalues every other one on the
+page.
+
+### Delivery
+
+Real multipart email over SMTP: table layout, inline styles, ~600px, no flexbox
+or grid, with a plain-text alternative (some clients strip HTML, and multipart
+without a text part gets filtered more often). Set `ATHLETEIQ_SMTP_HOST` and
+friends to enable sending.
+
+Without SMTP the digest still computes, still posts to the coach's in-app feed,
+and is still viewable and printable at `/api/coach/digest/preview` — and the
+send endpoint reports `delivered: false` rather than claiming a send that never
+happened. `scripts/run_notifications.py` sends it on Mondays; `--digest` forces
+it any day.
 
 ---
 

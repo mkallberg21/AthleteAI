@@ -355,3 +355,37 @@ tbody tr:hover { background: var(--surface-2); }
   .slip .code { color: #000; }
   .card { border: none; background: none; padding: 0; }
 }
+
+
+/* ---- Weekly digest ---- */
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.kpi {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-left: 3px solid var(--border); border-radius: 11px; padding: 12px 13px;
+}
+.kpi.up { border-left-color: var(--accent); }
+.kpi.down { border-left-color: var(--warn); }
+.kpi-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: block; }
+.kpi b { display: block; font-size: 1.75rem; line-height: 1.1; letter-spacing: -.02em; margin: 5px 0 3px; font-variant-numeric: tabular-nums; }
+.kpi-change { font-size: .76rem; font-weight: 600; display: block; }
+.kpi-change.up { color: var(--accent); }
+.kpi-change.down { color: var(--warn); }
+.kpi-change.flat { color: var(--muted); }
+.kpi-blurb { font-size: .72rem; color: var(--muted); display: block; margin-top: 7px; line-height: 1.45; }
+
+.milestone {
+  font-size: .87rem; padding: 7px 0; border-bottom: 1px solid var(--border);
+}
+.milestone:last-child { border-bottom: none; }
+.milestone::before { content: "\2022"; color: var(--accent); font-weight: 700; margin-right: 8px; }
+
+.target-banner {
+  margin-top: 14px; background: var(--surface-2); border: 1px solid var(--accent);
+  border-radius: 11px; padding: 13px 15px; font-size: .95rem; font-weight: 600;
+}
+.target-banner:empty { display: none; }
+.target-banner .eyebrow {
+  display: block; font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent); font-weight: 700; margin-bottom: 4px;
+}

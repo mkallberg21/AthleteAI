@@ -1259,3 +1259,69 @@ class TestRosterEndpoints:
                 content = (op.get("requestBody") or {}).get("content", {})
                 for media_type in content:
                     assert media_type == "application/json", f"{method} {path}"
+
+
+class TestDigestEndpoints:
+    def test_the_digest_returns_kpis(self, client, program):
+        do_session(client, program["athletes"][0]["headers"])
+        data = client.get("/api/coach/digest", headers=program["director"]).json()
+        assert data["subject"]
+        assert data["kpis"]
+        assert data["roster_size"] == 2
+
+    def test_the_preview_renders_email_html(self, client, program):
+        res = client.get("/api/coach/digest/preview", headers=program["director"])
+        assert res.status_code == 200
+        assert res.headers["content-type"].startswith("text/html")
+        assert "<table" in res.text
+
+    def test_the_preview_names_no_athlete(self, client, program):
+        """The constraint has to hold through the endpoint, not just the module."""
+        do_session(client, program["athletes"][0]["headers"])
+        body = client.get("/api/coach/digest/preview", headers=program["director"]).text
+        for athlete in program["athletes"]:
+            assert athlete["display_name"] not in body
+
+    def test_athletes_cannot_read_the_digest(self, client, program):
+        for path in ("/api/coach/digest", "/api/coach/digest/preview"):
+            assert client.get(
+                path, headers=program["athletes"][0]["headers"]
+            ).status_code == 403, path
+
+    def test_guardians_cannot_read_the_digest(self, client, program):
+        invite = client.post(
+            "/api/coach/guardian-invites",
+            json={"athlete_id": program["athletes"][0]["id"]},
+            headers=program["director"],
+        ).json()
+        guardian = client.post(
+            "/api/guardians/redeem",
+            json={"code": invite["code"], "display_name": "Dana"},
+        ).json()
+        headers = {"Authorization": f"Bearer {guardian['token']}"}
+        assert client.get("/api/coach/digest", headers=headers).status_code == 403
+
+    def test_sending_reports_honestly_when_mail_is_unconfigured(self, client, program):
+        """Claiming a send that did not happen is worse than saying it did not."""
+        res = client.post(
+            "/api/coach/digest/send", json={"to": "coach@example.com"},
+            headers=program["director"],
+        ).json()
+        assert res["delivered"] is False
+        assert "not configured" in res["note"]
+
+    def test_sending_without_an_address_is_refused_with_a_reason(self, client, program):
+        res = client.post(
+            "/api/coach/digest/send", json={}, headers=program["director"]
+        )
+        assert res.status_code == 400
+        assert "email address" in res.json()["detail"]
+
+    def test_a_digest_is_scoped_to_one_program(self, client, program):
+        do_session(client, program["athletes"][0]["headers"])
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+        ).json()
+        rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
+        data = client.get("/api/coach/digest", headers=rival_headers).json()
+        assert data["roster_size"] == 0
