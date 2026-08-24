@@ -2321,6 +2321,49 @@ def add_family_athlete(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class SiblingCompare(BaseModel):
+    on: bool
+
+
+@app.get("/api/family/board")
+def family_board(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What a household sees instead of a leaderboard.
+
+    Not a ranking by default. A club board works because forty athletes of
+    roughly the same age are already competing for the same places; a
+    household is a nine-year-old and a thirteen-year-old, and ranking them by
+    reps says nothing except which of them is older.
+    """
+    if not store.is_family(principal.org_id):
+        raise HTTPException(
+            status_code=400,
+            detail="that is a program account — the team leaderboard is at /leaderboard",
+        )
+    return store.family_board(principal.org_id)
+
+
+@app.put("/api/family/board/compare")
+def set_sibling_compare(
+    body: SiblingCompare,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Turn the side-by-side view on or off.
+
+    The parent's call, because parents know their own children. Even on, it
+    compares consistency and form and never volume -- a younger sibling can
+    win turning up and can win moving well, and cannot win reps against
+    someone four years older.
+    """
+    try:
+        return store.set_sibling_compare(principal.org_id, body.on)
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class ProgramVoice(BaseModel):
     name: str = Field(default="", max_length=120)
     title: str = Field(default="", max_length=120)

@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1490 tests
+python -m pytest tests/ -q          # 1510 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -118,6 +118,7 @@ athleteiq/
   digest.py         Weekly team KPIs and the coach email
   billing.py        Plans, seats, entitlements, invoicing seam
   recognition.py    Milestones, coach templates, and who signs them
+  family.py         The household board, which is not a leaderboard
   mailer.py         Outbound queue: retries, suppression, unsubscribe
   webhooks.py       Inbound delivery events: verification, bounce handling
   sns.py            SNS certificate verification for SES notifications
@@ -567,6 +568,45 @@ A parent email column issues guardian invites in the same pass, so importing a
 roster also onboards the parents.
 
 ---
+
+### The household board
+
+A club leaderboard works because forty athletes of roughly the same age are
+already competing for the same places, and seeing where you sit is information
+you were going to get anyway. A household is not that. It is a nine-year-old and
+a thirteen-year-old, and ranking them against each other by reps says nothing
+except which of them is older.
+
+So a family does not get a leaderboard. Each child is measured against **their
+own recent self** — this week's days against their own four-week average —
+because that is the only fair comparison when the other competitor is their
+sibling and four years behind them. No child's line ever mentions another child,
+and there is a test asserting it.
+
+Alongside sits one genuinely shared number: **days the household trained**.
+Somebody trained on 6 of 7 days; everybody did on 3. That is collaborative
+rather than competitive, and it is the thing a family can chase together.
+
+```
+The Pierces — 3 days this week everyone trained. That is the hard one.
+someone trained 6/7 days · everyone 3 · together streak 3
+
+Robin Pierce   (10)   3d this week   usual 0.5  ↑   streak 3
+                      3 days in a row right now.
+Jordan Pierce  (14)   6d this week   usual 0.5  ↑   streak 6
+                      6 days in a row right now.
+```
+
+A parent can turn on a side-by-side, because parents know their own children and
+some households genuinely thrive on it. **Even then it compares consistency and
+form, never volume** — a younger sibling can win turning up and can win moving
+well, and cannot win reps against someone four years older. A board that ranked
+them on reps would just be telling the younger one their birthday again.
+
+The streak shown here is the same number the athlete sees on their own screen,
+recovery days and wellness check-ins included. Two different numbers for the same
+word would be worse than not showing it — and saying you are sore must not cost
+a streak on the family board either.
 
 ## Recognition, and who it comes from
 

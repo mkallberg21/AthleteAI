@@ -135,6 +135,28 @@
     <div id="budget-sports"></div>
   </div>
 
+  <div class="card hidden" id="family-card">
+    <h2>How everyone is doing</h2>
+    <p class="small muted" id="family-headline"></p>
+    <div class="stat-row" id="family-stats" style="margin:12px 0"></div>
+    <div id="family-children"></div>
+    <details style="margin-top:14px">
+      <summary class="small muted" style="cursor:pointer">Side by side</summary>
+      <p class="small muted" style="margin:8px 0">
+        Off by default. Ranking a nine-year-old against their thirteen-year-old
+        sibling by reps says nothing except which of them is older. Turned on,
+        this compares turning up and moving well &mdash; things a younger one
+        can actually win &mdash; and never reps.
+      </p>
+      <label style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="family-compare"
+               style="width:auto;min-height:auto;margin:0">
+        Show a side-by-side
+      </label>
+      <div id="family-side" style="margin-top:10px"></div>
+    </details>
+  </div>
+
   <div class="card" id="recognition-card">
     <h2>Automatic recognition</h2>
     <p class="small muted">
@@ -791,6 +813,7 @@ async function loadAll() {
   renderLoadWatch(rosterData.athletes);
   await loadFilm(teamId);
   await loadRecognition();
+  await loadFamilyBoard();
   try {
     renderSharedClips(await api(
       `/api/coach/clips-shared${teamId ? `?team_id=${teamId}` : ''}`,
@@ -998,6 +1021,51 @@ $('wellness-watch').addEventListener('click', async (event) => {
   } catch (e) { showError(e.message); }
 });
 
+async function loadFamilyBoard() {
+  let data;
+  // A 400 here just means this is a club, which has the team leaderboard.
+  try { data = await api('/api/family/board'); } catch { return; }
+  $('family-card').classList.remove('hidden');
+  $('family-headline').textContent = data.headline;
+  $('family-compare').checked = Boolean(data.compare_siblings);
+
+  $('family-stats').innerHTML = `
+    <div class="stat"><b>${data.days_active}</b><span>Days someone trained</span></div>
+    <div class="stat"><b>${data.days_together}</b><span>Days everyone did</span></div>
+    <div class="stat"><b>${data.together_streak}</b><span>Together streak</span></div>`;
+
+  // Each child against their own recent self, which is the only fair
+  // comparison when the other competitor is their sibling.
+  $('family-children').innerHTML = data.children.map((c) => `
+    <div class="budget-row" style="align-items:flex-start">
+      <span class="budget-label">
+        <b>${esc(c.display_name)}</b>${c.age ? ` <span class="small muted">${c.age}</span>` : ''}
+        <br><span class="small muted">${esc(c.note)}</span>
+      </span>
+      <span class="budget-n">${c.days_this_week}d</span>
+      <span class="small ${c.trend === 'down' ? 'muted' : ''}">
+        ${c.trend === 'up' ? '&uarr;' : c.trend === 'down' ? '&darr;' : ''}
+        usual ${c.days_baseline}
+      </span>
+    </div>`).join('');
+
+  $('family-side').innerHTML = !data.side_by_side ? '' : data.side_by_side.map((g) => `
+    <p class="small" style="margin:10px 0 4px"><b>${esc(g.label)}</b></p>
+    ${g.rows.map((r, i) => `<div class="budget-row">
+        <span class="budget-label">${i + 1}. ${esc(r.display_name)}</span>
+        <span class="budget-n">${r.value === null ? '&mdash;' : r.value}</span>
+      </div>`).join('')}`).join('');
+}
+
+$('family-compare').addEventListener('change', async (event) => {
+  try {
+    await api('/api/family/board/compare', {
+      method: 'PUT', body: { on: event.target.checked },
+    });
+    await loadFamilyBoard();
+  } catch (e) { showError(e.message); }
+});
+
 async function loadRecognition() {
   let data;
   try { data = await api('/api/coach/recognition'); } catch { return; }
@@ -1032,6 +1100,7 @@ $('voice-save').addEventListener('click', async () => {
       body: { name: $('voice-name').value.trim(), title: $('voice-title').value.trim() },
     });
     await loadRecognition();
+  await loadFamilyBoard();
   } catch (e) { showError(e.message); }
 });
 
@@ -1053,6 +1122,7 @@ $('recognition-list').addEventListener('click', async (event) => {
     button.textContent = 'Saved';
     setTimeout(() => { button.textContent = 'Save'; }, 1500);
     await loadRecognition();
+  await loadFamilyBoard();
   } catch (e) { showError(e.message); }
 });
 

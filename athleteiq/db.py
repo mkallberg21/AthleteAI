@@ -47,6 +47,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- Whether this org is a club or school ('program') or one family running
     -- the app for their own children ('family').
     kind        TEXT NOT NULL DEFAULT 'program',
+    -- Family accounts only. Off by default: ranking a nine-year-old against
+    -- their thirteen-year-old sibling says nothing except which is older.
+    -- A parent can turn it on, because parents know their own children.
+    sibling_compare INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL
 );
 
@@ -746,6 +750,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("voice_name", "TEXT NOT NULL DEFAULT ''"),
         ("voice_title", "TEXT NOT NULL DEFAULT ''"),
         ("kind", "TEXT NOT NULL DEFAULT 'program'"),
+        ("sibling_compare", "INTEGER NOT NULL DEFAULT 0"),
     ],
     "recognition_templates": [
         ("from_voice", "TEXT NOT NULL DEFAULT 'coach'"),

@@ -3250,3 +3250,58 @@ class TestFamilyAccounts:
         assert client.get(
             "/api/coach/recognition", headers=program["director"],
         ).json()["voice"]["name"] == "Marcus Vale"
+
+
+class TestFamilyBoardEndpoint:
+
+    def _family(self, client):
+        made = client.post(
+            "/api/family", json={"parent_name": "Dana Pierce"},
+        ).json()
+        headers = {"Authorization": f"Bearer {made['parent']['token']}"}
+        for name, year in (("Jordan Pierce", 2012), ("Robin Pierce", 2016)):
+            client.post(
+                "/api/family/athletes",
+                json={"display_name": name, "birth_year": year},
+                headers=headers,
+            )
+        return made, headers
+
+    def test_a_household_gets_a_board_with_no_ranking(self, client):
+        _, headers = self._family(client)
+        body = client.get("/api/family/board", headers=headers).json()
+        assert body["compare_siblings"] is False
+        assert "side_by_side" not in body
+        assert len(body["children"]) == 2
+
+    def test_a_program_is_told_to_use_the_team_leaderboard(self, client, program):
+        res = client.get("/api/family/board", headers=program["director"])
+        assert res.status_code == 400
+        assert "leaderboard" in res.json()["detail"]
+
+    def test_the_parent_can_turn_the_side_by_side_on(self, client):
+        _, headers = self._family(client)
+        assert client.put(
+            "/api/family/board/compare", json={"on": True}, headers=headers,
+        ).json()["compare_siblings"] is True
+        body = client.get("/api/family/board", headers=headers).json()
+        assert body["side_by_side"]
+        assert {g["metric"] for g in body["side_by_side"]} == {
+            "days_this_week", "quality", "streak",
+        }
+
+    def test_a_program_cannot_turn_it_on(self, client, program):
+        assert client.put(
+            "/api/family/board/compare", json={"on": True}, headers=program["director"],
+        ).status_code == 400
+
+    def test_another_family_cannot_read_this_one(self, client):
+        _, mine = self._family(client)
+        theirs = client.post(
+            "/api/family", json={"parent_name": "Someone Else"},
+        ).json()
+        body = client.get(
+            "/api/family/board",
+            headers={"Authorization": f"Bearer {theirs['parent']['token']}"},
+        ).json()
+        assert body["children"] == []

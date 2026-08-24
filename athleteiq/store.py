@@ -19,6 +19,7 @@ from . import ball as ball_mod
 from . import notifications
 from . import recognition
 from .drills.catalog import ALL_DRILLS
+from . import family
 from . import film
 from . import rtp
 from . import wellness
@@ -1584,6 +1585,26 @@ class Store:
             guardians_mod.Scope.PARTICIPATION, True, method="family_account",
         )
         return athlete
+
+    def family_board(self, org_id: int) -> dict[str, Any]:
+        """The household board: each child against their own recent self."""
+        row = self.conn.execute(
+            "SELECT sibling_compare FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        return family.household(
+            self.conn, org_id,
+            compare_siblings=bool(row["sibling_compare"]) if row else False,
+        ).to_dict()
+
+    def set_sibling_compare(self, org_id: int, on: bool) -> dict[str, Any]:
+        if not self.is_family(org_id):
+            raise StoreError("side-by-side is a family setting")
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE organizations SET sibling_compare = ? WHERE id = ?",
+                (1 if on else 0, org_id),
+            )
+        return {"compare_siblings": on}
 
     def is_family(self, org_id: int) -> bool:
         row = self.conn.execute(
