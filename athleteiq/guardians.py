@@ -90,6 +90,34 @@ SCOPES = (
 
 SCOPE_LABELS = {key: label for key, label, _ in SCOPES}
 
+#: How the video permission reads in a household, where the person granting it
+#: and the person who would watch are the same. The decision is still a real
+#: one -- the clip still leaves the phone and lands in a database -- but
+#: describing it as "let a coach watch" would be describing someone else's
+#: situation, and a consent screen that does not match what is happening is
+#: not informed consent.
+FAMILY_SCOPE_COPY = {
+    Scope.COACH_VIDEO: (
+        "Let clips your athlete sends reach your dashboard",
+        "Off unless you turn it on. Everywhere else in this app video stays on "
+        "their phone. With this on, they can choose to send you one specific "
+        "clip for feedback — their choice, one at a time, never automatic. It "
+        "is uploaded to do that, so it is a real decision and not just a "
+        "screen. Clips are deleted after 30 days, and turning this off deletes "
+        "them straight away.",
+    ),
+}
+
+
+def scopes_for(kind: str = "program") -> tuple[tuple[str, str, str], ...]:
+    """The consent list, worded for who is actually reading it."""
+    if kind != "family":
+        return SCOPES
+    return tuple(
+        (key, *FAMILY_SCOPE_COPY[key]) if key in FAMILY_SCOPE_COPY else (key, label, why)
+        for key, label, why in SCOPES
+    )
+
 
 class GuardianError(Exception):
     """A guardian request that is well-formed but not permissible."""
@@ -346,8 +374,19 @@ def current_consents(conn: sqlite3.Connection, athlete_id: int) -> dict[str, boo
 
 
 def consent_detail(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str, Any]]:
-    """Every scope with its current state and description, for the portal."""
+    """Every scope with its current state and description, for the portal.
+
+    Worded for whoever is reading it: in a household the person granting the
+    video permission and the person who would watch are the same, and a
+    consent screen describing somebody else's situation is not informed
+    consent.
+    """
     state = current_consents(conn, athlete_id)
+    row = conn.execute(
+        "SELECT o.kind FROM users u JOIN organizations o ON o.id = u.org_id "
+        "WHERE u.id = ?",
+        (athlete_id,),
+    ).fetchone()
     return [
         {
             "scope": key,
@@ -355,7 +394,7 @@ def consent_detail(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str, 
             "description": description,
             "granted": state[key],
         }
-        for key, label, description in SCOPES
+        for key, label, description in scopes_for(row["kind"] if row else "program")
     ]
 
 

@@ -122,6 +122,13 @@ function renderAthlete(a) {
       <div class="msg-list">Loading&hellip;</div>
     </details>
 
+    <details style="margin-top:10px" data-clips="${a.athlete_id}">
+      <summary class="small muted" style="cursor:pointer">
+        Clips they have sent
+      </summary>
+      <div class="clip-list">Loading&hellip;</div>
+    </details>
+
     <details style="margin-top:10px" data-drills="${a.athlete_id}">
       <summary class="small muted" style="cursor:pointer">
         Everything they have trained
@@ -163,6 +170,26 @@ async function load() {
 
 // Loaded on open rather than up front: a parent with three children should
 // not wait for three training histories to see the top of the page.
+// Delegated once at module level, not inside wireDetails: attaching it there
+// re-bound it on every load, and `{once: true}` -- which looked like the fix --
+// tears the listener down after the first click anywhere in the list, matching
+// or not.
+document.getElementById('athletes').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-unshare]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await api(`/api/clips/${button.dataset.unshare}`, { method: 'DELETE' });
+    const box = button.closest('[data-clips]');
+    box.dataset.loaded = '';
+    box.open = false;
+    box.open = true;
+  } catch (e) {
+    button.disabled = false;
+    showError(e.message);
+  }
+});
+
 function wireDetails() {
   document.querySelectorAll('[data-messages]').forEach((box) => {
     box.addEventListener('toggle', async () => {
@@ -181,6 +208,46 @@ function wireDetails() {
               m.from_name ? ` &middot; ${esc(m.from_name)}` : ''}</span>
           </div>`).join('')
           : '<p class="small muted">Nothing yet.</p>';
+      } catch (e) { target.textContent = e.message; }
+    });
+  });
+
+  document.querySelectorAll('[data-clips]').forEach((box) => {
+    box.addEventListener('toggle', async () => {
+      if (!box.open || box.dataset.loaded) return;
+      box.dataset.loaded = '1';
+      const id = box.dataset.clips;
+      const target = box.querySelector('.clip-list');
+      try {
+        const data = await api(`/api/parent/athletes/${id}/clips`);
+        if (!data.allowed && !data.clips.length) {
+          // The honest empty state. Nothing has been shared and nothing can be
+          // until this parent decides otherwise.
+          target.innerHTML = '<p class="small muted">Video sharing is off, so '
+            + 'nothing has been sent. You can turn it on under Permissions.</p>';
+          return;
+        }
+        target.innerHTML = data.clips.length ? data.clips.map((c) => `
+          <div class="shared-clip">
+            <div class="budget-head">
+              <b>${esc(c.drill_key || 'Clip')}</b>
+              <span class="small muted">${esc(c.shared_at.slice(0, 10))}</span>
+            </div>
+            ${c.note ? `<p class="small">&ldquo;${esc(c.note)}&rdquo;</p>` : ''}
+            <video controls playsinline preload="none"
+                   src="/api/parent/athletes/${id}/clips/${c.id}/video"></video>
+            <p class="small muted">
+              ${c.views.length
+                ? `Watched by ${c.views.map((v) => esc(v.viewer_name)).join(', ')}.`
+                : 'Nobody has watched it yet.'}
+              Deletes itself on ${esc(c.expires_at.slice(0, 10))}.
+            </p>
+            <button class="danger inline" data-unshare="${c.id}">Take it back now</button>
+          </div>`).join('')
+          : `<p class="small muted">Sharing is on, but they have not sent
+             anything. Clips are only ever sent when they choose one &mdash;
+             nothing is uploaded automatically. Anything sent deletes itself
+             after ${data.retention_days} days.</p>`;
       } catch (e) { target.textContent = e.message; }
     });
   });

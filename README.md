@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1510 tests
+python -m pytest tests/ -q          # 1520 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -722,6 +722,43 @@ pattern-matched away. One of those tests also exposed a loophole it could not
 have caught before: a 20MB string field named `data` sailed through every
 name-based check, so oversized request fields now have to be named with a
 reason, and that immediately turned up the roster CSV as well.
+
+### What a parent sees of the clips
+
+A parent could already turn video sharing on and off and had **no way to see
+what it produced** — which made the consent a switch in the dark. The point of
+asking someone to allow something is that they can then look at what they
+allowed.
+
+The parent portal now shows every clip their athlete sent, with the note the
+athlete attached, who has watched it, and the date it deletes itself. Any of
+them can be taken back on the spot. A parent can watch too, and **that view is
+logged and shown to the athlete** like any other — a teenager who can see that a
+coach watched should be able to see that a parent did. The audit trail is for
+them, not only about them.
+
+With sharing switched off the panel says so plainly rather than looking broken,
+and with it on but nothing sent it says that instead — because "nothing here"
+should never be ambiguous about whether the feature is off or simply unused.
+
+### In a family, the parent is the coach
+
+Which changes the wording, not the gates. The consent reads *"Let clips your
+athlete sends reach your dashboard"* rather than *"Let a coach watch"* — in a
+household the person granting the permission and the person who would watch are
+the same, and a consent screen describing somebody else's situation is not
+informed consent. The coach-side card is reworded the same way, since a family
+parent is reading it about themselves.
+
+Everything else holds exactly as it does for a club, deliberately:
+
+- **The child still chooses each clip.** Being their parent does not remove
+  their say in it, and there is a test asserting a completed session still
+  uploads nothing.
+- **The consent is still a real decision**, because the clip still leaves the
+  phone and lands in a database — with the backup and breach exposure that
+  implies, parent-owned or not.
+- **Withdrawal still deletes**, and every view is still logged.
 
 ## What a parent sees
 

@@ -3305,3 +3305,165 @@ class TestFamilyBoardEndpoint:
             headers={"Authorization": f"Bearer {theirs['parent']['token']}"},
         ).json()
         assert body["children"] == []
+
+
+class TestParentCanSeeWhatTheyAllowed:
+    """A parent could turn video sharing on and off and had no way to see what
+    it produced, which made the consent a switch in the dark."""
+
+    CLIP = base64.b64encode(b"\x1aE\xdf\xa3" + b"y" * 2048).decode()
+
+    def _linked(self, client, program, allow=True):
+        from athleteiq import guardians
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, athlete["id"], created_by=athlete["id"])
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        guardians.set_consent(
+            store.conn, athlete["id"], guardian["guardian_id"],
+            guardians.Scope.PARTICIPATION, True,
+        )
+        if allow:
+            guardians.set_consent(
+                store.conn, athlete["id"], guardian["guardian_id"],
+                guardians.Scope.COACH_VIDEO, True,
+            )
+        store.conn.commit()
+        return athlete, {"Authorization": f"Bearer {guardian['token']}"}
+
+    def test_a_parent_sees_the_clips_their_athlete_sent(self, client, program):
+        athlete, parent = self._linked(client, program)
+        client.post("/api/clips", json={"data": self.CLIP, "note": "top hand?"},
+                    headers=athlete["headers"])
+        body = client.get(
+            f"/api/parent/athletes/{athlete['id']}/clips", headers=parent,
+        ).json()
+        assert body["allowed"] is True
+        assert body["clips"][0]["note"] == "top hand?"
+        assert body["retention_days"] == 30
+
+    def test_a_parent_can_watch_it(self, client, program):
+        athlete, parent = self._linked(client, program)
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        ).json()["id"]
+        res = client.get(
+            f"/api/parent/athletes/{athlete['id']}/clips/{clip_id}/video",
+            headers=parent,
+        )
+        assert res.status_code == 200
+        assert res.headers["content-type"].startswith("video/")
+
+    def test_the_athlete_can_see_their_parent_watched(self, client, program):
+        """The audit trail is for them, not only about them."""
+        athlete, parent = self._linked(client, program)
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        ).json()["id"]
+        client.get(
+            f"/api/parent/athletes/{athlete['id']}/clips/{clip_id}/video", headers=parent,
+        )
+        views = client.get(
+            "/api/clips", headers=athlete["headers"],
+        ).json()["clips"][0]["views"]
+        assert views and views[0]["viewer_name"] == "A Parent"
+
+    def test_with_sharing_off_it_says_so_rather_than_looking_broken(self, client, program):
+        athlete, parent = self._linked(client, program, allow=False)
+        body = client.get(
+            f"/api/parent/athletes/{athlete['id']}/clips", headers=parent,
+        ).json()
+        assert body["allowed"] is False and body["clips"] == []
+
+    def test_a_parent_cannot_see_another_familys_clips(self, client, program):
+        one, parent = self._linked(client, program)
+        two = program["athletes"][1]
+        res = client.get(f"/api/parent/athletes/{two['id']}/clips", headers=parent)
+        assert res.status_code >= 400
+
+    def test_a_parent_cannot_watch_a_clip_belonging_to_another_child(self, client, program):
+        """The clip id is checked against the athlete in the path, so guessing
+        an id from a child you do guard does not reach one you do not."""
+        athlete, parent = self._linked(client, program)
+        other = program["athletes"][1]
+        clip_id = client.post(
+            "/api/clips", json={"data": self.CLIP}, headers=athlete["headers"],
+        ).json()["id"]
+        assert client.get(
+            f"/api/parent/athletes/{other['id']}/clips/{clip_id}/video", headers=parent,
+        ).status_code >= 400
+
+
+class TestFamilyClipWording:
+
+    def test_a_household_reads_the_permission_about_itself(self, client):
+        """In a family the person granting it and the person who would watch
+        are the same, and a consent screen describing a coach at a club they
+        do not have is not informed consent."""
+        made = client.post("/api/family", json={"parent_name": "Dana Pierce"}).json()
+        headers = {"Authorization": f"Bearer {made['parent']['token']}"}
+        child = client.post(
+            "/api/family/athletes", json={"display_name": "Jordan Pierce"},
+            headers=headers,
+        ).json()
+
+        from athleteiq import guardians
+        detail = guardians.consent_detail(api_module._store.conn, child["id"])
+        video = next(d for d in detail if d["scope"] == "coach_video")
+        assert "your dashboard" in video["label"]
+        assert "coach" not in video["label"].lower()
+
+    def test_a_club_still_reads_the_club_wording(self, client, program):
+        from athleteiq import guardians
+        detail = guardians.consent_detail(
+            api_module._store.conn, program["athletes"][0]["id"],
+        )
+        video = next(d for d in detail if d["scope"] == "coach_video")
+        assert "coach" in video["label"].lower()
+
+    def test_the_family_parent_is_the_one_who_watches(self, client):
+        """No third party involved: the clip goes from the child's phone to
+        their own parent's dashboard."""
+        made = client.post("/api/family", json={"parent_name": "Dana Pierce"}).json()
+        headers = {"Authorization": f"Bearer {made['parent']['token']}"}
+        child = client.post(
+            "/api/family/athletes", json={"display_name": "Jordan Pierce"},
+            headers=headers,
+        ).json()
+        athlete = {"Authorization": f"Bearer {child['token']}"}
+
+        from athleteiq import guardians
+        store = api_module._store
+        guardians.set_consent(
+            store.conn, child["id"], made["parent"]["id"],
+            guardians.Scope.COACH_VIDEO, True,
+        )
+        store.conn.commit()
+
+        clip = base64.b64encode(b"\x1aE\xdf\xa3" + b"z" * 1024).decode()
+        client.post("/api/clips", json={"data": clip}, headers=athlete)
+        seen = client.get("/api/coach/clips-shared", headers=headers).json()["clips"]
+        assert len(seen) == 1 and seen[0]["display_name"] == "Jordan Pierce"
+
+    def test_the_child_still_has_to_choose_each_clip(self, client):
+        """Being their parent does not remove the child's say in it."""
+        made = client.post("/api/family", json={"parent_name": "Dana Pierce"}).json()
+        headers = {"Authorization": f"Bearer {made['parent']['token']}"}
+        child = client.post(
+            "/api/family/athletes", json={"display_name": "Jordan Pierce"},
+            headers=headers,
+        ).json()
+        athlete = {"Authorization": f"Bearer {child['token']}"}
+
+        from athleteiq import guardians
+        store = api_module._store
+        guardians.set_consent(
+            store.conn, child["id"], made["parent"]["id"],
+            guardians.Scope.COACH_VIDEO, True,
+        )
+        store.conn.commit()
+        do_session(client, athlete)
+        assert client.get(
+            "/api/coach/clips-shared", headers=headers,
+        ).json()["clips"] == []

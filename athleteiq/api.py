@@ -1971,6 +1971,52 @@ def parent_drill_log(
     return store.drill_log(athlete_id, days)
 
 
+@app.get("/api/parent/athletes/{athlete_id}/clips")
+def parent_clips(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What their athlete has sent, who has watched it, and when it goes.
+
+    A parent could already turn this permission on and off and had no way to
+    see what it produced -- which made the consent a switch in the dark. The
+    point of asking someone to allow something is that they can then look at
+    what they allowed.
+    """
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    return {
+        "clips": store.shared_clips_for_athlete(athlete_id),
+        "allowed": store._may_share_video(athlete_id),
+        "retention_days": store.CLIP_RETENTION_DAYS,
+    }
+
+
+@app.get("/api/parent/athletes/{athlete_id}/clips/{clip_id}/video")
+def parent_watch_clip(
+    athlete_id: int,
+    clip_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> Response:
+    """Let a parent watch what was shared.
+
+    Logged like any other view, and shown to the athlete. A teenager who can
+    see that a coach watched should be able to see that a parent did too --
+    the audit trail is for them, not only about them.
+    """
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    try:
+        clip = store.shared_clip(clip_id, with_bytes=True)
+    except StoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if clip["athlete_id"] != athlete_id:
+        raise HTTPException(status_code=404, detail="no clip with that id")
+
+    store.record_clip_view(clip_id, principal.id, principal.display_name)
+    return Response(content=clip["bytes"], media_type=clip["mime"])
+
+
 @app.get("/api/parent/athletes/{athlete_id}/messages")
 def parent_messages(
     athlete_id: int,

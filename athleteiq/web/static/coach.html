@@ -183,12 +183,7 @@
 
   <div class="card hidden" id="shared-clips-card">
     <h2>Clips sent to you</h2>
-    <p class="small muted">
-      Sent by an athlete, one at a time, and only where a parent has turned on
-      coach video. They expire after 30 days, a parent can withdraw them at any
-      moment, and every time you open one the athlete and their parent can see
-      that you did.
-    </p>
+    <p class="small muted" id="shared-clips-note"></p>
     <div id="shared-clips"></div>
   </div>
 
@@ -815,9 +810,10 @@ async function loadAll() {
   await loadRecognition();
   await loadFamilyBoard();
   try {
-    renderSharedClips(await api(
-      `/api/coach/clips-shared${teamId ? `?team_id=${teamId}` : ''}`,
-    ));
+    renderSharedClips(
+      await api(`/api/coach/clips-shared${teamId ? `?team_id=${teamId}` : ''}`),
+      !$('family-card').classList.contains('hidden'),
+    );
   } catch { /* none shared */ }
   try {
     renderBallDrills(await api(`/api/coach/ball${teamId ? `?team_id=${teamId}` : ''}`));
@@ -1126,9 +1122,20 @@ $('recognition-list').addEventListener('click', async (event) => {
   } catch (e) { showError(e.message); }
 });
 
-function renderSharedClips(data) {
+function renderSharedClips(data, isFamily) {
   const clips = data.clips || [];
   $('shared-clips-card').classList.toggle('hidden', clips.length === 0);
+
+  // A family parent is reading this about themselves, so it should not
+  // describe a coach at a club they do not have.
+  $('shared-clips-note').textContent = isFamily
+    ? 'Sent by your athlete, one at a time, because they chose to. They expire '
+      + 'after 30 days, you can delete one at any moment from their permissions '
+      + 'screen, and they can see each time you open one.'
+    : 'Sent by an athlete, one at a time, and only where a parent has turned on '
+      + 'coach video. They expire after 30 days, a parent can withdraw them at '
+      + 'any moment, and every time you open one the athlete and their parent '
+      + 'can see that you did.';
   $('shared-clips').innerHTML = clips.map((c) => `
     <div class="shared-clip">
       <div class="budget-head">
