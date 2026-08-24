@@ -76,7 +76,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1428 tests
+python -m pytest tests/ -q          # 1435 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -1245,6 +1245,68 @@ client always knows that number.
 
 Ball drills carry **no form score**. Range of motion is a pose idea; a contact
 has none, and claiming one would be inventing a number.
+
+### Either way up, and no perfect angle
+
+An athlete should be training, not deciding how to prop a phone. Three things
+make that true rather than aspirational.
+
+**Distances are measured in frame heights, not raw normalised units.** Pose
+landmarks and ball positions both arrive normalised 0-1 against their own axis,
+which makes that space *anisotropic*: in a 16:9 landscape frame one x-unit is
+1.78 times wider on the ground than one y-unit, and in portrait it is the
+reverse. Every radius here is a real distance, so measuring in raw units meant
+turning the phone silently changed what "next to the ball" meant — a foot
+0.1 across from the ball counted as a touch in one orientation and not the
+other. There is a test asserting the same physical contact classifies the same
+either way up.
+
+**The working image is budgeted on area, not width.** Sizing by width meant a
+phone held upright produced a 480×854 working image — three times the pixels and
+three times the cost — purely because the athlete turned it. Both orientations
+now cost the same and resolve the ball to the same number of pixels for the same
+physical scene.
+
+**The body scale has fallbacks and a memory.** The size prior needed a shoulder
+*and* a hip, so an athlete framed from the chest up — which is most of them,
+because a phone propped against a bag points where it points — lost the
+detector's strongest filter entirely. It now tries torso, then shoulder width,
+then head-to-shoulder, then thigh, and remembers the last good reading for four
+seconds so turning away or being briefly hidden by your own stick does not lose
+it mid-rally.
+
+The capture screen replaces the setup paragraph with one line that says whether
+the app can see what it needs — *"Got you and the ball"* — and mentions, once,
+that the other orientation works just as well. The camera request stopped
+insisting on a portrait shape, and turning the phone mid-session is handled
+rather than tolerated. Drill hints no longer prescribe distances: *"Prop the
+phone up anywhere it can see you and the ball. Any angle."*
+
+### What the coach sees about skill work
+
+Touches, not minutes, and nobody ranked by how many — the same rule every other
+board here follows. Sessions held for review are shown but not framed as an
+accusation.
+
+The genuinely useful column is **"sees the ball"**, and it comes first as an
+action list. An athlete whose sessions keep coming back with the ball barely
+visible is not slacking and is not cheating: their phone is somewhere it cannot
+see, and that is two minutes of a coach's time at the next practice. Nothing
+else in this product can tell a coach that.
+
+```
+Athlete     Touches  Sessions  Sees ball  Held
+Dev P.          120         2        48%
+Ava R.           84         2        66%
+Ben T.           56         2        55%
+Cleo M.           0         2         9%     2
+
+Worth two minutes at practice:
+  Cleo M. — ball visible in 9% of frames
+```
+
+Flagged only after two or more sessions, because one badly propped phone is an
+accident and three is a habit.
 
 ## Film study
 

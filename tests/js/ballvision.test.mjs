@@ -11,6 +11,7 @@ import assert from 'node:assert';
 import { test } from 'node:test';
 import {
   BallVision, PRESETS, BALLS, calibrate, matchPixel, radiusFromPose,
+  workSize, ScaleMemory, WORK_PIXELS,
   BALL_TO_TORSO, TORSO_CM, RADIUS_TOLERANCE,
 } from '../../athleteiq/web/static/ballvision.js';
 import { LANDMARK_INDEX } from '../../athleteiq/web/static/ball.js';
@@ -324,4 +325,80 @@ test('the white-wall fallback still works after that change', () => {
   const found = vision.detect(ball(95), { expectedRadius: 4 / H });
   assert.ok(found, 'lost the ball against the wall');
   assert.ok(Math.abs(found.x * W - 95) < 6, `x was ${found.x * W}`);
+});
+
+
+test('the working image costs the same held either way', () => {
+  // Sizing by width meant a phone in portrait produced three times the pixels
+  // and three times the cost, purely because the athlete turned it.
+  const landscape = workSize(1920, 1080);
+  const portrait = workSize(1080, 1920);
+  assert.ok(Math.abs(landscape.width * landscape.height - WORK_PIXELS) / WORK_PIXELS < 0.05);
+  assert.ok(Math.abs(portrait.width * portrait.height - WORK_PIXELS) / WORK_PIXELS < 0.05);
+  assert.equal(landscape.width, portrait.height);
+  assert.equal(landscape.height, portrait.width);
+});
+
+test('a small camera feed is used as it comes, never upscaled', () => {
+  const small = workSize(320, 240);
+  assert.equal(small.width, 320);
+  assert.equal(small.height, 240);
+});
+
+test('a ball is the same size in working pixels in either orientation', () => {
+  // What the athlete cares about: turning the phone must not change whether
+  // the drill works.
+  //
+  // The comparison has to be the *same physical scene*, which means the same
+  // torso in sensor pixels. Fixing the torso at a share of frame height
+  // instead describes two different framings -- an easy mistake, and one that
+  // makes the pipeline look broken when it is not.
+  const torsoSensorPx = 243;
+  const sizes = [[1920, 1080], [1080, 1920]].map(([w, h]) => {
+    const size = workSize(w, h);
+    const landmarks = [];
+    const torsoNorm = torsoSensorPx / h;
+    landmarks[LANDMARK_INDEX.left_shoulder] = { x: 0.5, y: 0.2, visibility: 0.9 };
+    landmarks[LANDMARK_INDEX.left_hip] = { x: 0.5, y: 0.2 + torsoNorm, visibility: 0.9 };
+    const r = radiusFromPose(
+      landmarks, LANDMARK_INDEX, BALLS.lacrosse.diameterCm, w / h,
+    );
+    return r * size.height;
+  });
+  assert.ok(Math.abs(sizes[0] - sizes[1]) < 0.2,
+    `landscape ${sizes[0].toFixed(2)}px vs portrait ${sizes[1].toFixed(2)}px`);
+  assert.ok(sizes[0] > 3, `only ${sizes[0].toFixed(2)}px, too small to resolve`);
+});
+
+test('body scale survives the hips leaving the frame', () => {
+  // A phone propped against a bag points where it points. Requiring shoulder
+  // *and* hip meant an athlete framed from the chest up lost the size prior
+  // entirely, and with it the detector's strongest filter.
+  const chestUp = [];
+  chestUp[LANDMARK_INDEX.left_shoulder] = { x: 0.42, y: 0.35, visibility: 0.9 };
+  chestUp[LANDMARK_INDEX.right_shoulder] = { x: 0.58, y: 0.35, visibility: 0.9 };
+  assert.ok(radiusFromPose(chestUp, LANDMARK_INDEX, 6.35, 16 / 9));
+
+  const headOnly = [];
+  headOnly[LANDMARK_INDEX.nose] = { x: 0.50, y: 0.20, visibility: 0.9 };
+  headOnly[LANDMARK_INDEX.left_shoulder] = { x: 0.44, y: 0.36, visibility: 0.9 };
+  assert.ok(radiusFromPose(headOnly, LANDMARK_INDEX, 6.35, 16 / 9));
+
+  assert.equal(radiusFromPose([], LANDMARK_INDEX), null, 'nothing visible is still null');
+});
+
+test('the scale is remembered while the athlete turns away', () => {
+  const memory = new ScaleMemory(4000);
+  assert.equal(memory.update(0.02, 0), 0.02);
+  // Pose lost for two seconds -- a turn, a stick across the body.
+  assert.ok(memory.update(null, 2000) > 0);
+  // Gone long enough that the framing may be different now.
+  assert.equal(memory.update(null, 9000), null);
+});
+
+test('the remembered scale is blended, so one bad frame cannot move it', () => {
+  const memory = new ScaleMemory();
+  memory.update(0.02, 0);
+  const after = memory.update(0.20, 100);
+  assert.ok(after < 0.07, `one wild reading moved it to ${after}`);
 });

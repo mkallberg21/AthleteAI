@@ -2753,3 +2753,97 @@ class TestBallTrackingKeepsThePrivacyPosture:
         assert by_key["soc_juggle"]["sport"] == "soccer"
         assert by_key["bkb_dribble"]["sport"] == "basketball"
         assert by_key["soc_juggle"]["ball"]["required"] is True
+
+
+class TestCoachBallDrillView:
+
+    def _ball_session(self, client, athlete, drill="soc_juggle", n=30,
+                      quality=0.6, status_hint=None):
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": drill}, headers=athlete["headers"],
+        ).json()
+        reps = [
+            {"t_ms": i * 900 + (i % 3) * 70, "hand": "left" if i % 3 else "right",
+             "confidence": quality, "speed": 1.2, "part": "left_ankle"}
+            for i in range(n)
+        ]
+        return client.post(
+            "/api/sessions/submit",
+            json={"session_id": started["session_id"], "nonce": started["nonce"],
+                  "duration_ms": 28_000, "reps": reps, "mean_confidence": quality,
+                  "track_quality": quality},
+            headers=athlete["headers"],
+        ).json()
+
+    def test_it_reports_touches_and_never_minutes(self, client, program):
+        """Minutes are not a thing to rank children by, here either."""
+        athlete = program["athletes"][0]
+        self._ball_session(client, athlete)
+        body = client.get("/api/coach/ball", headers=program["director"]).json()
+        row = body["athletes"][0]
+        assert row["touches"] == 30
+        assert "minutes" not in row and "duration_ms" not in row
+
+    def test_it_surfaces_who_needs_help_pointing_their_phone(self, client, program):
+        """The genuinely actionable part. An athlete whose sessions come back
+        with the ball barely visible is not slacking -- their phone is
+        somewhere it cannot see."""
+        good, bad = program["athletes"]
+        for _ in range(2):
+            self._ball_session(client, good, quality=0.62)
+            self._ball_session(client, bad, quality=0.10)
+
+        body = client.get("/api/coach/ball", headers=program["director"]).json()
+        needs = {a["display_name"] for a in body["needs_framing_help"]}
+        assert bad["display_name"] in needs
+        assert good["display_name"] not in needs
+
+    def test_one_bad_session_is_not_a_habit(self, client, program):
+        athlete = program["athletes"][0]
+        self._ball_session(client, athlete, quality=0.08)
+        body = client.get("/api/coach/ball", headers=program["director"]).json()
+        assert body["needs_framing_help"] == []
+
+    def test_held_sessions_are_shown_without_being_an_accusation(self, client, program):
+        athlete = program["athletes"][0]
+        self._ball_session(client, athlete, quality=0.05)
+        row = client.get(
+            "/api/coach/ball", headers=program["director"]
+        ).json()["athletes"][0]
+        assert row["held"] == 1
+        assert row["touches"] == 0, "a held session contributes no touches"
+
+    def test_it_breaks_down_by_drill(self, client, program):
+        athlete = program["athletes"][0]
+        self._ball_session(client, athlete, drill="soc_juggle")
+        body = client.get("/api/coach/ball", headers=program["director"]).json()
+        keys = {d["drill_key"] for d in body["drills"]}
+        assert "soc_juggle" in keys
+        juggle = next(d for d in body["drills"] if d["drill_key"] == "soc_juggle")
+        assert juggle["sport"] == "soccer" and juggle["athletes"] == 1
+
+    def test_an_empty_squad_returns_empty_rather_than_erroring(self, client, program):
+        body = client.get("/api/coach/ball", headers=program["director"]).json()
+        assert body["athletes"] == [] and body["needs_framing_help"] == []
+
+    def test_another_programs_skill_work_is_invisible(self, client, program):
+        """Scoped by org in the query rather than by a permission check on the
+        team id, so a director guessing another program's team number gets an
+        empty answer rather than a 403 -- which also avoids confirming that the
+        team exists. Asserted on the data, since that is the property that
+        matters.
+        """
+        athlete = program["athletes"][0]
+        self._ball_session(client, athlete)
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+        ).json()
+        headers = {"Authorization": f"Bearer {rival['director']['token']}"}
+
+        for path in ("/api/coach/ball", "/api/coach/wellness", "/api/coach/film"):
+            body = client.get(
+                f"{path}?team_id={program['team']['id']}", headers=headers,
+            ).json()
+            payload = json.dumps(body)
+            assert athlete["display_name"] not in payload, path
+            assert not body.get("athletes"), path

@@ -9,7 +9,7 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
 import {
-  BallTracker, ContactDetector, BallRepCounter, LANDMARK_INDEX,
+  BallTracker, ContactDetector, BallRepCounter, LANDMARK_INDEX, metricDistance,
 } from '../../athleteiq/web/static/ball.js';
 import { LANDMARKS } from '../../athleteiq/web/static/counter.js';
 const SPECS = JSON.parse(process.env.DRILL_SPECS);
@@ -308,4 +308,48 @@ test('travel is zero rather than undefined when there is no pose', () => {
     counter.push({ x: 0.5, y: 0.5, r: 0.02, score: 0.8 }, null, f * DT * 1000);
   }
   assert.equal(counter.confirmation().ball_travel, 0);
+});
+
+
+test('a distance means the same thing whichever way up the phone is', () => {
+  // Normalised coordinates are anisotropic: in 16:9 one x-unit is 1.78 times
+  // wider on the ground than one y-unit, and in portrait it is the reverse.
+  // Every radius in this module is a real distance, so measuring in raw
+  // normalised units meant turning the phone changed what "next to the ball"
+  // meant.
+  const acrossLandscape = metricDistance(0.5, 0.5, 0.6, 0.5, 16 / 9);
+  const down = metricDistance(0.5, 0.5, 0.5, 0.6, 16 / 9);
+  assert.ok(acrossLandscape > down, 'x must be scaled by the aspect ratio');
+  assert.ok(Math.abs(acrossLandscape - 0.1 * (16 / 9)) < 1e-9);
+  assert.ok(Math.abs(down - 0.1) < 1e-9);
+});
+
+test('the same physical contact is classified the same in both orientations', () => {
+  // The bug this guards: a foot 0.1 across from the ball counted as a touch in
+  // portrait and not in landscape, purely from frame shape.
+  function ran(aspect, dx) {
+    const counter = new BallRepCounter(spec('soc_juggle'));
+    counter.setAspect(aspect);
+    // A foot offset sideways from where the ball bounces.
+    const landmarks = pose({ left_ankle: { x: 0.52 + dx, y: 0.88 } });
+    run(counter, bounce({ every: 2, x: 0.52 }), landmarks);
+    return counter.count;
+  }
+  // Well inside the part radius in real terms: counted either way up.
+  assert.ok(ran(16 / 9, 0.02) > 0);
+  assert.ok(ran(9 / 16, 0.02) > 0);
+  // Far away in real terms: counted in neither.
+  assert.equal(ran(16 / 9, 0.45), 0);
+  assert.equal(ran(9 / 16, 0.45), 0);
+});
+
+test('setting the aspect reaches the tracker and the contact detector', () => {
+  const counter = new BallRepCounter(spec('soc_juggle'));
+  counter.setAspect(16 / 9);
+  assert.equal(counter.tracker.aspect, 16 / 9);
+  assert.equal(counter.detector.aspect, 16 / 9);
+  // Junk from a camera that has not reported dimensions yet is ignored.
+  counter.setAspect(0);
+  counter.setAspect(NaN);
+  assert.equal(counter.tracker.aspect, 16 / 9);
 });

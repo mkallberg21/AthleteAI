@@ -588,3 +588,15 @@ tbody tr:hover { background: var(--surface-2); }
             overflow: hidden; margin: 10px 0 6px; }
 .film-bar i { display: block; height: 100%; background: var(--accent);
               transition: width .4s ease; }
+
+/* Framing traffic light. One line, replacing a paragraph of setup rules: an
+   athlete's problem is not that the instructions are unclear, it is that
+   reading them costs time they would rather spend training. */
+.framing { display: flex; align-items: center; gap: 6px; }
+.framing::before { content: ''; width: 8px; height: 8px; border-radius: 99px; flex: none; }
+.framing.good { color: var(--accent); }
+.framing.good::before { background: var(--accent); }
+.framing.ok { color: var(--muted); }
+.framing.ok::before { background: var(--warn); }
+.framing.bad { color: var(--warn); }
+.framing.bad::before { background: var(--danger); }

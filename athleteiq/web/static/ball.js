@@ -32,6 +32,24 @@
 
 import { LANDMARKS } from './counter.js';
 
+/**
+ * Distance between two normalised points, corrected for frame shape.
+ *
+ * Pose landmarks and ball positions both arrive normalised 0-1 against their
+ * own axis, which makes that space **anisotropic**: in a 16:9 landscape frame
+ * one x-unit is 1.78 times wider on the ground than one y-unit, and in
+ * portrait it is the other way round. Every radius and gate in this module is
+ * a real-world distance, so measuring them in raw normalised units meant a
+ * phone turned sideways silently changed what "next to the ball" meant.
+ *
+ * Everything here is therefore measured in **frame heights**: x is scaled by
+ * the aspect ratio, y is left alone, and a distance means the same thing
+ * whichever way up the phone is.
+ */
+export function metricDistance(ax, ay, bx, by, aspect = 1) {
+  return Math.hypot((ax - bx) * aspect, ay - by);
+}
+
 /** Detections older than this are not worth extrapolating from. */
 export const MAX_COAST_MS = 220;
 
@@ -72,6 +90,8 @@ export class BallTracker {
   constructor(options = {}) {
     this.gate = options.gate ?? GATE_RADIUS;
     this.reacquireAfter = options.reacquireAfter ?? REACQUIRE_AFTER;
+    //: Frame width over height. 1 until the camera reports otherwise.
+    this.aspect = options.aspect ?? 1;
     this.maxCoastMs = options.maxCoastMs ?? MAX_COAST_MS;
     this.positionBlend = options.positionBlend ?? 0.55;
     this.velocityBlend = options.velocityBlend ?? 0.45;
@@ -120,7 +140,7 @@ export class BallTracker {
 
     if (detection) {
       const outOfGate = this.visible
-        && Math.hypot(detection.x - this.x, detection.y - this.y) > this.gate
+        && metricDistance(detection.x, detection.y, this.x, this.y, this.aspect) > this.gate
         && (tMs - this.lastSeenAt) < this.maxCoastMs;
 
       // A detection far from where the ball must be, while the track is still
@@ -249,6 +269,7 @@ export class ContactDetector {
     this.minSpeed = options.minSpeed ?? MIN_CONTACT_SPEED;
     this.partRadius = options.partRadius ?? 0.16;
     this.groundBand = options.groundBand ?? 0.12;
+    this.aspect = options.aspect ?? 1;
     this.reset();
   }
 
@@ -321,7 +342,7 @@ export class ContactDetector {
     let bestDistance = Infinity;
     for (const [name, point] of Object.entries(parts || {})) {
       if (!point) continue;
-      const distance = Math.hypot(ball.x - point.x, ball.y - point.y);
+      const distance = metricDistance(ball.x, ball.y, point.x, point.y, this.aspect);
       if (distance < bestDistance) { bestDistance = distance; best = name; }
     }
 
@@ -362,7 +383,22 @@ export class BallRepCounter {
       minGapMs: this.ball.min_gap_ms ?? 180,
       minSpeed: this.ball.min_speed ?? MIN_CONTACT_SPEED,
     });
+    this.aspect = 1;
     this.reset();
+  }
+
+  /**
+   * Tell the counter what shape the frame is.
+   *
+   * Set once the camera reports its dimensions, and again if the phone is
+   * turned mid-session -- which athletes do, and which used to change the
+   * meaning of every distance in here.
+   */
+  setAspect(aspect) {
+    if (!aspect || !Number.isFinite(aspect) || aspect <= 0) return;
+    this.aspect = aspect;
+    this.tracker.aspect = aspect;
+    this.detector.aspect = aspect;
   }
 
   reset() {
@@ -423,7 +459,7 @@ export class BallRepCounter {
 
     const rep = {
       t_ms: Math.round(contact.t),
-      hand: this.ball.attribute_side ? sideOf(contact, landmarks) : 'none',
+      hand: this.ball.attribute_side ? sideOf(contact, landmarks, this.aspect) : 'none',
       confidence: Math.min(1, this.tracker.quality + 0.2),
       part: contact.part,
       speed: Number(contact.speedOut.toFixed(3)),
@@ -436,7 +472,7 @@ export class BallRepCounter {
   /** How far the ball gets from the hands, measured in the athlete's torsos. */
   _measureTravel(ball, landmarks) {
     if (!ball || ball.x === null || !landmarks) return;
-    const torso = torsoLength(landmarks);
+    const torso = torsoLength(landmarks, this.aspect);
     if (!torso) return;
     this.trackedFrames += 1;
 
@@ -444,7 +480,9 @@ export class BallRepCounter {
     for (const name of ['left_wrist', 'right_wrist']) {
       const point = landmarks[LANDMARK_INDEX[name]];
       if (!point || (point.visibility ?? 1) < 0.4) continue;
-      nearest = Math.min(nearest, Math.hypot(ball.x - point.x, ball.y - point.y));
+      nearest = Math.min(
+        nearest, metricDistance(ball.x, ball.y, point.x, point.y, this.aspect),
+      );
     }
     if (nearest === Infinity) return;
     if (nearest / torso > AWAY_FROM_HANDS) this.awayFrames += 1;
@@ -507,12 +545,12 @@ export class BallRepCounter {
 export const AWAY_FROM_HANDS = 1.5;
 
 /** Shoulder-to-hip, the scale everything about a body is measured in. */
-function torsoLength(landmarks) {
+function torsoLength(landmarks, aspect = 1) {
   const shoulder = landmarks[LANDMARK_INDEX.left_shoulder]
     || landmarks[LANDMARK_INDEX.right_shoulder];
   const hip = landmarks[LANDMARK_INDEX.left_hip] || landmarks[LANDMARK_INDEX.right_hip];
   if (!shoulder || !hip) return 0;
-  const torso = Math.hypot(shoulder.x - hip.x, shoulder.y - hip.y);
+  const torso = metricDistance(shoulder.x, shoulder.y, hip.x, hip.y, aspect);
   return torso > 0.05 ? torso : 0;
 }
 
@@ -522,14 +560,14 @@ function torsoLength(landmarks) {
  * For a body contact the landmark says it directly. For a ground contact --
  * a dribble -- the floor has no side, so it is the nearer wrist that answers.
  */
-function sideOf(contact, landmarks) {
+function sideOf(contact, landmarks, aspect = 1) {
   if (contact.side && contact.side !== 'none') return contact.side;
   if (!landmarks) return 'none';
   const left = landmarks[LANDMARK_INDEX.left_wrist];
   const right = landmarks[LANDMARK_INDEX.right_wrist];
   if (!left || !right) return 'none';
-  const dl = Math.hypot(contact.x - left.x, contact.y - left.y);
-  const dr = Math.hypot(contact.x - right.x, contact.y - right.y);
+  const dl = metricDistance(contact.x, contact.y, left.x, left.y, aspect);
+  const dr = metricDistance(contact.x, contact.y, right.x, right.y, aspect);
   // Too close to call is 'none' rather than a coin flip: a fabricated
   // left/right split would feed straight into the off-hand balance score.
   if (Math.abs(dl - dr) < 0.05) return 'none';

@@ -56,6 +56,31 @@
 export const WORK_WIDTH = 480;
 
 /**
+ * Pixel budget for the working image, whichever way the phone is held.
+ *
+ * Sizing by width alone meant a phone in portrait produced a 480x854 working
+ * image -- three times the pixels and three times the cost -- purely because
+ * the athlete turned it. Budgeting on area keeps the cost flat and the ball
+ * the same size in working pixels in both orientations.
+ */
+export const WORK_PIXELS = 480 * 270;
+
+/**
+ * Working dimensions for a video of any shape.
+ *
+ * Never upscales: a small camera feed is used as it comes rather than
+ * interpolated into looking like more information than it is.
+ */
+export function workSize(videoWidth, videoHeight) {
+  if (!videoWidth || !videoHeight) return { width: 0, height: 0 };
+  const scale = Math.min(1, Math.sqrt(WORK_PIXELS / (videoWidth * videoHeight)));
+  return {
+    width: Math.max(1, Math.round(videoWidth * scale)),
+    height: Math.max(1, Math.round(videoHeight * scale)),
+  };
+}
+
+/**
  * A ball smaller than this in working pixels cannot be resolved.
  *
  * Reported rather than silently returning nothing, so the app can tell the
@@ -209,16 +234,74 @@ export function calibrate(image, box) {
  * away anything is. Returns null when the pose is not usable, and the caller
  * then falls back to an unconstrained search rather than a wrong constraint.
  */
-export function radiusFromPose(landmarks, index, diameterCm = 6.35) {
-  if (!landmarks) return null;
-  const shoulder = landmarks[index.left_shoulder] || landmarks[index.right_shoulder];
-  const hip = landmarks[index.left_hip] || landmarks[index.right_hip];
-  if (!shoulder || !hip) return null;
-  if ((shoulder.visibility ?? 1) < 0.5 || (hip.visibility ?? 1) < 0.5) return null;
+/**
+ * Body references for scale, best first.
+ *
+ * More than one, deliberately. Requiring shoulder *and* hip meant an athlete
+ * framed from the chest up -- which is most of them, because a phone propped
+ * against a bag points at whatever it points at -- lost the size prior
+ * entirely and with it the detector's strongest filter. Shoulder width works
+ * when the hips are out of shot, and head-to-shoulder works when it is just a
+ * head and shoulders.
+ */
+const SCALE_REFERENCES = [
+  { a: 'left_shoulder', b: 'left_hip', cm: TORSO_CM },
+  { a: 'right_shoulder', b: 'right_hip', cm: TORSO_CM },
+  { a: 'left_shoulder', b: 'right_shoulder', cm: 36 },
+  { a: 'nose', b: 'left_shoulder', cm: 28 },
+  { a: 'nose', b: 'right_shoulder', cm: 28 },
+  { a: 'left_hip', b: 'left_knee', cm: 40 },
+];
 
-  const torso = Math.hypot(shoulder.x - hip.x, shoulder.y - hip.y);
-  if (torso < 0.05) return null;
-  return (torso * (diameterCm / TORSO_CM)) / 2;
+/**
+ * Ball radius implied by the athlete's own body, in frame heights.
+ *
+ * Tries each reference in turn, so a partly-framed athlete still gets a size
+ * prior. Returns null only when nothing usable is visible, and the caller
+ * then falls back to an unconstrained search rather than a wrong constraint.
+ */
+export function radiusFromPose(landmarks, index, diameterCm = 6.35, aspect = 1) {
+  if (!landmarks) return null;
+  for (const ref of SCALE_REFERENCES) {
+    const a = landmarks[index[ref.a]];
+    const b = landmarks[index[ref.b]];
+    if (!a || !b) continue;
+    if ((a.visibility ?? 1) < 0.5 || (b.visibility ?? 1) < 0.5) continue;
+    const span = Math.hypot((a.x - b.x) * aspect, a.y - b.y);
+    if (span < 0.04) continue;
+    return (span * (diameterCm / ref.cm)) / 2;
+  }
+  return null;
+}
+
+/**
+ * Remembers the last usable scale.
+ *
+ * An athlete who turns, steps out of shot for a second, or is briefly
+ * occluded by their own stick should not lose the size prior and with it the
+ * detector's selectivity. Body scale barely changes within a session, so the
+ * last good reading stays valid far longer than the pose that produced it.
+ */
+export class ScaleMemory {
+  constructor(holdMs = 4000) {
+    this.holdMs = holdMs;
+    this.value = null;
+    this.at = -Infinity;
+  }
+
+  update(radius, tMs) {
+    if (radius) {
+      // Blended rather than replaced, so one bad frame cannot move it far.
+      this.value = this.value === null ? radius : this.value + 0.25 * (radius - this.value);
+      this.at = tMs;
+    }
+    return this.get(tMs);
+  }
+
+  get(tMs) {
+    if (this.value === null) return null;
+    return tMs - this.at <= this.holdMs ? this.value : null;
+  }
 }
 
 /**

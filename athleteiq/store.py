@@ -16,6 +16,7 @@ from typing import Any
 from .config import CONFIG
 from . import sports
 from . import ball as ball_mod
+from .drills.catalog import ALL_DRILLS
 from . import film
 from . import rtp
 from . import wellness
@@ -985,6 +986,111 @@ class Store:
                 }
                 for r in rows
             ],
+        }
+
+    def team_ball_drills(
+        self, athlete_ids: list[int], days: int = 14
+    ) -> dict[str, Any]:
+        """Skill work, and who needs help pointing their phone.
+
+        The framing figure is the useful half. An athlete whose sessions keep
+        coming back with the ball barely visible is not slacking and is not
+        cheating -- they have propped their phone somewhere it cannot see, and
+        that is two minutes of a coach's time to fix. Nothing else in this
+        product can tell a coach that.
+
+        Reports touches rather than minutes, and does not rank by volume, for
+        the same reason every other board here does not.
+        """
+        if not athlete_ids:
+            return {"days": days, "athletes": [], "drills": [], "needs_framing_help": []}
+
+        start = (_now().date() - timedelta(days=days - 1)).isoformat()
+        marks = ",".join("?" for _ in athlete_ids)
+        ball_keys = [d.key for d in ALL_DRILLS if d.ball is not None]
+        if not ball_keys:
+            return {"days": days, "athletes": [], "drills": [], "needs_framing_help": []}
+        drill_marks = ",".join("?" for _ in ball_keys)
+
+        rows = self.conn.execute(
+            f"SELECT s.athlete_id, u.display_name, s.drill_key, s.status, "
+            f"       s.reps_total, s.reps_left, s.reps_right, s.mean_confidence, "
+            f"       s.duration_ms, s.day AS day "
+            f"FROM ("
+            f"  SELECT *, date(COALESCE(completed_at, submitted_at)) AS day "
+            f"  FROM sessions WHERE athlete_id IN ({marks}) "
+            f"  AND drill_key IN ({drill_marks}) AND status != 'open'"
+            f") s JOIN users u ON u.id = s.athlete_id "
+            f"WHERE s.day >= ? ORDER BY s.athlete_id",
+            (*athlete_ids, *ball_keys, start),
+        ).fetchall()
+
+        by_athlete: dict[int, dict[str, Any]] = {}
+        by_drill: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            athlete = by_athlete.setdefault(int(row["athlete_id"]), {
+                "athlete_id": int(row["athlete_id"]),
+                "display_name": row["display_name"],
+                "touches": 0, "sessions": 0, "held": 0,
+                "left": 0, "right": 0,
+                "framing_sum": 0.0, "framing_n": 0,
+                "drills": set(),
+            })
+            athlete["sessions"] += 1
+            athlete["drills"].add(row["drill_key"])
+            if row["status"] == "counted":
+                athlete["touches"] += int(row["reps_total"] or 0)
+                athlete["left"] += int(row["reps_left"] or 0)
+                athlete["right"] += int(row["reps_right"] or 0)
+            elif row["status"] == "review":
+                athlete["held"] += 1
+            # Ball drills store the track quality in mean_confidence, which is
+            # what the client sends for them.
+            athlete["framing_sum"] += float(row["mean_confidence"] or 0)
+            athlete["framing_n"] += 1
+
+            drill = by_drill.setdefault(row["drill_key"], {
+                "drill_key": row["drill_key"],
+                "name": DRILLS_BY_KEY[row["drill_key"]].name,
+                "sport": DRILLS_BY_KEY[row["drill_key"]].sport,
+                "athletes": set(), "touches": 0, "sessions": 0,
+            })
+            drill["athletes"].add(int(row["athlete_id"]))
+            drill["sessions"] += 1
+            if row["status"] == "counted":
+                drill["touches"] += int(row["reps_total"] or 0)
+
+        athletes = []
+        for entry in by_athlete.values():
+            framing = entry["framing_sum"] / entry["framing_n"] if entry["framing_n"] else 0
+            hands = entry["left"] + entry["right"]
+            athletes.append({
+                **{k: v for k, v in entry.items()
+                   if k not in ("framing_sum", "framing_n", "drills", "left", "right")},
+                "drills": sorted(entry["drills"]),
+                "framing": round(framing, 3),
+                # Only reported where the drill attributes a side at all, and
+                # as a share rather than a ranking.
+                "weak_side_share": round(entry["left"] / hands, 3) if hands else None,
+            })
+        athletes.sort(key=lambda a: -a["touches"])
+
+        drills = [
+            {**d, "athletes": len(d["athletes"])}
+            for d in sorted(by_drill.values(), key=lambda d: -d["sessions"])
+        ]
+
+        # The actionable list. Two or more sessions, because one badly propped
+        # phone is an accident and three is a habit worth a word about.
+        help_needed = [
+            a for a in athletes
+            if a["sessions"] >= 2 and a["framing"] < 0.30
+        ]
+        return {
+            "days": days,
+            "athletes": athletes,
+            "drills": drills,
+            "needs_framing_help": help_needed,
         }
 
     # ------------------------------------------------------------------

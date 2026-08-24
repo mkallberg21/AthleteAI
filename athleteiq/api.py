@@ -1935,6 +1935,21 @@ def plan_history(
     return {"events": store.plan_history(plan_id)}
 
 
+@app.get("/api/coach/ball")
+def team_ball_drills(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Skill work across the squad, and who needs help pointing their phone."""
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
+    )
+    return store.team_ball_drills([a["athlete_id"] for a in athletes])
+
+
 @app.get("/api/coach/wellness")
 def team_wellness(
     team_id: int | None = None,

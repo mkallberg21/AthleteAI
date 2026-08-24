@@ -189,8 +189,10 @@
       </div>
 
       <div class="small muted" id="hint" style="margin-top:10px"></div>
+      <div class="small muted" id="orientation-note" style="margin-top:4px"></div>
       <div id="ball-readout" class="hidden" style="margin-top:6px">
-        <div class="small muted" id="ball-quality"></div>
+        <div class="small" id="ball-quality"></div>
+        <div class="small muted" id="ball-detail"></div>
         <div class="small warn-text" id="ball-help"></div>
       </div>
       <button class="secondary hidden" id="ball-calibrate" style="margin-top:8px">
@@ -290,7 +292,7 @@
 <script type="module">
 import { api, esc, fmtDate, getToken, logout } from './api.js';
 import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
-import { BallVision, PRESETS, calibrate, radiusFromPose, WORK_WIDTH }
+import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory }
   from './ballvision.js';
 import { RepCounter } from './counter.js';
 import {
@@ -338,6 +340,7 @@ let lastLandmarks = null;
 let workCanvas = null;
 let workCtx = null;
 let calibrating = false;
+let ballScale = null;
 let stream = null;
 let counter = null;
 let session = null;
@@ -1112,6 +1115,7 @@ async function openCapture(drill) {
   ballVision = drill.ball && drill.ball.detector === 'vision'
     ? new BallVision({ profile: PRESETS[drill.ball.colour] || PRESETS.white })
     : null;
+  ballScale = new ScaleMemory();
   $('ball-calibrate').classList.toggle('hidden', !ballVision);
   lastBallDetectAt = 0;
   $('ball-readout').classList.toggle('hidden', !drill.ball);
@@ -1152,8 +1156,17 @@ async function openCapture(drill) {
 
   try {
     setBanner('Starting camera…');
+    // Deliberately loose. The old constraint asked for 720x960, which is a
+    // portrait shape -- a phone propped on its side then got a stream fought
+    // over between what was asked for and what the sensor wanted. Everything
+    // downstream now adapts to whatever arrives, so the only thing worth
+    // insisting on is enough resolution to find a ball in.
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
+      video: {
+        facingMode: 'user',
+        width: { min: 480, ideal: 1280 },
+        frameRate: { ideal: 30 },
+      },
       audio: false,
     });
     $('video').srcObject = stream;
@@ -1162,7 +1175,10 @@ async function openCapture(drill) {
     setBanner('Loading the pose model…');
     await ensureLandmarker();
 
-    setBanner('Step back until your whole body is in frame, then press Start.');
+    // No distances, no angles. The traffic light says when it is ready, and
+    // an athlete should be training rather than reading setup rules.
+    setBanner('Prop the phone up so it can see you, then press Start.');
+    describeOrientation();
     $('startstop').disabled = false;
     renderLoop();
   } catch (e) {
@@ -1204,9 +1220,12 @@ function renderLoop() {
     if (video.currentTime === lastVideoTime) return;
     lastVideoTime = video.currentTime;
 
-    if (canvas.width !== video.videoWidth) {
+    // Both dimensions, because turning the phone swaps them and checking only
+    // the width leaves the overlay stretched across a rotated frame.
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
+      describeOrientation();
     }
 
     let result;
@@ -1238,7 +1257,7 @@ function renderLoop() {
         // Cheap enough to run every frame, which is the point: the general
         // model manages about one frame in four, and a lacrosse ball crosses
         // a lot of frame in the three it misses.
-        detection = detectByVision();
+        detection = detectByVision(t);
       } else if (ballDetector && now - lastBallDetectAt >= BALL_DETECT_EVERY_MS) {
         lastBallDetectAt = now;
         try {
@@ -1300,13 +1319,19 @@ function workFrame() {
     workCanvas = document.createElement('canvas');
     workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
   }
-  const height = Math.max(1, Math.round(WORK_WIDTH * (video.videoHeight / video.videoWidth)));
-  if (workCanvas.width !== WORK_WIDTH) {
-    workCanvas.width = WORK_WIDTH;
-    workCanvas.height = height;
+  // Budgeted on area rather than width, so a phone held upright costs the
+  // same as one held sideways instead of three times as much.
+  const size = workSize(video.videoWidth, video.videoHeight);
+  if (!size.width) return null;
+  if (workCanvas.width !== size.width || workCanvas.height !== size.height) {
+    workCanvas.width = size.width;
+    workCanvas.height = size.height;
+    // A different shape of frame is a different frame; the previous one is
+    // not comparable and would read as motion everywhere.
+    if (ballVision) ballVision.previous = null;
   }
-  workCtx.drawImage(video, 0, 0, WORK_WIDTH, height);
-  return workCtx.getImageData(0, 0, WORK_WIDTH, height);
+  workCtx.drawImage(video, 0, 0, size.width, size.height);
+  return workCtx.getImageData(0, 0, size.width, size.height);
 }
 
 /**
@@ -1315,16 +1340,25 @@ function workFrame() {
  * The size prior is the part a general detector cannot do: a lacrosse ball is
  * always 6.35cm, and the torso in the same frame says what that is in pixels.
  */
-function detectByVision() {
+function detectByVision(tMs) {
   let image;
   try { image = workFrame(); } catch { return null; }
-  const landmarks = lastLandmarks;
+  if (!image) return null;
+
+  const aspect = video.videoWidth / video.videoHeight;
+  if (ballCounter) ballCounter.setAspect(aspect);
+
   // Each drill's own ball, not a lacrosse ball for everything: a basketball
   // is nearly four times the diameter, and the size gate is only a filter if
   // it is filtering on the right size.
-  const expectedRadius = radiusFromPose(
-    landmarks, LANDMARK_INDEX, (activeDrill.ball && activeDrill.ball.diameter_cm) || 6.35,
+  const measured = radiusFromPose(
+    lastLandmarks, LANDMARK_INDEX,
+    (activeDrill.ball && activeDrill.ball.diameter_cm) || 6.35, aspect,
   );
+  // Remembered, so an athlete who turns away or steps half out of shot keeps
+  // the size prior instead of losing the detector's best filter mid-rally.
+  const expectedRadius = ballScale.update(measured, tMs);
+
   const near = ballCounter && ballCounter.tracker.visible
     ? { x: ballCounter.tracker.x, y: ballCounter.tracker.y }
     : null;
@@ -1379,27 +1413,73 @@ function drawBall(ctx, ball, width, height) {
  * An athlete who can see the app losing the ball can move the phone. One who
  * only finds out at the end has wasted the session.
  */
+/**
+ * One traffic light instead of a list of setup rules.
+ *
+ * The athlete's problem is not that the instructions are unclear, it is that
+ * reading them costs time they would rather spend training. So nothing here
+ * asks for a distance or an angle: it says whether the app can see what it
+ * needs right now, and the only advice it ever gives is the single thing
+ * that is actually missing.
+ */
+function framingState() {
+  const seesAthlete = Boolean(lastLandmarks);
+  const seesBall = Boolean(ballCounter && ballCounter.tracker.visible);
+  const quality = ballCounter ? ballCounter.trackQuality : 0;
+
+  if (!seesAthlete) return { level: 'bad', text: 'Step into the picture' };
+  if (seesBall) return { level: 'good', text: 'Got you and the ball' };
+  // Early on there is simply nothing to judge yet.
+  if (!ballCounter || ballCounter.tracker.frames < 45) {
+    return { level: 'ok', text: 'Looking for the ball…' };
+  }
+  if (quality > 0.15) return { level: 'ok', text: 'Losing the ball sometimes' };
+  return { level: 'bad', text: 'Cannot see the ball — try the button below' };
+}
+
 function updateBallReadout() {
   if (!ballCounter) return;
   const quality = ballCounter.trackQuality;
   const el = $('ball-quality');
-  el.textContent = `Ball seen in ${Math.round(quality * 100)}% of frames`;
-  el.className = ballCounter.trusted ? 'small muted' : 'small warn-text';
+  const framing = framingState();
+  el.textContent = framing.text;
+  el.className = `small framing ${framing.level}`;
+  $('ball-detail').textContent = ballCounter.tracker.frames
+    ? `${Math.round(quality * 100)}% of frames` : '';
   if (ballConfirms) {
     // Never nag on a confirm drill. A lacrosse ball the detector cannot see
     // is the detector's problem, and telling a child to fix it would be
     // asking them to solve something they cannot.
-    el.className = 'small muted';
-    $('ball-help').textContent = ballCounter.trusted
-      ? 'Ball confirmed.' : '';
+    $('ball-help').textContent = '';
     return;
   }
-  $('ball-help').textContent = ballCounter.trusted
-    ? ''
-    : 'Move the phone so the ball and your whole body are in shot.';
+  // One line, and only when there is something to do about it. Not a checklist.
+  $('ball-help').textContent = framing.level === 'bad' && ballCounter.tracker.frames > 45
+    ? 'Any angle is fine — it just needs to see the ball.'
+    : '';
 }
 
 $('ball-calibrate').addEventListener('click', calibrateBall);
+
+/**
+ * Says which way up the phone is, and that it does not matter.
+ *
+ * Worth saying out loud once: athletes and parents assume there is a right
+ * way, and the time spent deciding is the time this is trying to give back.
+ */
+function describeOrientation() {
+  const note = $('orientation-note');
+  if (!note || !video.videoWidth) return;
+  const upright = video.videoHeight >= video.videoWidth;
+  note.textContent = upright
+    ? 'Phone upright — landscape works just as well.'
+    : 'Phone on its side — upright works just as well.';
+}
+
+// Turning the phone mid-session is normal. Everything adapts, but the overlay
+// and the note need a nudge once the new frame size has actually arrived.
+window.addEventListener('orientationchange', () => setTimeout(describeOrientation, 350));
+window.addEventListener('resize', describeOrientation);
 
 function drawSkeleton(ctx, lms, w, h) {
   ctx.lineWidth = Math.max(2, w / 220);

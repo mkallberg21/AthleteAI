@@ -135,6 +135,17 @@
     <div id="budget-sports"></div>
   </div>
 
+  <div class="card hidden" id="ball-card">
+    <h2>Skill work</h2>
+    <p class="small muted">
+      Drills where the app watches the ball rather than the body. Touches, not
+      minutes &mdash; and nobody is ranked by how many.
+    </p>
+    <div id="ball-help-list"></div>
+    <div id="ball-athletes"></div>
+    <div id="ball-drills" style="margin-top:12px"></div>
+  </div>
+
   <div class="card" id="film-card">
     <h2>Film study</h2>
     <p class="small muted">
@@ -745,6 +756,9 @@ async function loadAll() {
   renderLoadWatch(rosterData.athletes);
   await loadFilm(teamId);
   try {
+    renderBallDrills(await api(`/api/coach/ball${teamId ? `?team_id=${teamId}` : ''}`));
+  } catch { /* no skill work logged yet */ }
+  try {
     renderWellnessWatch(await api(
       `/api/coach/wellness${teamId ? `?team_id=${teamId}` : ''}`,
     ));
@@ -942,6 +956,58 @@ $('wellness-watch').addEventListener('click', async (event) => {
     await loadAll();
   } catch (e) { showError(e.message); }
 });
+
+function renderBallDrills(data) {
+  const rows = data.athletes || [];
+  $('ball-card').classList.toggle('hidden', rows.length === 0);
+  if (!rows.length) return;
+
+  // The genuinely actionable part, and first for that reason. An athlete whose
+  // sessions keep coming back with the ball barely visible is not slacking --
+  // their phone is somewhere it cannot see, and that is two minutes to fix.
+  const help = data.needs_framing_help || [];
+  $('ball-help-list').innerHTML = help.length === 0 ? '' : `
+    <div class="advisory caution">
+      <span class="dotmark"></span>
+      <div><b>Worth two minutes at practice</b>
+        <em>${help.map((a) => esc(a.display_name)).join(', ')}
+          ${help.length === 1 ? 'has' : 'have'} been recording where the app can
+          barely see the ball. Nothing is wrong with their work &mdash; the phone
+          just needs propping somewhere it can see. Any angle is fine.</em></div>
+    </div>`;
+
+  $('ball-athletes').innerHTML = `
+    <table style="margin-top:10px"><thead><tr>
+      <th>Athlete</th><th class="num">Touches</th><th class="num">Sessions</th>
+      <th>Sees the ball</th><th>Drills</th>
+    </tr></thead><tbody>
+    ${rows.map((a) => {
+      const pct = Math.round(a.framing * 100);
+      const level = a.framing >= 0.45 ? 'good' : a.framing >= 0.3 ? 'ok' : 'bad';
+      return `<tr>
+        <td><b>${esc(a.display_name)}</b>${a.held
+          ? ` <span class="small muted">&middot; ${a.held} held for review</span>` : ''}</td>
+        <td class="num">${a.touches}</td>
+        <td class="num">${a.sessions}</td>
+        <td><span class="framing ${level}">${pct}%</span></td>
+        <td class="small muted">${a.drills.map((d) => esc(drillName(d))).join(', ')}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+
+  $('ball-drills').innerHTML = (data.drills || []).map((d) => `
+    <div class="budget-row">
+      <span class="budget-label">${esc(d.name)}
+        <span class="small muted">&middot; ${esc(d.sport)}</span></span>
+      <span class="budget-n">${d.touches}</span>
+      <span class="small muted">${d.athletes} athlete${d.athletes === 1 ? '' : 's'}</span>
+    </div>`).join('');
+}
+
+function drillName(key) {
+  const found = drillCatalog.find((d) => d.key === key);
+  return found ? found.name : key;
+}
 
 async function loadFilm(teamId) {
   try {
@@ -1333,8 +1399,11 @@ $('template-btn').addEventListener('click', async () => {
 
 $('print-slips').addEventListener('click', () => window.print());
 
+let drillCatalog = [];
+
 async function loadDrillOptions() {
   const { drills } = await api('/api/drills');
+  drillCatalog = drills;
   $('a-drill').innerHTML = drills
     .map((d) => `<option value="${esc(d.key)}">${esc(d.name)}</option>`).join('');
 }
@@ -1469,6 +1538,7 @@ $('signout').addEventListener('click', logout);
     await loadStaff(orgs.role === 'director');
     await loadPositionSettings(orgs.role === 'director');
     await loadTeams();
+    // Before loadAll, because the skill-work table names drills from it.
     await loadDrillOptions();
     defaultAssignmentDates();
     await loadAll();

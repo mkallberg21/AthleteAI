@@ -102,8 +102,8 @@ WALL_BALL = DrillSpec(
         colour="white",
     ),
     setup_hint=(
-        "Stand side-on to the phone, 8-10 feet back, full body and stick head "
-        "in frame. Both feet visible."
+        "Prop the phone up so it can see you and the wall. Side-on reads hands "
+        "best, but any angle counts."
     ),
     quality=QualitySpec(
         # Top hand travels from roughly a hand's width below the shoulder line
@@ -852,7 +852,7 @@ SOC_JUGGLE = DrillSpec(
     ),
     scoring=ScoringSpec(xp_per_rep=0.9, daily_rep_cap=600, diminishing_after_reps=200),
     validation=ValidationSpec(max_reps_per_second=3.0, min_reps=6),
-    setup_hint="Phone on the ground, propped up, your whole body and the ball in frame.",
+    setup_hint="Prop the phone up anywhere it can see you and the ball. Any angle.",
     quality=None,
     load=LoadSpec(load_per_rep=0.3, load_per_minute=1.6, tissue=Tissue.LOWER_BODY),
     tracks_handedness=True,
@@ -884,7 +884,7 @@ BKB_DRIBBLE = DrillSpec(
     ),
     scoring=ScoringSpec(xp_per_rep=0.4, daily_rep_cap=900, diminishing_after_reps=300),
     validation=ValidationSpec(max_reps_per_second=5.0, min_reps=10),
-    setup_hint="Phone propped up side-on, hands and the floor in frame.",
+    setup_hint="Prop the phone up so it can see your hands and the floor. Any angle.",
     quality=None,
     load=LoadSpec(load_per_rep=0.15, load_per_minute=1.4, tissue=Tissue.WHOLE_BODY),
     tracks_handedness=True,
@@ -914,7 +914,7 @@ VB_SET = DrillSpec(
     ),
     scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=500, diminishing_after_reps=180),
     validation=ValidationSpec(max_reps_per_second=2.0, min_reps=6),
-    setup_hint="Phone propped up, you and the top of the ball's flight in frame.",
+    setup_hint="Prop the phone up so it can see you and the top of the ball's flight.",
     quality=None,
     load=LoadSpec(load_per_rep=0.3, load_per_minute=1.4, tissue=Tissue.UPPER_BODY),
 )
@@ -943,7 +943,7 @@ BB_WALL_THROW = DrillSpec(
     ),
     scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=400, diminishing_after_reps=150),
     validation=ValidationSpec(max_reps_per_second=1.6, min_reps=6),
-    setup_hint="Side-on to the wall, phone propped up, you and the ball in frame.",
+    setup_hint="Prop the phone up so it can see you and the wall. Any angle.",
     quality=None,
     load=LoadSpec(
         load_per_rep=1.0,
@@ -981,7 +981,7 @@ TEN_WALL_RALLY = DrillSpec(
     ),
     scoring=ScoringSpec(xp_per_rep=0.8, daily_rep_cap=700, diminishing_after_reps=250),
     validation=ValidationSpec(max_reps_per_second=2.5, min_reps=8),
-    setup_hint="Phone behind you, propped up, you and the wall in frame.",
+    setup_hint="Prop the phone up behind or beside you. It just needs to see the ball.",
     quality=None,
     load=LoadSpec(load_per_rep=0.5, load_per_minute=1.8, tissue=Tissue.UPPER_BODY),
     tracks_handedness=True,
