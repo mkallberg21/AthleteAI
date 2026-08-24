@@ -33,9 +33,11 @@ import logging
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Protocol
+from typing import Any, Iterable, Protocol
 
 from . import mailer
+from . import sns
+from .config import CONFIG
 
 log = logging.getLogger(__name__)
 
@@ -191,8 +193,10 @@ VERIFIERS: dict[str, Verifier] = {
     "mailgun": MailgunVerifier(),
     "sendgrid": SendGridVerifier(),
     "postmark": TokenVerifier(),
-    "ses": TokenVerifier(),
     "generic": HmacBodyVerifier(),
+    # SES is absent deliberately: it arrives through SNS, whose messages carry
+    # their own certificate-backed signature rather than a shared secret, and
+    # is handled by `_handle_ses` below.
 }
 
 
@@ -547,18 +551,75 @@ def apply_event(conn: sqlite3.Connection, event: Event) -> str:
     return action
 
 
+def _handle_ses(
+    body: bytes,
+    conn: sqlite3.Connection,
+    *,
+    topics: Iterable[str] | None = None,
+    fetcher: sns.Fetcher | None = None,
+    auto_confirm: bool | None = None,
+) -> dict[str, Any]:
+    """SES, delivered through SNS.
+
+    Verified against the message's own certificate rather than a shared secret,
+    with the signing certificate's URL and the topic ARN both checked before
+    anything is fetched or believed. See `athleteiq.sns` for why each of those
+    matters.
+    """
+    try:
+        envelope = json.loads(body)
+    except ValueError as exc:
+        raise WebhookError(f"payload is not JSON: {exc}") from None
+    if not isinstance(envelope, dict):
+        raise WebhookError("SNS payload is not an object")
+
+    allowed = CONFIG.sns_topic_arns if topics is None else topics
+    try:
+        message = sns.verify(envelope, allowed_topics=allowed, fetcher=fetcher)
+    except sns.SnsError as exc:
+        # Surfaced as a verification failure so the endpoint answers 401 the
+        # same way it does for every other provider.
+        raise WebhookError(f"signature verification failed: {exc}") from None
+
+    if message.type in ("SubscriptionConfirmation", "UnsubscribeConfirmation"):
+        confirm = CONFIG.sns_auto_confirm if auto_confirm is None else auto_confirm
+        confirmed = False
+        if confirm and message.type == "SubscriptionConfirmation":
+            confirmed = sns.confirm_subscription(message, fetcher)
+        return {
+            "received": 0,
+            "actions": {},
+            "subscription": message.type,
+            "confirmed": confirmed,
+        }
+
+    events = parse("ses", body)
+    actions: dict[str, int] = {}
+    for event in events:
+        action = apply_event(conn, event)
+        actions[action] = actions.get(action, 0) + 1
+    return {"received": len(events), "actions": actions}
+
+
 def handle(
     provider: str,
     headers: dict[str, str],
     body: bytes,
     secret: str,
     conn: sqlite3.Connection,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """Verify, parse, and apply a webhook request.
 
     Verification happens before parsing: an unverified payload is not data, and
     should not reach a parser at all.
     """
+    if len(body) > MAX_BODY_BYTES:
+        raise WebhookError("payload too large")
+
+    if provider == "ses":
+        return _handle_ses(body, conn, **kwargs)
+
     if not verify(provider, headers, body, secret):
         raise WebhookError("signature verification failed")
 

@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 719 tests
+python -m pytest tests/ -q          # 763 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -94,6 +94,7 @@ athleteiq/
   billing.py        Plans, seats, entitlements, invoicing seam
   mailer.py         Outbound queue: retries, suppression, unsubscribe
   webhooks.py       Inbound delivery events: verification, bounce handling
+  sns.py            SNS certificate verification for SES notifications
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -334,11 +335,43 @@ instructions from the public internet about which addresses to stop mailing.
 Unverified, it is a one-request tool for cutting any coach off from their
 digest. Each provider is checked with its own real scheme — SendGrid's ECDSA
 P-256 over timestamp + raw body, Mailgun's HMAC over timestamp + token, a
-constant-time shared secret for Postmark and SES — the signature is checked
-before the payload reaches a parser, and a stale timestamp is refused so a
-captured request cannot be replayed tomorrow. **An unset secret disables the
-provider rather than trusting everything**, and the rejection says only
-"unauthorized", because explaining the failure helps the next attempt succeed.
+constant-time shared secret for Postmark, and full SNS certificate verification
+for SES. The signature is checked before the payload reaches a parser, and a
+stale timestamp is refused so a captured request cannot be replayed tomorrow.
+**An unset secret disables the provider rather than trusting everything**, and
+the rejection says only "unauthorized", because explaining the failure helps the
+next attempt succeed.
+
+#### SES and SNS
+
+SES bounces arrive through SNS, which signs each message with a certificate it
+tells you where to fetch. That last part is the whole problem, and two mistakes
+make the verification worthless:
+
+**Fetching the certificate the message points at.** An attacker hosts their own
+certificate, signs their own payload with the matching key, and the signature
+verifies perfectly. The URL is therefore matched against the real SNS hostname
+pattern (`sns.<region>.amazonaws.com`, plus the China partition) *before*
+anything is fetched — a check on the exact host, not a suffix, since
+`sns.us-east-1.amazonaws.com.attacker.net` ends with nothing useful. Redirects
+are refused outright: a 302 from a genuine AWS host would otherwise walk
+straight through the check.
+
+**Trusting any valid AWS signature.** Anyone can create an SNS topic in their
+own account and have Amazon sign messages for it entirely legitimately, so a
+signature alone establishes only that the sender has an AWS account. The topic
+ARN is checked against `ATHLETEIQ_SNS_TOPIC_ARNS`, and an empty allowlist
+disables the endpoint rather than accepting everything.
+
+Both signature versions are supported — v1 is SHA1, v2 is SHA256, and AWS still
+emits v1 for older topics. Certificate validity dates are checked, certificates
+are cached for an hour so a bounce storm is not one HTTPS round trip per bounce,
+and `SubscriptionConfirmation` is handled by visiting the confirm URL — which is
+host-checked again, being a second attacker-supplied URL this server would
+otherwise fetch on command.
+
+Network access is injected rather than imported, so all of this is tested
+against a generated keypair without touching the internet.
 
 **A soft bounce is not a dead address.** A full mailbox, a greylisting server,
 an over-quota school account: all bounce, all recover. Hard bounces and spam
@@ -810,10 +843,10 @@ contact with a real driveway:
    than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **SES webhooks use a shared secret, not SNS signature verification.** Full
-   SNS verification means fetching and validating AWS's signing certificate at
-   request time; a secret in the subscription URL is the documented alternative
-   and is what is implemented. The other three providers use their real schemes.
+7. **SNS certificates are not chained to a trust root.** The signing
+   certificate is fetched over TLS from a verified AWS host and its validity
+   dates are checked, but it is not validated against Amazon's CA chain. The
+   host restriction plus TLS is what carries the trust here.
 8. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.

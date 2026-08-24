@@ -230,6 +230,22 @@ class Config:
     # endpoint is disabled -- absent configuration must never mean "trust
     # anything", since this endpoint takes instructions from the public
     # internet about whose mail to stop.
+    # SNS topics whose messages will be accepted. A valid AWS signature only
+    # proves the sender has an AWS account -- anyone can create a topic and
+    # have Amazon sign for it legitimately -- so this allowlist is what makes
+    # SES verification mean anything. Empty disables the endpoint.
+    sns_topic_arns: tuple = field(
+        default_factory=lambda: tuple(
+            arn.strip()
+            for arn in os.environ.get("ATHLETEIQ_SNS_TOPIC_ARNS", "").split(",")
+            if arn.strip()
+        )
+    )
+    # Whether to auto-confirm an SNS subscription for an allowlisted topic.
+    sns_auto_confirm: bool = field(
+        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_AUTO_CONFIRM", "1") != "0"
+    )
+
     webhook_secrets: dict = field(
         default_factory=lambda: {
             provider: os.environ.get(f"ATHLETEIQ_WEBHOOK_SECRET_{provider.upper()}", "")

@@ -1835,3 +1835,100 @@ class TestBounceAdmin:
         assert res.status_code == 400
         assert "opt back in themselves" in res.json()["detail"]
         assert mailer.is_suppressed(api_module._store.conn, "angry@example.com")
+
+
+class TestSesWebhookEndpoint:
+    """SES arrives through SNS, verified by certificate rather than a secret."""
+
+    TOPIC = "arn:aws:sns:us-east-1:123456789012:athleteiq-bounces"
+
+    def _signed(self, key, email="coach@example.com", topic=None):
+        import base64
+        import json
+
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+
+        from athleteiq import sns
+
+        body = json.dumps({
+            "notificationType": "Bounce", "mail": {"messageId": "m1"},
+            "bounce": {
+                "bounceType": "Permanent", "feedbackId": "f1",
+                "bouncedRecipients": [{"emailAddress": email}],
+            },
+        })
+        message = {
+            "Type": "Notification", "MessageId": "mid-1",
+            "TopicArn": topic or self.TOPIC, "Message": body,
+            "Timestamp": "2026-08-24T10:00:00.000Z", "SignatureVersion": "2",
+            "SigningCertURL": "https://sns.us-east-1.amazonaws.com/cert.pem",
+        }
+        message["Signature"] = base64.b64encode(
+            key.sign(sns.canonical_string(message), padding.PKCS1v15(), hashes.SHA256())
+        ).decode()
+        return json.dumps(message)
+
+    def _configure(self, monkeypatch, pem, topics=None):
+        import athleteiq.api as api_mod
+        import athleteiq.sns as sns_mod
+        import athleteiq.webhooks as webhooks_mod
+        from athleteiq.config import Config
+
+        config = Config(sns_topic_arns=tuple(topics if topics is not None else [self.TOPIC]))
+        monkeypatch.setattr(api_mod, "CONFIG", config)
+        monkeypatch.setattr(webhooks_mod, "CONFIG", config)
+        monkeypatch.setattr(sns_mod, "default_fetcher", lambda url: pem)
+        sns_mod.clear_cert_cache()
+
+    def test_a_genuine_ses_bounce_suppresses_the_address(self, client, program, monkeypatch):
+        from athleteiq import mailer
+        from tests.test_sns import make_cert
+
+        key, pem = make_cert()
+        self._configure(monkeypatch, pem)
+        res = client.post(
+            "/api/webhooks/email/ses", content=self._signed(key),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 200
+        assert res.json()["actions"]["suppressed"] == 1
+        assert mailer.is_suppressed(api_module._store.conn, "coach@example.com")
+
+    def test_a_message_for_another_topic_is_rejected(self, client, program, monkeypatch):
+        """A valid AWS signature only proves the sender has an AWS account."""
+        from athleteiq import mailer
+        from tests.test_sns import make_cert
+
+        key, pem = make_cert()
+        self._configure(monkeypatch, pem)
+        res = client.post(
+            "/api/webhooks/email/ses",
+            content=self._signed(key, topic="arn:aws:sns:us-east-1:999:attacker"),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 401
+        assert not mailer.is_suppressed(api_module._store.conn, "coach@example.com")
+
+    def test_a_foreign_signing_key_is_rejected(self, client, program, monkeypatch):
+        from tests.test_sns import make_cert
+
+        _, our_pem = make_cert()
+        attacker_key, _ = make_cert()
+        self._configure(monkeypatch, our_pem)
+        res = client.post(
+            "/api/webhooks/email/ses", content=self._signed(attacker_key),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 401
+
+    def test_no_configured_topics_disables_the_endpoint(self, client, program, monkeypatch):
+        from tests.test_sns import make_cert
+
+        key, pem = make_cert()
+        self._configure(monkeypatch, pem, topics=[])
+        res = client.post(
+            "/api/webhooks/email/ses", content=self._signed(key),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 401
