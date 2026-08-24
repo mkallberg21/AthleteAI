@@ -290,6 +290,18 @@ class BallSpec:
     #: Share of frames that must have a real detection behind them. Below
     #: this the session is held for review rather than counted.
     min_track_quality: float = 0.35
+    #: Which detector finds it.
+    #:
+    #: 'model'  -- the general object detector's "sports ball" class, which
+    #:             knows basketballs and tennis balls.
+    #: 'vision' -- the purpose-built colour-and-size detector, for balls the
+    #:             general model does not know. Cheaper, runs every frame, and
+    #:             uses the athlete's own torso to know how big the ball
+    #:             should be -- which the general model cannot do.
+    detector: str = "model"
+    #: Default colour preset when the athlete has not calibrated: white,
+    #: yellow or orange. Only meaningful for the vision detector.
+    colour: str = "white"
 
     @property
     def counts(self) -> bool:
@@ -309,6 +321,8 @@ class BallSpec:
             "min_speed": self.min_speed,
             "attribute_side": self.attribute_side,
             "min_track_quality": self.min_track_quality,
+            "detector": self.detector,
+            "colour": self.colour,
         }
 
 

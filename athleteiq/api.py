@@ -370,6 +370,9 @@ class SubmitSessionRequest(BaseModel):
     # Confirm-mode drills only: how many contacts the ball tracker saw while
     # the body counted the reps. Used to tell a real session from a mime.
     ball_contacts: int | None = Field(default=None, ge=0, le=20_000)
+    # Share of tracked frames the ball spent away from the athlete's hands.
+    # Separates a throw from a throwing motion with the ball still in it.
+    ball_travel: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 @app.post("/api/sessions/submit")
@@ -393,6 +396,7 @@ def submit_session(
             completed_at=body.completed_at,
             track_quality=body.track_quality,
             ball_contacts=body.ball_contacts,
+            ball_travel=body.ball_travel,
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

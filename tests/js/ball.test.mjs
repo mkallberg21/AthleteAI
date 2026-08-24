@@ -253,7 +253,8 @@ test('wall ball corroborates rather than counting', () => {
   const confirmation = counter.confirmation();
   assert.ok(confirmation.ball_contacts > 0, 'saw the ball being thrown');
   assert.ok(confirmation.track_quality > 0);
-  assert.deepEqual(Object.keys(confirmation).sort(), ['ball_contacts', 'track_quality']);
+  assert.deepEqual(Object.keys(confirmation).sort(),
+    ['ball_contacts', 'ball_travel', 'track_quality']);
 });
 
 test('a wall ball session with no ball reports zero contacts, not zero reps', () => {
@@ -264,4 +265,47 @@ test('a wall ball session with no ball reports zero contacts, not zero reps', ()
   for (let f = 0; f < 600; f += 1) counter.push(null, landmarks, f * DT * 1000);
   assert.equal(counter.confirmation().ball_contacts, 0);
   assert.equal(counter.confirmation().track_quality, 0);
+});
+
+
+test('travel separates a throw from a wave, where contacts cannot', () => {
+  // Both produce contacts. Only one sends the ball anywhere.
+  const drill = spec('lax_wall_ball');
+  const shoulder = { x: 0.35, y: 0.30 }, hip = { x: 0.36, y: 0.60 };
+
+  function session(thrown) {
+    const counter = new BallRepCounter(drill);
+    let t = 0;
+    for (let rep = 0; rep < 12; rep += 1) {
+      for (let f = 0; f < 30; f += 1) {
+        const phase = f / 30;
+        const hand = { x: 0.36, y: 0.34 - Math.sin(phase * Math.PI * 2) * 0.09 };
+        const landmarks = pose({
+          left_shoulder: shoulder, left_hip: hip,
+          left_wrist: hand, right_wrist: { x: hand.x + 0.02, y: hand.y },
+        });
+        // Thrown: the ball crosses the frame to the wall and back. Waved: it
+        // stays exactly where the hand is.
+        const ball = thrown
+          ? { x: 0.36 + Math.sin(phase * Math.PI) * 0.58, y: hand.y, r: 0.02, score: 0.8 }
+          : { x: hand.x, y: hand.y, r: 0.02, score: 0.8 };
+        counter.push(ball, landmarks, t);
+        t += 1000 / 30;
+      }
+    }
+    return counter.confirmation();
+  }
+
+  const real = session(true);
+  const fake = session(false);
+  assert.ok(real.ball_travel > 0.15, `real travelled ${real.ball_travel}`);
+  assert.equal(fake.ball_travel, 0, `fake travelled ${fake.ball_travel}`);
+});
+
+test('travel is zero rather than undefined when there is no pose', () => {
+  const counter = new BallRepCounter(spec('lax_wall_ball'));
+  for (let f = 0; f < 60; f += 1) {
+    counter.push({ x: 0.5, y: 0.5, r: 0.02, score: 0.8 }, null, f * DT * 1000);
+  }
+  assert.equal(counter.confirmation().ball_travel, 0);
 });

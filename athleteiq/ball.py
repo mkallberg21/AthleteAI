@@ -49,6 +49,18 @@ CONFIRM_MIN_SHARE = 0.25
 #: detector happened to miss the ball is noise, not evidence.
 CONFIRM_MIN_REPS = 15
 
+#: Share of tracked frames the ball must spend away from the hands.
+#:
+#: The check that separates wall ball from waving a ball around. An arm
+#: whipping through a throwing motion with the ball still in it produces
+#: accelerations that read as impulses and a wrist beside them that reads as a
+#: contact, so contact counting alone scores that fake exactly like the real
+#: thing -- measured at twelve contacts for twelve fake throws. What it cannot
+#: fake is the ball leaving: real wall ball sends it metres away and brings it
+#: back, and a ball that never gets more than a hand's width from a wrist has
+#: not been thrown at anything.
+CONFIRM_MIN_TRAVEL = 0.15
+
 
 @dataclass
 class BallReview:
@@ -85,13 +97,16 @@ def review(
     track_quality: float | None,
     duration_ms: int,
     ball_contacts: int | None = None,
+    ball_travel: float | None = None,
 ) -> BallReview:
     """Decide whether a ball-tracked submission can be counted."""
     result = BallReview(quality=float(track_quality or 0.0))
     if spec.ball is None:
         return result
     if spec.ball.confirms:
-        return _review_confirmation(spec, reps, track_quality, ball_contacts, result)
+        return _review_confirmation(
+            spec, reps, track_quality, ball_contacts, ball_travel, result,
+        )
 
     if track_quality is None:
         result.flag(
@@ -176,6 +191,7 @@ def _review_confirmation(
     reps: list[dict[str, Any]],
     track_quality: float | None,
     ball_contacts: int | None,
+    ball_travel: float | None,
     result: BallReview,
 ) -> BallReview:
     """Confirm mode: the body counted the reps, the ball corroborates them.
@@ -212,5 +228,15 @@ def _review_confirmation(
         result.flag(
             f"The ball was tracked clearly for this session but was involved "
             f"in only {share:.0%} of the {len(reps)} throws counted."
+        )
+        return result
+
+    # Contacts alone cannot tell a throw from a wave, because an arm whipping
+    # forward with the ball still in it produces the same impulse beside the
+    # same wrist. Whether the ball ever left the hand can.
+    if ball_travel is not None and ball_travel < CONFIRM_MIN_TRAVEL:
+        result.flag(
+            "The ball never travelled away from your hands, so these look like "
+            "throwing motions rather than throws."
         )
     return result

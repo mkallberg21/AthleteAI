@@ -370,6 +370,20 @@ export class BallRepCounter {
     this.detector.reset();
     this.reps = [];
     this.lastAt = null;
+    /** Frames where the ball was tracked at all. */
+    this.trackedFrames = 0;
+    /**
+     * Frames where the ball was well clear of both hands.
+     *
+     * The check that separates wall ball from waving a ball around. An arm
+     * whipping through a throwing motion with the ball still in it produces
+     * accelerations that read as impulses and a wrist right beside them that
+     * reads as a contact -- so contact counting alone scores a fake exactly
+     * like the real thing. What it cannot fake is the ball leaving: real wall
+     * ball sends it metres away and brings it back, and a ball that never
+     * gets more than a hand's width from a wrist never went anywhere.
+     */
+    this.awayFrames = 0;
   }
 
   get count() { return this.reps.length; }
@@ -397,6 +411,7 @@ export class BallRepCounter {
   push(detection, landmarks, tMs) {
     this.lastAt = tMs;
     const ball = this.tracker.push(detection, tMs);
+    this._measureTravel(ball, landmarks);
     const contact = this.detector.push(ball, this.parts(landmarks), tMs);
     if (!contact) return null;
 
@@ -418,6 +433,28 @@ export class BallRepCounter {
     return rep;
   }
 
+  /** How far the ball gets from the hands, measured in the athlete's torsos. */
+  _measureTravel(ball, landmarks) {
+    if (!ball || ball.x === null || !landmarks) return;
+    const torso = torsoLength(landmarks);
+    if (!torso) return;
+    this.trackedFrames += 1;
+
+    let nearest = Infinity;
+    for (const name of ['left_wrist', 'right_wrist']) {
+      const point = landmarks[LANDMARK_INDEX[name]];
+      if (!point || (point.visibility ?? 1) < 0.4) continue;
+      nearest = Math.min(nearest, Math.hypot(ball.x - point.x, ball.y - point.y));
+    }
+    if (nearest === Infinity) return;
+    if (nearest / torso > AWAY_FROM_HANDS) this.awayFrames += 1;
+  }
+
+  /** Share of tracked frames where the ball was genuinely away from the hands. */
+  get travelShare() {
+    return this.trackedFrames ? this.awayFrames / this.trackedFrames : 0;
+  }
+
   /**
    * Corroboration for a drill whose reps the *body* counted.
    *
@@ -429,6 +466,7 @@ export class BallRepCounter {
     return {
       track_quality: Math.round(this.trackQuality * 1000) / 1000,
       ball_contacts: this.detector.contacts.length,
+      ball_travel: Math.round(this.travelShare * 1000) / 1000,
     };
   }
 
@@ -463,6 +501,19 @@ export class BallRepCounter {
     }
     return out;
   }
+}
+
+/** Distance from ball to hand, beyond which the ball has actually gone. */
+export const AWAY_FROM_HANDS = 1.5;
+
+/** Shoulder-to-hip, the scale everything about a body is measured in. */
+function torsoLength(landmarks) {
+  const shoulder = landmarks[LANDMARK_INDEX.left_shoulder]
+    || landmarks[LANDMARK_INDEX.right_shoulder];
+  const hip = landmarks[LANDMARK_INDEX.left_hip] || landmarks[LANDMARK_INDEX.right_hip];
+  if (!shoulder || !hip) return 0;
+  const torso = Math.hypot(shoulder.x - hip.x, shoulder.y - hip.y);
+  return torso > 0.05 ? torso : 0;
 }
 
 /**

@@ -1311,6 +1311,7 @@ class Store:
         completed_at: str | None = None,
         track_quality: float | None = None,
         ball_contacts: int | None = None,
+        ball_travel: float | None = None,
     ) -> dict[str, Any]:
         """Validate, score, and record a completed session.
 
@@ -1378,6 +1379,7 @@ class Store:
                 track_quality,
                 claim.duration_ms,
                 ball_contacts=ball_contacts,
+                ball_travel=ball_travel,
             )
             if not ball_review.ok:
                 verdict.status = "review"

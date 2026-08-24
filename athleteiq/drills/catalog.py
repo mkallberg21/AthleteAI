@@ -94,6 +94,12 @@ WALL_BALL = DrillSpec(
         min_speed=0.40,
         attribute_side=False,
         min_track_quality=0.30,
+        # The purpose-built detector rather than the general model, because a
+        # lacrosse ball is not in the general model's vocabulary. It also runs
+        # every frame instead of every fourth, which matters for a ball moving
+        # this fast.
+        detector="vision",
+        colour="white",
     ),
     setup_hint=(
         "Stand side-on to the phone, 8-10 feet back, full body and stick head "

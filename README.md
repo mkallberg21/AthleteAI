@@ -76,7 +76,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1425 tests
+python -m pytest tests/ -q          # 1428 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -126,6 +126,7 @@ athleteiq/
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
     ball.js         Ball tracking: detect-then-track, contacts, ball reps
+    ballvision.js   The lacrosse-specific detector: colour, size, motion
     review.js       Self-review recording, markers, pose track (never uploaded)
     offline.js      IndexedDB slot pool + submission queue
     sw.js           Service worker: app-shell cache and push delivery
@@ -1090,6 +1091,52 @@ juggle if a foot is next to it and a dribble if nothing is. There is a test
 driving the same trajectory into both drills and asserting each counts it — and
 that a foot placed elsewhere counts nothing.
 
+### The lacrosse-specific detector
+
+The general model knows "sports ball" from photographs of basketballs and
+tennis balls. It does not reliably see a 6cm ball moving at speed against a
+wall, which left wall-ball confirmation firing only sometimes.
+
+**`ballvision.js` is classical computer vision, not a trained model.** No
+network was trained and none is downloaded. That is a deliberate choice, not a
+shortcut: training one needs thousands of labelled frames of real athletes,
+which do not exist for this product and could not be collected without
+uploading exactly the footage the architecture promises never to upload. It
+exploits four things about a lacrosse ball instead, none of which a general
+model can use.
+
+**Its size is regulated.** A lacrosse ball is 6.35cm, always. Pose gives the
+athlete's torso in the same frame and a youth torso is about 45cm, so the ball's
+expected radius in pixels is *computed*, not guessed — and anything twice or
+half that is not the ball. A general detector cannot do this because it has no
+idea how far away anything is.
+
+**Its colour is regulated too.** Centroids for white, yellow and orange are
+measured from real ball colours in sun and shade, in illumination-normalised
+chroma so a ball in shadow matches the same point as one in sun. Tolerances are
+set from the distance to the nearest thing that is *not* a ball — skin at 0.134
+for yellow, brick at 0.120 for orange — with better than twice that margin, and
+a test asserts the separation. Better still, "Show the app your ball" samples
+the athlete's actual ball under their actual light.
+
+**It is a solid disc**, so matched pixels must fill the circle they imply. A
+yellow jacket sleeve matches on every pixel and is rejected for being a streak.
+
+**It flies ballistically**, which the tracker already checks.
+
+Working width is **480px, and that number is the crux**. At a realistic framing
+the torso spans about 30% of frame height, so a lacrosse ball is roughly *two
+pixels across* in a 192-wide image — a large part of why the general detector
+could not find one. At 480 the same ball is about six pixels, which is findable,
+for about a millisecond a frame. Below a resolvable size the detector says so
+rather than silently counting nothing.
+
+A white ball on a white wall is the genuinely hard case and colour cannot solve
+it — a pale wall matches the white profile *better* than the ball does. The
+motion gate carries it, and it is **directional**: a bright ball arriving makes a
+pixel brighter, a bright ball leaving makes it darker, and a plain
+change-magnitude test followed the hole the ball left instead of the ball.
+
 ### Two modes: counting, and confirming
 
 A ball spec does one of two jobs, and which one matters more than any threshold
@@ -1112,6 +1159,7 @@ The rule is **deliberately asymmetric**, and the asymmetry is the design.
 | Ball never detected | Counts, with a note saying so — **no penalty** |
 | Ball tracked, throws corroborated | Counts quietly |
 | Ball tracked clearly, involved in <25% of throws | **Held for review** |
+| Ball tracked clearly, never leaves the hands | **Held for review** |
 
 Not seeing a ball proves nothing. A lacrosse ball is outside COCO's vocabulary —
 the detector knows basketballs and tennis balls, not a 6cm ball moving at speed
@@ -1121,6 +1169,14 @@ for a whole session and watching it never leave a hand while the arms threw
 forty times proves quite a lot. Penalising only on positive evidence is what
 stops this becoming a feature that quietly marks down every kid whose ball
 happens to be white.
+
+That last row is the one contact counting could not see. An arm whipping
+through a throwing motion with the ball still in it produces the same impulse
+beside the same wrist as a real release — in simulation, **twelve contacts for
+twelve fake throws, identical to the real session**. What cannot be faked is the
+ball leaving: real wall ball sends it metres away and brings it back, so the
+client reports the share of tracked frames the ball spent more than 1.5 torsos
+from the nearest hand. Real: 0.45. Waving it around: 0.00.
 
 Short sessions are never judged this way, an older client that predates ball
 tracking is unaffected, and the count-mode checks (metronomic timing, an

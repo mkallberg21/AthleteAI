@@ -205,6 +205,36 @@ class TestConfirmingWallBall:
         )
         assert result.ok and not result.hold
 
+    def test_waving_a_ball_around_is_caught_by_travel(self):
+        """The case contact counting cannot see.
+
+        An arm whipping through a throwing motion with the ball still in it
+        produces the same impulse beside the same wrist as a real release --
+        measured at twelve contacts for twelve fake throws, identical to the
+        real session. What it cannot fake is the ball leaving the hand.
+        """
+        result = B.review(
+            self.WALL_BALL, self.throws(), track_quality=0.63,
+            duration_ms=48_000, ball_contacts=12, ball_travel=0.0,
+        )
+        assert not result.ok and result.hold
+        assert "never travelled away from your hands" in result.reasons[0]
+
+    def test_a_real_session_travels_and_passes(self):
+        result = B.review(
+            self.WALL_BALL, self.throws(), track_quality=0.50,
+            duration_ms=48_000, ball_contacts=12, ball_travel=0.45,
+        )
+        assert result.ok and not result.hold
+
+    def test_travel_is_not_judged_when_the_client_does_not_report_it(self):
+        """An older client sends no travel figure, and silence is not evidence."""
+        result = B.review(
+            self.WALL_BALL, self.throws(), track_quality=0.50,
+            duration_ms=48_000, ball_contacts=12, ball_travel=None,
+        )
+        assert result.ok
+
     def test_shadow_throwing_with_the_ball_in_shot_is_caught(self):
         """The exact hole this closes: forty throwing motions, a ball tracked
         clearly the whole time, and it never once left a hand."""

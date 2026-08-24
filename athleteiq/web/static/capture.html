@@ -193,6 +193,9 @@
         <div class="small muted" id="ball-quality"></div>
         <div class="small warn-text" id="ball-help"></div>
       </div>
+      <button class="secondary hidden" id="ball-calibrate" style="margin-top:8px">
+        Show the app your ball
+      </button>
       <div class="privacy-note">Nothing you see here is recorded or uploaded. Counts only.</div>
 
       <button id="startstop" style="margin-top:12px" disabled>Start</button>
@@ -286,7 +289,9 @@
 
 <script type="module">
 import { api, esc, fmtDate, getToken, logout } from './api.js';
-import { BallRepCounter } from './ball.js';
+import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
+import { BallVision, PRESETS, calibrate, radiusFromPose, WORK_WIDTH }
+  from './ballvision.js';
 import { RepCounter } from './counter.js';
 import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
@@ -328,6 +333,11 @@ let ballDetector = null;
 let ballCounter = null;
 let ballConfirms = false;
 let lastBallDetectAt = 0;
+let ballVision = null;
+let lastLandmarks = null;
+let workCanvas = null;
+let workCtx = null;
+let calibrating = false;
 let stream = null;
 let counter = null;
 let session = null;
@@ -1099,9 +1109,13 @@ async function openCapture(drill) {
   // Count mode replaces the pose counter; confirm mode runs alongside it.
   ballCounter = drill.ball ? new BallRepCounter(drill) : null;
   ballConfirms = Boolean(drill.ball && drill.ball.mode === 'confirm');
+  ballVision = drill.ball && drill.ball.detector === 'vision'
+    ? new BallVision({ profile: PRESETS[drill.ball.colour] || PRESETS.white })
+    : null;
+  $('ball-calibrate').classList.toggle('hidden', !ballVision);
   lastBallDetectAt = 0;
   $('ball-readout').classList.toggle('hidden', !drill.ball);
-  if (drill.ball) {
+  if (drill.ball && drill.ball.detector === 'model') {
     setBanner('Loading the ball detector…');
     try {
       await ensureBallDetector();
@@ -1206,6 +1220,9 @@ function renderLoop() {
       if (running) setBanner('Nobody in frame — counting paused.', true);
       return;
     }
+    // Kept for the vision detector, which needs the torso to know how big the
+    // ball should be in this framing.
+    lastLandmarks = landmarks;
     drawSkeleton(ctx, landmarks, canvas.width, canvas.height);
 
     if (!running) return;
@@ -1217,7 +1234,12 @@ function renderLoop() {
     if (ballCounter) {
       let detection = null;
       const now = performance.now();
-      if (ballDetector && now - lastBallDetectAt >= BALL_DETECT_EVERY_MS) {
+      if (ballVision) {
+        // Cheap enough to run every frame, which is the point: the general
+        // model manages about one frame in four, and a lacrosse ball crosses
+        // a lot of frame in the three it misses.
+        detection = detectByVision();
+      } else if (ballDetector && now - lastBallDetectAt >= BALL_DETECT_EVERY_MS) {
         lastBallDetectAt = now;
         try {
           detection = bestBall(
@@ -1272,6 +1294,70 @@ const BONES = [
   [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
 ];
 
+/** The downscaled frame the vision detector works on. ~20k pixels. */
+function workFrame() {
+  if (!workCanvas) {
+    workCanvas = document.createElement('canvas');
+    workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  const height = Math.max(1, Math.round(WORK_WIDTH * (video.videoHeight / video.videoWidth)));
+  if (workCanvas.width !== WORK_WIDTH) {
+    workCanvas.width = WORK_WIDTH;
+    workCanvas.height = height;
+  }
+  workCtx.drawImage(video, 0, 0, WORK_WIDTH, height);
+  return workCtx.getImageData(0, 0, WORK_WIDTH, height);
+}
+
+/**
+ * One vision detection, constrained by the athlete's own body.
+ *
+ * The size prior is the part a general detector cannot do: a lacrosse ball is
+ * always 6.35cm, and the torso in the same frame says what that is in pixels.
+ */
+function detectByVision() {
+  let image;
+  try { image = workFrame(); } catch { return null; }
+  const landmarks = lastLandmarks;
+  const expectedRadius = radiusFromPose(landmarks, LANDMARK_INDEX);
+  const near = ballCounter && ballCounter.tracker.visible
+    ? { x: ballCounter.tracker.x, y: ballCounter.tracker.y }
+    : null;
+  return ballVision.detect(image, { expectedRadius, near });
+}
+
+/**
+ * Learn the athlete's actual ball.
+ *
+ * Two seconds of setup beats any preset: it captures this ball, in this
+ * light, in this gym. A yellow ball under sodium floodlights is not the
+ * yellow in a rulebook, and a scuffed white ball is not paper white.
+ */
+async function calibrateBall() {
+  if (!ballVision) return;
+  calibrating = true;
+  setBanner('Hold the ball still in the middle of the screen…');
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  try {
+    const image = workFrame();
+    const box = {
+      x: image.width * 0.4, y: image.height * 0.35,
+      w: image.width * 0.2, h: image.height * 0.3,
+    };
+    const profile = calibrate(image, box);
+    if (profile) {
+      ballVision.setProfile(profile);
+      setBanner('Got it — that is your ball.');
+      setTimeout(() => setBanner(''), 1600);
+    } else {
+      setBanner('Could not see it. The preset will do.', true);
+    }
+  } catch {
+    setBanner('Could not see it. The preset will do.', true);
+  }
+  calibrating = false;
+}
+
 /** A ring where the ball is, so an athlete can see it is being followed. */
 function drawBall(ctx, ball, width, height) {
   ctx.beginPath();
@@ -1307,6 +1393,8 @@ function updateBallReadout() {
     ? ''
     : 'Move the phone so the ball and your whole body are in shot.';
 }
+
+$('ball-calibrate').addEventListener('click', calibrateBall);
 
 function drawSkeleton(ctx, lms, w, h) {
   ctx.lineWidth = Math.max(2, w / 220);
