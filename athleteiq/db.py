@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -403,6 +403,28 @@ CREATE TABLE IF NOT EXISTS email_preferences (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (user_id, kind)
 );
+
+-- Every delivery event a mail provider has told us about.
+--
+-- Kept raw as well as normalized: when a coach says they never got the digest,
+-- the provider's own words are what settles it, and a normalization bug should
+-- not destroy the evidence of what actually arrived.
+CREATE TABLE IF NOT EXISTS webhook_events (
+    id          INTEGER PRIMARY KEY,
+    provider    TEXT NOT NULL,
+    -- The provider's own id for this event. Providers retry webhooks, and a
+    -- retried soft bounce counted twice pushes a live address off the list.
+    event_id    TEXT NOT NULL UNIQUE,
+    event_type  TEXT NOT NULL,
+    email       TEXT NOT NULL,
+    reason      TEXT NOT NULL DEFAULT '',
+    message_id  TEXT NOT NULL DEFAULT '',
+    occurred_at TEXT NOT NULL DEFAULT '',
+    received_at TEXT NOT NULL,
+    action      TEXT NOT NULL DEFAULT '',
+    raw         TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_email ON webhook_events(email, event_type, received_at);
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,

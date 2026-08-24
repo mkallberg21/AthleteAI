@@ -226,6 +226,17 @@ class Config:
     # a development default rather than a production one.
     secret_key: str = field(default_factory=lambda: os.environ.get("ATHLETEIQ_SECRET", ""))
 
+    # Per-provider webhook secrets. An empty secret means that provider's
+    # endpoint is disabled -- absent configuration must never mean "trust
+    # anything", since this endpoint takes instructions from the public
+    # internet about whose mail to stop.
+    webhook_secrets: dict = field(
+        default_factory=lambda: {
+            provider: os.environ.get(f"ATHLETEIQ_WEBHOOK_SECRET_{provider.upper()}", "")
+            for provider in ("sendgrid", "postmark", "mailgun", "ses", "generic")
+        }
+    )
+
     @property
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host)

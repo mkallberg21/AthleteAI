@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 665 tests
+python -m pytest tests/ -q          # 719 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -93,6 +93,7 @@ athleteiq/
   digest.py         Weekly team KPIs and the coach email
   billing.py        Plans, seats, entitlements, invoicing seam
   mailer.py         Outbound queue: retries, suppression, unsubscribe
+  webhooks.py       Inbound delivery events: verification, bounce handling
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -318,6 +319,43 @@ and another coach's cannot be forged by swapping the user id. `List-Unsubscribe`
 and `List-Unsubscribe-Post` headers let a mail client do it in place. Opting out
 of the weekly digest does not touch in-app alerts, and transactional mail ignores
 the preference entirely.
+
+### Bounce webhooks
+
+Most bounces are asynchronous. The receiving server accepts the message and only
+sends a bounce back minutes or hours later, long after the SMTP conversation has
+closed — so without a webhook a dead address is retried every Monday forever.
+
+`POST /api/webhooks/email/{provider}` accepts events from SendGrid, Postmark,
+Mailgun, and SES.
+
+**Verification comes before parsing.** This endpoint's entire job is taking
+instructions from the public internet about which addresses to stop mailing.
+Unverified, it is a one-request tool for cutting any coach off from their
+digest. Each provider is checked with its own real scheme — SendGrid's ECDSA
+P-256 over timestamp + raw body, Mailgun's HMAC over timestamp + token, a
+constant-time shared secret for Postmark and SES — the signature is checked
+before the payload reaches a parser, and a stale timestamp is refused so a
+captured request cannot be replayed tomorrow. **An unset secret disables the
+provider rather than trusting everything**, and the rejection says only
+"unauthorized", because explaining the failure helps the next attempt succeed.
+
+**A soft bounce is not a dead address.** A full mailbox, a greylisting server,
+an over-quota school account: all bounce, all recover. Hard bounces and spam
+complaints suppress immediately; soft bounces only suppress after three in a
+fortnight. Suppressing on the first one loses real recipients silently, which is
+the exact failure the webhook exists to prevent. SendGrid's `blocked` bounce is
+mapped to *soft* for the same reason.
+
+**A spam complaint outranks an administrator.** It suppresses the address *and*
+turns the preference off, and a director cannot undo it from the dashboard —
+someone who reported the mail did not ask to be put back on the list. A plain
+bounce, which is usually a typo in a roster import, can be cleared in one click.
+
+Events are deduplicated on the provider's own id, because providers retry and a
+soft bounce counted twice pushes a live address off the list. Raw payloads are
+retained alongside the normalized event: when a coach says they never got the
+digest, the provider's own words are what settles it.
 
 **Every send is recorded.** `/api/coach/outbox` shows what was delivered, what is
 waiting, what failed and why, so "did the coach actually get it?" has an answer.
@@ -772,10 +810,10 @@ contact with a real driveway:
    than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **No bounce webhook.** Hard bounces are detected from the SMTP response at
-   send time, which catches a refused recipient but not an asynchronous bounce
-   that arrives minutes later. A provider webhook feeding `mailer.suppress()`
-   is the missing piece.
+7. **SES webhooks use a shared secret, not SNS signature verification.** Full
+   SNS verification means fetching and validating AWS's signing certificate at
+   request time; a secret in the subscription URL is the documented alternative
+   and is what is implemented. The other three providers use their real schemes.
 8. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.

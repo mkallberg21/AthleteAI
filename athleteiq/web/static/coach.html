@@ -94,6 +94,7 @@
     </div>
     <div id="digest-note" class="small muted hidden" style="margin-top:8px"></div>
     <div id="delivery" class="hidden" style="margin-top:12px"></div>
+    <div id="bounces" class="hidden" style="margin-top:12px"></div>
   </div>
 
   <div class="card" id="attention-card">
@@ -491,6 +492,47 @@ async function loadDelivery() {
             <td class="small muted">${esc((r.last_error || '').slice(0, 60))}</td>
           </tr>`).join('')}</tbody></table>` : ''}`;
   } catch { /* only directors can read the outbox */ }
+
+  try {
+    const b = await api('/api/coach/bounces');
+    const bad = (b.addresses || []).filter((a) => a.suppressed);
+    if (!bad.length) {
+      $('bounces').classList.add('hidden');
+      return;
+    }
+    $('bounces').classList.remove('hidden');
+    $('bounces').innerHTML = `
+      <div class="small" style="color:var(--warn)">
+        ${bad.length} address${bad.length === 1 ? '' : 'es'} no longer receiving mail
+        &mdash; a typo in a roster import is the usual cause.
+      </div>
+      <table style="margin-top:8px"><tbody>${bad.slice(0, 6).map((a) => {
+        const complained = (a.counts || {}).complaint;
+        return `<tr>
+          <td class="small">${esc(a.email)}</td>
+          <td><span class="pill ${complained ? 'bad' : 'warn'}">${
+            complained ? 'reported as spam' : 'bouncing'}</span></td>
+          <td>${complained ? '<span class="small muted">they must opt back in</span>'
+            : `<button class="inline secondary" data-unsuppress="${esc(a.email)}">Try again</button>`}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+
+    $('bounces').querySelectorAll('[data-unsuppress]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await api('/api/coach/bounces/unsuppress', {
+            method: 'POST', body: { email: btn.dataset.unsuppress },
+          });
+          await loadDelivery();
+        } catch (e) {
+          $('digest-note').textContent = e.message;
+          $('digest-note').classList.remove('hidden');
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch { /* only directors can read bounces */ }
 }
 
 $('digest-optin').addEventListener('change', async () => {

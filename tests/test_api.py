@@ -1639,3 +1639,199 @@ class TestUnsubscribeEndpoints:
         assert client.get(
             "/api/coach/outbox", headers=program["director"]
         ).status_code == 200
+
+
+class TestWebhookEndpoint:
+    """The endpoint takes instructions from the public internet about whose
+    mail to stop. Every negative case here is a real attack."""
+
+    def _mailgun(self, secret="mg-secret", email="coach@example.com", age=0, event_id="ev1"):
+        import hashlib
+        import hmac
+        import json
+        import time
+
+        timestamp = str(int(time.time()) - age)
+        token = "tok"
+        signature = hmac.new(
+            secret.encode(), f"{timestamp}{token}".encode(), hashlib.sha256
+        ).hexdigest()
+        return json.dumps({
+            "signature": {"timestamp": timestamp, "token": token, "signature": signature},
+            "event-data": {
+                "event": "failed", "severity": "permanent", "id": event_id,
+                "recipient": email, "reason": "550 mailbox unavailable",
+            },
+        })
+
+    def _configure(self, monkeypatch, secret="mg-secret"):
+        import athleteiq.api as api_mod
+        from athleteiq.config import Config
+
+        monkeypatch.setattr(
+            api_mod, "CONFIG",
+            Config(webhook_secrets={"mailgun": secret, "sendgrid": "", "postmark": "",
+                                    "ses": "", "generic": ""}),
+        )
+
+    def _seed(self, client, program):
+        from athleteiq import mailer
+
+        store = api_module._store
+        store.conn.execute(
+            "UPDATE users SET email = 'coach@example.com' WHERE id = ?",
+            (program["org"]["director"]["id"],),
+        )
+        store.conn.commit()
+        mailer.enqueue(
+            store.conn, to_email="coach@example.com", subject="x", html="x", text="x",
+            kind=mailer.Kind.COACH_DIGEST, dedupe_key="seed",
+            user_id=program["org"]["director"]["id"],
+        )
+
+    def test_a_verified_bounce_suppresses_the_address(self, client, program, monkeypatch):
+        from athleteiq import mailer
+
+        self._configure(monkeypatch)
+        self._seed(client, program)
+        res = client.post(
+            "/api/webhooks/email/mailgun",
+            content=self._mailgun(),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 200
+        assert res.json()["actions"]["suppressed"] == 1
+        assert mailer.is_suppressed(api_module._store.conn, "coach@example.com")
+
+    def test_an_unsigned_request_is_rejected(self, client, program, monkeypatch):
+        """The whole point: anyone could otherwise cut a coach off from their digest."""
+        from athleteiq import mailer
+
+        self._configure(monkeypatch)
+        self._seed(client, program)
+        res = client.post(
+            "/api/webhooks/email/mailgun",
+            content=self._mailgun(secret="attacker-guess"),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 401
+        assert not mailer.is_suppressed(api_module._store.conn, "coach@example.com")
+
+    def test_the_rejection_does_not_explain_itself(self, client, program, monkeypatch):
+        """Telling an unauthenticated caller why helps them get it right next time."""
+        self._configure(monkeypatch)
+        res = client.post(
+            "/api/webhooks/email/mailgun",
+            content=self._mailgun(secret="wrong"),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.json()["detail"] == "unauthorized"
+
+    def test_a_replayed_request_is_rejected(self, client, program, monkeypatch):
+        self._configure(monkeypatch)
+        self._seed(client, program)
+        res = client.post(
+            "/api/webhooks/email/mailgun",
+            content=self._mailgun(age=7200),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 401
+
+    def test_an_unconfigured_provider_rejects_everything(self, client, program, monkeypatch):
+        """Absent configuration must never mean 'trust anything'."""
+        self._configure(monkeypatch, secret="")
+        res = client.post(
+            "/api/webhooks/email/mailgun",
+            content=self._mailgun(),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 401
+
+    def test_a_verified_but_unreadable_payload_is_accepted(self, client, program, monkeypatch):
+        """A provider disables an endpoint that keeps erroring, so an unknown
+        shape must not look like a failure."""
+        import athleteiq.api as api_mod
+        from athleteiq.config import Config
+
+        monkeypatch.setattr(
+            api_mod, "CONFIG",
+            Config(webhook_secrets={"postmark": "tok", "mailgun": "", "sendgrid": "",
+                                    "ses": "", "generic": ""}),
+        )
+        res = client.post(
+            "/api/webhooks/email/postmark",
+            content="{not json",
+            headers={"Content-Type": "application/json", "X-Webhook-Token": "tok"},
+        )
+        assert res.status_code == 202
+
+    def test_retried_deliveries_are_idempotent(self, client, program, monkeypatch):
+        self._configure(monkeypatch)
+        self._seed(client, program)
+        payload = self._mailgun()
+        for _ in range(3):
+            client.post(
+                "/api/webhooks/email/mailgun", content=payload,
+                headers={"Content-Type": "application/json"},
+            )
+        assert api_module._store.conn.execute(
+            "SELECT COUNT(*) AS n FROM webhook_events"
+        ).fetchone()["n"] == 1
+
+    def test_the_webhook_needs_no_bearer_token(self, client, program, monkeypatch):
+        """The caller is a provider, not a user."""
+        self._configure(monkeypatch)
+        self._seed(client, program)
+        res = client.post(
+            "/api/webhooks/email/mailgun", content=self._mailgun(),
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 200
+
+
+class TestBounceAdmin:
+    def test_a_director_sees_failing_addresses(self, client, program):
+        from athleteiq import webhooks as W
+
+        W.apply_event(api_module._store.conn, W.Event(
+            provider="mailgun", event_id="b1",
+            type=W.EventType.HARD_BOUNCE, email="dead@example.com",
+        ))
+        data = client.get("/api/coach/bounces", headers=program["director"]).json()
+        assert data["addresses"][0]["email"] == "dead@example.com"
+        assert data["addresses"][0]["suppressed"] is True
+
+    def test_athletes_cannot_read_bounces(self, client, program):
+        assert client.get(
+            "/api/coach/bounces", headers=program["athletes"][0]["headers"]
+        ).status_code == 403
+
+    def test_a_corrected_address_can_be_put_back(self, client, program):
+        from athleteiq import mailer, webhooks as W
+
+        W.apply_event(api_module._store.conn, W.Event(
+            provider="mailgun", event_id="b2",
+            type=W.EventType.HARD_BOUNCE, email="typo@example.com",
+        ))
+        res = client.post(
+            "/api/coach/bounces/unsuppress",
+            json={"email": "typo@example.com"}, headers=program["director"],
+        )
+        assert res.status_code == 200
+        assert not mailer.is_suppressed(api_module._store.conn, "typo@example.com")
+
+    def test_a_spam_complaint_cannot_be_overridden_by_an_admin(self, client, program):
+        """They did not ask to be put back on the list."""
+        from athleteiq import mailer, webhooks as W
+
+        W.apply_event(api_module._store.conn, W.Event(
+            provider="sendgrid", event_id="c9",
+            type=W.EventType.COMPLAINT, email="angry@example.com",
+        ))
+        res = client.post(
+            "/api/coach/bounces/unsuppress",
+            json={"email": "angry@example.com"}, headers=program["director"],
+        )
+        assert res.status_code == 400
+        assert "opt back in themselves" in res.json()["detail"]
+        assert mailer.is_suppressed(api_module._store.conn, "angry@example.com")

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -20,6 +20,7 @@ from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import digest as digest_mod
 from . import mailer
+from . import webhooks as webhooks_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
 from . import notifications as notify
@@ -925,6 +926,100 @@ def send_digest(
             "It will be retried automatically."
         ),
     }
+
+
+# ----------------------------------------------------------------------
+# Delivery webhooks
+# ----------------------------------------------------------------------
+
+@app.post("/api/webhooks/email/{provider}")
+async def email_webhook(
+    provider: str,
+    request: Request,
+    store: Store = Depends(get_store),
+) -> JSONResponse:
+    """Receive delivery events from a mail provider.
+
+    Deliberately outside the bearer-token auth: the caller is a provider, not a
+    user. Authenticity comes from the provider's own signature over the raw
+    body, which is why this reads the body itself rather than declaring a
+    model -- a parsed and re-serialized payload no longer matches what was
+    signed.
+    """
+    secret = CONFIG.webhook_secrets.get(provider, "")
+    body = await request.body()
+
+    if len(body) > webhooks_mod.MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="payload too large")
+
+    try:
+        result = webhooks_mod.handle(
+            provider, dict(request.headers), body, secret, store.conn
+        )
+    except webhooks_mod.WebhookError as exc:
+        message = str(exc)
+        if "verification" in message:
+            # Deliberately terse. Telling an unauthenticated caller *why* the
+            # signature failed helps them make the next one succeed.
+            raise HTTPException(status_code=401, detail="unauthorized") from None
+        # Verified but unreadable: accept it so the provider does not disable
+        # the endpoint over a shape we have not seen, and log it for us.
+        log = __import__("logging").getLogger(__name__)
+        log.warning("unreadable %s webhook: %s", provider, message)
+        return JSONResponse(status_code=202, content={"accepted": True, "note": message})
+
+    return JSONResponse(status_code=200, content=result)
+
+
+@app.get("/api/coach/bounces")
+def get_bounces(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Addresses that are failing, so someone can go and fix them."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="director access required")
+    return {
+        **webhooks_mod.bounce_summary(store.conn),
+        "recent_events": webhooks_mod.recent_events(store.conn, 25),
+        "configured_providers": [
+            name for name, secret in CONFIG.webhook_secrets.items() if secret
+        ],
+    }
+
+
+class UnsuppressRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+
+
+@app.post("/api/coach/bounces/unsuppress")
+def unsuppress_address(
+    body: UnsuppressRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Put a corrected address back into circulation.
+
+    Refuses a spam complaint: someone who reported the mail did not ask to be
+    put back on the list, and an administrator should not be able to override
+    that on their behalf.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="director access required")
+
+    complained = store.conn.execute(
+        "SELECT 1 FROM webhook_events WHERE email = ? AND event_type = ? LIMIT 1",
+        (body.email.strip().lower(), webhooks_mod.EventType.COMPLAINT),
+    ).fetchone()
+    if complained:
+        raise HTTPException(
+            status_code=400,
+            detail="That recipient reported the mail as spam. They have to opt "
+                   "back in themselves.",
+        )
+
+    mailer.unsuppress(store.conn, body.email)
+    return {"email": body.email, "suppressed": False}
 
 
 # ----------------------------------------------------------------------
