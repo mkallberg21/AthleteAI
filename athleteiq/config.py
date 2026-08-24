@@ -222,6 +222,9 @@ class Config:
     app_base_url: str = field(
         default_factory=lambda: os.environ.get("ATHLETEIQ_BASE_URL", "")
     )
+    # Signs unsubscribe links. Unset means links are forgeable, not broken --
+    # a development default rather than a production one.
+    secret_key: str = field(default_factory=lambda: os.environ.get("ATHLETEIQ_SECRET", ""))
 
     @property
     def smtp_configured(self) -> bool:

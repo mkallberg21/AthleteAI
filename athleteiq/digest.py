@@ -648,7 +648,9 @@ def _kpi_cell(kpi: KPI) -> str:
 </td>"""
 
 
-def render_html(digest: TeamDigest, dashboard_url: str = "") -> str:
+def render_html(
+    digest: TeamDigest, dashboard_url: str = "", unsubscribe_url: str = ""
+) -> str:
     """The digest as an email-client-safe HTML document."""
     rows = []
     cells = [_kpi_cell(k) for k in digest.kpis]
@@ -772,6 +774,8 @@ def render_html(digest: TeamDigest, dashboard_url: str = "") -> str:
       No individual athlete is named in this email, by design &mdash; these are
       team numbers, meant to be shared.
       <br>Athletes' video is analysed on their own phones and never uploaded.
+      {f'<br><a href="{_esc(unsubscribe_url)}" style="color:{MUTED}">'
+       f'Stop receiving this weekly email</a>' if unsubscribe_url else ''}
     </div>
   </td></tr>
 
@@ -780,7 +784,9 @@ def render_html(digest: TeamDigest, dashboard_url: str = "") -> str:
 </body></html>"""
 
 
-def render_text(digest: TeamDigest, dashboard_url: str = "") -> str:
+def render_text(
+    digest: TeamDigest, dashboard_url: str = "", unsubscribe_url: str = ""
+) -> str:
     """Plain-text alternative.
 
     Sent alongside the HTML rather than instead of it: some clients prefer it,
@@ -833,6 +839,8 @@ def render_text(digest: TeamDigest, dashboard_url: str = "") -> str:
         "named in this email, by design. Video is analysed on athletes' own",
         "phones and never uploaded.",
     ]
+    if unsubscribe_url:
+        lines += ["", f"Stop receiving this weekly email: {unsubscribe_url}"]
     return "\n".join(lines)
 
 

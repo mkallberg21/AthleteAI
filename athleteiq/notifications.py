@@ -217,87 +217,85 @@ class WebPushChannel(Channel):
         return delivered
 
 
-def send_email(to: str, subject: str, html: str, text: str) -> bool:
-    """Send one multipart email over SMTP. Returns False when unconfigured.
-
-    Both parts are sent: some clients prefer plain text, some strip HTML
-    entirely, and a multipart message without a text alternative is filtered as
-    spam noticeably more often.
-    """
-    if not CONFIG.smtp_configured:
-        log.info("SMTP not configured; would have emailed %s: %s", to, subject)
-        return False
-
-    import smtplib
-    from email.message import EmailMessage
-
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = CONFIG.smtp_from
-    message["To"] = to
-    message.set_content(text)
-    message.add_alternative(html, subtype="html")
-
-    try:
-        with smtplib.SMTP(CONFIG.smtp_host, CONFIG.smtp_port, timeout=20) as server:
-            server.starttls()
-            if CONFIG.smtp_user:
-                server.login(CONFIG.smtp_user, CONFIG.smtp_password)
-            server.send_message(message)
-        return True
-    except Exception as exc:  # noqa: BLE001 -- a mail failure must not break a cron run
-        log.warning("could not email %s: %s", to, exc)
-        return False
-
-
 def send_coach_digests(
     conn: sqlite3.Connection, today: date | None = None, dry_run: bool = False
 ) -> dict[str, int]:
-    """Compose and send the weekly digest to every coach and director.
+    """Compose the weekly digest for every coach and queue it for delivery.
 
-    One per team they can see, plus a program-wide one for directors, because a
-    varsity coach does not want JV's numbers folded into their own.
+    Scoped to what each person is responsible for. A director gets the
+    programme-wide numbers; a coach assigned to JV gets JV's, because folding
+    varsity's participation into a JV coach's email makes the number they are
+    supposed to move meaningless -- and it hands them data about children they
+    are not responsible for.
+
+    Queues rather than sends: delivery is a separate step that retries, so a
+    mail server having a bad Monday does not cost the week's digest.
     """
     from . import digest as digest_mod
+    from . import mailer
 
     today = today or _now().date()
     start, _ = digest_mod.last_complete_week(today)
-    sent = composed = skipped = 0
+    week = start.isoformat()
+
+    dashboard = (
+        f"{CONFIG.app_base_url.rstrip('/')}/app/coach.html"
+        if CONFIG.app_base_url else ""
+    )
+    stats = {"composed": 0, "queued": 0, "not_queued": 0}
 
     staff = conn.execute(
-        "SELECT id, org_id, role, display_name, email FROM users "
-        "WHERE role IN ('coach', 'director') AND active = 1"
+        "SELECT DISTINCT u.id, m.org_id, m.role, u.display_name, u.email "
+        "FROM memberships m JOIN users u ON u.id = m.user_id "
+        "WHERE m.role IN ('coach', 'director') AND m.active = 1 AND u.active = 1"
     ).fetchall()
 
     for member in staff:
-        report = digest_mod.compute(conn, member["org_id"], today=today)
-        composed += 1
+        # Directors, and coaches with no assignment, see the whole programme.
+        teams = [
+            r["team_id"]
+            for r in conn.execute(
+                "SELECT ts.team_id FROM team_staff ts JOIN teams t ON t.id = ts.team_id "
+                "WHERE ts.user_id = ? AND t.org_id = ?",
+                (member["id"], member["org_id"]),
+            )
+        ] if member["role"] == "coach" else []
 
-        dashboard = (
-            f"{CONFIG.app_base_url.rstrip('/')}/app/coach.html"
-            if CONFIG.app_base_url else ""
-        )
-        html = digest_mod.render_html(report, dashboard)
-        text = digest_mod.render_text(report, dashboard)
-        subject = digest_mod.subject_line(report)
+        scopes: list[int | None] = teams or [None]
 
-        # The in-app copy always lands, so a coach without an email address on
-        # file still gets the digest.
-        enqueue(
-            conn, member["id"], Kind.COACH_DIGEST, subject,
-            report.headline, link="/app/coach.html",
-            dedupe_key=f"{Kind.COACH_DIGEST}:{start.isoformat()}",
-        )
+        for team_id in scopes:
+            report = digest_mod.compute(
+                conn, member["org_id"], team_id=team_id, today=today
+            )
+            subject = digest_mod.subject_line(report)
+            stats["composed"] += 1
 
-        if dry_run or not member["email"]:
-            skipped += 1
-            continue
-        if send_email(member["email"], subject, html, text):
-            sent += 1
-        else:
-            skipped += 1
+            # The in-app copy always lands, so a coach with no email on file
+            # still gets the digest.
+            enqueue(
+                conn, member["id"], Kind.COACH_DIGEST, subject,
+                report.headline, link="/app/coach.html",
+                dedupe_key=f"{Kind.COACH_DIGEST}:{week}:{team_id or 'org'}",
+            )
 
-    return {"composed": composed, "emailed": sent, "not_emailed": skipped}
+            if dry_run:
+                stats["not_queued"] += 1
+                continue
+
+            unsubscribe = mailer.unsubscribe_url(member["id"], mailer.Kind.COACH_DIGEST)
+            queued = mailer.enqueue(
+                conn,
+                to_email=member["email"] or "",
+                subject=subject,
+                html=digest_mod.render_html(report, dashboard, unsubscribe_url=unsubscribe),
+                text=digest_mod.render_text(report, dashboard, unsubscribe_url=unsubscribe),
+                kind=mailer.Kind.COACH_DIGEST,
+                dedupe_key=f"digest:{member['id']}:{week}:{team_id or 'org'}",
+                user_id=member["id"],
+            )
+            stats["queued" if queued else "not_queued"] += 1
+
+    return stats
 
 
 def dispatch(conn: sqlite3.Connection, channels: list[Channel], limit: int = 200) -> int:

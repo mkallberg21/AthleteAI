@@ -84,11 +84,16 @@
     <div class="kpi-grid" id="digest-kpis"></div>
     <div id="digest-milestones" style="margin-top:14px"></div>
     <div id="digest-target" class="target-banner"></div>
-    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
       <button class="secondary inline" id="digest-preview">Preview the email</button>
       <button class="secondary inline" id="digest-send">Send it to me now</button>
+      <label style="display:flex;gap:7px;align-items:center;font-size:.82rem;margin-left:auto">
+        <input type="checkbox" id="digest-optin" style="width:auto;min-height:auto;margin:0">
+        Email it to me on Mondays
+      </label>
     </div>
     <div id="digest-note" class="small muted hidden" style="margin-top:8px"></div>
+    <div id="delivery" class="hidden" style="margin-top:12px"></div>
   </div>
 
   <div class="card" id="attention-card">
@@ -454,6 +459,55 @@ function renderDigest(d) {
     ? `<span class="eyebrow">Beat this</span>${esc(d.target)}` : '';
 }
 
+async function loadDelivery() {
+  try {
+    const prefs = await api('/api/email/preferences');
+    $('digest-optin').checked = prefs.preferences.coach_digest !== false;
+  } catch { /* not fatal */ }
+
+  try {
+    const ob = await api('/api/coach/outbox');
+    const counts = ob.counts || {};
+    const stuck = (counts.queued || 0) + (counts.failed || 0);
+    const bits = [];
+    if (counts.sent) bits.push(`${counts.sent} delivered`);
+    if (counts.queued) bits.push(`${counts.queued} waiting to send`);
+    if (counts.failed) bits.push(`${counts.failed} failed`);
+    if (counts.suppressed) bits.push(`${counts.suppressed} skipped`);
+
+    $('delivery').classList.remove('hidden');
+    $('delivery').innerHTML = `
+      <div class="small muted">
+        Email delivery: ${bits.length ? esc(bits.join(' · ')) : 'nothing sent yet'}
+        ${ob.smtp_configured ? '' :
+          ' — <b style="color:var(--warn)">no mail server configured</b>, so nothing leaves this machine'}
+      </div>
+      ${stuck && ob.recent.length ? `
+        <table style="margin-top:8px"><tbody>${ob.recent
+          .filter((r) => r.status !== 'sent').slice(0, 5)
+          .map((r) => `<tr>
+            <td class="small">${esc(r.to_email)}</td>
+            <td><span class="pill ${r.status === 'failed' ? 'bad' : 'warn'}">${esc(r.status)}</span></td>
+            <td class="small muted">${esc((r.last_error || '').slice(0, 60))}</td>
+          </tr>`).join('')}</tbody></table>` : ''}`;
+  } catch { /* only directors can read the outbox */ }
+}
+
+$('digest-optin').addEventListener('change', async () => {
+  try {
+    await api('/api/email/preferences', {
+      method: 'POST',
+      body: { kind: 'coach_digest', enabled: $('digest-optin').checked },
+    });
+    $('digest-note').textContent = $('digest-optin').checked
+      ? "You'll get the digest by email each Monday."
+      : "Turned off. It still appears in your alerts here.";
+    $('digest-note').classList.remove('hidden');
+  } catch (e) {
+    $('digest-optin').checked = !$('digest-optin').checked;
+  }
+});
+
 $('digest-preview').addEventListener('click', () => {
   // Opened rather than downloaded so the coach sees it exactly as it arrives,
   // and can print or forward from their own browser.
@@ -467,7 +521,8 @@ $('digest-send').addEventListener('click', async () => {
     const res = await api('/api/coach/digest/send', { method: 'POST', body: {} });
     note.textContent = res.delivered
       ? `Sent to ${res.to}.`
-      : res.note || 'Email is not configured on this server.';
+      : res.note || `Queued for ${res.to}.`;
+    await loadDelivery();
   } catch (e) { note.textContent = e.message; }
   note.classList.remove('hidden');
   $('digest-send').disabled = false;
@@ -559,6 +614,7 @@ async function loadAll() {
   await loadAssignments();
   try {
     renderDigest(await api('/api/coach/digest'));
+    await loadDelivery();
   } catch { /* a brand-new program has no week to report yet */ }
 }
 

@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 612 tests
+python -m pytest tests/ -q          # 665 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -92,6 +92,7 @@ athleteiq/
   roster.py         Bulk import: header detection, parsing, claim codes
   digest.py         Weekly team KPIs and the coach email
   billing.py        Plans, seats, entitlements, invoicing seam
+  mailer.py         Outbound queue: retries, suppression, unsubscribe
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -282,16 +283,51 @@ page.
 
 ### Delivery
 
-Real multipart email over SMTP: table layout, inline styles, ~600px, no flexbox
-or grid, with a plain-text alternative (some clients strip HTML, and multipart
-without a text part gets filtered more often). Set `ATHLETEIQ_SMTP_HOST` and
-friends to enable sending.
+Composing a digest and getting it into an inbox are different problems, and the
+second is where weekly email quietly stops working. Delivery is a queue, not a
+send loop.
 
-Without SMTP the digest still computes, still posts to the coach's in-app feed,
-and is still viewable and printable at `/api/coach/digest/preview` — and the
-send endpoint reports `delivered: false` rather than claiming a send that never
-happened. `scripts/run_notifications.py` sends it on Mondays; `--digest` forces
-it any day.
+**Queue, then send.** A Monday job that mails a hundred coaches inside one SMTP
+session loses the whole week when the ninetieth times out. Composition writes
+rows; a separate worker drains them and can be re-run. `run_notifications.py`
+composes on Mondays and flushes on *every* tick, so a message that hit a
+transient failure is retried within the hour rather than at next week's
+composition.
+
+**Idempotent queueing.** Every message carries a dedupe key, so a cron that
+fires twice on a Monday queues once. This was a real bug in the first version:
+the in-app copy deduped by week while the email did not, and a double cron run
+sent two.
+
+**Scoped per coach.** A director gets the program-wide numbers; a coach
+assigned to JV gets JV's. Folding varsity's participation into a JV coach's
+email makes the number they are meant to move meaningless — and hands them data
+about children they are not responsible for. This was also wrong initially:
+every coach got the program-wide digest regardless of scope.
+
+**Retry the transient, give up on the permanent.** A connection reset gets
+another attempt on a 5/20/60/240-minute backoff. A 5xx or a refused recipient
+never will succeed, so it fails immediately and the address is added to a
+suppression list — retrying a dead mailbox forever damages the sending domain
+for every other recipient on it.
+
+**One-click unsubscribe that needs no login.** Someone who wants out is holding
+an email, not a login; requiring them to sign in is how a message gets marked as
+spam instead. Links are HMAC-signed rather than random, so they need no storage
+and another coach's cannot be forged by swapping the user id. `List-Unsubscribe`
+and `List-Unsubscribe-Post` headers let a mail client do it in place. Opting out
+of the weekly digest does not touch in-app alerts, and transactional mail ignores
+the preference entirely.
+
+**Every send is recorded.** `/api/coach/outbox` shows what was delivered, what is
+waiting, what failed and why, so "did the coach actually get it?" has an answer.
+Delivered mail is pruned after 90 days; failures are kept, because a failure is
+evidence and a delivered message is just storage.
+
+Without SMTP configured the queue drains through a console transport, the digest
+still posts to the in-app feed, and it is still viewable and printable at
+`/api/coach/digest/preview` — and the send endpoint says nothing left the
+machine rather than claiming a delivery.
 
 ---
 
@@ -736,25 +772,29 @@ contact with a real driveway:
    than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **No payment processor.** The billing model, entitlements, and invoicing are
+7. **No bounce webhook.** Hard bounces are detected from the SMTP response at
+   send time, which catches a refused recipient but not an asynchronous bounce
+   that arrives minutes later. A provider webhook feeding `mailer.suppress()`
+   is the missing piece.
+8. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-8. **Offline slots are per-drill.** A drill you have never opened online has no
+9. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-9. **Web Push needs credentials.** Notifications generate and display in-app
+10. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-10. **Form quality is pose-only.** It reads how the body moved, not where the
+11. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-11. **Guardian identity is proven by the invite code alone.** There is no email
+12. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-12. **Roster import reads delimited text only.** CSV, TSV, and
+13. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-13. **Load coefficients are reasoned estimates, not measured values.** The
+14. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

@@ -19,6 +19,7 @@ from .config import CONFIG
 from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import digest as digest_mod
+from . import mailer
 from . import guardians as guardians_mod
 from . import roster as roster_mod
 from . import notifications as notify
@@ -41,6 +42,12 @@ app = FastAPI(
 )
 
 _store: Store | None = None
+
+
+def _utcnow_stamp() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
 
 def get_store() -> Store:
@@ -848,35 +855,164 @@ def send_digest(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    """Queue this week's digest and try to deliver it immediately.
+
+    Queued first even for a manual send, so a failure is retried by the same
+    worker that handles the Monday run rather than silently lost.
+    """
+    if body.team_id is not None and not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+
     report = digest_mod.compute(store.conn, principal.org_id, team_id=body.team_id)
     recipient = body.to or store.conn.execute(
         "SELECT email FROM users WHERE id = ?", (principal.id,)
     ).fetchone()["email"]
 
-    if not recipient:
+    if not mailer.looks_like_email(recipient):
         raise HTTPException(
             status_code=400,
             detail="No email address on file. Add one, or pass an address to send to.",
+        )
+    if mailer.is_suppressed(store.conn, recipient):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{recipient} has unsubscribed or previously bounced.",
         )
 
     dashboard = (
         f"{CONFIG.app_base_url.rstrip('/')}/app/coach.html"
         if CONFIG.app_base_url else ""
     )
-    delivered = notify.send_email(
-        recipient,
-        digest_mod.subject_line(report),
-        digest_mod.render_html(report, dashboard),
-        digest_mod.render_text(report, dashboard),
+    unsubscribe = mailer.unsubscribe_url(principal.id, mailer.Kind.COACH_DIGEST)
+    subject = digest_mod.subject_line(report)
+
+    # A manual send is on demand, so it carries a timestamp in its dedupe key
+    # rather than collapsing into the week's scheduled copy.
+    queued = mailer.enqueue(
+        store.conn,
+        to_email=recipient,
+        subject=subject,
+        html=digest_mod.render_html(report, dashboard, unsubscribe_url=unsubscribe),
+        text=digest_mod.render_text(report, dashboard, unsubscribe_url=unsubscribe),
+        kind=mailer.Kind.COACH_DIGEST,
+        dedupe_key=f"manual:{principal.id}:{body.team_id or 'org'}:{_utcnow_stamp()}",
+        user_id=principal.id,
     )
+    if queued is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Not queued — you have unsubscribed from the weekly digest.",
+        )
+
+    stats = mailer.flush(store.conn, limit=5)
+    row = store.conn.execute(
+        "SELECT status, last_error FROM email_outbox WHERE id = ?", (queued,)
+    ).fetchone()
+    delivered = row["status"] == "sent"
+
     return {
         "to": recipient,
+        "queued": True,
         "delivered": delivered,
-        "subject": digest_mod.subject_line(report),
-        "note": None if delivered else (
-            "Email is not configured on this server, so nothing was sent. The "
-            "digest is still viewable and printable from the preview."
+        "status": row["status"],
+        "subject": subject,
+        "stats": stats,
+        "note": None if (delivered and CONFIG.smtp_configured) else (
+            "Email is not configured on this server, so nothing left the machine. "
+            "The digest is still viewable and printable from the preview."
+            if not CONFIG.smtp_configured else
+            f"Queued but not yet delivered ({row['last_error'][:120]}). "
+            "It will be retried automatically."
         ),
+    }
+
+
+# ----------------------------------------------------------------------
+# Email delivery
+# ----------------------------------------------------------------------
+
+@app.get("/api/email/unsubscribe", response_class=HTMLResponse)
+def unsubscribe(token: str) -> str:
+    """One-click unsubscribe. Unauthenticated by design.
+
+    Someone who wants out is holding an email, not a login. Requiring them to
+    sign in to stop receiving mail is how a message gets marked as spam
+    instead, which costs far more than the one recipient.
+    """
+    store = get_store()
+    verified = mailer.verify_unsubscribe(token)
+    if verified is None:
+        return (
+            "<!doctype html><meta charset='utf-8'>"
+            "<body style='font-family:system-ui;padding:40px;max-width:32rem'>"
+            "<h2>That link is not valid</h2>"
+            "<p>It may have been altered in transit. Reply to the email and we "
+            "will take you off the list.</p></body>"
+        )
+
+    user_id, kind = verified
+    mailer.set_preference(store.conn, user_id, kind, False)
+    row = store.conn.execute(
+        "SELECT display_name FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    who = row["display_name"] if row else "You"
+
+    return (
+        "<!doctype html><meta charset='utf-8'>"
+        "<body style='font-family:system-ui;padding:40px;max-width:32rem;line-height:1.6'>"
+        f"<h2>Unsubscribed</h2><p>{who} will no longer receive the weekly email.</p>"
+        "<p style='color:#5b6b7c'>Alerts inside the app are unaffected, and this "
+        "changes nothing for your athletes. You can turn the email back on from "
+        "your dashboard at any time.</p></body>"
+    )
+
+
+@app.post("/api/email/unsubscribe")
+def unsubscribe_one_click(token: str) -> dict[str, Any]:
+    """The POST an email client sends for List-Unsubscribe-Post."""
+    store = get_store()
+    verified = mailer.verify_unsubscribe(token)
+    if verified is None:
+        raise HTTPException(status_code=400, detail="invalid token")
+    user_id, kind = verified
+    mailer.set_preference(store.conn, user_id, kind, False)
+    return {"unsubscribed": True, "kind": kind}
+
+
+@app.get("/api/email/preferences")
+def get_email_preferences(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {"preferences": mailer.preferences(store.conn, principal.id)}
+
+
+class EmailPreference(BaseModel):
+    kind: str = Field(max_length=60)
+    enabled: bool
+
+
+@app.post("/api/email/preferences")
+def set_email_preference(
+    body: EmailPreference,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    mailer.set_preference(store.conn, principal.id, body.kind, body.enabled)
+    return {"preferences": mailer.preferences(store.conn, principal.id)}
+
+
+@app.get("/api/coach/outbox")
+def get_outbox(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Delivery status, so "did the coach get it?" has an answer."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="director access required")
+    return {
+        **mailer.outbox_summary(store.conn, 40),
+        "smtp_configured": CONFIG.smtp_configured,
     }
 
 

@@ -51,7 +51,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--no-email", action="store_true",
-        help="compose digests and post them in-app without sending mail",
+        help="compose digests and post them in-app without queueing or sending mail",
+    )
+    parser.add_argument(
+        "--flush-only", action="store_true",
+        help="skip generation; only attempt delivery of what is already queued",
     )
     args = parser.parse_args()
 
@@ -61,6 +65,17 @@ def main() -> int:
     )
 
     conn = connect(Path(args.db) if args.db else None)
+
+    if args.flush_only:
+        from athleteiq import mailer
+
+        stats = mailer.flush(conn)
+        print(
+            f"mail: {stats['sent']} sent, {stats['retrying']} retrying, "
+            f"{stats['failed']} failed, {stats['suppressed']} suppressed"
+        )
+        return 0
+
     made = notify.run_all(conn)
     total = sum(made.values())
     print(f"generated {total}: " + ", ".join(f"{k}={v}" for k, v in made.items()))
@@ -73,9 +88,22 @@ def main() -> int:
     if args.digest or date.today().weekday() == 0:
         result = notify.send_coach_digests(conn, dry_run=args.no_email)
         print(
-            f"digests: {result['composed']} composed, {result['emailed']} emailed, "
-            f"{result['not_emailed']} not emailed"
+            f"digests: {result['composed']} composed, {result['queued']} queued, "
+            f"{result['not_queued']} not queued"
         )
+
+    # Delivery runs on every tick, not just Monday. Queueing and sending are
+    # separate steps so a retry does not have to wait a week for the next
+    # scheduled composition.
+    if not args.no_email:
+        from athleteiq import mailer
+
+        stats = mailer.flush(conn)
+        if any(stats.values()):
+            print(
+                f"mail: {stats['sent']} sent, {stats['retrying']} retrying, "
+                f"{stats['failed']} failed, {stats['suppressed']} suppressed"
+            )
 
     if args.generate_only:
         return 0

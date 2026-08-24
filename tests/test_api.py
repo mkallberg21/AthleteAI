@@ -1307,8 +1307,8 @@ class TestDigestEndpoints:
             "/api/coach/digest/send", json={"to": "coach@example.com"},
             headers=program["director"],
         ).json()
-        assert res["delivered"] is False
-        assert "not configured" in res["note"]
+        assert res["queued"] is True
+        assert "nothing left the machine" in res["note"]
 
     def test_sending_without_an_address_is_refused_with_a_reason(self, client, program):
         res = client.post(
@@ -1497,3 +1497,145 @@ class TestBillingEndpoints:
         assert client.get(
             "/api/billing", headers=program["athletes"][0]["headers"]
         ).status_code == 403
+
+
+class TestDigestDelivery:
+    def _staff(self, client, program):
+        """A director with an address, and a JV-scoped coach with their own."""
+        store = api_module._store
+        store.conn.execute(
+            "UPDATE users SET email = 'director@example.com' WHERE id = ?",
+            (program["org"]["director"]["id"],),
+        )
+        jv = client.post("/api/teams", json={"name": "JV"}, headers=program["director"]).json()
+        coach = store.create_user(
+            program["org"]["org_id"], "coach", "Coach JV", email="jv@example.com"
+        )
+        store.assign_staff_to_team(coach["id"], jv["id"])
+        client.post(
+            "/api/athletes",
+            json={"display_name": "JV Kid", "join_code": jv["join_code"]},
+            headers=program["director"],
+        )
+        store.conn.commit()
+        return {"jv_team": jv, "coach": coach}
+
+    def test_each_coach_gets_the_digest_for_their_own_teams(self, client, program):
+        """Folding varsity into a JV coach's email makes their number meaningless."""
+        from athleteiq import notifications as notify
+
+        self._staff(client, program)
+        notify.send_coach_digests(api_module._store.conn)
+
+        rows = api_module._store.conn.execute(
+            "SELECT to_email, subject FROM email_outbox ORDER BY to_email"
+        ).fetchall()
+        by_email = {r["to_email"]: r["subject"] for r in rows}
+        assert "JV" in by_email["jv@example.com"]
+        assert "Northshore" in by_email["director@example.com"]
+
+    def test_running_the_job_twice_queues_once(self, client, program):
+        from athleteiq import notifications as notify
+
+        self._staff(client, program)
+        first = notify.send_coach_digests(api_module._store.conn)
+        second = notify.send_coach_digests(api_module._store.conn)
+        assert first["queued"] > 0
+        assert second["queued"] == 0
+
+    def test_a_manual_send_queues_and_reports_status(self, client, program):
+        self._staff(client, program)
+        res = client.post(
+            "/api/coach/digest/send", json={}, headers=program["director"]
+        ).json()
+        assert res["queued"] is True
+        assert res["status"] in ("sent", "queued", "failed")
+
+    def test_a_suppressed_address_is_refused_with_a_reason(self, client, program):
+        from athleteiq import mailer
+
+        self._staff(client, program)
+        mailer.suppress(api_module._store.conn, "director@example.com", "bounced")
+        res = client.post("/api/coach/digest/send", json={}, headers=program["director"])
+        assert res.status_code == 400
+        assert "unsubscribed" in res.json()["detail"]
+
+    def test_a_scoped_coach_cannot_send_another_teams_digest(self, client, program):
+        staff = self._staff(client, program)
+        headers = {"Authorization": f"Bearer {staff['coach']['token']}"}
+        res = client.post(
+            "/api/coach/digest/send",
+            json={"team_id": program["team"]["id"]}, headers=headers,
+        )
+        assert res.status_code == 403
+
+
+class TestUnsubscribeEndpoints:
+    def test_one_click_unsubscribe_needs_no_login(self, client, program):
+        """Someone who wants out is holding an email, not a login."""
+        from athleteiq import mailer
+
+        token = mailer.unsubscribe_token(
+            program["org"]["director"]["id"], mailer.Kind.COACH_DIGEST
+        )
+        res = client.get(f"/api/email/unsubscribe?token={token}")
+        assert res.status_code == 200
+        assert "Unsubscribed" in res.text
+        assert not mailer.wants(
+            api_module._store.conn,
+            program["org"]["director"]["id"],
+            mailer.Kind.COACH_DIGEST,
+        )
+
+    def test_the_post_form_of_one_click_works(self, client, program):
+        from athleteiq import mailer
+
+        token = mailer.unsubscribe_token(
+            program["org"]["director"]["id"], mailer.Kind.COACH_DIGEST
+        )
+        assert client.post(f"/api/email/unsubscribe?token={token}").json()["unsubscribed"]
+
+    def test_a_forged_token_changes_nothing(self, client, program):
+        from athleteiq import mailer
+
+        res = client.get("/api/email/unsubscribe?token=1.coach_digest.deadbeef")
+        assert res.status_code == 200
+        assert "not valid" in res.text
+        assert mailer.wants(
+            api_module._store.conn,
+            program["org"]["director"]["id"],
+            mailer.Kind.COACH_DIGEST,
+        )
+
+    def test_preferences_can_be_read_and_set(self, client, program):
+        prefs = client.get("/api/email/preferences", headers=program["director"]).json()
+        assert prefs["preferences"]["coach_digest"] is True
+        updated = client.post(
+            "/api/email/preferences",
+            json={"kind": "coach_digest", "enabled": False},
+            headers=program["director"],
+        ).json()
+        assert updated["preferences"]["coach_digest"] is False
+
+    def test_an_unsubscribed_coach_is_skipped_next_week(self, client, program):
+        from athleteiq import mailer, notifications as notify
+
+        api_module._store.conn.execute(
+            "UPDATE users SET email = 'director@example.com' WHERE id = ?",
+            (program["org"]["director"]["id"],),
+        )
+        api_module._store.conn.commit()
+        mailer.set_preference(
+            api_module._store.conn, program["org"]["director"]["id"],
+            mailer.Kind.COACH_DIGEST, False,
+        )
+        result = notify.send_coach_digests(api_module._store.conn)
+        assert result["queued"] == 0
+
+    def test_only_a_director_can_read_the_outbox(self, client, program):
+        assert client.get(
+            "/api/coach/outbox", headers=program["athletes"][0]["headers"]
+        ).status_code == 403
+        assert client.get(
+            "/api/coach/outbox", headers=program["director"]
+        ).status_code == 200

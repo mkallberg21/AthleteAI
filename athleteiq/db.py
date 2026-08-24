@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -358,6 +358,51 @@ CREATE TABLE IF NOT EXISTS billing_events (
     created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_billing_org ON billing_events(org_id, created_at);
+
+-- Outbound mail, queued before it is sent.
+--
+-- Queued rather than sent inline because a weekly job that emails a hundred
+-- coaches inside one SMTP connection loses the whole week when the ninetieth
+-- times out. Composition and delivery are separate steps, and delivery retries.
+CREATE TABLE IF NOT EXISTS email_outbox (
+    id              INTEGER PRIMARY KEY,
+    user_id         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    to_email        TEXT NOT NULL,
+    subject         TEXT NOT NULL,
+    html_body       TEXT NOT NULL,
+    text_body       TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    -- Makes queueing idempotent. A cron that fires twice on a Monday must not
+    -- send the same digest twice.
+    dedupe_key      TEXT NOT NULL UNIQUE,
+    status          TEXT NOT NULL DEFAULT 'queued'
+                    CHECK (status IN ('queued','sent','failed','suppressed')),
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    last_error      TEXT NOT NULL DEFAULT '',
+    queued_at       TEXT NOT NULL,
+    next_attempt_at TEXT NOT NULL,
+    sent_at         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_pending ON email_outbox(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_user ON email_outbox(user_id, kind);
+
+-- Addresses that must not be written to again: hard bounces, and anyone who
+-- unsubscribed. Repeatedly mailing a dead address is how a sending domain
+-- loses its reputation, and mailing someone who opted out is worse than that.
+CREATE TABLE IF NOT EXISTS email_suppressions (
+    email      TEXT PRIMARY KEY,
+    reason     TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- Per-person, per-kind opt-out. Absent means opted in.
+CREATE TABLE IF NOT EXISTS email_preferences (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,
+    enabled    INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, kind)
+);
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
