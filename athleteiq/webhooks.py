@@ -582,6 +582,8 @@ def _handle_ses(
             envelope, allowed_topics=allowed, fetcher=fetcher,
             anchors=anchors, verify_chain=verify_chain,
             check_revocation=check_revocation,
+            # Lets the staple store answer without a network call.
+            conn=conn,
         )
     except sns.SnsError as exc:
         # Surfaced as a verification failure so the endpoint answers 401 the

@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from athleteiq import notifications as notify  # noqa: E402
 from athleteiq.config import CONFIG  # noqa: E402
-from athleteiq.db import connect  # noqa: E402
+from athleteiq.db import connect, init_db  # noqa: E402
 
 
 def build_channels(quiet: bool) -> list[notify.Channel]:
@@ -65,6 +65,9 @@ def main() -> int:
     )
 
     conn = connect(Path(args.db) if args.db else None)
+    # Applies any pending migrations: a database created by an older
+    # release will not have the tables this job reads.
+    init_db(conn)
 
     if args.flush_only:
         from athleteiq import mailer

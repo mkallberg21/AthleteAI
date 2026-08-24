@@ -403,16 +403,29 @@ def check(
     fetcher: Fetcher | None = None,
     strict: bool = False,
     use_cache: bool = True,
+    conn=None,
 ) -> Result:
     """Establish whether a certificate has been revoked.
 
     Raises `RevocationError` when it has been -- always -- and also when the
     answer could not be established and `strict` is set.
 
-    OCSP is tried first: it is current and small. A CRL is the fallback for a
-    certificate with no responder, or when the responder cannot be reached.
+    Sources are tried in order of what they cost a waiting request: a stored
+    staple first (already verified, no network), then a live OCSP query, then a
+    CRL. A deployment that keeps its staples refreshed never reaches the
+    network from here at all, which is what makes `strict` practical rather
+    than an availability risk.
     """
     import time
+
+    if conn is not None:
+        # Imported here rather than at module scope: the staple store is built
+        # on this module, so importing it at the top would be circular.
+        from . import staple as staple_mod
+
+        stapled = staple_mod.check(conn, certificate, issuer)
+        if stapled is not None:
+            return stapled
 
     key = (certificate.serial_number, issuer.subject.public_bytes())
     if use_cache:
@@ -462,6 +475,7 @@ def check_chain(
     *,
     fetcher: Fetcher | None = None,
     strict: bool = False,
+    conn=None,
 ) -> list[Result]:
     """Check every certificate in a validated path against its own issuer.
 
@@ -470,5 +484,7 @@ def check_chain(
     """
     results = []
     for certificate, issuer in zip(path, path[1:]):
-        results.append(check(certificate, issuer, fetcher=fetcher, strict=strict))
+        results.append(
+            check(certificate, issuer, fetcher=fetcher, strict=strict, conn=conn)
+        )
     return results

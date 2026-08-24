@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 812 tests
+python -m pytest tests/ -q          # 836 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/counter.test.mjs tests/js/calibration.test.mjs   # 21 tests
@@ -97,6 +97,7 @@ athleteiq/
   sns.py            SNS certificate verification for SES notifications
   chain.py          X.509 path validation against pinned Amazon roots
   revocation.py     OCSP and CRL checking for signing certificates
+  staple.py         Pre-fetched OCSP responses, refreshed off the request path
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
@@ -412,6 +413,42 @@ in either mode; that part is never a judgement call.
 Answers are cached for an hour, so this is roughly one network round trip per
 hour rather than one per webhook — and a revocation is never cached, since
 re-deciding it costs nothing that matters.
+
+#### Stapling
+
+In TLS, stapling means the server fetches an OCSP response for its own
+certificate and hands it over during the handshake, so the client never asks the
+responder itself. An SNS signing certificate arrives as a *file*, not in a
+handshake, so there is nothing to staple it into — and Python's `ssl` module
+cannot read a stapled response anyway, which is worth knowing before designing
+around one.
+
+What *is* available is the same division of labour. `scripts/refresh_staples.py`
+fetches responder answers on a schedule, verifies each one, and stores it;
+verification then reads the stored answer and makes no network call at all:
+
+```
+result: good via staple  (no network call made)
+```
+
+That changes what soft-fail costs. Revocation soft-fails because refusing on an
+unreachable responder would let a CA outage take down bounce processing. Once
+staples are refreshed out of band — with their own retries, on their own
+schedule — **`ATHLETEIQ_SNS_REVOCATION_STRICT=1` stops being an availability
+risk**, because a missing staple is a condition the refresh job reports and
+`/api/coach/staples` shows, rather than a race decided while a webhook waits.
+
+Two properties make it trustworthy. Responses are verified **on the way in**, so
+nothing unverifiable can be stored and read back later as an answer — a forged
+response is rejected at ingest, never at use. And a staple past its own
+`nextUpdate` is **not believed**: it falls through to a live query rather than
+pinning a verdict from before whatever went wrong. Staples are also capped by
+age, so a responder promising a month of validity cannot hold one answer that
+long, and they are refreshed six hours before expiry so a scheduled job gets
+several attempts before anything goes stale.
+
+A response can also be handed in directly — `staple.staple_response()` — for a
+sidecar that fetches them, or for a provider that starts offering one.
 
 Both signature versions are supported — v1 is SHA1, v2 is SHA256, and AWS still
 emits v1 for older topics. Certificates are cached for an hour so a bounce storm
@@ -892,14 +929,16 @@ contact with a real driveway:
    than trusting a version counter.
 6. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-7. **Revocation checking soft-fails by default.** A `revoked` answer is always
-   fatal, but an unreachable responder is proceeded past with a warning, which
-   an attacker able to block the request can exploit.
-   `ATHLETEIQ_SNS_REVOCATION_STRICT=1` closes that at the cost of dropping
-   bounce events during a CA outage. There is no OCSP stapling, which would
-   remove the round trip and the soft-fail question together — it does not
-   apply to a certificate fetched as a file rather than offered in a handshake.
-8. **No payment processor.** The billing model, entitlements, and invoicing are
+7. **Revocation soft-fails by default**, though pre-fetched staples make strict
+   mode practical — see **Stapling** above. Left soft by default because a
+   deployment that has not set up the refresh job would otherwise start
+   refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
+   `/api/coach/staples` shows them fresh.
+8. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+   stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
+   *TLS* certificate rather than the SNS signing certificate, so it was left
+   out rather than added untested.
+9. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
 9. **Offline slots are per-drill.** A drill you have never opened online has no

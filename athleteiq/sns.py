@@ -231,6 +231,7 @@ def _load_certificate(
     check_revocation: bool | None = None,
     revocation_strict: bool | None = None,
     revocation_fetcher: revocation_mod.Fetcher | None = None,
+    conn=None,
 ):
     """Parse the fetched bundle and return its leaf certificate.
 
@@ -268,7 +269,9 @@ def _load_certificate(
             if revocation_strict is None else revocation_strict
         )
         try:
-            revocation_mod.check_chain(path, fetcher=revocation_fetcher, strict=strict)
+            revocation_mod.check_chain(
+                path, fetcher=revocation_fetcher, strict=strict, conn=conn
+            )
         except revocation_mod.RevocationError as exc:
             raise SnsError(f"certificate rejected: {exc}") from None
 
@@ -286,6 +289,7 @@ def verify(
     check_revocation: bool | None = None,
     revocation_strict: bool | None = None,
     revocation_fetcher: revocation_mod.Fetcher | None = None,
+    conn=None,
 ) -> VerifiedMessage:
     """Verify an SNS message, or raise SnsError explaining what failed.
 
@@ -319,7 +323,7 @@ def verify(
     certificate = _load_certificate(
         pem, anchors=anchors, verify_chain=verify_chain, now=now,
         check_revocation=check_revocation, revocation_strict=revocation_strict,
-        revocation_fetcher=revocation_fetcher,
+        revocation_fetcher=revocation_fetcher, conn=conn,
     )
 
     # An expired certificate means either a misconfiguration or a replay of a

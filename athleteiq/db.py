@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -425,6 +425,31 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     raw         TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_webhook_email ON webhook_events(email, event_type, received_at);
+
+-- Pre-fetched OCSP responses for certificates we expect to verify.
+--
+-- The point of stapling: someone fetches the responder's answer ahead of time
+-- and attaches it, so verification reads a fresh local answer instead of
+-- making a network call while a request waits. That moves the freshness
+-- problem off the request path, which is what makes refusing an unproven
+-- certificate practical rather than an availability risk.
+CREATE TABLE IF NOT EXISTS ocsp_staples (
+    id            INTEGER PRIMARY KEY,
+    -- Certificate serial and issuer, which together identify what the
+    -- response is about.
+    serial        TEXT NOT NULL,
+    issuer_key_id TEXT NOT NULL,
+    subject       TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL,
+    response      BLOB NOT NULL,
+    this_update   TEXT NOT NULL DEFAULT '',
+    -- After this the staple is stale and must not be believed.
+    next_update   TEXT NOT NULL DEFAULT '',
+    fetched_at    TEXT NOT NULL,
+    source        TEXT NOT NULL DEFAULT 'prefetch',
+    UNIQUE (serial, issuer_key_id)
+);
+CREATE INDEX IF NOT EXISTS idx_staples_next ON ocsp_staples(next_update);
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,

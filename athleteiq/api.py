@@ -20,6 +20,7 @@ from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import digest as digest_mod
 from . import mailer
+from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
@@ -969,6 +970,26 @@ async def email_webhook(
         return JSONResponse(status_code=202, content={"accepted": True, "note": message})
 
     return JSONResponse(status_code=200, content=result)
+
+
+@app.get("/api/coach/staples")
+def get_staples(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Freshness of the pre-fetched revocation answers.
+
+    Surfaced because a stale staple is the condition that makes strict mode
+    start refusing webhooks, and it should be visible before that happens
+    rather than discovered by it.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="director access required")
+    return {
+        **staple_mod.summary(store.conn),
+        "strict_mode": CONFIG.sns_revocation_strict,
+        "revocation_enabled": CONFIG.sns_check_revocation,
+    }
 
 
 @app.get("/api/coach/bounces")
