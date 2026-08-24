@@ -32,6 +32,7 @@
       </div>
       <div class="feel-row" id="feel-row"></div>
       <div id="wellness-guidance"></div>
+      <div id="rtp-plans"></div>
       <div id="wellness-open"></div>
       <details style="margin-top:10px" id="hurt-details">
         <summary class="small muted" style="cursor:pointer">
@@ -477,6 +478,45 @@ async function loadWellness() {
   return status;
 }
 
+const RTP_STAGE_LABELS = ['Resting', 'Moving', 'Easy drills', 'Full solo', 'Done'];
+
+function renderPlans(plans) {
+  $('rtp-plans').innerHTML = (plans || []).map((p) => `
+    <div class="rtp">
+      <div class="budget-head">
+        <b>${esc(p.headline)}</b>
+        ${p.setbacks ? `<span class="small muted">${p.setbacks} step${
+          p.setbacks === 1 ? '' : 's'} back</span>` : ''}
+      </div>
+      <div class="rtp-track">
+        ${RTP_STAGE_LABELS.map((label, i) => `
+          <span class="rtp-step ${i < p.stage_index ? 'done' : ''} ${
+            i === p.stage_index ? 'now' : ''}">
+            <i></i><span>${esc(label)}</span>
+          </span>`).join('')}
+      </div>
+      <p class="small" style="margin:8px 0 4px">${esc(p.stage_what)}</p>
+      ${p.cleared_by_name ? `<p class="small muted" style="margin:0 0 6px">
+        Started because ${esc(p.cleared_by_name)} said you could${
+          p.clinician_name ? `, after ${esc(p.clinician_name)}` : ''}.</p>` : ''}
+      ${p.can_advance
+        ? `<button class="secondary" data-advance="${p.id}">
+             I feel good — next stage</button>`
+        : `<p class="small muted" style="margin:0">${esc(p.blocker)}</p>`}
+    </div>`).join('');
+}
+
+$('rtp-plans').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-advance]');
+  if (!button) return;
+  try {
+    await api(`/api/wellness/plans/${button.dataset.advance}/advance`, { method: 'POST' });
+    // The ramp decides what is on the drill list, so both are rebuilt.
+    renderWellness(await api('/api/wellness'));
+    await loadDrills();
+  } catch (e) { showError(e.message); }
+});
+
 function renderWellness(status) {
   $('wellness-state').textContent = status.checked_in_today
     ? 'Logged today — thanks'
@@ -488,6 +528,8 @@ function renderWellness(status) {
       <span class="dotmark"></span>
       <div><b>${esc(g.headline)}</b><em>${esc(g.detail)}</em></div>
     </div>`).join('');
+
+  renderPlans(status.plans);
 
   $('wellness-open').innerHTML = (status.open_reports || []).map((r) => `
     <div class="open-report">

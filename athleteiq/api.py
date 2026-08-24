@@ -25,6 +25,7 @@ from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import positions as positions_mod
 from . import sports as sports_mod
+from . import rtp as rtp_mod
 from . import wellness as wellness_mod
 from . import transfer as transfer_mod
 from . import guardians as guardians_mod
@@ -1628,6 +1629,122 @@ def resolve_discomfort(
     return store.wellness_status(principal.id).to_dict()
 
 
+class Clearance(BaseModel):
+    #: Required when the plan needs a clinician. Free text, and stored as an
+    #: attestation by the person who typed it -- the app cannot verify it.
+    clinician_name: str = Field(default="", max_length=120)
+
+
+@app.get("/api/wellness/plans")
+def my_return_plans(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {"plans": [p.to_dict() for p in store.active_return_plans(principal.id)]}
+
+
+@app.post("/api/wellness/plans/{plan_id}/advance")
+def advance_plan(
+    plan_id: int,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Move up a stage.
+
+    The athlete's own action, but only once the gate opens: time served at the
+    stage, a check-in today saying they feel fine, and -- for the first step --
+    an adult having cleared them. The refusal explains itself, because a greyed
+    out button with no reason is how a kid decides the app is broken and goes
+    back to training on their own.
+    """
+    try:
+        return store.advance_return_plan(principal.id, plan_id)
+    except StoreError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/wellness/plans/{plan_id}/clearance")
+def clear_plan(
+    plan_id: int,
+    body: Clearance,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Record that a human has said this athlete can start their ramp.
+
+    **This endpoint never generates a clearance -- it stores someone else's.**
+    An athlete cannot clear themselves, and a plan that needs a clinician can
+    only be cleared by a guardian, who is the person with standing to say what
+    a doctor told the family. A coach can clear the ordinary ones, which is a
+    judgement coaches already make at every practice.
+    """
+    plan = store.conn.execute(
+        "SELECT athlete_id, clearance FROM return_plans WHERE id = ?", (plan_id,)
+    ).fetchone()
+    if plan is None:
+        raise HTTPException(status_code=404, detail="no return plan with that id")
+
+    athlete_id = int(plan["athlete_id"])
+    if principal.id == athlete_id:
+        raise HTTPException(
+            status_code=403,
+            detail="you cannot clear your own return — ask a parent or your coach",
+        )
+
+    is_guardian = guardians_mod.guards(store.conn, principal.id, athlete_id)
+    if plan["clearance"] == rtp_mod.Clearance.CLINICIAN and not is_guardian:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "this one has to be recorded by a parent or guardian, because it "
+                "needs what a doctor or physio told the family"
+            ),
+        )
+    if not is_guardian and not principal.is_staff:
+        raise HTTPException(status_code=403, detail="not your athlete")
+    if principal.is_staff and not is_guardian:
+        owner = store.conn.execute(
+            "SELECT org_id FROM users WHERE id = ?", (athlete_id,)
+        ).fetchone()
+        if owner is None or owner["org_id"] != principal.org_id:
+            raise HTTPException(status_code=404, detail="no return plan with that id")
+
+    try:
+        return store.clear_return_plan(
+            plan_id, principal.id, principal.display_name, body.clinician_name,
+        )
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/wellness/plans/{plan_id}/history")
+def plan_history(
+    plan_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Who decided what, and when. The one record here that may need answering
+    for later, so it is readable by everyone with standing over the athlete."""
+    plan = store.conn.execute(
+        "SELECT athlete_id FROM return_plans WHERE id = ?", (plan_id,)
+    ).fetchone()
+    if plan is None:
+        raise HTTPException(status_code=404, detail="no return plan with that id")
+    athlete_id = int(plan["athlete_id"])
+
+    allowed = principal.id == athlete_id or guardians_mod.guards(
+        store.conn, principal.id, athlete_id
+    )
+    if not allowed and principal.is_staff:
+        owner = store.conn.execute(
+            "SELECT org_id FROM users WHERE id = ?", (athlete_id,)
+        ).fetchone()
+        allowed = owner is not None and owner["org_id"] == principal.org_id
+    if not allowed:
+        raise HTTPException(status_code=404, detail="no return plan with that id")
+    return {"events": store.plan_history(plan_id)}
+
+
 @app.get("/api/coach/wellness")
 def team_wellness(
     team_id: int | None = None,
@@ -1650,7 +1767,9 @@ def team_wellness(
     carrying, counts = [], {}
     for athlete in athletes:
         status = store.wellness_status(athlete["athlete_id"])
-        if not status.reports:
+        # A ramp counts as carrying something even once the pain has gone --
+        # an athlete mid-return is exactly who a coach must not push.
+        if not status.reports and not status.plans:
             continue
         counts[status.action] = counts.get(status.action, 0) + 1
         carrying.append({
@@ -1658,7 +1777,7 @@ def team_wellness(
             "display_name": athlete["display_name"],
             "action": status.action,
             **{k: v for k, v in status.to_dict(include_notes=False).items()
-               if k in ("open_reports", "blocked_tissues")},
+               if k in ("open_reports", "blocked_tissues", "plans")},
         })
 
     carrying.sort(key=lambda a: -wellness_mod.Action.rank(a["action"]))

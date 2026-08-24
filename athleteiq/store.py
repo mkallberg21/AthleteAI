@@ -15,6 +15,7 @@ from typing import Any
 
 from .config import CONFIG
 from . import sports
+from . import rtp
 from . import wellness
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
@@ -310,20 +311,54 @@ class Store:
         # behind it, and friction is what stops the next report happening.
         self.check_in(athlete_id, max(severity, "sore", key=wellness.Severity.rank), day)
 
+        # A live ramp on this area steps back rather than carrying on as if
+        # nothing happened -- and it steps back one stage, not to the start.
+        setback = None
+        if severity != wellness.Severity.FINE:
+            setback = self.record_setback(athlete_id, area, day)
+
         previous = open_row["severity"] if open_row is not None else None
-        return {"id": report_id, "previous": previous}
+        return {"id": report_id, "previous": previous, "setback": setback}
 
     def resolve_discomfort(
         self, athlete_id: int, report_id: int, day: date | None = None
-    ) -> bool:
+    ) -> dict[str, Any]:
+        """Close a report. Something serious opens a ramp rather than ending.
+
+        An athlete saying "better now" about a knee that gave way is not the
+        same event as saying it about a stiff thigh, and treating them the same
+        is how a kid walks straight from an injury back into full training. The
+        report still closes -- what changes is that a plan opens behind it, and
+        the plan needs an adult.
+        """
         day = day or _now().date()
+        status = self.wellness_status(athlete_id, day)
+        pair = next(
+            ((r, a) for r, a in zip(status.reports, status.assessments) if r.id == report_id),
+            None,
+        )
+
         with transaction(self.conn) as conn:
             changed = conn.execute(
                 "UPDATE discomfort_reports SET resolved_on = ? "
                 "WHERE id = ? AND athlete_id = ? AND resolved_on IS NULL",
                 (day.isoformat(), report_id, athlete_id),
             ).rowcount
-        return bool(changed)
+        if not changed or pair is None:
+            return {"resolved": bool(changed), "plan": None}
+
+        report, assessment = pair
+        clearance = rtp.required_clearance(report.area.urgent, assessment.action)
+        if clearance == rtp.Clearance.NONE:
+            return {"resolved": True, "plan": None}
+
+        opened = self.open_return_plan(
+            athlete_id, report_id, report.area.key, clearance, day
+        )
+        return {
+            "resolved": True,
+            "plan": self.return_plan(opened["id"], day) if opened else None,
+        }
 
     def wellness_status(
         self, athlete_id: int, today: date | None = None
@@ -358,13 +393,237 @@ class Store:
             "SELECT 1 FROM wellness_checkins WHERE athlete_id = ? AND day = ?",
             (athlete_id, today.isoformat()),
         ).fetchone()
-        return wellness.Status(reports, assessments, checked is not None)
+        return wellness.Status(
+            reports, assessments, checked is not None,
+            plans=self.active_return_plans(athlete_id, today),
+            today=today,
+        )
 
     def _checkin_days(self, athlete_id: int) -> list[date]:
         return [
             date.fromisoformat(r["day"])
             for r in self.conn.execute(
                 "SELECT day FROM wellness_checkins WHERE athlete_id = ?", (athlete_id,)
+            )
+        ]
+
+    # ------------------------------------------------------------------
+    # Returning to training
+    # ------------------------------------------------------------------
+
+    def _log_plan_event(
+        self, conn, plan_id: int, kind: str, detail: str = "",
+        actor_id: int | None = None, actor_name: str = "", day: date | None = None,
+    ) -> None:
+        conn.execute(
+            "INSERT INTO return_plan_events(plan_id, kind, detail, actor_id, "
+            "actor_name, day, created_at) VALUES (?,?,?,?,?,?,?)",
+            (plan_id, kind, detail, actor_id, actor_name,
+             (day or _now().date()).isoformat(), _iso(_now())),
+        )
+
+    def open_return_plan(
+        self,
+        athlete_id: int,
+        report_id: int,
+        area: str,
+        clearance: str,
+        day: date | None = None,
+    ) -> dict[str, Any] | None:
+        """Start a ramp back. Returns None if one is already open for this area.
+
+        Called from `resolve_discomfort` rather than exposed on its own: a plan
+        exists because an athlete tried to say they were better after something
+        serious, and inventing plans any other way would let one be started
+        without a report behind it.
+        """
+        day = day or _now().date()
+        existing = self.conn.execute(
+            "SELECT id FROM return_plans WHERE athlete_id = ? AND area = ? "
+            "AND completed_on IS NULL",
+            (athlete_id, area),
+        ).fetchone()
+        if existing is not None:
+            return None
+
+        with transaction(self.conn) as conn:
+            cur = conn.execute(
+                "INSERT INTO return_plans(athlete_id, report_id, area, stage, "
+                "clearance, started_on, stage_started_on, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (athlete_id, report_id, area, rtp.FIRST_STAGE.key, clearance,
+                 day.isoformat(), day.isoformat(), _iso(_now())),
+            )
+            plan_id = int(cur.lastrowid)
+            self._log_plan_event(
+                conn, plan_id, "opened", f"clearance required: {clearance}", day=day
+            )
+        return {"id": plan_id, "clearance": clearance}
+
+    def clear_return_plan(
+        self,
+        plan_id: int,
+        actor_id: int,
+        actor_name: str,
+        clinician_name: str = "",
+        day: date | None = None,
+    ) -> dict[str, Any]:
+        """Record that a human said this athlete can start their ramp.
+
+        The app is storing someone else's decision, never making one. For a
+        plan that needs a clinician, a name is required -- not because we can
+        check it, but because typing one makes the step deliberate rather than
+        a tap on the way to the pitch.
+        """
+        day = day or _now().date()
+        row = self.conn.execute(
+            "SELECT * FROM return_plans WHERE id = ?", (plan_id,)
+        ).fetchone()
+        if row is None or row["completed_on"] is not None:
+            raise StoreError("no open return plan with that id")
+        if row["cleared_on"] is not None:
+            raise StoreError("that return plan has already been cleared")
+        if row["clearance"] == rtp.Clearance.CLINICIAN and not clinician_name.strip():
+            raise StoreError(
+                "this return needs the name of the doctor or physio who cleared them"
+            )
+
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE return_plans SET cleared_on = ?, cleared_by = ?, "
+                "cleared_by_name = ?, clinician_name = ?, stage = ?, "
+                "stage_started_on = ? WHERE id = ?",
+                (day.isoformat(), actor_id, actor_name, clinician_name.strip(),
+                 rtp.next_stage(row["stage"]).key, day.isoformat(), plan_id),
+            )
+            detail = f"cleared by {actor_name}"
+            if clinician_name.strip():
+                detail += f", attested clinician: {clinician_name.strip()}"
+            self._log_plan_event(
+                conn, plan_id, "cleared", detail, actor_id, actor_name, day
+            )
+        return self.return_plan(plan_id)
+
+    def advance_return_plan(
+        self, athlete_id: int, plan_id: int, day: date | None = None
+    ) -> dict[str, Any]:
+        day = day or _now().date()
+        plan = self._load_plan(plan_id, athlete_id)
+        gate = rtp.can_advance(plan, day)
+        if not gate["ok"]:
+            raise StoreError(gate["reason"])
+
+        moved = rtp.next_stage(plan.stage)
+        done = moved.key == rtp.LAST_STAGE.key
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE return_plans SET stage = ?, stage_started_on = ?, "
+                "completed_on = ? WHERE id = ?",
+                (moved.key, day.isoformat(), day.isoformat() if done else None, plan_id),
+            )
+            self._log_plan_event(
+                conn, plan_id, "advanced", f"{plan.stage} -> {moved.key}", day=day
+            )
+        return self.return_plan(plan_id)
+
+    def record_setback(
+        self, athlete_id: int, area: str, day: date | None = None
+    ) -> dict[str, Any] | None:
+        """Step an active plan back one stage because symptoms returned.
+
+        One stage, never back to the start. Resetting the plan is the same
+        mistake as charging a streak for reporting soreness: if speaking up
+        costs a week, a kid who wants to play on Saturday stops speaking up.
+        """
+        day = day or _now().date()
+        row = self.conn.execute(
+            "SELECT * FROM return_plans WHERE athlete_id = ? AND area = ? "
+            "AND completed_on IS NULL AND cleared_on IS NOT NULL",
+            (athlete_id, area),
+        ).fetchone()
+        if row is None or row["stage"] == rtp.FIRST_STAGE.key:
+            return None
+
+        dropped = rtp.previous_stage(row["stage"])
+        setbacks = int(row["setbacks"]) + 1
+        # Two is the point where the ramp itself is not the answer any more.
+        needs_reclearance = setbacks >= rtp.SETBACKS_BEFORE_RECLEARANCE
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE return_plans SET stage = ?, stage_started_on = ?, "
+                "setbacks = ?, cleared_on = ? WHERE id = ?",
+                (dropped.key, day.isoformat(), setbacks,
+                 None if needs_reclearance else row["cleared_on"], row["id"]),
+            )
+            self._log_plan_event(
+                conn, row["id"], "setback",
+                f"{row['stage']} -> {dropped.key} (setback {setbacks})", day=day,
+            )
+        return self.return_plan(int(row["id"]))
+
+    def _load_plan(self, plan_id: int, athlete_id: int | None = None) -> rtp.Plan:
+        sql = "SELECT * FROM return_plans WHERE id = ?"
+        params: list[Any] = [plan_id]
+        if athlete_id is not None:
+            sql += " AND athlete_id = ?"
+            params.append(athlete_id)
+        row = self.conn.execute(sql, params).fetchone()
+        if row is None:
+            raise StoreError("no return plan with that id")
+
+        started = date.fromisoformat(row["started_on"])
+        clear_days = tuple(
+            date.fromisoformat(r["day"])
+            for r in self.conn.execute(
+                "SELECT day FROM wellness_checkins WHERE athlete_id = ? AND day >= ? "
+                "AND soreness IN ('fine', 'niggle')",
+                (row["athlete_id"], started.isoformat()),
+            )
+        )
+        return rtp.Plan(
+            id=int(row["id"]),
+            athlete_id=int(row["athlete_id"]),
+            area=row["area"],
+            area_label=wellness.AREAS_BY_KEY[row["area"]].label,
+            stage=row["stage"],
+            started_on=started,
+            stage_started_on=date.fromisoformat(row["stage_started_on"]),
+            clearance=row["clearance"],
+            cleared_on=date.fromisoformat(row["cleared_on"]) if row["cleared_on"] else None,
+            cleared_by_name=row["cleared_by_name"] or "",
+            clinician_name=row["clinician_name"] or "",
+            setbacks=int(row["setbacks"]),
+            completed_on=(
+                date.fromisoformat(row["completed_on"]) if row["completed_on"] else None
+            ),
+            clear_days=clear_days,
+        )
+
+    def return_plan(self, plan_id: int, today: date | None = None) -> dict[str, Any]:
+        return self._load_plan(plan_id).to_dict(today or _now().date())
+
+    def active_return_plans(
+        self, athlete_id: int, today: date | None = None
+    ) -> list[rtp.Plan]:
+        """Live ramps, ignoring any the athlete has clearly walked away from."""
+        today = today or _now().date()
+        stale = (today - timedelta(days=rtp.STALE_AFTER_DAYS)).isoformat()
+        return [
+            self._load_plan(int(row["id"]))
+            for row in self.conn.execute(
+                "SELECT id FROM return_plans WHERE athlete_id = ? "
+                "AND completed_on IS NULL AND stage_started_on >= ? ORDER BY id",
+                (athlete_id, stale),
+            )
+        ]
+
+    def plan_history(self, plan_id: int) -> list[dict[str, Any]]:
+        return [
+            dict(r)
+            for r in self.conn.execute(
+                "SELECT kind, detail, actor_name, day FROM return_plan_events "
+                "WHERE plan_id = ? ORDER BY id",
+                (plan_id,),
             )
         ]
 

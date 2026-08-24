@@ -154,6 +154,46 @@ CREATE TABLE IF NOT EXISTS discomfort_reports (
 CREATE INDEX IF NOT EXISTS idx_discomfort_open
     ON discomfort_reports(athlete_id, resolved_on);
 
+-- The ramp back after something serious. This app never clears anyone: a
+-- return after an injury is a human decision, and these rows record that a
+-- named adult made it on a named date. `clinician_name` is what a guardian
+-- typed, attesting that a healthcare professional said yes -- unverifiable by
+-- us, and stored as an attestation rather than a fact about the clinician.
+CREATE TABLE IF NOT EXISTS return_plans (
+    id              INTEGER PRIMARY KEY,
+    athlete_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    report_id       INTEGER,
+    area            TEXT NOT NULL,
+    stage           TEXT NOT NULL,
+    clearance       TEXT NOT NULL,
+    cleared_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    cleared_by_name TEXT NOT NULL DEFAULT '',
+    clinician_name  TEXT NOT NULL DEFAULT '',
+    cleared_on      TEXT,
+    setbacks        INTEGER NOT NULL DEFAULT 0,
+    started_on      TEXT NOT NULL,
+    stage_started_on TEXT NOT NULL,
+    completed_on    TEXT,
+    created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_return_plans_open
+    ON return_plans(athlete_id, completed_on);
+
+-- Append-only history of everything that happened to a plan. A return after an
+-- injury is the one place in this product where "who decided what, and when"
+-- may genuinely need answering later.
+CREATE TABLE IF NOT EXISTS return_plan_events (
+    id          INTEGER PRIMARY KEY,
+    plan_id     INTEGER NOT NULL REFERENCES return_plans(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    detail      TEXT NOT NULL DEFAULT '',
+    actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    actor_name  TEXT NOT NULL DEFAULT '',
+    day         TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_return_plan_events ON return_plan_events(plan_id);
+
 -- One recording. Contains no video and no frames -- only derived counts.
 CREATE TABLE IF NOT EXISTS sessions (
     id               INTEGER PRIMARY KEY,

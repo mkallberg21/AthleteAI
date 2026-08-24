@@ -314,6 +314,10 @@ class Status:
     reports: list[Report] = field(default_factory=list)
     assessments: list[Assessment] = field(default_factory=list)
     checked_in_today: bool = False
+    #: Live return-to-play ramps. Typed loosely to keep `rtp` importing this
+    #: module rather than the other way round.
+    plans: list[Any] = field(default_factory=list)
+    today: date | None = None
 
     @property
     def action(self) -> str:
@@ -326,15 +330,22 @@ class Status:
         out: set[Tissue] = set()
         for assessment in self.assessments:
             out.update(assessment.blocked_tissues)
+        # A ramp holds things back too, and for a different reason: not
+        # "this hurts now" but "this is not back to full load yet".
+        for plan in self.plans:
+            area = AREAS_BY_KEY.get(plan.area)
+            out.update(plan.blocked_tissues(tuple(area.tissues) if area else ()))
         return out
 
     def to_dict(self, include_notes: bool = True) -> dict[str, Any]:
+        today = self.today or datetime.now(timezone.utc).date()
         return {
             "action": self.action,
             "checked_in_today": self.checked_in_today,
             "open_reports": [r.to_dict(include_notes) for r in self.reports],
             "guidance": [a.to_dict() for a in self.assessments],
             "blocked_tissues": sorted(t.value for t in self.blocked_tissues),
+            "plans": [p.to_dict(today) for p in self.plans],
         }
 
 
@@ -348,8 +359,7 @@ def drill_availability(
     should not pretend it can stop them -- but it does not sit on the home
     screen inviting them to load a sore knee.
     """
-    blocked = status.blocked_tissues
-    if tissue not in blocked:
+    if tissue not in status.blocked_tissues:
         return {"drill_key": drill_key, "available": True, "reason": ""}
 
     areas = sorted({
@@ -357,12 +367,25 @@ def drill_availability(
         for report, assessment in zip(status.reports, status.assessments)
         if tissue in assessment.blocked_tissues
     })
-    named = areas[0].lower() if len(areas) == 1 else " and ".join(a.lower() for a in areas)
-    return {
-        "drill_key": drill_key,
-        "available": False,
-        "reason": f"Resting your {named}. This one loads it.",
-    }
+    if areas:
+        named = areas[0].lower() if len(areas) == 1 else " and ".join(a.lower() for a in areas)
+        return {
+            "drill_key": drill_key,
+            "available": False,
+            "reason": f"Resting your {named}. This one loads it.",
+        }
+
+    # Held by a ramp rather than by pain. Worth saying differently: "resting
+    # your knee" is confusing to a kid whose knee stopped hurting last week.
+    for plan in status.plans:
+        area = AREAS_BY_KEY.get(plan.area)
+        if tissue in plan.blocked_tissues(tuple(area.tissues) if area else ()):
+            return {
+                "drill_key": drill_key,
+                "available": False,
+                "reason": f"Not at this stage of your {plan.area_label.lower()} ramp yet.",
+            }
+    return {"drill_key": drill_key, "available": False, "reason": "Held back for now."}
 
 
 def purge_cutoff(today: date | None = None) -> str:

@@ -864,6 +864,19 @@ function renderWellnessWatch(data) {
   $('wellness-watch').innerHTML = rows.map((a) => {
     const level = a.action === 'stop' ? 'stop'
       : a.action === 'tell_someone' ? 'warning' : 'caution';
+    const plans = (a.plans || []).map((p) => `
+      <div class="small muted" style="margin-top:4px">
+        Coming back from ${esc(p.area_label.toLowerCase())} &mdash;
+        ${esc(p.stage_label.toLowerCase())}
+        ${p.setbacks ? ` &middot; ${p.setbacks} step back` : ''}
+        ${p.awaiting_clearance ? `<br><b>Waiting on ${
+          p.clearance === 'clinician'
+            ? 'a parent to confirm a doctor has cleared them'
+            : 'an adult to say they can start'}.</b>` : ''}
+      </div>
+      ${p.awaiting_clearance && p.clearance !== 'clinician'
+        ? `<button class="secondary inline" style="margin-top:6px"
+             data-clear="${p.id}">They can start</button>` : ''}`).join('');
     const areas = a.open_reports.map((r) => `
       <div class="small muted">
         ${esc(r.area_label)}${r.side ? ` (${esc(r.side)})` : ''}
@@ -875,10 +888,24 @@ function renderWellnessWatch(data) {
     return `<div class="advisory ${level}" style="align-items:flex-start">
       <span class="dotmark"></span>
       <div><b>${esc(a.display_name)}</b> &mdash; ${ACTION_LABELS[a.action] || ''}
-        ${areas}</div>
+        ${areas}${plans}</div>
     </div>`;
   }).join('');
 }
+
+// A coach can start an ordinary ramp. Anything that needed a clinician is
+// deliberately not actionable here -- a coach does not have standing to report
+// what a doctor told the family, and the button is absent rather than failing.
+$('wellness-watch').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-clear]');
+  if (!button) return;
+  try {
+    await api(`/api/wellness/plans/${button.dataset.clear}/clearance`, {
+      method: 'POST', body: {},
+    });
+    await loadAll();
+  } catch (e) { showError(e.message); }
+});
 
 function renderLoadWatch(athletes) {
   const flagged = athletes

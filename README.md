@@ -64,7 +64,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1089 tests
+python -m pytest tests/ -q          # 1122 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -89,6 +89,7 @@ athleteiq/
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
   load.py           Workload ratio, throwing volume, rest days, advisories
   wellness.py       Soreness and injury reporting, and what it holds back
+  rtp.py            The ramp back after an injury, and who has to authorise it
   benchmarks.py     Age-banded weekly time budgets and peer context
   positions.py      Canonical positions, aliases, and per-position drill mix
   sports.py         Other sports played, and how single-sport a year is
@@ -1090,6 +1091,78 @@ reports are purged after 400 days by the notifications cron; open ones never
 are, since an open report is a live thing about a body that still hurts.
 Everything is in the guardian export and is deleted by the erase path.
 
+### Coming back afterwards
+
+The most important thing in `rtp.py` is what it refuses to do: **it never clears
+anyone.** A graduated return after an injury is a medical decision, and an app
+that produces a green tick saying "you are ready" is dangerous however carefully
+the stages are worded. Clearance is always a human's, recorded here as a fact
+with a name and a date — this stores the sentence *"Jordan's guardian recorded
+that a doctor cleared them on the 3rd"*, and never generates it.
+
+What it is good for is the part after that decision. A ramp is a schedule, and
+schedules are what software does well.
+
+Saying "better now" about something that had escalated does not simply close the
+report — it opens a ramp behind it. A stiff thigh still closes outright; not
+everything that aches is an injury to come back from.
+
+| Stage | Min days | Session cap | Loads the injured area |
+|---|---|---|---|
+| Resting | — | none | no — *ends when an adult says it can* |
+| Moving again | 1 | 15 min | no |
+| Back to drills, easy | 2 | 25 min | yes |
+| Full solo training | 2 | uncapped | yes |
+| Done | — | — | *"your coach's call and your parent's, not this app's"* |
+
+Advancing needs three things: time served at the stage, a check-in **today**
+saying they feel fine, and — for the first step — an adult. Every refusal
+returns a sentence explaining itself, because a greyed-out button with no reason
+is how a kid decides the app is broken and goes back to training on their own.
+
+### Who can authorise what
+
+| | Ordinary return | Head or neck |
+|---|---|---|
+| The athlete | **never** | **never** |
+| Coach or director | yes | **no** |
+| Guardian | yes | yes, with a named clinician |
+
+A coach can clear the ordinary ones — a judgement coaches already make at every
+practice. A head or neck return can only be recorded by a guardian, because it
+needs what a doctor told the family and a coach has no standing to report that.
+The clinician's name is required, not because the app can verify it, but because
+typing one makes the step deliberate rather than a tap on the way to the pitch.
+It is stored as an *attestation by the person who typed it*, never as a fact
+about the clinician. In the coach view that button is simply absent rather than
+present and failing.
+
+Every plan carries an append-only history — opened, cleared, advanced, setback,
+with actor and date. This is the one place in the product where "who decided
+what, and when" may genuinely need answering later.
+
+### Setbacks are survivable
+
+Reporting the same area during a ramp steps it back **one stage, never to the
+start.** Resetting the plan is the same mistake as charging a streak for
+reporting soreness: if speaking up costs a week, a thirteen-year-old who wants
+to play on Saturday stops speaking up, and the ramp becomes a formality they
+walk through while hurt. The copy says so outright:
+
+> Your knee spoke up, so you have gone back one stage. That is not a punishment
+> and it is not starting over — it is the ramp doing exactly what it is for.
+> Telling us is the right call every time.
+
+A second setback returns the plan to `awaiting_clearance`, because at that point
+the ramp itself is not the answer and an adult should look again. Reporting
+during a ramp still protects the streak, like every other check-in.
+
+A drill held back by a ramp says so differently from one held back by pain —
+*"Not at this stage of your knee ramp yet"* rather than *"Resting your knee"*,
+which would confuse an athlete whose knee stopped hurting a week ago. A ramp
+nobody has touched for 45 days is treated as abandoned and stops holding
+anything.
+
 ## Load management and overuse protection
 
 Stated plainly, because it is the reason this exists: **everything else in this
@@ -1327,85 +1400,92 @@ the main compliance gap between this and a shippable product.
 Stated plainly, because these are the things that decide whether this survives
 contact with a real driveway:
 
-1. **Soreness reporting is not a medical device and must not be relied on as
+1. **Nothing here is a medical device, and the return ramp least of all.** The
+   stages are a load schedule, not a protocol, and completing one means the
+   athlete pressed a button five times over five symptom-free days — not that
+   any tissue has healed. The app records that a human cleared them and cannot
+   verify that the human was right, that a named clinician exists, or that the
+   athlete answered honestly. It should never be the reason a young athlete
+   goes back, and finishing a ramp should never be the reason one is picked.
+2. **Soreness reporting is not a medical device and must not be relied on as
    one.** It is a prompt to involve an adult, and its most important output is
    "tell someone" rather than any assessment of its own. It cannot see an
    athlete who says nothing, it takes every report at face value, and a child
    who is hurt and silent looks identical to one who is fine. Nothing in it
    should ever delay getting a young athlete looked at.
-2. **Thresholds are calibrated against synthetic motion, not real athletes.**
+3. **Thresholds are calibrated against synthetic motion, not real athletes.**
    The calibration harness makes every drill self-consistent — a textbook rep
    counts and measures what its spec claims — but "textbook" is still a
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
    the calibration against hand-counted ground truth remains the
    highest-value next task, and the reason the specs are data rather than code.
-3. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
+4. **Wall-ball counting is pose-only.** It infers a throw–catch cycle from arm
    motion without tracking the ball, so a convincing shadow-throw with no ball
    counts. Ball detection would close that, at real cost in model size and
    battery.
-4. **Multi-sport participation is self-reported and unverified.** An athlete
+5. **Multi-sport participation is self-reported and unverified.** An athlete
    who ticks three sports gets an earlier specialisation gate and a lighter
    weekly budget, and nothing stops them ticking sports they do not play. The
    incentive is weak in both directions — the reward is a different drill mix,
    not points or a leaderboard place, and the lighter budget asks *less* of
    them — and a coach sees the list on the roster, which is the check that
    matters. But it is a self-report, and the gate treats it as fact.
-5. **Seasons are a coarse proxy for training load.** Three seasons of
+6. **Seasons are a coarse proxy for training load.** Three seasons of
    recreational soccer and three seasons of travel soccer score identically,
    though they are not remotely the same week. Capturing sessions per week per
    sport would sharpen it, at the cost of a form a twelve-year-old will not
    fill in — which is the trade the season picker deliberately takes.
-6. **Positions are modelled for lacrosse only.** Another sport gets honest
+7. **Positions are modelled for lacrosse only.** Another sport gets honest
    silence — `for_sport` returns nothing, athletes fall back to the generic
    mix, and the join form falls back to free text. Adding a sport means adding
    its positions *and* the sport-specific drills their emphasis would point at;
    half of that is worse than neither, since a soccer emphasis built only from
    the general strength drills would recommend the same mix to every position
    on the pitch.
-7. **The age bands are heuristics, not a clinical instrument.** They are drawn
+8. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-8. **Handedness is inferred from wrist height**, which is reliable for standard
+9. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-9. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+10. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-10. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+11. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-11. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+12. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-12. **Revocation soft-fails by default**, though pre-fetched staples make strict
+13. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-13. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+14. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-14. **No payment processor.** The billing model, entitlements, and invoicing are
+15. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-15. **Offline slots are per-drill.** A drill you have never opened online has no
+16. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-16. **Web Push needs credentials.** Notifications generate and display in-app
+17. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-17. **Form quality is pose-only.** It reads how the body moved, not where the
+18. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-18. **Guardian identity is proven by the invite code alone.** There is no email
+19. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-19. **Roster import reads delimited text only.** CSV, TSV, and
+20. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. Direct TeamSnap/SportsEngine API sync is a separate integration.
-20. **Load coefficients are reasoned estimates, not measured values.** The
+21. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical

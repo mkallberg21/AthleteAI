@@ -226,13 +226,15 @@ class TestRecordKeeping:
 
     def test_resolving_clears_the_hold(self, store, athlete):
         saved = store.report_discomfort(athlete["id"], "knee", "sore")
-        assert store.resolve_discomfort(athlete["id"], saved["id"]) is True
+        done = store.resolve_discomfort(athlete["id"], saved["id"])
+        assert done["resolved"] is True
+        assert done["plan"] is None, "a sore knee does not need a ramp back"
         assert store.wellness_status(athlete["id"]).blocked_tissues == set()
 
     def test_one_athlete_cannot_resolve_anothers_report(self, store, program, athlete):
         other = store.create_user(program["org"], "athlete", "Someone Else")
         saved = store.report_discomfort(athlete["id"], "knee", "sore")
-        assert store.resolve_discomfort(other["id"], saved["id"]) is False
+        assert store.resolve_discomfort(other["id"], saved["id"])["resolved"] is False
 
     def test_junk_is_refused_rather_than_stored(self, store, athlete):
         for bad in (

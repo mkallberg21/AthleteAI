@@ -2397,3 +2397,138 @@ class TestWellnessEndpoints:
             ).lower()
             for leak in ("knee", "sore", "discomfort", "wellness", "private", "injur"):
                 assert leak not in payload, (path, leak)
+
+
+class TestReturnToPlayEndpoints:
+
+    def _guardian(self, client, store, athlete_id, name="A Parent"):
+        from athleteiq import guardians
+        invite = guardians.create_invite(store.conn, athlete_id, created_by=athlete_id)
+        person = guardians.redeem_invite(store.conn, invite["code"], name)
+        store.conn.commit()
+        return {"Authorization": f"Bearer {person['token']}"}
+
+    def _plan(self, client, athlete, area="knee", flags=("giving_way",)):
+        made = client.post(
+            "/api/wellness/discomfort",
+            json={"area": area, "severity": "niggle", "flags": list(flags)},
+            headers=athlete["headers"],
+        ).json()
+        report_id = made["open_reports"][0]["id"]
+        return client.post(
+            f"/api/wellness/discomfort/{report_id}/resolved", headers=athlete["headers"]
+        ).json()
+
+    def test_saying_you_are_better_opens_a_ramp(self, client, program):
+        athlete = program["athletes"][0]
+        body = self._plan(client, athlete)
+        assert body["open_reports"] == []
+        plan = body["plans"][0]
+        assert plan["stage"] == "rest" and plan["awaiting_clearance"] is True
+
+    def test_an_athlete_cannot_clear_themselves(self, client, program):
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete)["plans"][0]["id"]
+        res = client.post(
+            f"/api/wellness/plans/{plan_id}/clearance", json={},
+            headers=athlete["headers"],
+        )
+        assert res.status_code == 403
+        assert "cannot clear your own" in res.json()["detail"]
+
+    def test_a_coach_can_clear_an_ordinary_one(self, client, program):
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete)["plans"][0]["id"]
+        res = client.post(
+            f"/api/wellness/plans/{plan_id}/clearance", json={},
+            headers=program["director"],
+        )
+        assert res.status_code == 200
+        assert res.json()["stage"] == "light"
+
+    def test_a_coach_cannot_clear_a_head_return(self, client, program):
+        """That one needs what a doctor told the family, and a coach does not
+        have standing to report it."""
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete, area="head", flags=())["plans"][0]["id"]
+        res = client.post(
+            f"/api/wellness/plans/{plan_id}/clearance",
+            json={"clinician_name": "Dr Okafor"}, headers=program["director"],
+        )
+        assert res.status_code == 403
+        assert "parent or guardian" in res.json()["detail"]
+
+    def test_a_guardian_can_with_a_named_clinician(self, client, program):
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete, area="head", flags=())["plans"][0]["id"]
+        guardian = self._guardian(client, api_module._store, athlete["id"])
+
+        bare = client.post(
+            f"/api/wellness/plans/{plan_id}/clearance", json={}, headers=guardian,
+        )
+        assert bare.status_code == 400
+
+        named = client.post(
+            f"/api/wellness/plans/{plan_id}/clearance",
+            json={"clinician_name": "Dr Okafor"}, headers=guardian,
+        )
+        assert named.status_code == 200
+        assert named.json()["clinician_name"] == "Dr Okafor"
+
+    def test_a_stranger_cannot_clear_anything(self, client, program):
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete)["plans"][0]["id"]
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+        ).json()
+        res = client.post(
+            f"/api/wellness/plans/{plan_id}/clearance", json={},
+            headers={"Authorization": f"Bearer {rival['director']['token']}"},
+        )
+        assert res.status_code == 404
+
+    def test_advancing_too_early_explains_why(self, client, program):
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete)["plans"][0]["id"]
+        res = client.post(
+            f"/api/wellness/plans/{plan_id}/advance", headers=athlete["headers"]
+        )
+        assert res.status_code == 409
+        assert "Waiting on" in res.json()["detail"]
+
+    def test_the_ramp_holds_drills_back_until_it_is_finished(self, client, program):
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete)["plans"][0]["id"]
+        held = {d["key"]: d for d in client.get(
+            "/api/me/drills", headers=athlete["headers"]
+        ).json()["drills"]}
+        assert all(d["available"] is False for d in held.values()), "rest stage"
+
+        client.post(f"/api/wellness/plans/{plan_id}/clearance", json={},
+                    headers=program["director"])
+        after = {d["key"]: d for d in client.get(
+            "/api/me/drills", headers=athlete["headers"]
+        ).json()["drills"]}
+        assert after["lax_wall_ball"]["available"] is True
+        assert after["gen_squat"]["available"] is False
+        assert "ramp" in after["gen_squat"]["reason"]
+
+    def test_the_history_is_readable_by_the_people_with_standing(self, client, program):
+        athlete = program["athletes"][0]
+        plan_id = self._plan(client, athlete)["plans"][0]["id"]
+        client.post(f"/api/wellness/plans/{plan_id}/clearance", json={},
+                    headers=program["director"])
+        guardian = self._guardian(client, api_module._store, athlete["id"])
+
+        for headers in (athlete["headers"], program["director"], guardian):
+            events = client.get(
+                f"/api/wellness/plans/{plan_id}/history", headers=headers
+            ).json()["events"]
+            assert [e["kind"] for e in events] == ["opened", "cleared"]
+
+    def test_the_history_is_not_readable_by_anyone_else(self, client, program):
+        athlete, other = program["athletes"]
+        plan_id = self._plan(client, athlete)["plans"][0]["id"]
+        assert client.get(
+            f"/api/wellness/plans/{plan_id}/history", headers=other["headers"]
+        ).status_code == 404
