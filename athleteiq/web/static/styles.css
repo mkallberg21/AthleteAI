@@ -253,6 +253,21 @@ tbody tr:hover { background: var(--surface-2); }
   background: var(--surface); border-left: 3px solid var(--accent);
   font-size: .86rem; line-height: 1.5;
 }
+/* The fix, sitting under the note about what went wrong. Visually quieter
+   than the score above it -- this is the useful half, not the loud half. */
+.technique {
+  margin-top: 10px; padding: 11px 12px; border-radius: 9px;
+  background: var(--surface); border: 1px dashed var(--border);
+  font-size: .86rem; line-height: 1.5;
+}
+.technique b { display: block; font-size: .74rem; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.technique p { margin: 0 0 4px; }
+
+#technique-panel summary { cursor: pointer; color: var(--muted); }
+#technique-trace { color: var(--accent); display: block; }
+#technique-cues { padding-left: 18px; line-height: 1.5; }
+
 .hand-split { display: flex; gap: 10px; margin-top: 11px; }
 .hand-split > div {
   flex: 1; background: var(--surface); border: 1px solid var(--border);

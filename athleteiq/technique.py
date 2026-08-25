@@ -1,0 +1,488 @@
+"""What a good rep looks like, for every drill.
+
+Form scoring could already tell a child their range was short. It could not
+tell them what "not short" looks like, and a score without a fix is just a
+mark out of ten -- which is the thing this product is otherwise careful not
+to hand a twelve-year-old.
+
+Two halves, and the first is the important one.
+
+**Cues.** Per drill, per scoring component, a sentence saying what to do
+differently and one saying why it matters. They are keyed to the same
+component keys `quality.py` emits, so the fix an athlete reads is always the
+fix for the thing that actually scored lowest -- not a generic tip list they
+have to search.
+
+**A reference.** Film study points a browser at somebody else's video and
+inherits every problem that comes with a third-party embed: an ad before a
+drill, a sidebar of recommendations, a link out. None of that belongs in
+front of a child mid-session, so the reference here is generated from the
+drill's own spec instead -- the target range, the tempo band, the shape of
+the movement, drawn as a trace the athlete can watch their own rep against.
+
+Generating it rather than filming it has a property a stock clip cannot have:
+it is built from the same numbers the scorer marks against, so it can never
+drift out of agreement with the score. A video shot once and a threshold
+tuned later disagree silently, and the child is the one who pays for that.
+
+A program that films its own demonstration can still drop a file in
+`web/static/technique/<drill_key>.mp4` and it will be offered alongside the
+trace. Nothing is shipped in the repo -- `available` is computed from the
+filesystem, so this is honest about which drills actually have one.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .drills import ALL_DRILLS, DRILLS_BY_KEY
+from .drills.base import DrillSpec, Metric, SignalKind
+
+#: Where a deployment drops its own demonstration files, if it has any.
+CLIP_DIR = Path(__file__).resolve().parent / "web" / "static" / "technique"
+
+#: Kept short on purpose. A reference a child watches for forty seconds is a
+#: reference that has eaten the session it was meant to improve.
+MAX_CLIP_SECONDS = 20
+
+
+@dataclass(frozen=True)
+class Cue:
+    """One fix, for one thing that scored low."""
+
+    #: Matches a `quality.Component.key`, or "offhand" for the handed gap.
+    component: str
+    fix: str      # what to do differently, in the second person
+    why: str      # why it is worth doing, in one clause
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"component": self.component, "fix": self.fix, "why": self.why}
+
+
+# Written per drill rather than generated, because "go deeper" is not advice.
+# The fix has to name the body part and the feeling, which is the part a
+# template cannot do.
+CUES: dict[str, tuple[Cue, ...]] = {
+    "gen_squat": (
+        Cue("depth", "Sit back like there is a chair behind you, until your "
+                     "thighs are about level with the floor.",
+            "half a squat trains half the leg"),
+        Cue("tempo", "Take about a second down and a second up. If you are "
+                     "bouncing, you are using the bounce and not the muscle.",
+            "control is what makes it count"),
+        Cue("consistency", "Pick a spot on the wall and keep your eyes on it. "
+                           "Every rep should look like the one before.",
+            "reps that all look different are hard to get better at"),
+        Cue("endurance", "Stop the set when your reps start getting shallower, "
+                         "not when you cannot do another one.",
+            "the shallow ones at the end teach your body the shallow version"),
+    ),
+    "gen_push_up": (
+        Cue("depth", "Go down until your chest is about a fist off the floor, "
+                     "elbows pointing back rather than straight out.",
+            "the bottom third is where the strength comes from"),
+        Cue("tempo", "Lower for about a second. Dropping down and pushing off "
+                     "the floor is a different, easier exercise.",
+            "you want the muscle doing it, not the bounce"),
+        Cue("consistency", "Keep a straight line from your head to your heels "
+                           "and hold it the whole way down.",
+            "the hips sagging is the first thing to go"),
+        Cue("endurance", "When your hips start to drop, that is the end of the "
+                         "set. Rest and do another one.",
+            "reps after the form goes are practising the wrong shape"),
+    ),
+    "gen_sit_up": (
+        Cue("depth", "Come all the way up until your chest is near your knees, "
+                     "and go all the way back down.",
+            "the little ones in the middle do the least"),
+        Cue("tempo", "Slow on the way down. Most people rush that half and it "
+                     "is the half that works.",
+            "lowering under control is where the core earns it"),
+        Cue("consistency", "Do not yank on your neck. Hands crossed on your "
+                           "chest keeps you honest.",
+            "pulling your head forward fakes the range"),
+        Cue("endurance", "Stop when you start using a swing to get up.",
+            "the swing is your hips, not your stomach"),
+    ),
+    "gen_lunge": (
+        Cue("depth", "Drop your back knee towards the floor until your front "
+                     "thigh is about level.",
+            "a shallow lunge misses the muscle it is for"),
+        Cue("tempo", "Step, sink, and stand back up under control. Do not fall "
+                     "into it.",
+            "falling into a lunge is how knees get sore"),
+        Cue("consistency", "Front knee over your front foot, not rolling "
+                           "inwards. Same on both legs.",
+            "the knee drifting in is worth fixing early"),
+        Cue("endurance", "If you start wobbling, that is the set finished.",
+            "balance going is the first sign of fatigue"),
+    ),
+    "gen_glute_bridge": (
+        Cue("depth", "Push your hips all the way up until your body is a "
+                     "straight line from knees to shoulders.",
+            "the top of the movement is the whole point"),
+        Cue("tempo", "Squeeze at the top for a beat before coming down.",
+            "the pause is what makes it work"),
+        Cue("consistency", "Keep your feet flat and your knees the same width "
+                           "apart the whole time.",
+            "knees falling apart changes which muscle is working"),
+        Cue("endurance", "Stop when your hips stop reaching the top.",
+            "half-height reps are a different exercise"),
+    ),
+    "gen_dead_bug": (
+        Cue("depth", "Reach the opposite arm and leg out long and low, without "
+                     "letting your back come off the floor.",
+            "the range is limited by your back, not your limbs"),
+        Cue("tempo", "Slowly. This one is meant to look easy and feel hard.",
+            "speed is how people cheat this one"),
+        Cue("consistency", "Press your lower back into the floor and keep it "
+                           "there for every rep.",
+            "if your back arches, the exercise has stopped"),
+        Cue("endurance", "Finish the set when your back starts lifting.",
+            "that is the muscle you came for giving up"),
+    ),
+    "gen_pull_up": (
+        Cue("depth", "Pull until your chin clears the bar, and lower all the "
+                     "way until your arms are straight.",
+            "stopping short trains the easy half"),
+        Cue("tempo", "Come down slowly. The lowering half builds as much as "
+                     "the pulling half.",
+            "dropping off the bar wastes half the rep"),
+        Cue("consistency", "Stop the swinging. If you are kicking, the set is "
+                           "over.",
+            "a kip is a different exercise"),
+        Cue("endurance", "Stop when you stop clearing the bar.",
+            "reps that do not get there do not count"),
+    ),
+    "gen_plank": (
+        Cue("position", "Straight line from your head to your heels. Hips not "
+                        "up in the air, not sagging down.",
+            "the line is the entire exercise"),
+        Cue("endurance", "Come down when your hips start dropping, rather than "
+                         "hanging on with bad form.",
+            "a shorter good plank beats a long sagging one"),
+    ),
+    "gen_side_plank": (
+        Cue("position", "Push your hip up so your body is a straight line, and "
+                        "keep your shoulder stacked over your elbow.",
+            "letting the hip drop takes the work off the side you are training"),
+        Cue("endurance", "Stop when your hip starts sinking.",
+            "past that you are resting on the floor, not holding"),
+    ),
+    "gen_hollow_hold": (
+        Cue("position", "Lower back pressed flat into the floor, shoulders and "
+                        "feet just off it.",
+            "if your back lifts, the hold has stopped working"),
+        Cue("endurance", "Come down when your back starts to arch.",
+            "arching means your hip flexors took over"),
+    ),
+    "gen_wall_sit": (
+        Cue("position", "Slide down until your thighs are level with the floor "
+                        "and your knees are over your ankles.",
+            "sitting high makes it easy in a way that does not show"),
+        Cue("endurance", "Stand up when you start creeping higher up the wall.",
+            "creeping up is the set ending whether you notice or not"),
+    ),
+    "gen_jumping_jack": (
+        Cue("depth", "All the way out and all the way up -- hands meeting "
+                     "above your head, feet wide.",
+            "small ones are barely moving"),
+        Cue("tempo", "Find a rhythm you can hold, rather than sprinting the "
+                     "first ten.",
+            "an even pace is what makes it conditioning"),
+        Cue("consistency", "Same size every time, all the way through.",
+            "shrinking halfway is the usual pattern"),
+        Cue("endurance", "Slow down before you shrink, not after.",
+            "smaller reps are your body quitting quietly"),
+    ),
+    "gen_high_knees": (
+        Cue("depth", "Drive your knees up to about hip height, not just a "
+                     "quick jog on the spot.",
+            "low knees make this a jog"),
+        Cue("tempo", "Quick feet. Short, sharp contacts with the floor.",
+            "the speed is the training effect"),
+        Cue("consistency", "Stay tall. Leaning back is the usual mistake.",
+            "leaning back drops your knee height without you noticing"),
+        Cue("endurance", "Finish the set when your knees stop coming up.",
+            "there is nothing left to train once the height goes"),
+    ),
+    "gen_mountain_climber": (
+        Cue("depth", "Drive each knee right up towards your chest.",
+            "short ones turn this into a shuffle"),
+        Cue("tempo", "Fast but even. Do not let your hips bounce.",
+            "bouncing hips means your core stopped holding"),
+        Cue("consistency", "Keep your shoulders over your hands and your hips "
+                           "flat the whole time.",
+            "hips riding up is the plank part giving in"),
+        Cue("endurance", "Stop when your hips start to lift.",
+            "past that you are just moving your legs"),
+    ),
+    "gen_burpee": (
+        Cue("depth", "Chest to the floor at the bottom, and a proper jump with "
+                     "your hands overhead at the top.",
+            "both ends get skipped when people are tired"),
+        Cue("tempo", "Steady. Burpees are won by not stopping, not by going "
+                     "flat out for twenty seconds.",
+            "an even pace gets you more reps than a sprint"),
+        Cue("consistency", "Every rep gets the same chest-to-floor and the "
+                           "same jump.",
+            "the shrinking rep is the burpee's signature"),
+        Cue("endurance", "Slow the pace before the reps get smaller.",
+            "you keep more of the session that way"),
+    ),
+    "gen_tuck_jump": (
+        Cue("depth", "Pull your knees up towards your chest at the top, rather "
+                     "than just hopping.",
+            "the tuck is what makes it a tuck jump"),
+        Cue("tempo", "Land softly and reset. This is not a rhythm exercise.",
+            "soft landings are what keep your knees happy"),
+        Cue("consistency", "Land in the same spot you took off from.",
+            "drifting means you are jumping off balance"),
+        Cue("endurance", "Stop when your knees stop coming up or your landings "
+                         "get loud.",
+            "loud landings are tired legs"),
+    ),
+    "gen_squat_jump": (
+        Cue("depth", "Sink to a proper squat before you jump, and land back "
+                     "into one.",
+            "a shallow dip gives you a shallow jump"),
+        Cue("tempo", "Explode up, land soft, take a beat, go again.",
+            "the pause is what keeps the jumps sharp"),
+        Cue("consistency", "Knees tracking over your toes on every landing.",
+            "knees caving in on landing is the one to fix"),
+        Cue("endurance", "Stop when the jumps get low. Height is the point.",
+            "low jumps train slowness"),
+    ),
+    "gen_lateral_bound": (
+        Cue("depth", "Push properly sideways and stick the landing on one leg "
+                     "before you go back.",
+            "small hops miss the balance part"),
+        Cue("tempo", "Hold each landing for a beat.",
+            "the stick is where the ankle and knee learn to control it"),
+        Cue("consistency", "Land in a controlled position every time rather "
+                           "than scrambling to stay upright.",
+            "a bound you cannot land is a bound you cannot use"),
+        Cue("offhand", "Push off your weaker leg as hard as your strong one, "
+                       "and cover the same distance both directions.",
+            "almost everybody bounds further off one leg, and the other one "
+            "is the one that gets hurt"),
+        Cue("endurance", "Stop when you cannot stick the landings.",
+            "wobbly landings are how ankles get rolled"),
+    ),
+    "lax_wall_ball": (
+        Cue("depth", "Full throwing motion -- take the stick back past your "
+                     "ear and follow through, rather than flicking at it.",
+            "a short flick will not survive a game"),
+        Cue("tempo", "Find a steady rhythm rather than rushing. Catch, cradle, "
+                     "throw.",
+            "rushing is where the drops come from"),
+        Cue("consistency", "Same spot on the wall every time. Aim small.",
+            "a target is what turns reps into accuracy"),
+        Cue("offhand", "Give your weak hand the same number of reps and the "
+                       "same full motion, even though it feels awful.",
+            "your weak hand is the fastest thing you can improve"),
+        Cue("endurance", "Stop when your throws start dropping short.",
+            "tired reps groove a tired throw"),
+    ),
+    "lax_quick_stick": (
+        Cue("depth", "Catch and release in one motion, hands soft.",
+            "the whole drill is about not winding up"),
+        Cue("tempo", "Quick, but not panicked. Let the ball do the work.",
+            "panic hands drop balls"),
+        Cue("consistency", "Same height, same spot on the wall.",
+            "consistency here is what makes it usable in a game"),
+        Cue("offhand", "Same count on your weak hand.",
+            "quick stick on your weak side is a real advantage"),
+    ),
+    "soc_juggle": (
+        Cue("consistency", "Small touches, ball no higher than your waist.",
+            "high touches are hard to control"),
+        Cue("tempo", "Keep an even rhythm rather than chasing saves.",
+            "rhythm is what lets you keep going"),
+        Cue("offhand", "Alternate feet, even though one will feel wrong.",
+            "a one-footed juggler is a one-footed player"),
+    ),
+    "bkb_dribble": (
+        Cue("consistency", "Fingertips, not palms, and keep the ball below "
+                           "your waist.",
+            "a low hard dribble is much harder to steal"),
+        Cue("tempo", "Pound it. A soft dribble is a slow dribble.",
+            "the speed off the floor is what beats a defender"),
+        Cue("offhand", "Same number of reps with your weak hand.",
+            "defenders find your weak hand in about one possession"),
+    ),
+    "vb_set": (
+        Cue("consistency", "Hands in a triangle above your forehead, ball "
+                           "straight up.",
+            "setting it forward is the habit to break early"),
+        Cue("tempo", "Quiet hands. Catching and throwing is a different skill.",
+            "a set should be one touch"),
+    ),
+    "bb_wall_throw": (
+        Cue("consistency", "Same target on the wall, four seams across.",
+            "the grip is what makes it go straight"),
+        Cue("tempo", "Do not rush. Set your feet between throws.",
+            "footwork is most of throwing accuracy"),
+        Cue("offhand", "Glove-side work counts too -- catch cleanly before you "
+                       "throw.",
+            "the catch is half of every throw you make in a game"),
+    ),
+    "ten_wall_rally": (
+        Cue("consistency", "Aim above the line every time and let it bounce "
+                           "once.",
+            "a target turns hitting into practice"),
+        Cue("tempo", "Recover to the middle between shots.",
+            "getting back is what you actually do in a rally"),
+        Cue("offhand", "Backhands get the same count as forehands.",
+            "everyone hits your backhand until it holds up"),
+    ),
+}
+
+#: Used when a drill has no bespoke cue for the component that scored lowest.
+#: Deliberately vaguer -- a generic sentence is better than nothing but is not
+#: a substitute for one that names the body part, so `bespoke` says which it is.
+GENERIC: dict[str, Cue] = {
+    "consistency": Cue(
+        "consistency", "Try to make every rep look like the one before it.",
+        "reps that all look different are hard to improve"),
+    "depth": Cue(
+        "depth", "Take each rep through its full range, both ends.",
+        "the ends of the movement are where the work is"),
+    "tempo": Cue(
+        "tempo", "Slow down and control the movement instead of rushing it.",
+        "control is what makes a rep count"),
+    "endurance": Cue(
+        "endurance", "Finish the set when the reps start getting smaller, "
+                     "rather than pushing to failure.",
+        "small tired reps teach your body the small version"),
+    "position": Cue(
+        "position", "Hold the shape you started in for the whole time.",
+        "the shape is the exercise"),
+    "offhand": Cue(
+        "offhand", "Give your weaker side the same number of reps.",
+        "the weaker side is usually the fastest thing to improve"),
+}
+
+
+@dataclass
+class Trace:
+    """The shape of a well-executed rep, for the reference animation.
+
+    Points are (fraction of the cycle, fraction of target range). Drawn rather
+    than filmed, and built from the drill's own thresholds so it cannot fall
+    out of agreement with the score.
+    """
+
+    points: tuple[tuple[float, float], ...]
+    target_rom: float
+    tempo_ms: int
+    units: str
+    hold: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "points": [list(p) for p in self.points],
+            "target_rom": self.target_rom,
+            "tempo_ms": self.tempo_ms,
+            "units": self.units,
+            "hold": self.hold,
+        }
+
+
+def _trace(drill: DrillSpec) -> Trace | None:
+    """A good rep of this drill as a curve.
+
+    A hold is a flat line, which is exactly the point of a hold. Everything
+    else is out and back: down-and-up for a squat, up-and-down for a pull-up.
+    The asymmetry is real -- the return half is slower on nearly every drill,
+    because that is the half people rush.
+    """
+    quality = drill.quality
+    if quality is None:
+        return None
+
+    units = "degrees" if drill.signal.kind is SignalKind.JOINT_ANGLE else "frame heights"
+    mid = (quality.tempo_min_ms + quality.tempo_max_ms) // 2
+
+    if drill.metric is Metric.HOLD_SECONDS:
+        return Trace(
+            points=((0.0, 1.0), (1.0, 1.0)),
+            target_rom=quality.target_rom, tempo_ms=mid, units="", hold=True,
+        )
+
+    # Out fast, hold the end position briefly, come back slower. The pause at
+    # the end and the slower return are the two things a rushed rep loses.
+    return Trace(
+        points=(
+            (0.00, 0.0), (0.30, 0.85), (0.40, 1.0), (0.52, 1.0),
+            (0.75, 0.35), (1.00, 0.0),
+        ),
+        target_rom=quality.target_rom, tempo_ms=mid, units=units,
+    )
+
+
+def clip_path(drill_key: str) -> Path:
+    return CLIP_DIR / f"{drill_key}.mp4"
+
+
+def has_clip(drill_key: str) -> bool:
+    """Whether a deployment actually dropped a demonstration file in.
+
+    Read from disk rather than declared in a table, so this cannot claim a
+    clip exists when the file is not there.
+    """
+    return clip_path(drill_key).is_file()
+
+
+def cues_for(drill_key: str) -> tuple[Cue, ...]:
+    return CUES.get(drill_key, ())
+
+
+def fix_for(drill_key: str, component: str) -> dict[str, Any] | None:
+    """The cue for one thing that scored low, falling back to a generic one.
+
+    `bespoke` tells the caller which it got. A generic sentence is worth
+    showing, but it is not worth pretending it was written for this drill.
+    """
+    for cue in cues_for(drill_key):
+        if cue.component == component:
+            return {**cue.to_dict(), "bespoke": True}
+    generic = GENERIC.get(component)
+    return {**generic.to_dict(), "bespoke": False} if generic else None
+
+
+def reference(drill_key: str) -> dict[str, Any]:
+    """Everything the capture screen needs to show a child how to be right."""
+    drill = DRILLS_BY_KEY.get(drill_key)
+    if drill is None:
+        return {}
+    trace = _trace(drill)
+    return {
+        "drill_key": drill_key,
+        "drill_name": drill.name,
+        "setup_hint": drill.setup_hint,
+        "cues": [c.to_dict() for c in cues_for(drill_key)],
+        "trace": trace.to_dict() if trace else None,
+        # Self-hosted, and only claimed when the file is actually on disk.
+        "clip_url": f"/static/technique/{drill_key}.mp4" if has_clip(drill_key) else "",
+        "has_clip": has_clip(drill_key),
+    }
+
+
+def coverage() -> dict[str, Any]:
+    """Which drills have bespoke cues, and which are on generic ones.
+
+    Reported rather than hidden: "every drill has a reference" is only true
+    in the sense that every drill has *something*, and the difference between
+    a sentence written for the squat and one written for anything is the
+    difference between advice and filler.
+    """
+    bespoke = [d.key for d in ALL_DRILLS if CUES.get(d.key)]
+    return {
+        "drills": len(ALL_DRILLS),
+        "with_cues": len(bespoke),
+        "without_cues": [d.key for d in ALL_DRILLS if not CUES.get(d.key)],
+        "with_trace": sum(1 for d in ALL_DRILLS if _trace(d) is not None),
+        "with_clip": [d.key for d in ALL_DRILLS if has_clip(d.key)],
+    }

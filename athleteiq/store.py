@@ -31,6 +31,7 @@ from . import guardians as guardians_mod
 from . import load as load_mod
 from . import roster as roster_mod
 from . import roster_sync
+from . import technique
 from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
 from .quality import RepFeature, analyze as analyze_quality
@@ -2383,6 +2384,11 @@ class Store:
             ],
             "counted_for_day": today,
             "quality": report.to_dict(),
+            # What "right" looks like for the thing that scored lowest. A
+            # score without a fix is a mark out of ten, which is exactly what
+            # this product is otherwise careful not to hand a twelve-year-old.
+            "technique": technique.fix_for(drill.key, report.weakest)
+                         if report.weakest else None,
             "load": self.load_state(athlete_id).to_dict(),
         }
         # Stored so a duplicate delivery replays this exact response.

@@ -197,6 +197,15 @@
       </div>
 
       <div class="small muted" id="hint" style="margin-top:10px"></div>
+      <details id="technique-panel" class="hidden" style="margin-top:8px">
+        <summary class="small">What a good rep looks like</summary>
+        <canvas id="technique-trace" width="320" height="90"
+          style="width:100%;max-width:320px;margin-top:8px"></canvas>
+        <div class="small muted" id="technique-scale"></div>
+        <ul class="small" id="technique-cues" style="margin-top:8px"></ul>
+        <video id="technique-clip" class="hidden" controls playsinline muted
+          preload="none" style="width:100%;max-width:320px;margin-top:8px"></video>
+      </details>
       <div class="small muted" id="orientation-note" style="margin-top:4px"></div>
       <div id="ball-readout" class="hidden" style="margin-top:6px">
         <div class="small" id="ball-quality"></div>
@@ -1208,6 +1217,7 @@ async function openCapture(drill) {
   show('capture');
   $('drill-name').textContent = drill.name;
   $('hint').textContent = drill.setup_hint;
+  loadTechnique(drill.key);
   $('reps').textContent = '0';
   $('rep-label').textContent = drill.metric === 'hold' ? 'seconds' : 'reps';
   $('hands').innerHTML = drill.tracks_handedness
@@ -1698,7 +1708,88 @@ function qualityClass(score) {
   return score >= 80 ? 'good' : score >= 60 ? 'mid' : 'low';
 }
 
-function renderQuality(quality) {
+/** What "right" looks like, next to the thing that scored lowest.
+ *
+ * The note says what went wrong; this says what to do instead. A score
+ * without a fix is a mark out of ten, and marks out of ten are the thing
+ * this app is otherwise careful not to hand a twelve-year-old.
+ */
+function renderTechnique(fix) {
+  if (!fix) return '';
+  return `<div class="technique">
+    <b>Try this next time</b>
+    <p>${esc(fix.fix)}</p>
+    <span class="small muted">Why: ${esc(fix.why)}</span>
+  </div>`;
+}
+
+/** Draw the shape of a well-executed rep.
+ *
+ * Generated from the drill's own thresholds rather than filmed, which gives
+ * it a property a stock clip cannot have: it is built from the same numbers
+ * the scorer marks against, so it can never drift out of agreement with the
+ * score a child is shown. A video shot once and a threshold tuned later
+ * disagree silently, and the child is the one who pays for that.
+ */
+function drawTrace(canvas, trace) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height, pad = 10;
+  ctx.clearRect(0, 0, w, h);
+
+  const x = (t) => pad + t * (w - pad * 2);
+  const y = (v) => h - pad - v * (h - pad * 2);
+
+  // The target line. A rep that does not reach it is the "short range" the
+  // score is about, so it is drawn as the thing to touch.
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = 'rgba(127,127,127,.6)';
+  ctx.beginPath();
+  ctx.moveTo(pad, y(1)); ctx.lineTo(w - pad, y(1)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = 'currentColor';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  trace.points.forEach(([t, v], i) => {
+    if (i === 0) ctx.moveTo(x(t), y(v)); else ctx.lineTo(x(t), y(v));
+  });
+  ctx.stroke();
+}
+
+async function loadTechnique(drillKey) {
+  const panel = $('technique-panel');
+  try {
+    const ref = await api(`/api/technique/${encodeURIComponent(drillKey)}`);
+    panel.classList.remove('hidden');
+
+    if (ref.trace) {
+      drawTrace($('technique-trace'), ref.trace);
+      $('technique-scale').textContent = ref.trace.hold
+        ? 'Hold the position steady for the whole set.'
+        : `Aim for about ${ref.trace.target_rom} ${ref.trace.units} of movement, `
+          + `roughly ${(ref.trace.tempo_ms / 1000).toFixed(1)}s a rep.`;
+    } else {
+      $('technique-trace').classList.add('hidden');
+      $('technique-scale').textContent = '';
+    }
+
+    $('technique-cues').innerHTML = ref.cues
+      .map((c) => `<li>${esc(c.fix)} <span class="muted">— ${esc(c.why)}</span></li>`)
+      .join('');
+
+    // Self-hosted, and only shown when a deployment actually added one.
+    const clip = $('technique-clip');
+    clip.classList.toggle('hidden', !ref.has_clip);
+    if (ref.has_clip) clip.src = ref.clip_url;
+  } catch {
+    // A reference is a nice-to-have. Failing to fetch it must not stop a
+    // child from recording their session.
+    panel.classList.add('hidden');
+  }
+}
+
+function renderQuality(quality, fix) {
   if (!quality || quality.score === null || quality.score === undefined) {
     // Say why rather than showing a blank panel or a misleading zero.
     return quality && quality.coaching_note
@@ -1728,6 +1819,7 @@ function renderQuality(quality) {
     </div>
     ${hands}
     ${quality.coaching_note ? `<div class="coach-note">${esc(quality.coaching_note)}</div>` : ''}
+    ${renderTechnique(fix)}
   </div>`;
 }
 
@@ -1772,7 +1864,8 @@ function showResult(result) {
     .map((l) => `<tr><td>${esc(l.label)}</td><td class="num">${l.amount >= 0 ? '+' : ''}${l.amount}</td></tr>`)
     .join('');
 
-  $('r-quality').innerHTML = result.status === 'counted' ? renderQuality(result.quality) : '';
+  $('r-quality').innerHTML = result.status === 'counted'
+    ? renderQuality(result.quality, result.technique) : '';
 
   if (result.status === 'queued') {
     $('r-quality').innerHTML = '';

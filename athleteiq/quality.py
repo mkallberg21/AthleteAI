@@ -111,6 +111,10 @@ class QualityReport:
     offhand_rom_ratio: float | None = None
     coaching_note: str = ""
     measurable_reps: int = 0
+    #: Component key the note is about, so a caller can look up the matching
+    #: technique cue. Recorded rather than re-derived: the note and the fix
+    #: disagreeing about what went wrong would be worse than having no fix.
+    weakest: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -124,6 +128,7 @@ class QualityReport:
             "offhand_rom_ratio": self.offhand_rom_ratio,
             "coaching_note": self.coaching_note,
             "measurable_reps": self.measurable_reps,
+            "weakest": self.weakest,
         }
 
 
@@ -393,6 +398,7 @@ def _analyze_hold(hold_ms: int, duration_ms: int) -> QualityReport:
         detail = f"Only {share:.0%} of that was a real plank. Shorter and stricter beats longer and sagging."
 
     report.components = [Component("position", "Position held", score, detail)]
+    report.weakest = "position"
     report.score = round(score * 100)
     report.coaching_note = detail
     return report
@@ -426,6 +432,8 @@ def offhand_deficit_threshold(within_hand_spread: float | None) -> float:
 def _coaching_note(
     report: QualityReport, drill: DrillSpec, dominant_hand: str | None
 ) -> str:
+    # Sets report.weakest as a side effect so the technique cue shown next to
+    # the note is about the same thing the note is about.
     """The single most useful sentence for this session.
 
     One sentence, not four. A wall of feedback gets skimmed; the weakest
@@ -438,6 +446,7 @@ def _coaching_note(
         deficit = 1.0 - report.offhand_rom_ratio
         if deficit >= offhand_deficit_threshold(report.within_hand_spread):
             offhand = "left" if dominant_hand == "right" else "right"
+            report.weakest = "offhand"
             return (
                 f"Your {offhand} hand is getting {deficit:.0%} less range than your "
                 f"{dominant_hand}. That gap is the fastest thing you can fix."
@@ -447,7 +456,10 @@ def _coaching_note(
         return ""
 
     weakest = min(report.components, key=lambda c: c.score)
+    report.weakest = weakest.key
     if weakest.score >= STRONG:
         strongest = max(report.components, key=lambda c: c.score)
+        # Still the weakest key, not the strongest: on a clean session the
+        # cue becomes "here is the next thing", which is the right offer.
         return f"Clean session. {strongest.detail}"
     return weakest.detail

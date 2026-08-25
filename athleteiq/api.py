@@ -37,6 +37,7 @@ from . import guardians as guardians_mod
 from . import practice as practice_mod
 from . import roster as roster_mod
 from . import season as season_mod
+from . import technique as technique_mod
 from . import roster_sync
 from . import notifications as notify
 from .assignments import AssignmentError
@@ -2547,6 +2548,33 @@ def team_wellness(
 
     carrying.sort(key=lambda a: -wellness_mod.Action.rank(a["action"]))
     return {"athletes": carrying, "counts": counts, "roster": len(athletes)}
+
+
+@app.get("/api/technique/{drill_key}")
+def technique_reference(drill_key: str) -> dict[str, Any]:
+    """What a good rep of this drill looks like.
+
+    Public reference data, like the drill catalog itself -- it describes a
+    movement and contains nothing about any athlete. Served from here rather
+    than pointing a browser at somebody else's video: a third-party embed
+    brings an ad before a drill, a sidebar of recommendations, and a way out
+    of the app, none of which belong in front of a child mid-session.
+    """
+    reference = technique_mod.reference(drill_key)
+    if not reference:
+        raise HTTPException(status_code=404, detail=f"unknown drill: {drill_key}")
+    return reference
+
+
+@app.get("/api/technique")
+def technique_coverage() -> dict[str, Any]:
+    """Which drills have cues written for them, and which have a clip on disk.
+
+    Reported rather than hidden. "Every drill has a reference" is only true in
+    the sense that every drill has something, and a caller deserves to know
+    the difference.
+    """
+    return technique_mod.coverage()
 
 
 @app.get("/api/sports")
