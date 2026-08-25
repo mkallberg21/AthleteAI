@@ -25,7 +25,7 @@ export function setOrg(orgId) {
   } catch { /* private mode */ }
 }
 
-export async function api(path, { method = 'GET', body } = {}) {
+export async function api(path, { method = 'GET', body, raw = false } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -59,7 +59,11 @@ export async function api(path, { method = 'GET', body } = {}) {
     err.permanent = res.status >= 400 && res.status < 500;
     throw err;
   }
-  return res.status === 204 ? null : res.json();
+  if (res.status === 204) return null;
+  // `raw` is for the one endpoint that returns a file rather than JSON. It
+  // still goes through here so the bearer token and org header ride along --
+  // a bare <a href> would 401.
+  return raw ? res.text() : res.json();
 }
 
 /** Escape text before it reaches innerHTML. Display names are user-supplied. */

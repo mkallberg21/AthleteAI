@@ -352,6 +352,37 @@
     <div id="assignments"></div>
   </div>
 
+  <div class="card" id="evaluation-card">
+    <h2>Evaluation export</h2>
+    <p class="small muted">
+      For tryouts and end-of-season reviews. It carries <b>participation and
+      improvement</b> and deliberately not volume &mdash; reps and XP mostly
+      measure whether a child has a garage, a wall, and a lift to practice,
+      which is not something they control. It is alphabetical, has no total,
+      and contains nobody's injury history. Weeks an athlete was hurt or away
+      come out of their participation rate without saying why.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:150px">
+        <label for="ev-team">Team</label>
+        <select id="ev-team"><option value="">All teams</option></select>
+      </div>
+      <div style="flex:1;min-width:130px">
+        <label for="ev-weeks">Window</label>
+        <select id="ev-weeks">
+          <option value="8">Last 8 weeks</option>
+          <option value="12" selected>Last 12 weeks</option>
+          <option value="26">Last 6 months</option>
+          <option value="52">Last year</option>
+        </select>
+      </div>
+      <button class="secondary" id="ev-build">Show</button>
+      <button class="secondary" id="ev-csv">Download CSV</button>
+    </div>
+    <div id="ev-out" style="margin-top:12px"></div>
+    <div id="ev-err" class="err hidden"></div>
+  </div>
+
   <div class="card" id="goals-card">
     <h2>A number the squad chases together</h2>
     <p class="small muted">
@@ -1688,7 +1719,63 @@ async function loadTeams() {
   $('import-team').innerHTML = options;
   $('sync-team').innerHTML = options;
   $('g-team').innerHTML = options;
+  $('ev-team').innerHTML = '<option value="">All teams</option>' + options;
 }
+
+// ------------------------------------------------------- evaluation export
+
+function evQuery() {
+  const team = $('ev-team').value;
+  return `?weeks=${$('ev-weeks').value}${team ? `&team_id=${team}` : ''}`;
+}
+
+$('ev-build').addEventListener('click', async () => {
+  $('ev-err').classList.add('hidden');
+  try {
+    const data = await api(`/api/coach/evaluation${evQuery()}`);
+    $('ev-out').innerHTML = `
+      <p class="small muted" style="white-space:pre-line">${esc(data.preamble)}</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Athlete</th><th class="num">Weeks trained</th>
+            <th class="num">Participation</th><th class="num">Form</th>
+            <th>Trend</th>
+          </tr></thead>
+          <tbody>${data.athletes.map((a) => `
+            <tr>
+              <td>${esc(a.display_name)}</td>
+              <td class="num">${a.weeks_active}/${a.weeks_available}</td>
+              <td class="num">${a.participation === null ? '—'
+                : `${Math.round(a.participation * 100)}%`}</td>
+              <td class="num">${a.form_now === null ? '—' : a.form_now}</td>
+              <td>${esc(a.trend)}${a.form_change === null ? ''
+                : ` <span class="small muted">(${a.form_change > 0 ? '+' : ''}${a.form_change})</span>`}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    $('ev-err').textContent = e.message;
+    $('ev-err').classList.remove('hidden');
+  }
+});
+
+$('ev-csv').addEventListener('click', async () => {
+  $('ev-err').classList.add('hidden');
+  try {
+    // Through api() so the bearer token goes with it; a bare link would 401.
+    const text = await api(`/api/coach/evaluation.csv${evQuery()}`, { raw: true });
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'evaluation.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    $('ev-err').textContent = e.message;
+    $('ev-err').classList.remove('hidden');
+  }
+});
 
 // ------------------------------------------------------------- team goals
 

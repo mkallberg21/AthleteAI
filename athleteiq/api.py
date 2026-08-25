@@ -12,7 +12,12 @@ import base64
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -36,6 +41,7 @@ from . import film as film_mod
 from . import guardians as guardians_mod
 from . import practice as practice_mod
 from . import absence as absence_mod
+from . import evaluation as evaluation_mod
 from . import parent_report as parent_report_mod
 from . import roster as roster_mod
 from . import season as season_mod
@@ -2640,6 +2646,49 @@ def team_ball_drills(
         store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
     )
     return store.team_ball_drills([a["athlete_id"] for a in athletes])
+
+
+@app.get("/api/coach/evaluation")
+def evaluation_export(
+    team_id: int | None = None,
+    weeks: int = Query(default=12, ge=4, le=52),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The artifact a coach takes into tryouts.
+
+    Deliberate rather than incidental: coaches will use this data at selection
+    whether or not anyone designs for it, and the realistic alternative is a
+    screenshot of a leaderboard ranked by volume with a child's name at the
+    bottom. Participation and improvement only, alphabetical, no totals.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    return evaluation_mod.build(
+        store.conn, principal.org_id, team_id, weeks=weeks,
+        scope=principal.scope_filter(),
+    ).to_dict()
+
+
+@app.get("/api/coach/evaluation.csv", response_class=PlainTextResponse)
+def evaluation_export_csv(
+    team_id: int | None = None,
+    weeks: int = Query(default=12, ge=4, le=52),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> str:
+    """The same thing as a file, caveats included.
+
+    The preamble rides along as comment lines because a caveat that lives only
+    in the web page does not survive the export -- and the export is what
+    reaches the selection meeting.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    return evaluation_mod.build(
+        store.conn, principal.org_id, team_id, weeks=weeks,
+        scope=principal.scope_filter(),
+    ).to_csv()
 
 
 @app.get("/api/coach/practice")
