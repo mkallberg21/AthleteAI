@@ -30,6 +30,7 @@ from . import billing as billing_mod
 from . import guardians as guardians_mod
 from . import load as load_mod
 from . import roster as roster_mod
+from . import injury_history
 from . import roster_sync
 from . import technique
 from . import notifications as notify
@@ -2671,10 +2672,16 @@ class Store:
         age = None
         if row and row["birth_year"]:
             age = _now().year - int(row["birth_year"])
+        # Prior injury makes a caution arrive earlier on the tissues involved.
+        # It reaches here and the return-to-play flow; it deliberately does not
+        # reach any coach-facing evaluation surface.
+        history = injury_history.for_athlete(self.conn, athlete_id)
         return load_mod.analyze(
             self.load_history(athlete_id, CONFIG.load.chronic_days),
             today=_now().date(),
             age=age,
+            tightened=history.tightening(),
+            history_note=history.note(),
         )
 
     def log_recovery_day(self, athlete_id: int, day: date | None = None) -> dict[str, Any]:

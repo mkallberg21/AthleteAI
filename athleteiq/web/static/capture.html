@@ -124,6 +124,7 @@
       </div>
       <div class="gauge" id="load-gauge"></div>
       <div id="load-advisories"></div>
+      <div class="small muted hidden" id="load-history-note"></div>
       <div id="load-action"></div>
     </div>
 
@@ -993,6 +994,13 @@ async function loadTrainingLoad() {
       <span class="dotmark"></span>
       <div>${esc(a.message)}${a.evidence ? `<em>${esc(a.evidence)}</em>` : ''}</div>
     </div>`).join('');
+
+  // Why this athlete's thresholds differ from a teammate's. Without it, an
+  // advisory that fires on a week a friend was told was fine reads as the app
+  // picking on them. Their own screen only -- see injury_history.py.
+  const historyNote = $('load-history-note');
+  historyNote.textContent = state.history_note || '';
+  historyNote.classList.toggle('hidden', !state.history_note);
 
   // The recovery button is the whole point: it removes the reason to train
   // through fatigue, because resting no longer costs the streak.

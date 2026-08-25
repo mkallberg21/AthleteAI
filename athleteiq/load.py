@@ -98,6 +98,12 @@ class LoadState:
     acwr: float | None = None
     zone: str = Zone.UNKNOWN
     history_days: int = 0
+    #: Per-tissue thresholds tightened by prior injury, and the sentence the
+    #: athlete reads about it. Empty for almost everybody. See
+    #: injury_history.py -- this reaches the athlete's own screen and the
+    #: return-to-play flow, and deliberately not a coach's evaluation surface.
+    tightened: dict[str, float] = field(default_factory=dict)
+    history_note: str = ""
 
     weekly_throws: int = 0
     throw_change: float | None = None
@@ -128,6 +134,8 @@ class LoadState:
             "zone": self.zone,
             "zone_label": ZONE_LABELS.get(self.zone, self.zone),
             "history_days": self.history_days,
+            "tightened": self.tightened,
+            "history_note": self.history_note,
             "weekly_throws": self.weekly_throws,
             "throw_change": round(self.throw_change, 2) if self.throw_change is not None else None,
             "consecutive_days": self.consecutive_days,
@@ -171,10 +179,20 @@ def analyze(
     today: date,
     age: int | None = None,
     config: LoadConfig | None = None,
+    tightened: dict[str, float] | None = None,
+    history_note: str = "",
 ) -> LoadState:
-    """Assess an athlete's recent workload. Never raises."""
+    """Assess an athlete's recent workload. Never raises.
+
+    `tightened` comes from prior injury and makes a caution arrive earlier on
+    the tissues involved. It never blocks anything and never reduces a budget
+    -- it moves the point at which this app raises a question, which is the
+    only thing a prediction like that has any business doing to a child.
+    """
     cfg = config or CONFIG.load
     state = LoadState()
+    state.tightened = dict(tightened or {})
+    state.history_note = history_note
 
     if not days:
         state.advisories.append(
@@ -288,10 +306,35 @@ def _zone(acwr: float, cfg: LoadConfig) -> str:
     return Zone.HIGH
 
 
+def _tissue_tightening(state: LoadState, *tissues: str) -> float:
+    """The largest tightening that applies to any of these tissues."""
+    return max((state.tightened.get(t, 0.0) for t in tissues), default=0.0)
+
+
 def _add_advisories(
     state: LoadState, cfg: LoadConfig, age: int | None, acute_window: list[DayLoad]
 ) -> None:
     """Turn the numbers into things a coach can act on."""
+
+    # Prior injury pulls the *elevated* line down on the tissues involved, so
+    # an athlete who has been here before gets the question a little sooner.
+    # The HIGH line is left alone deliberately: it is already the point at
+    # which this app says ease off, and moving it would mean a child with a
+    # history gets told to stop on a week their teammate is told is fine.
+    whole = _tissue_tightening(state, "whole_body", "lower_body", "core")
+    elevated_low = cfg.optimal_high * (1.0 - whole)
+    if (whole and state.zone == Zone.OPTIMAL and state.acwr is not None
+            and state.acwr >= elevated_low):
+        state.advisories.append(
+            Advisory(
+                "caution",
+                "history_ramp",
+                "This week is a bigger step up than usual, and you have come "
+                "back from something before. Worth an easier day rather than "
+                "another hard one.",
+                f"Workload ratio {state.acwr:.2f}.",
+            )
+        )
 
     if state.zone == Zone.HIGH:
         state.advisories.append(
@@ -315,6 +358,22 @@ def _add_advisories(
                 f"Workload ratio {state.acwr:.2f}.",
             )
         )
+
+    history_rest_after = cfg.rest_day_after
+    if whole:
+        history_rest_after = max(3, round(cfg.rest_day_after * (1.0 - whole)))
+        if (not state.rest_recommended
+                and state.consecutive_days >= history_rest_after):
+            state.advisories.append(
+                Advisory(
+                    "caution",
+                    "history_rest",
+                    f"{state.consecutive_days} days in a row. Given what you "
+                    "have come back from, a day off now is worth more than "
+                    "another session.",
+                    "Rest days are when adaptation actually happens.",
+                )
+            )
 
     if state.rest_recommended:
         state.advisories.append(

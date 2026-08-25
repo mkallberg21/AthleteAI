@@ -755,7 +755,13 @@ def purge_old_wellness(conn: sqlite3.Connection, today: "date | None" = None) ->
         removed += conn.execute(
             "DELETE FROM wellness_checkins WHERE day < ?", (cutoff,)
         ).rowcount
-    return removed
+    # Completed return plans were never purged at all, which contradicted what
+    # the wellness module says this product does with health data about a
+    # minor. They have their own longer horizon because prior injury genuinely
+    # informs the season after -- but a horizon, not forever.
+    from . import injury_history
+
+    return removed + injury_history.purge_old_plans(conn, today)
 
 
 def purge_expired_clips(conn: sqlite3.Connection, now: "datetime | None" = None) -> int:
