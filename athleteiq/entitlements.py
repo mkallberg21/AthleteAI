@@ -235,18 +235,45 @@ class Entitlement:
         }
 
 
+def _org_covers(conn: sqlite3.Connection, athlete_id: int) -> bool:
+    """Whether this athlete's club is on a plan that already includes it.
+
+    A club paying for seats is paying for the whole product, families
+    included. This is why there is no separate sponsorship price: a club that
+    wants to cover its parents buys the seat plan it was already going to
+    buy, rather than choosing between two numbers where one is always worse.
+    """
+    from . import billing
+
+    row = conn.execute(
+        "SELECT s.plan_code FROM users u "
+        "JOIN subscriptions s ON s.org_id = u.org_id "
+        "WHERE u.id = ? AND s.status IN ('active','trialing')",
+        (athlete_id,),
+    ).fetchone()
+    if row is None:
+        return False
+    plan = billing.PLANS_BY_CODE.get(row["plan_code"])
+    return bool(plan and plan.payer == billing.PAYER_PROGRAM
+                and plan.price_cents > 0)
+
+
 def for_athlete(
     conn: sqlite3.Connection, athlete_id: int, today: str | None = None
 ) -> Entitlement:
     """What this child's family currently has.
 
-    A club that has chosen to cover its athletes shows up here as `sponsored`,
-    and a family granted hardship as `hardship`. Neither is distinguishable
-    from `paid` anywhere a coach can see.
+    Three routes in, and they are indistinguishable to a coach: the family
+    bought it, the club is on a paid plan that includes it, or it was granted
+    -- as hardship, or because the club chose to cover that athlete.
     """
     from datetime import date
 
     today = today or date.today().isoformat()
+    if _org_covers(conn, athlete_id):
+        return Entitlement(
+            athlete_id=athlete_id, source="included", active=True)
+
     row = conn.execute(
         "SELECT source, status, period_end FROM household_subscriptions "
         "WHERE athlete_id = ?",

@@ -301,9 +301,25 @@ class TestSending:
         families who have not bought it gives the product away -- and sending
         a deliberately worse version instead would be a worse thing to put in
         a parent's inbox than sending nothing."""
+        # On the club-free plan specifically. A new program starts on a
+        # trial of a paid seat plan, and during a trial every family has the
+        # parent product -- an evaluation shaped by limits the club would not
+        # hit in practice is not an evaluation.
+        billing.start_subscription(
+            store.conn, family["org"], "club_free", trial=False)
         store.conn.execute("DELETE FROM household_subscriptions")
         store.conn.commit()
         assert parent_report.generate(store.conn, TODAY) == 0
+
+    def test_but_a_club_on_a_paid_seat_plan_gets_them_for_everybody(
+        self, store, family
+    ):
+        """What paying for seats means: the club covers its families."""
+        billing.start_subscription(
+            store.conn, family["org"], "program", trial=False)
+        store.conn.execute("DELETE FROM household_subscriptions")
+        store.conn.commit()
+        assert parent_report.generate(store.conn, TODAY) == 1
 
     def test_a_child_with_no_guardian_produces_nothing(self, store, family):
         """There is no sensible fallback recipient for a report about a

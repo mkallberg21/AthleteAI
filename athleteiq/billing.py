@@ -661,11 +661,14 @@ HOUSEHOLD_FREE_FROM_CHILD = 3
 #: a trap.
 HOUSEHOLD_MONTHLY_CENTS = 800
 
-#: What a club pays per athlete per season if it decides to cover its families
-#: itself. Cheaper than a household pays, because it arrives without
-#: acquisition cost and covers everybody including the families who would never
-#: have bought.
-SPONSOR_SEASON_CENTS = 1900
+# There is deliberately no separate sponsorship price. Pricing one was a
+# mistake worth recording: at $19 an athlete it came out between 2.5x and 5.7x
+# more expensive than simply buying the seat-metered plan that fits the same
+# roster, so no club would ever rationally have chosen it. A club that wants to
+# cover its families buys Team, Program or Club -- those plans include the
+# parent product for every athlete in them, which is what paying for seats
+# should mean. Sponsorship survives as a mechanism for a club-free program
+# quietly covering particular families, and costs that program nothing.
 
 #: How a family got their entitlement.
 SOURCE_PAID = "paid"
@@ -771,12 +774,15 @@ def grant_hardship(
 def sponsor_athletes(
     conn: sqlite3.Connection, org_id: int, athlete_ids: list[int] | None = None
 ) -> int:
-    """A club covering the parent product for its own families.
+    """Cover the parent product for particular athletes, free.
 
-    Some clubs will want to, and the ones that do are the ones with a budget
-    and a view about equity. It is cheaper per athlete than a family pays and
-    it reaches the families who would never have bought, which is where the
-    value is.
+    For a club-free program that wants to quietly cover some families -- the
+    scaled-up version of the hardship path, decided by a director who knows
+    their community rather than by a family having to ask.
+
+    A club that wants to cover *everybody* should buy a seat plan instead;
+    those include the parent product by definition. This is not a cheaper
+    route to the same thing, and pricing it as one was wrong.
     """
     if athlete_ids is None:
         athlete_ids = [

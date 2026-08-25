@@ -3086,13 +3086,18 @@ def pricing() -> dict[str, Any]:
             "trial_days": billing_mod.HOUSEHOLD_TRIAL_DAYS,
             "examples": [billing_mod.household_quote(n) for n in (1, 2, 3)],
         },
-        "sponsorship": {
-            "per_athlete_season_cents": billing_mod.SPONSOR_SEASON_CENTS,
+        "club_pays_instead": {
             "note": (
-                "A club that would rather cover its families can. Cheaper per "
-                "athlete than a household pays, and it reaches the families "
-                "who would never have bought."
+                "A club that would rather cover its families buys a "
+                "seat-metered plan. Those include the parent product for "
+                "every athlete on the roster — that is what paying for seats "
+                "means here, and it is cheaper than covering families one at "
+                "a time."
             ),
+            "plans": [
+                p.to_dict() for p in billing_mod.PLANS
+                if p.payer == billing_mod.PAYER_PROGRAM and p.price_cents > 0
+            ],
         },
         "features": entitlements.catalog(),
     }
@@ -3130,20 +3135,29 @@ def request_hardship(
     return entitlements.for_athlete(store.conn, athlete_id).to_dict()
 
 
+class Sponsorship(BaseModel):
+    #: Empty means every athlete on the roster.
+    athlete_ids: list[int] = Field(default_factory=list, max_length=2000)
+
+
 @app.post("/api/org/sponsor", status_code=201)
 def sponsor(
+    body: Sponsorship,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """A club covering the parent product for every athlete on its roster."""
+    """Cover the parent product for particular athletes, free to the club.
+
+    The scaled-up hardship path: a director who knows their community
+    covering families who will not ask. A club wanting to cover everybody
+    should buy a seat plan, which includes it by definition.
+    """
     if not principal.is_director:
         raise HTTPException(
-            status_code=403, detail="only a director can sponsor the program")
-    covered = billing_mod.sponsor_athletes(store.conn, principal.org_id)
-    return {
-        "sponsored": covered,
-        "season_cost_cents": covered * billing_mod.SPONSOR_SEASON_CENTS,
-    }
+            status_code=403, detail="only a director can sponsor athletes")
+    covered = billing_mod.sponsor_athletes(
+        store.conn, principal.org_id, body.athlete_ids or None)
+    return {"sponsored": covered, "cost_to_the_club_cents": 0}
 
 
 @app.get("/api/technique/{drill_key}")

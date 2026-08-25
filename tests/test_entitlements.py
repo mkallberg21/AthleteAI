@@ -337,17 +337,52 @@ class TestThePriceItself:
         assert season["season_total_cents"] < monthly
         assert monthly < season["season_total_cents"] * 2
 
-    def test_sponsoring_is_cheaper_per_athlete_than_a_family_pays(self):
-        """It arrives without acquisition cost and covers the families who
-        would never have bought."""
-        assert billing.SPONSOR_SEASON_CENTS < billing.HOUSEHOLD_SEASON_CENTS
+    def test_there_is_no_separate_sponsorship_price(self):
+        """Pricing one was a mistake worth keeping a test about. At $19 an
+        athlete it came out between 2.5x and 5.7x more expensive than simply
+        buying the seat plan that fits the same roster, so no club would ever
+        rationally have chosen it. A third price that always loses to one you
+        already publish is not a pricing option, it is a trap for whoever
+        reads the pricing page carefully."""
+        assert not hasattr(billing, "SPONSOR_SEASON_CENTS")
 
-    def test_a_club_can_cover_everybody(self, store, club):
-        covered = billing.sponsor_athletes(store.conn, club["org"])
-        assert covered == 3
+    def test_covering_everybody_means_buying_a_seat_plan(self, store, club):
+        """And that plan is cheaper than covering families one at a time."""
+        season = billing.SEASON_MONTHS
+        for size in (40, 100, 200, 400):
+            households = size * billing.HOUSEHOLD_SEASON_CENTS
+            fits = [p for p in billing.PLANS
+                    if p.payer == billing.PAYER_PROGRAM
+                    and p.price_cents > 0 and p.included_seats >= size]
+            assert fits, size
+            cheapest = min(p.seat_cost_cents(size) for p in fits) * season
+            assert cheapest < households, (
+                f"at {size} athletes a seat plan should beat paying for every "
+                f"household: {cheapest} vs {households}"
+            )
+
+    def test_a_paid_seat_plan_includes_the_parent_product(self, store, club):
+        """What paying for seats should mean."""
+        billing.start_subscription(store.conn, club["org"], "program",
+                                   trial=False)
         for key in ("paying", "unpaid", "hardship"):
-            assert entitlements.for_athlete(
-                store.conn, club[key]["id"]).active
+            granted = entitlements.for_athlete(store.conn, club[key]["id"])
+            assert granted.active is True
+            assert granted.has("parent_report")
+
+    def test_the_free_club_plan_does_not(self, store, club):
+        assert not entitlements.for_athlete(
+            store.conn, club["unpaid"]["id"]).active
+
+    def test_a_club_free_program_can_still_cover_named_athletes(
+        self, store, club
+    ):
+        """The scaled-up hardship path: a director covering families who will
+        not ask. Free to the club."""
+        covered = billing.sponsor_athletes(
+            store.conn, club["org"], [club["unpaid"]["id"]])
+        assert covered == 1
+        assert entitlements.for_athlete(store.conn, club["unpaid"]["id"]).active
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +483,20 @@ class TestOverTheWire:
     def test_only_a_director_can_sponsor(self, client, wired):
         coach = wired["store"].create_user(wired["org_id"], "coach", "Asst")
         headers = {"Authorization": f"Bearer {coach['token']}"}
-        assert client.post("/api/org/sponsor", headers=headers).status_code == 403
         assert client.post(
-            "/api/org/sponsor", headers=wired["director"]).status_code == 201
+            "/api/org/sponsor", json={"athlete_ids": []},
+            headers=headers).status_code == 403
+        assert client.post(
+            "/api/org/sponsor", json={"athlete_ids": []},
+            headers=wired["director"]).status_code == 201
+
+    def test_sponsoring_costs_the_club_nothing(self, client, wired):
+        body = client.post(
+            "/api/org/sponsor", json={"athlete_ids": []},
+            headers=wired["director"]).json()
+        assert body["cost_to_the_club_cents"] == 0
+
+    def test_the_pricing_page_points_a_paying_club_at_seat_plans(self, client):
+        body = client.get("/api/pricing").json()
+        assert "sponsorship" not in body
+        assert body["club_pays_instead"]["plans"]

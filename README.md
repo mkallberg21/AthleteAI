@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2064 tests
+python -m pytest tests/ -q          # 2070 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
@@ -2619,11 +2619,34 @@ imports the entitlement layer.
 
 ### If the club would rather cover it
 
-Some will, and the ones that do have a budget and a view about equity.
-Sponsorship is **$19 per athlete per season** — cheaper than a family pays,
-because it arrives without acquisition cost and reaches the families who would
-never have bought. The seat-metered `club` plan at $399/month also remains for
-clubs that prefer a single invoice.
+They buy a seat-metered plan — Team, Program or Club — and **those include the
+parent product for every athlete on the roster.** That is what paying for seats
+means here.
+
+There is deliberately **no separate sponsorship price**, and the reason is
+worth recording. One was written first, at $19 an athlete per season, and it
+came out between 2.5× and 5.7× more expensive than simply buying the seat plan
+that fits the same roster:
+
+| Club size | Sponsorship at $19/athlete | Cheapest seat plan that fits |
+|---|---|---|
+| 40 | $760/season | $245/season (Team) |
+| 200 | $3,800/season | $745/season (Program) |
+| 600 | $11,400/season | $1,995/season (Club) |
+
+No club would ever rationally have chosen it. A third price that always loses
+to one you already publish is not an option, it is a trap for whoever reads
+the pricing page carefully — so it is gone, and a test asserts the constant no
+longer exists.
+
+Sponsorship survives as a *mechanism* with no price attached: a club-free
+program can quietly cover particular families, which is the scaled-up version
+of the hardship path — a director who knows their community covering the
+families who will not ask. It costs that club nothing.
+
+A new program starts on a trial of a paid plan, so during the trial every
+family has the parent product. An evaluation shaped by limits the club would
+not hit in practice is not an evaluation.
 
 ### What lapsing costs a child
 
