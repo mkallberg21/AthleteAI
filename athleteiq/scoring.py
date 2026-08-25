@@ -226,11 +226,18 @@ def compute_streak(
     active_days: list[date],
     today: date,
     config: ScoringConfig | None = None,
+    paused: set[date] | None = None,
 ) -> StreakState:
     """Derive streak state from the sorted set of days the athlete trained.
 
     A gap of one day is forgiven (the streak holds but is flagged `at_risk`).
     A gap of two or more days breaks it.
+
+    `paused` days -- a holiday, a tournament weekend -- are *removed from the
+    timeline* rather than counted as training. The gap either side closes up
+    and the athlete comes back to the streak they earned. Crediting them
+    instead would turn a fortnight away into twenty-one days of streak, and a
+    number that describes nothing the child did is one nobody protects.
     """
     cfg = config or CONFIG.scoring
     if not active_days:
@@ -238,18 +245,30 @@ def compute_streak(
 
     days = sorted(set(active_days))
     max_gap = cfg.streak_grace_days + 1
+    paused = paused or set()
+
+    def gap(earlier: date, later: date) -> int:
+        """Days between two dates, not counting ones spent away."""
+        span = (later - earlier).days
+        if not paused or span <= 1:
+            return span
+        away = sum(
+            1 for i in range(1, span)
+            if (earlier + timedelta(days=i)) in paused
+        )
+        return span - away
 
     # Longest run anywhere in history.
     longest = run = 1
     for prev, cur in zip(days, days[1:]):
-        if (cur - prev).days <= max_gap:
+        if gap(prev, cur) <= max_gap:
             run += 1
             longest = max(longest, run)
         else:
             run = 1
 
     last = days[-1]
-    since_last = (today - last).days
+    since_last = gap(last, today)
 
     if since_last > max_gap:
         return StreakState(current=0, longest=longest, last_active=last, at_risk=False)
@@ -257,7 +276,7 @@ def compute_streak(
     # Walk backwards from the most recent active day.
     current = 1
     for prev, cur in zip(reversed(days[:-1]), reversed(days[1:])):
-        if (cur - prev).days <= max_gap:
+        if gap(prev, cur) <= max_gap:
             current += 1
         else:
             break
@@ -266,7 +285,10 @@ def compute_streak(
         current=current,
         longest=max(longest, current),
         last_active=last,
-        at_risk=since_last >= 1,
+        # Never "at risk" on a day the athlete is down as away. The warning
+        # exists to say *train today or lose it*, and telling a child that on
+        # a family holiday is the exact nag this pause was built to stop.
+        at_risk=since_last >= 1 and today not in paused,
     )
 
 

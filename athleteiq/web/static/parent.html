@@ -43,6 +43,32 @@
 
   <div id="athletes"></div>
 
+  <div class="card" id="away-card">
+    <h2>Going away</h2>
+    <p class="small muted">
+      A holiday or a tournament weekend pauses a streak instead of breaking
+      it. The days come out of the count rather than being added to it &mdash;
+      they come back to the streak they earned, not a bigger one.
+    </p>
+    <label for="away-athlete">Who</label>
+    <select id="away-athlete"></select>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <label for="away-start">From</label>
+        <input id="away-start" type="date">
+      </div>
+      <div style="flex:1;min-width:140px">
+        <label for="away-end">Until</label>
+        <input id="away-end" type="date">
+      </div>
+    </div>
+    <label for="away-reason">Why (optional)</label>
+    <input id="away-reason" placeholder="Family holiday" maxlength="200">
+    <button class="secondary" id="away-add">Add</button>
+    <div id="away-list" style="margin-top:12px"></div>
+    <div id="away-err" class="err hidden"></div>
+  </div>
+
   <div class="card">
     <h2>Add another athlete</h2>
     <p class="small muted">If you have a second child in the program, paste their invite code.</p>
@@ -217,6 +243,67 @@ async function loadReports(athletes) {
   $('reports').innerHTML = reports.filter(Boolean).map(renderReport).join('');
 }
 
+/**
+ * Planned absences.
+ *
+ * A parent sets these, not the child: a streak with an undo button is not a
+ * streak, and whether the family is away is a fact an adult knows.
+ */
+async function loadAbsences(athletes) {
+  const lists = await Promise.all(athletes.map((a) =>
+    api(`/api/absences?athlete_id=${a.athlete_id}`)
+      .then((d) => ({ athlete: a, ...d }))
+      .catch(() => null)));
+
+  $('away-list').innerHTML = lists.filter(Boolean).flatMap((entry) =>
+    entry.absences.map((ab) => `
+      <div class="budget-row">
+        <span class="budget-label">
+          <b>${esc(entry.athlete.display_name)}</b>
+          <span class="small muted">${esc(ab.starts_on)} to ${esc(ab.ends_on)}
+            ${ab.reason ? `&middot; ${esc(ab.reason)}` : ''}</span>
+        </span>
+        <span class="budget-n">${ab.days}d</span>
+        <button class="secondary inline" data-cancel-away="${ab.id}"
+          data-athlete="${entry.athlete.athlete_id}">Remove</button>
+      </div>`)).join('')
+    || '<p class="small muted">Nothing booked.</p>';
+}
+
+$('away-add').addEventListener('click', async () => {
+  const err = $('away-err');
+  err.classList.add('hidden');
+  try {
+    await api('/api/absences', {
+      method: 'POST',
+      body: {
+        athlete_id: Number($('away-athlete').value),
+        starts_on: $('away-start').value,
+        ends_on: $('away-end').value,
+        reason: $('away-reason').value,
+      },
+    });
+    $('away-reason').value = '';
+    await load();
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  }
+});
+
+// Delegated, and without {once} -- a one-shot listener tears itself down
+// after the first click anywhere in the list.
+$('away-list').addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-cancel-away]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/absences/${btn.dataset.cancelAway}`
+      + `?athlete_id=${btn.dataset.athlete}`, { method: 'DELETE' });
+    await load();
+  } catch (e) { showError(e.message); btn.disabled = false; }
+});
+
 async function load() {
   $('err').classList.add('hidden');
   const data = await api('/api/guardians/me');
@@ -230,6 +317,12 @@ async function load() {
   wire();
   await loadDecisions();
   await loadReports(data.athletes);
+
+  $('away-card').classList.toggle('hidden', !data.athletes.length);
+  $('away-athlete').innerHTML = data.athletes
+    .map((a) => `<option value="${a.athlete_id}">${esc(a.display_name)}</option>`)
+    .join('');
+  await loadAbsences(data.athletes);
 }
 
 /**

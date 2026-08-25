@@ -409,7 +409,13 @@ def generate_streak_warnings(conn: sqlite3.Connection, today: date | None = None
         "SELECT id, display_name FROM users WHERE role = 'athlete' AND active = 1"
     ).fetchall()
 
+    from . import absence as absence_mod
+
     for athlete in athletes:
+        # "Train today or lose it" is exactly the message a planned absence
+        # exists to stop sending. Their streak is not going anywhere.
+        if absence_mod.current(conn, int(athlete["id"]), today) is not None:
+            continue
         days = [
             date.fromisoformat(r["day"])
             for r in conn.execute(
@@ -570,7 +576,14 @@ def notify_inactive(conn: sqlite3.Connection, quiet_days: int = 7, today: date |
         (cutoff,),
     ).fetchall()
 
+    from . import absence as absence_mod
+
     for row in rows:
+        # A booked absence is not going quiet, it is a holiday somebody told
+        # us about. Nudging through one is how a family decides the app is
+        # not worth having on the phone.
+        if absence_mod.current(conn, int(row["id"]), today) is not None:
+            continue
         # Keyed to the week so a long absence produces a weekly nudge, not a
         # daily one.
         week = today.isocalendar()

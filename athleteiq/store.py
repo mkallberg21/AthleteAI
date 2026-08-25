@@ -30,6 +30,7 @@ from . import billing as billing_mod
 from . import guardians as guardians_mod
 from . import load as load_mod
 from . import roster as roster_mod
+from . import absence
 from . import injury_history
 from . import roster_sync
 from . import technique
@@ -948,7 +949,14 @@ class Store:
         # film hold the training streak would mean a streak maintained from
         # the sofa, which is the opposite of what the streak is for.
         watched_days = sorted({date.fromisoformat(r["day"]) for r in watched})
-        streak = compute_streak(watched_days, _now().date())
+        # Paused by an absence too. A child on a family holiday is not
+        # expected to keep up with the app at all, and a film streak that
+        # survives the trip while the training streak does not would be an
+        # odd thing to teach them.
+        streak = compute_streak(
+            watched_days, _now().date(),
+            paused=absence.paused_days(self.conn, athlete_id),
+        )
         return {
             "streak": streak.current,
             "longest_streak": streak.longest,
@@ -1285,7 +1293,8 @@ class Store:
         """
         today = today or _now().date()
         days = sorted(set(self._streak_days(athlete_id)))
-        streak = compute_streak(days, today)
+        streak = compute_streak(
+            days, today, paused=absence.paused_days(self.conn, athlete_id))
 
         # The first day of the current run, derived from the days themselves
         # rather than counted back from today.
@@ -2535,7 +2544,10 @@ class Store:
             (athlete_id,),
         ).fetchone()["n"]
 
-        streak = compute_streak(self._streak_days(athlete_id), _now().date())
+        streak = compute_streak(
+            self._streak_days(athlete_id), _now().date(),
+            paused=absence.paused_days(self.conn, athlete_id),
+        )
 
         return AthleteStats(
             total_xp=total_xp,
@@ -2579,7 +2591,10 @@ class Store:
 
         stats = self.athlete_stats(athlete_id)
         prog = level_progress(stats.total_xp)
-        streak = compute_streak(self._streak_days(athlete_id), _now().date())
+        streak = compute_streak(
+            self._streak_days(athlete_id), _now().date(),
+            paused=absence.paused_days(self.conn, athlete_id),
+        )
 
         badges = [
             {
@@ -2624,6 +2639,9 @@ class Store:
             "streak": streak.current,
             "longest_streak": streak.longest,
             "streak_at_risk": streak.at_risk,
+            # So the home screen can say the streak is safe rather than
+            # leaving a child to wonder why it stopped counting.
+            "away_note": absence.note(absence.current(self.conn, athlete_id)),
             "xp_today": self._xp_on_day(athlete_id, _now().date().isoformat()),
             "daily_cap": CONFIG.scoring.daily_xp_cap,
             "quality": self.quality_trend(athlete_id),

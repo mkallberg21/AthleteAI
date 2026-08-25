@@ -35,6 +35,7 @@ from . import transfer as transfer_mod
 from . import film as film_mod
 from . import guardians as guardians_mod
 from . import practice as practice_mod
+from . import absence as absence_mod
 from . import parent_report as parent_report_mod
 from . import roster as roster_mod
 from . import season as season_mod
@@ -43,6 +44,7 @@ from . import technique as technique_mod
 from . import roster_sync
 from . import notifications as notify
 from .assignments import AssignmentError
+from .absence import AbsenceError
 from .team_goals import GoalError
 from .billing import BillingError
 from .guardians import GuardianError
@@ -112,6 +114,11 @@ async def _store_error_handler(_request, exc: StoreError) -> JSONResponse:
 
 @app.exception_handler(AssignmentError)
 async def _assignment_error_handler(_request, exc: AssignmentError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(AbsenceError)
+async def _absence_error_handler(_request, exc: AbsenceError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -2692,6 +2699,88 @@ def team_wellness(
 
     carrying.sort(key=lambda a: -wellness_mod.Action.rank(a["action"]))
     return {"athletes": carrying, "counts": counts, "roster": len(athletes)}
+
+
+class ScheduleAbsence(BaseModel):
+    athlete_id: int
+    starts_on: str = Field(min_length=10, max_length=10)
+    ends_on: str = Field(min_length=10, max_length=10)
+    reason: str = Field(default="", max_length=200)
+
+
+def _may_set_absence(store: Store, principal: Principal, athlete_id: int) -> str:
+    """A guardian of this child, or staff at their program. Not the athlete.
+
+    A child who can declare their own absence has a button that undoes a
+    missed day, and a streak with an undo button is not a streak. It is also
+    the wrong call to hand a twelve-year-old: whether the family is away is a
+    fact an adult knows.
+    """
+    if principal.role == "athlete":
+        raise HTTPException(
+            status_code=403,
+            detail="a parent or your coach sets this — ask them to add it",
+        )
+    if principal.role in ("coach", "director"):
+        row = store.conn.execute(
+            "SELECT org_id FROM users WHERE id = ? AND role = 'athlete'",
+            (athlete_id,),
+        ).fetchone()
+        if row is None or int(row["org_id"]) != principal.org_id:
+            raise HTTPException(status_code=404, detail="unknown athlete")
+        return principal.display_name
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    return principal.display_name
+
+
+@app.post("/api/absences", status_code=201)
+def schedule_absence(
+    body: ScheduleAbsence,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Book a holiday or a tournament weekend.
+
+    The days come out of the streak timeline rather than counting as training,
+    so the athlete returns to the streak they earned rather than a larger one.
+    """
+    setter = _may_set_absence(store, principal, body.athlete_id)
+    return absence_mod.schedule(
+        store.conn, body.athlete_id, body.starts_on, body.ends_on,
+        set_by=principal.id, set_by_name=setter, reason=body.reason,
+    ).to_dict()
+
+
+@app.get("/api/absences")
+def list_absences(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """An athlete may read their own; adults read the children they cover."""
+    if principal.role == "athlete":
+        if principal.id != athlete_id:
+            raise HTTPException(status_code=403, detail="not your athlete")
+    else:
+        _may_set_absence(store, principal, athlete_id)
+    return {
+        "absences": [
+            a.to_dict() for a in absence_mod.for_athlete(store.conn, athlete_id)
+        ],
+        "current": (lambda a: a.to_dict() if a else None)(
+            absence_mod.current(store.conn, athlete_id)),
+    }
+
+
+@app.delete("/api/absences/{absence_id}")
+def cancel_absence(
+    absence_id: int,
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    _may_set_absence(store, principal, athlete_id)
+    return {"removed": absence_mod.cancel(store.conn, absence_id, athlete_id)}
 
 
 @app.get("/api/technique/{drill_key}")

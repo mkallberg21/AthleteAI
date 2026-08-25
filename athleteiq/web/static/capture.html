@@ -419,7 +419,12 @@ async function loadHome(prefetched) {
   }
 
   const warn = $('streak-warn');
-  if (profile.streak_at_risk && profile.streak > 0) {
+  // Being away outranks every other banner here: the point of booking one is
+  // that the app stops asking, so an at-risk warning must not slip through.
+  if (profile.away_note) {
+    warn.textContent = profile.away_note;
+    warn.classList.remove('hidden');
+  } else if (profile.streak_at_risk && profile.streak > 0) {
     warn.textContent = `Train today to keep your ${profile.streak}-day streak alive.`;
     warn.classList.remove('hidden');
   } else if (profile.xp_today >= profile.daily_cap) {

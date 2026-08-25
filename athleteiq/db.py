@@ -421,6 +421,29 @@ CREATE TABLE IF NOT EXISTS badges (
 -- A coach's prescription. This is what turns free-form logging into a
 -- program: the athlete sees what was asked of them, and the coach sees who
 -- did it.
+-- A holiday, a tournament weekend, a school trip.
+--
+-- These days are *removed from the timeline* rather than credited as training.
+-- An athlete comes back to the streak they earned, not a bigger one: a
+-- fortnight away must not turn a 7-day streak into 21, or the number stops
+-- meaning anything and the streak stops being worth protecting.
+--
+-- Set by a parent or a coach, never by the athlete. A child who can declare
+-- their own absence has a button that undoes a missed day, which is the same
+-- thing as not having streaks at all.
+CREATE TABLE IF NOT EXISTS planned_absences (
+    id          INTEGER PRIMARY KEY,
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    starts_on   TEXT NOT NULL,
+    ends_on     TEXT NOT NULL,
+    reason      TEXT NOT NULL DEFAULT '',
+    set_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    set_by_name TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_absences_athlete
+    ON planned_absences(athlete_id, starts_on);
+
 -- A number a squad chases together.
 --
 -- The shape matters more than the fields. `target_athletes` is a count of
