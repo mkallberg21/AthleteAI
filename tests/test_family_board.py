@@ -10,9 +10,9 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import family as F
-from athleteiq.db import connect
-from athleteiq.store import Store, StoreError
+from offdays import family as F
+from offdays.db import connect
+from offdays.store import Store, StoreError
 
 TODAY = date.today()
 

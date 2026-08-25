@@ -22,9 +22,9 @@ from datetime import date
 
 import pytest
 
-from athleteiq import benchmarks, season
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import benchmarks, season
+from offdays.db import connect
+from offdays.store import Store
 
 TODAY = date.today()
 
@@ -105,7 +105,7 @@ class TestTheBreakIsNotALapse:
 
     def test_a_light_week_during_the_break_is_called_plenty(self, store, athlete):
         """Under target during the break. Under target *is* the target."""
-        from athleteiq.benchmarks import WeekOfTraining, assess_time, band_for
+        from offdays.benchmarks import WeekOfTraining, assess_time, band_for
 
         band = band_for(14)
         week = WeekOfTraining(minutes=10.0, days=1, sessions=1)
@@ -116,7 +116,7 @@ class TestTheBreakIsNotALapse:
     def test_but_it_still_says_stop_if_they_are_hammering_it(self, store, athlete):
         """The break lowers the ceiling; it does not remove it. A child
         training through their rest period is exactly who this should reach."""
-        from athleteiq.benchmarks import WeekOfTraining, assess_time, _rescaled, band_for
+        from offdays.benchmarks import WeekOfTraining, assess_time, _rescaled, band_for
 
         band = _rescaled(band_for(14), season.BY_KEY["postseason"].scale)
         card = assess_time(
@@ -156,7 +156,7 @@ class TestTheCoachSeesTheSameNumbers:
     ):
         """The whole point: the same week means something different in March.
         This is the load the season phase is there to catch."""
-        from athleteiq.benchmarks import WeekOfTraining, assess_time, _rescaled, band_for
+        from offdays.benchmarks import WeekOfTraining, assess_time, _rescaled, band_for
 
         week = WeekOfTraining(minutes=100.0, days=5, sessions=6)
         pre = assess_time(band_for(14), week, phase=season.BY_KEY["preseason"])
@@ -177,8 +177,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)
@@ -212,7 +212,7 @@ class TestOverTheWire:
     def test_an_assistant_coach_cannot_change_it(self, client, program):
         """It silently changes what every child in the program is told to do,
         so it wants a person's name on it."""
-        from athleteiq import api as api_mod
+        from offdays import api as api_mod
 
         store = api_mod.get_store()
         org_id = store.authenticate(

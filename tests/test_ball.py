@@ -7,8 +7,8 @@ than a pose one -- a contact is a timestamp and a speed, not a skeleton.
 
 import pytest
 
-from athleteiq import ball as B
-from athleteiq.drills.catalog import ALL_DRILLS, DRILLS_BY_KEY
+from offdays import ball as B
+from offdays.drills.catalog import ALL_DRILLS, DRILLS_BY_KEY
 
 JUGGLE = DRILLS_BY_KEY["soc_juggle"]
 DRIBBLE = DRILLS_BY_KEY["bkb_dribble"]

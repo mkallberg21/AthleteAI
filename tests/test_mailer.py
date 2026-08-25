@@ -11,9 +11,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import mailer
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import mailer
+from offdays.db import connect
+from offdays.store import Store
 
 def now() -> datetime:
     """The current time, read at the point of use.
@@ -236,11 +236,11 @@ class TestDelivery:
 
 class TestHeaders:
     def test_list_unsubscribe_is_set_when_a_base_url_exists(self, store, coach, monkeypatch):
-        import athleteiq.mailer as mailer_mod
-        from athleteiq.config import Config
+        import offdays.mailer as mailer_mod
+        from offdays.config import Config
 
         monkeypatch.setattr(
-            mailer_mod, "CONFIG", Config(app_base_url="https://athleteiq.example.com")
+            mailer_mod, "CONFIG", Config(app_base_url="https://offdays.example.com")
         )
         queue(store, coach)
         transport = Always(OK)

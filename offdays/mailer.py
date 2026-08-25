@@ -67,10 +67,10 @@ def _secret() -> bytes:
     """Signing key for unsubscribe links.
 
     Falls back to a per-database constant when unset so links still work in
-    development; a real deployment sets ATHLETEIQ_SECRET, and an unset secret
+    development; a real deployment sets OFFDAYS_SECRET, and an unset secret
     means links are forgeable, not broken.
     """
-    return (CONFIG.secret_key or "athleteiq-dev-secret").encode("utf-8")
+    return (CONFIG.secret_key or "offdays-dev-secret").encode("utf-8")
 
 
 def unsubscribe_token(user_id: int, kind: str) -> str:
@@ -303,7 +303,7 @@ def _headers(row: sqlite3.Row) -> dict[str, str]:
         "Message-ID": (
             f"<{row['kind']}-{row['id']}-"
             f"{hashlib.sha256(row['dedupe_key'].encode()).hexdigest()[:12]}"
-            f"@athleteiq>"
+            f"@offdays>"
         ),
         "Auto-Submitted": "auto-generated",
     }

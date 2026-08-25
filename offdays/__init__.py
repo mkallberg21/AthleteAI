@@ -1,4 +1,4 @@
-"""AthleteIQ -- on-device training analysis, gamification, and coach reporting.
+"""0FFDAYS -- on-device training analysis, gamification, and coach reporting.
 
 Athletes record drills with a phone camera. Pose analysis runs entirely in the
 browser on the athlete's device; **video never leaves the phone**. Only derived

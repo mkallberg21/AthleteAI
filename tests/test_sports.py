@@ -2,7 +2,7 @@
 
 import pytest
 
-from athleteiq import sports as S
+from offdays import sports as S
 
 
 def play(key, seasons, primary=False):

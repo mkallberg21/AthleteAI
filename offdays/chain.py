@@ -121,7 +121,7 @@ def load_anchors(
     if not anchors:
         raise ChainError(
             "no trusted anchors found. Amazon's roots are usually in the system "
-            "CA bundle; point ATHLETEIQ_SNS_CA_BUNDLE at a PEM file containing "
+            "CA bundle; point OFFDAYS_SNS_CA_BUNDLE at a PEM file containing "
             "them, or disable pinning."
         )
     return anchors

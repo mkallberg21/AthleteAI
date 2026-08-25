@@ -11,9 +11,9 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import assignments, notifications as notify
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import assignments, notifications as notify
+from offdays.db import connect
+from offdays.store import Store
 
 
 @pytest.fixture

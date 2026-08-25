@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import {
   MAX_BUFFER_BYTES, POSE_SAMPLE_HZ, SessionRecorder, buildMarkers, formatBytes,
   poseAt,
-} from '../../athleteiq/web/static/review.js';
+} from '../../offdays/web/static/review.js';
 
 /** A MediaRecorder stand-in that emits chunks on demand. */
 class FakeRecorder {

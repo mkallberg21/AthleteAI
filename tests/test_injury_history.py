@@ -24,9 +24,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import injury_history, load as load_mod
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import injury_history, load as load_mod
+from offdays.db import connect
+from offdays.store import Store
 
 TODAY = date(2026, 8, 25)
 
@@ -73,7 +73,7 @@ class TestTheRecordCarriesForward:
     def test_reported_discomfort_survives_a_season_too(self, store, athlete):
         """400 days of retention is longer than a year, so March is still
         readable the following August. Confirmed rather than assumed."""
-        from athleteiq import wellness
+        from offdays import wellness
 
         assert wellness.RETENTION_DAYS > 365
 
@@ -196,7 +196,7 @@ class TestItIsOnlyEverATissueSpecificCaution:
     def test_nothing_here_reduces_a_budget(self, store, athlete):
         """Prior injury moves when a question is asked. It does not quietly
         shrink what a child is allowed to do."""
-        from athleteiq import benchmarks
+        from offdays import benchmarks
 
         ramp(store, athlete, "ankle", TODAY - timedelta(days=30))
         report = benchmarks.report(store.conn, athlete["person"]["id"], TODAY)
@@ -224,7 +224,7 @@ class TestACoachDoesNotGetAnInjuryHistory:
         assert "not stopping you" in note
 
     def test_the_history_itself_is_not_on_the_coach_roster(self, store, athlete):
-        from athleteiq.leaderboard import coach_roster
+        from offdays.leaderboard import coach_roster
 
         ramp(store, athlete, "ankle", TODAY - timedelta(days=30))
         payload = str(coach_roster(
@@ -233,7 +233,7 @@ class TestACoachDoesNotGetAnInjuryHistory:
             assert leak not in payload, f"coach roster leaks injury history: {leak!r}"
 
     def test_no_count_of_past_injuries_reaches_a_coach_surface(self, store, athlete):
-        from athleteiq import practice
+        from offdays import practice
 
         for offset in (30, 200, 400):
             ramp(store, athlete, "ankle", TODAY - timedelta(days=offset))
@@ -286,7 +286,7 @@ class TestHealthDataIsNotKeptForever:
             "SELECT COUNT(*) AS n FROM return_plan_events").fetchone()["n"] == 0
 
     def test_the_scheduled_purge_covers_plans_now(self, store, athlete):
-        from athleteiq import notifications
+        from offdays import notifications
 
         ramp(store, athlete, "knee", TODAY - timedelta(days=900))
         notifications.purge_old_wellness(store.conn, TODAY)

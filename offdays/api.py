@@ -1,4 +1,4 @@
-"""HTTP API for AthleteIQ.
+"""HTTP API for 0FFDAYS.
 
 Nothing here accepts video, image data, or pose landmarks. The capture app
 sends counts and timings only; there is no endpoint that could receive footage
@@ -65,7 +65,7 @@ from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError, transaction
 
 app = FastAPI(
-    title="AthleteIQ",
+    title="0FFDAYS",
     version=__version__,
     description=(
         "On-device training analysis for youth athletes. Video never leaves the "
@@ -1555,7 +1555,7 @@ def unlink_roster(
 def roster_template() -> dict[str, Any]:
     """A sample file, for a coach who has no export to start from."""
     return {
-        "filename": "athleteiq-roster-template.csv",
+        "filename": "offdays-roster-template.csv",
         "content": (
             "First Name,Last Name,#,Position,Birth Year,Shoots,Parent Email\n"
             "Jordan,Pierce,14,Midfield,2011,Right,parent1@example.com\n"

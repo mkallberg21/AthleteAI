@@ -18,9 +18,9 @@ import json
 
 import pytest
 
-from athleteiq import sns
+from offdays import sns
 
-TOPIC = "arn:aws:sns:us-east-1:123456789012:athleteiq-bounces"
+TOPIC = "arn:aws:sns:us-east-1:123456789012:offdays-bounces"
 CERT_URL = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-abc123.pem"
 
 
@@ -387,7 +387,7 @@ class TestChainValidation:
         assert result.type == "Notification"
 
     def test_the_default_configuration_verifies_the_chain(self):
-        from athleteiq.config import CONFIG
+        from offdays.config import CONFIG
 
         assert CONFIG.sns_verify_chain is True
         assert CONFIG.sns_pin_amazon_roots is True
@@ -395,9 +395,9 @@ class TestChainValidation:
 
 class TestWebhookIntegration:
     def test_a_verified_ses_bounce_suppresses_the_address(self, tmp_path, signer):
-        from athleteiq import mailer, webhooks
-        from athleteiq.db import connect
-        from athleteiq.store import Store
+        from offdays import mailer, webhooks
+        from offdays.db import connect
+        from offdays.store import Store
 
         key, _, fetcher = signer
         store = Store(connect(tmp_path / "s.db"))
@@ -410,9 +410,9 @@ class TestWebhookIntegration:
         assert mailer.is_suppressed(store.conn, "coach@example.com")
 
     def test_an_unverified_ses_message_changes_nothing(self, tmp_path, signer):
-        from athleteiq import mailer, webhooks
-        from athleteiq.db import connect
-        from athleteiq.store import Store
+        from offdays import mailer, webhooks
+        from offdays.db import connect
+        from offdays.store import Store
 
         key, _, fetcher = signer
         store = Store(connect(tmp_path / "s.db"))
@@ -429,9 +429,9 @@ class TestWebhookIntegration:
         assert not mailer.is_suppressed(store.conn, "victim@example.com")
 
     def test_a_subscription_confirmation_is_handled_not_parsed(self, tmp_path, signer):
-        from athleteiq import webhooks
-        from athleteiq.db import connect
-        from athleteiq.store import Store
+        from offdays import webhooks
+        from offdays.db import connect
+        from offdays.store import Store
 
         key, _, fetcher = signer
         store = Store(connect(tmp_path / "s.db"))
@@ -451,9 +451,9 @@ class TestWebhookIntegration:
         assert result["received"] == 0
 
     def test_auto_confirm_can_be_turned_off(self, tmp_path, signer):
-        from athleteiq import webhooks
-        from athleteiq.db import connect
-        from athleteiq.store import Store
+        from offdays import webhooks
+        from offdays.db import connect
+        from offdays.store import Store
 
         key, _, fetcher = signer
         store = Store(connect(tmp_path / "s.db"))

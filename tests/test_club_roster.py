@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import pytest
 
-from athleteiq import billing, entitlements
-from athleteiq.billing import BillingError
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import billing, entitlements
+from offdays.billing import BillingError
+from offdays.db import connect
+from offdays.store import Store
 
 
 @pytest.fixture
@@ -219,7 +219,7 @@ class TestEveryRosteredAthleteIsCovered:
         """It stops mattering under this plan, and the guarantee stays anyway
         -- a club may move to the free plan mid-season."""
         program = club(store, athletes=5)
-        from athleteiq.leaderboard import coach_roster
+        from offdays.leaderboard import coach_roster
 
         payload = str(coach_roster(
             store.conn, program["org"], program["team"]["id"], "week")).lower()
@@ -236,8 +236,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)
@@ -245,7 +245,7 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture
 def wired(client):
-    from athleteiq import api as api_mod
+    from offdays import api as api_mod
 
     store = api_mod.get_store()
     org = client.post(

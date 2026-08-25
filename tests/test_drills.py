@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from athleteiq.drills import ALL_DRILLS, DRILLS_BY_KEY, LANDMARKS, get_drill
-from athleteiq.drills.base import Metric, SignalKind
+from offdays.drills import ALL_DRILLS, DRILLS_BY_KEY, LANDMARKS, get_drill
+from offdays.drills.base import Metric, SignalKind
 
 
 @pytest.mark.parametrize("drill", ALL_DRILLS, ids=lambda d: d.key)

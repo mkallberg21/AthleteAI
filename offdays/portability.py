@@ -103,7 +103,7 @@ class Table:
         return _csv(self.rows, self.columns)
 
 
-README = """AthleteIQ program export
+README = """0FFDAYS program export
 ========================
 
 Everything this program owns, as CSV. Written so somebody who has never seen

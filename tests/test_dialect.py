@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from athleteiq import dialect
+from offdays import dialect
 
 
 class TestTheClaimThatWasWrong:

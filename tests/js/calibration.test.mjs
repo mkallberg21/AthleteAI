@@ -14,7 +14,7 @@
  */
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { RepCounter, LANDMARKS } from '../../athleteiq/web/static/counter.js';
+import { RepCounter, LANDMARKS } from '../../offdays/web/static/counter.js';
 
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
 const SPECS = JSON.parse(process.env.DRILL_SPECS);

@@ -1,7 +1,7 @@
 /** Thin API client. Token lives in localStorage; nothing else is persisted. */
 
-const TOKEN_KEY = 'athleteiq.token';
-const ORG_KEY = 'athleteiq.org';
+const TOKEN_KEY = 'offdays.token';
+const ORG_KEY = 'offdays.org';
 
 export function getToken() {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }

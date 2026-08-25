@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import pytest
 
-from athleteiq.config import CONFIG, Config
-from athleteiq.db import connect
-from athleteiq.store import Store, StoreError
+from offdays.config import CONFIG, Config
+from offdays.db import connect
+from offdays.store import Store, StoreError
 
 
 @pytest.fixture
@@ -140,7 +140,7 @@ class TestTeamScope:
 
     def test_strict_scope_gives_an_unassigned_coach_nothing(self, store, club, monkeypatch):
         """What a new deployment should turn on."""
-        import athleteiq.store as store_mod
+        import offdays.store as store_mod
 
         monkeypatch.setattr(
             store_mod, "CONFIG",
@@ -156,7 +156,7 @@ class TestTeamScope:
 
     def test_an_empty_scope_filters_to_nothing_not_everything(self, store, club):
         """The dangerous failure mode: an empty list read as 'no restriction'."""
-        from athleteiq.store import Principal
+        from offdays.store import Principal
 
         principal = Principal(
             id=1, org_id=club["org"], role="coach", display_name="x",
@@ -173,7 +173,7 @@ class TestTeamScope:
 
 class TestScopedRoster:
     def test_a_coach_roster_only_lists_their_team(self, store, club):
-        from athleteiq.leaderboard import coach_roster
+        from offdays.leaderboard import coach_roster
 
         principal = store.authenticate(club["varsity_coach"]["token"])
         rows = coach_roster(
@@ -182,14 +182,14 @@ class TestScopedRoster:
         assert [r["display_name"] for r in rows] == ["Varsity Kid"]
 
     def test_a_director_roster_lists_everyone(self, store, club):
-        from athleteiq.leaderboard import coach_roster
+        from offdays.leaderboard import coach_roster
 
         principal = store.authenticate(club["director"]["token"])
         rows = coach_roster(store.conn, club["org"], scope=principal.scope_filter())
         assert len(rows) == 2
 
     def test_a_coach_on_both_teams_sees_both(self, store, club):
-        from athleteiq.leaderboard import coach_roster
+        from offdays.leaderboard import coach_roster
 
         store.assign_staff_to_team(club["varsity_coach"]["id"], club["jv"]["id"])
         principal = store.authenticate(club["varsity_coach"]["token"])

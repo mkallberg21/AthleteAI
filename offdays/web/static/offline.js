@@ -18,7 +18,7 @@
  * session loses a streak, which loses the athlete.
  */
 
-const DB_NAME = 'athleteiq';
+const DB_NAME = 'offdays';
 const DB_VERSION = 1;
 const SLOTS = 'slots';
 const QUEUE = 'queue';

@@ -2,13 +2,13 @@
 """Generate and deliver notifications. Run this on a schedule.
 
     # once an hour is plenty -- every generator dedupes, so extra runs are free
-    0 * * * *  cd /srv/athleteiq && python scripts/run_notifications.py
+    0 * * * *  cd /srv/offdays && python scripts/run_notifications.py
 
 Safe to run as often as you like: every rule carries a dedupe key, so an
 athlete gets one "streak at risk" per day no matter how many times this fires.
 
-Web Push activates only when ATHLETEIQ_VAPID_PUBLIC_KEY and
-ATHLETEIQ_VAPID_PRIVATE_KEY are set and `pywebpush` is installed. Without them
+Web Push activates only when OFFDAYS_VAPID_PUBLIC_KEY and
+OFFDAYS_VAPID_PRIVATE_KEY are set and `pywebpush` is installed. Without them
 notifications still generate and appear in the in-app feed -- nothing about the
 product depends on a third-party service being configured.
 """
@@ -21,9 +21,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from athleteiq import notifications as notify  # noqa: E402
-from athleteiq.config import CONFIG  # noqa: E402
-from athleteiq.db import connect, init_db  # noqa: E402
+from offdays import notifications as notify  # noqa: E402
+from offdays.config import CONFIG  # noqa: E402
+from offdays.db import connect, init_db  # noqa: E402
 
 
 def build_channels(quiet: bool) -> list[notify.Channel]:
@@ -70,7 +70,7 @@ def main() -> int:
     init_db(conn)
 
     if args.flush_only:
-        from athleteiq import mailer
+        from offdays import mailer
 
         stats = mailer.flush(conn)
         print(
@@ -112,7 +112,7 @@ def main() -> int:
     # separate steps so a retry does not have to wait a week for the next
     # scheduled composition.
     if not args.no_email:
-        from athleteiq import mailer
+        from offdays import mailer
 
         stats = mailer.flush(conn)
         if any(stats.values()):

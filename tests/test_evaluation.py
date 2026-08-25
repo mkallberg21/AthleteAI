@@ -26,10 +26,10 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import absence, evaluation
-from athleteiq.db import connect
-from athleteiq.evaluation import Trend
-from athleteiq.store import Store
+from offdays import absence, evaluation
+from offdays.db import connect
+from offdays.evaluation import Trend
+from offdays.store import Store
 
 TODAY = date(2026, 8, 25)
 
@@ -372,7 +372,7 @@ class TestAnAdaptiveAthleteIsNotIdentifiableHere:
         the outright failure, and there is not one."""
         import inspect
 
-        from athleteiq import evaluation as evaluation_mod
+        from offdays import evaluation as evaluation_mod
 
         source = inspect.getsource(evaluation_mod)
         assert "adaptive_profiles" not in source
@@ -388,8 +388,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)

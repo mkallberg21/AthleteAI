@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'athleteiq-shell-v1';
+const CACHE = 'offdays-shell-v1';
 
 const SHELL = [
   './',
@@ -77,7 +77,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'AthleteIQ', body: '', link: 'capture.html' };
+  let data = { title: '0FFDAYS', body: '', link: 'capture.html' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {

@@ -10,8 +10,8 @@ import assert from 'node:assert';
 import { test } from 'node:test';
 import {
   BallTracker, ContactDetector, BallRepCounter, LANDMARK_INDEX, metricDistance,
-} from '../../athleteiq/web/static/ball.js';
-import { LANDMARKS } from '../../athleteiq/web/static/counter.js';
+} from '../../offdays/web/static/ball.js';
+import { LANDMARKS } from '../../offdays/web/static/counter.js';
 const SPECS = JSON.parse(process.env.DRILL_SPECS);
 const spec = (key) => SPECS.find((d) => d.key === key);
 const FPS = 30, DT = 1 / FPS;

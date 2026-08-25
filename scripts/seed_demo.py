@@ -19,12 +19,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from athleteiq import assignments as assignments_mod  # noqa: E402
-from athleteiq import guardians as guardians_mod  # noqa: E402
-from athleteiq import notifications as notify  # noqa: E402
-from athleteiq.db import connect, transaction  # noqa: E402
-from athleteiq.drills import get_drill  # noqa: E402
-from athleteiq.store import Store  # noqa: E402
+from offdays import assignments as assignments_mod  # noqa: E402
+from offdays import guardians as guardians_mod  # noqa: E402
+from offdays import notifications as notify  # noqa: E402
+from offdays.db import connect, transaction  # noqa: E402
+from offdays.drills import get_drill  # noqa: E402
+from offdays.store import Store  # noqa: E402
 
 # name, dominant hand, sessions/week, off-hand appetite, days quiet, form profile
 #
@@ -272,7 +272,7 @@ def main() -> int:
     print(f"    {'Dana Pierce (parent)':<26} {guardian['token']}")
     for athlete, name, *_ in athletes:
         print(f"    {name:<26} {athlete['token']}")
-    print(f"\n  Run:  ATHLETEIQ_DB_PATH={db_path} uvicorn athleteiq.api:app --reload")
+    print(f"\n  Run:  OFFDAYS_DB_PATH={db_path} uvicorn offdays.api:app --reload")
     print("  Then open http://127.0.0.1:8000/\n")
     return 0
 

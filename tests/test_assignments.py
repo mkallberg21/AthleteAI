@@ -11,10 +11,10 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import assignments
-from athleteiq.assignments import AssignmentError
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import assignments
+from offdays.assignments import AssignmentError
+from offdays.db import connect
+from offdays.store import Store
 
 
 @pytest.fixture

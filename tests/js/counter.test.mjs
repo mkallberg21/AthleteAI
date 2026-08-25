@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { RepCounter, computeSignal, wallBallSignal, LANDMARKS } from '../../athleteiq/web/static/counter.js';
+import { RepCounter, computeSignal, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
 
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
 

@@ -20,10 +20,10 @@ import time
 
 import pytest
 
-from athleteiq import mailer
-from athleteiq import webhooks as W
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import mailer
+from offdays import webhooks as W
+from offdays.db import connect
+from offdays.store import Store
 
 
 @pytest.fixture

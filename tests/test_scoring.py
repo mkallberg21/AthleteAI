@@ -5,9 +5,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq.drills import get_drill
-from athleteiq.integrity import IntegrityResult
-from athleteiq.scoring import (
+from offdays.drills import get_drill
+from offdays.integrity import IntegrityResult
+from offdays.scoring import (
     AthleteStats,
     compute_streak,
     earned_badges,
@@ -92,7 +92,7 @@ class TestSessionScoring:
         assert double < base * 2
 
     def test_daily_cap_is_enforced(self):
-        from athleteiq.config import CONFIG
+        from offdays.config import CONFIG
 
         drill = get_drill("lax_wall_ball")
         spent = CONFIG.scoring.daily_xp_cap - 10
@@ -100,7 +100,7 @@ class TestSessionScoring:
         assert result.total == 10
 
     def test_daily_cap_never_produces_negative_xp(self):
-        from athleteiq.config import CONFIG
+        from offdays.config import CONFIG
 
         drill = get_drill("lax_wall_ball")
         result = score_session(drill, counted(500), xp_already_today=CONFIG.scoring.daily_xp_cap * 2)

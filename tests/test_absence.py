@@ -22,11 +22,11 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import absence
-from athleteiq.absence import AbsenceError
-from athleteiq.db import connect
-from athleteiq.scoring import compute_streak
-from athleteiq.store import Store
+from offdays import absence
+from offdays.absence import AbsenceError
+from offdays.db import connect
+from offdays.scoring import compute_streak
+from offdays.store import Store
 
 BASE = date(2026, 7, 1)
 WEEK = [BASE + timedelta(days=i) for i in range(7)]
@@ -172,7 +172,7 @@ class TestWhatTheAthleteReads:
 
 class TestNudgesGoQuiet:
     def test_no_streak_warning_while_away(self, store, athlete):
-        from athleteiq import notifications
+        from offdays import notifications
 
         today = BASE + timedelta(days=3)
         absence.schedule(
@@ -188,7 +188,7 @@ class TestNudgesGoQuiet:
     def test_no_inactivity_nudge_while_away(self, store, athlete):
         """A booked absence is not going quiet. Nudging through one is how a
         family decides the app is not worth having on the phone."""
-        from athleteiq import notifications
+        from offdays import notifications
 
         store.conn.execute(
             "INSERT INTO sessions(athlete_id, drill_key, status, submitted_at, "
@@ -241,8 +241,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)
@@ -250,8 +250,8 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture
 def wired(client):
-    from athleteiq import api as api_mod
-    from athleteiq import guardians as guardians_mod
+    from offdays import api as api_mod
+    from offdays import guardians as guardians_mod
 
     store = api_mod.get_store()
     org = client.post(

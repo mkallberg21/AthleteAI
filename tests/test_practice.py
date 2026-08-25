@@ -17,11 +17,11 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import assignments as assignments_mod
-from athleteiq import practice
-from athleteiq import wellness as W
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import assignments as assignments_mod
+from offdays import practice
+from offdays import wellness as W
+from offdays.db import connect
+from offdays.store import Store
 
 TODAY = date.today()
 
@@ -241,8 +241,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)

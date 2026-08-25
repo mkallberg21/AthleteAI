@@ -3,11 +3,11 @@
 
 Run on a schedule, well ahead of anything expiring:
 
-    */30 * * * *  cd /srv/athleteiq && python scripts/refresh_staples.py
+    */30 * * * *  cd /srv/offdays && python scripts/refresh_staples.py
 
 This is what moves revocation freshness off the request path. With staples kept
 current, verifying a bounce webhook makes no network call at all, and
-ATHLETEIQ_SNS_REVOCATION_STRICT=1 becomes practical: refusing a certificate
+OFFDAYS_SNS_REVOCATION_STRICT=1 becomes practical: refusing a certificate
 that cannot be proved good stops being an availability risk, because a missing
 staple is a condition this job reports rather than a race decided per request.
 
@@ -23,11 +23,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from athleteiq import chain as chain_mod  # noqa: E402
-from athleteiq import sns as sns_mod  # noqa: E402
-from athleteiq import staple as staple_mod  # noqa: E402
-from athleteiq.config import CONFIG  # noqa: E402
-from athleteiq.db import connect, init_db  # noqa: E402
+from offdays import chain as chain_mod  # noqa: E402
+from offdays import sns as sns_mod  # noqa: E402
+from offdays import staple as staple_mod  # noqa: E402
+from offdays.config import CONFIG  # noqa: E402
+from offdays.db import connect, init_db  # noqa: E402
 
 
 def known_cert_urls(conn) -> list[str]:

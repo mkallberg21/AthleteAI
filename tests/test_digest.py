@@ -12,9 +12,9 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import digest as D
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import digest as D
+from offdays.db import connect
+from offdays.store import Store
 
 # A Monday, so "last complete week" is unambiguous.
 TODAY = date(2026, 8, 24)

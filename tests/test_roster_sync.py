@@ -28,9 +28,9 @@ import json
 
 import pytest
 
-from athleteiq import roster_sync
-from athleteiq.db import connect
-from athleteiq.store import Store, StoreError
+from offdays import roster_sync
+from offdays.db import connect
+from offdays.store import Store, StoreError
 
 SECRET = "tok-do-not-leak-9f3c"
 
@@ -278,7 +278,7 @@ class TestTheShippedAdapters:
         """Synced and uploaded rosters must not be two code paths -- the
         import parser is the forgiving, well-tested one, so the sync feeds it
         rather than reimplementing it."""
-        from athleteiq import roster as roster_mod
+        from offdays import roster as roster_mod
 
         csv = roster_sync.rows_to_csv([
             {"first_name": "Jordan", "last_name": "Pierce", "jersey": "7"},
@@ -302,8 +302,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)

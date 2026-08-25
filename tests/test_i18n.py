@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import pytest
 
-from athleteiq import i18n
-from athleteiq.db import connect
-from athleteiq.guardians import scopes_for
-from athleteiq.recognition import MILESTONES
-from athleteiq.store import Store
+from offdays import i18n
+from offdays.db import connect
+from offdays.guardians import scopes_for
+from offdays.recognition import MILESTONES
+from offdays.store import Store
 
 
 @pytest.fixture
@@ -100,7 +100,7 @@ class TestConsentIsTranslatedWhereItIsBuilt:
         assert "se borran" in why
 
     def test_a_guardian_reads_consent_in_their_own_language(self, store):
-        from athleteiq import guardians as guardians_mod
+        from offdays import guardians as guardians_mod
 
         org = store.create_org("Northshore")
         director = store.create_user(org, "director", "Coach Ada")
@@ -122,7 +122,7 @@ class TestLanguageBelongsToThePerson:
     @staticmethod
     def _household(store):
         """A real guardian, made the way guardians are actually made."""
-        from athleteiq import guardians as guardians_mod
+        from offdays import guardians as guardians_mod
 
         org = store.create_org("Northshore")
         director = store.create_user(org, "director", "Coach Ada")
@@ -212,8 +212,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)

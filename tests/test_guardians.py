@@ -12,9 +12,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import guardians as G
-from athleteiq.db import connect
-from athleteiq.store import Store, StoreError
+from offdays import guardians as G
+from offdays.db import connect
+from offdays.store import Store, StoreError
 
 
 @pytest.fixture

@@ -2183,7 +2183,7 @@ class Store:
 
         A coach with no assignments falls back to the whole program. That is a
         deliberate accommodation for accounts created before team assignment
-        existed, not the intended end state: set ATHLETEIQ_STRICT_TEAM_SCOPE=1
+        existed, not the intended end state: set OFFDAYS_STRICT_TEAM_SCOPE=1
         to make an unassigned coach see nothing instead.
         """
         if role != "coach":
@@ -2252,7 +2252,7 @@ class Store:
         ):
             raise StoreError(
                 "Training is paused for this account until a parent or guardian "
-                "gives consent in their AthleteIQ portal."
+                "gives consent in their 0FFDAYS portal."
             )
 
     def start_session(self, athlete_id: int, drill_key: str) -> dict[str, Any]:

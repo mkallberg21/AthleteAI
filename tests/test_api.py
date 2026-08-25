@@ -11,10 +11,10 @@ pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient
 
-import athleteiq.api as api_module
-from athleteiq import sports as sports_mod
-from athleteiq.db import connect
-from athleteiq.store import Store
+import offdays.api as api_module
+from offdays import sports as sports_mod
+from offdays.db import connect
+from offdays.store import Store
 
 
 @pytest.fixture
@@ -528,7 +528,7 @@ class TestPrivacy:
 
         source = (
             Path(__file__).resolve().parent.parent
-            / "athleteiq" / "web" / "static" / "review.js"
+            / "offdays" / "web" / "static" / "review.js"
         ).read_text()
 
         # Comments describe the guarantee; the code must not contain a way to
@@ -553,7 +553,7 @@ class TestPrivacy:
 
         source = (
             Path(__file__).resolve().parent.parent
-            / "athleteiq" / "web" / "static" / "capture.html"
+            / "offdays" / "web" / "static" / "capture.html"
         ).read_text()
         code = re.sub(r"<!--[\s\S]*?-->|/\*[\s\S]*?\*/|//.*", "", source)
 
@@ -1065,7 +1065,7 @@ class TestLoadEndpoints:
         assert "needs_rest" in row["flags"]
 
     def test_a_rest_nudge_is_generated_and_deduped(self, client, program):
-        from athleteiq import notifications as notify
+        from offdays import notifications as notify
 
         headers = program["athletes"][0]["headers"]
         for day in range(12, 0, -1):
@@ -1289,7 +1289,7 @@ class TestGuardianEndpoints:
         assert len(home["athletes"]) == 2
 
     def test_a_weekly_digest_is_generated_and_deduped(self, client, program):
-        from athleteiq import notifications as notify
+        from offdays import notifications as notify
 
         athlete = program["athletes"][0]
         guardian = self._onboard(client, program, 0)
@@ -1675,7 +1675,7 @@ class TestDigestDelivery:
 
     def test_each_coach_gets_the_digest_for_their_own_teams(self, client, program):
         """Folding varsity into a JV coach's email makes their number meaningless."""
-        from athleteiq import notifications as notify
+        from offdays import notifications as notify
 
         self._staff(client, program)
         notify.send_coach_digests(api_module._store.conn)
@@ -1688,7 +1688,7 @@ class TestDigestDelivery:
         assert "Northshore" in by_email["director@example.com"]
 
     def test_running_the_job_twice_queues_once(self, client, program):
-        from athleteiq import notifications as notify
+        from offdays import notifications as notify
 
         self._staff(client, program)
         first = notify.send_coach_digests(api_module._store.conn)
@@ -1705,7 +1705,7 @@ class TestDigestDelivery:
         assert res["status"] in ("sent", "queued", "failed")
 
     def test_a_suppressed_address_is_refused_with_a_reason(self, client, program):
-        from athleteiq import mailer
+        from offdays import mailer
 
         self._staff(client, program)
         mailer.suppress(api_module._store.conn, "director@example.com", "bounced")
@@ -1726,7 +1726,7 @@ class TestDigestDelivery:
 class TestUnsubscribeEndpoints:
     def test_one_click_unsubscribe_needs_no_login(self, client, program):
         """Someone who wants out is holding an email, not a login."""
-        from athleteiq import mailer
+        from offdays import mailer
 
         token = mailer.unsubscribe_token(
             program["org"]["director"]["id"], mailer.Kind.COACH_DIGEST
@@ -1741,7 +1741,7 @@ class TestUnsubscribeEndpoints:
         )
 
     def test_the_post_form_of_one_click_works(self, client, program):
-        from athleteiq import mailer
+        from offdays import mailer
 
         token = mailer.unsubscribe_token(
             program["org"]["director"]["id"], mailer.Kind.COACH_DIGEST
@@ -1749,7 +1749,7 @@ class TestUnsubscribeEndpoints:
         assert client.post(f"/api/email/unsubscribe?token={token}").json()["unsubscribed"]
 
     def test_a_forged_token_changes_nothing(self, client, program):
-        from athleteiq import mailer
+        from offdays import mailer
 
         res = client.get("/api/email/unsubscribe?token=1.coach_digest.deadbeef")
         assert res.status_code == 200
@@ -1771,7 +1771,7 @@ class TestUnsubscribeEndpoints:
         assert updated["preferences"]["coach_digest"] is False
 
     def test_an_unsubscribed_coach_is_skipped_next_week(self, client, program):
-        from athleteiq import mailer, notifications as notify
+        from offdays import mailer, notifications as notify
 
         api_module._store.conn.execute(
             "UPDATE users SET email = 'director@example.com' WHERE id = ?",
@@ -1818,8 +1818,8 @@ class TestWebhookEndpoint:
         })
 
     def _configure(self, monkeypatch, secret="mg-secret"):
-        import athleteiq.api as api_mod
-        from athleteiq.config import Config
+        import offdays.api as api_mod
+        from offdays.config import Config
 
         monkeypatch.setattr(
             api_mod, "CONFIG",
@@ -1828,7 +1828,7 @@ class TestWebhookEndpoint:
         )
 
     def _seed(self, client, program):
-        from athleteiq import mailer
+        from offdays import mailer
 
         store = api_module._store
         store.conn.execute(
@@ -1843,7 +1843,7 @@ class TestWebhookEndpoint:
         )
 
     def test_a_verified_bounce_suppresses_the_address(self, client, program, monkeypatch):
-        from athleteiq import mailer
+        from offdays import mailer
 
         self._configure(monkeypatch)
         self._seed(client, program)
@@ -1858,7 +1858,7 @@ class TestWebhookEndpoint:
 
     def test_an_unsigned_request_is_rejected(self, client, program, monkeypatch):
         """The whole point: anyone could otherwise cut a coach off from their digest."""
-        from athleteiq import mailer
+        from offdays import mailer
 
         self._configure(monkeypatch)
         self._seed(client, program)
@@ -1903,8 +1903,8 @@ class TestWebhookEndpoint:
     def test_a_verified_but_unreadable_payload_is_accepted(self, client, program, monkeypatch):
         """A provider disables an endpoint that keeps erroring, so an unknown
         shape must not look like a failure."""
-        import athleteiq.api as api_mod
-        from athleteiq.config import Config
+        import offdays.api as api_mod
+        from offdays.config import Config
 
         monkeypatch.setattr(
             api_mod, "CONFIG",
@@ -1944,7 +1944,7 @@ class TestWebhookEndpoint:
 
 class TestBounceAdmin:
     def test_a_director_sees_failing_addresses(self, client, program):
-        from athleteiq import webhooks as W
+        from offdays import webhooks as W
 
         W.apply_event(api_module._store.conn, W.Event(
             provider="mailgun", event_id="b1",
@@ -1960,7 +1960,7 @@ class TestBounceAdmin:
         ).status_code == 403
 
     def test_a_corrected_address_can_be_put_back(self, client, program):
-        from athleteiq import mailer, webhooks as W
+        from offdays import mailer, webhooks as W
 
         W.apply_event(api_module._store.conn, W.Event(
             provider="mailgun", event_id="b2",
@@ -1975,7 +1975,7 @@ class TestBounceAdmin:
 
     def test_a_spam_complaint_cannot_be_overridden_by_an_admin(self, client, program):
         """They did not ask to be put back on the list."""
-        from athleteiq import mailer, webhooks as W
+        from offdays import mailer, webhooks as W
 
         W.apply_event(api_module._store.conn, W.Event(
             provider="sendgrid", event_id="c9",
@@ -1993,7 +1993,7 @@ class TestBounceAdmin:
 class TestSesWebhookEndpoint:
     """SES arrives through SNS, verified by certificate rather than a secret."""
 
-    TOPIC = "arn:aws:sns:us-east-1:123456789012:athleteiq-bounces"
+    TOPIC = "arn:aws:sns:us-east-1:123456789012:offdays-bounces"
 
     def _signed(self, key, email="coach@example.com", topic=None):
         import base64
@@ -2002,7 +2002,7 @@ class TestSesWebhookEndpoint:
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import padding
 
-        from athleteiq import sns
+        from offdays import sns
 
         body = json.dumps({
             "notificationType": "Bounce", "mail": {"messageId": "m1"},
@@ -2023,10 +2023,10 @@ class TestSesWebhookEndpoint:
         return json.dumps(message)
 
     def _configure(self, monkeypatch, pem, anchors, topics=None):
-        import athleteiq.api as api_mod
-        import athleteiq.sns as sns_mod
-        import athleteiq.webhooks as webhooks_mod
-        from athleteiq.config import Config
+        import offdays.api as api_mod
+        import offdays.sns as sns_mod
+        import offdays.webhooks as webhooks_mod
+        from offdays.config import Config
 
         config = Config(sns_topic_arns=tuple(topics if topics is not None else [self.TOPIC]))
         monkeypatch.setattr(api_mod, "CONFIG", config)
@@ -2038,7 +2038,7 @@ class TestSesWebhookEndpoint:
         sns_mod.clear_cert_cache()
 
     def test_a_genuine_ses_bounce_suppresses_the_address(self, client, program, monkeypatch):
-        from athleteiq import mailer
+        from offdays import mailer
         from tests.test_sns import make_cert
 
         key, pem, anchors = make_cert()
@@ -2053,7 +2053,7 @@ class TestSesWebhookEndpoint:
 
     def test_a_message_for_another_topic_is_rejected(self, client, program, monkeypatch):
         """A valid AWS signature only proves the sender has an AWS account."""
-        from athleteiq import mailer
+        from offdays import mailer
         from tests.test_sns import make_cert
 
         key, pem, anchors = make_cert()
@@ -2503,7 +2503,7 @@ class TestWellnessEndpoints:
 class TestReturnToPlayEndpoints:
 
     def _guardian(self, client, store, athlete_id, name="A Parent"):
-        from athleteiq import guardians
+        from offdays import guardians
         invite = guardians.create_invite(store.conn, athlete_id, created_by=athlete_id)
         person = guardians.redeem_invite(store.conn, invite["code"], name)
         store.conn.commit()
@@ -2904,14 +2904,14 @@ class TestCoachVideoNeedsAParent:
     CLIP = base64.b64encode(b"\x1aE\xdf\xa3" + b"x" * 4096).decode()
 
     def _guardian(self, store, athlete_id, name="A Parent"):
-        from athleteiq import guardians
+        from offdays import guardians
         invite = guardians.create_invite(store.conn, athlete_id, created_by=athlete_id)
         person = guardians.redeem_invite(store.conn, invite["code"], name)
         store.conn.commit()
         return person
 
     def _allow(self, store, athlete_id, guardian_id, granted=True):
-        from athleteiq import guardians
+        from offdays import guardians
         guardians.set_consent(
             store.conn, athlete_id, guardian_id, guardians.Scope.COACH_VIDEO, granted,
         )
@@ -3025,7 +3025,7 @@ class TestCoachVideoNeedsAParent:
         one and it needs an explicit call."""
         athlete = program["athletes"][0]
         store = api_module._store
-        from athleteiq import guardians
+        from offdays import guardians
 
         guardian = self._guardian(store, athlete["id"])
         self._allow(store, athlete["id"], guardian["guardian_id"])
@@ -3040,7 +3040,7 @@ class TestCoachVideoNeedsAParent:
         ).fetchone()["n"] == 0
 
     def test_expired_clips_are_purged(self, client, program):
-        from athleteiq.notifications import purge_expired_clips
+        from offdays.notifications import purge_expired_clips
         from datetime import datetime, timedelta, timezone
 
         athlete = program["athletes"][0]
@@ -3056,7 +3056,7 @@ class TestCoachVideoNeedsAParent:
 class TestMessagesGoOneWay:
 
     def test_a_parent_sees_everything_their_athlete_was_sent(self, client, program):
-        from athleteiq import guardians, notifications as N
+        from offdays import guardians, notifications as N
 
         athlete = program["athletes"][0]
         store = api_module._store
@@ -3088,7 +3088,7 @@ class TestMessagesGoOneWay:
         assert writable == [], f"a reply path exists: {writable}"
 
     def test_a_parent_cannot_read_another_familys_messages(self, client, program):
-        from athleteiq import guardians
+        from offdays import guardians
 
         one, two = program["athletes"]
         store = api_module._store
@@ -3106,7 +3106,7 @@ class TestMessagesGoOneWay:
 class TestParentSeesEveryDrill:
 
     def test_the_whole_drill_log_not_a_summary(self, client, program):
-        from athleteiq import guardians
+        from offdays import guardians
 
         athlete = program["athletes"][0]
         store = api_module._store
@@ -3134,7 +3134,7 @@ class TestParentSeesEveryDrill:
     def test_held_sessions_are_shown_rather_than_hidden(self, client, program):
         """A parent finding out from their child that something was queried is
         worse than reading it here."""
-        from athleteiq import guardians
+        from offdays import guardians
 
         athlete = program["athletes"][0]
         store = api_module._store
@@ -3314,7 +3314,7 @@ class TestParentCanSeeWhatTheyAllowed:
     CLIP = base64.b64encode(b"\x1aE\xdf\xa3" + b"y" * 2048).decode()
 
     def _linked(self, client, program, allow=True):
-        from athleteiq import guardians
+        from offdays import guardians
 
         athlete = program["athletes"][0]
         store = api_module._store
@@ -3408,14 +3408,14 @@ class TestFamilyClipWording:
             headers=headers,
         ).json()
 
-        from athleteiq import guardians
+        from offdays import guardians
         detail = guardians.consent_detail(api_module._store.conn, child["id"])
         video = next(d for d in detail if d["scope"] == "coach_video")
         assert "your dashboard" in video["label"]
         assert "coach" not in video["label"].lower()
 
     def test_a_club_still_reads_the_club_wording(self, client, program):
-        from athleteiq import guardians
+        from offdays import guardians
         detail = guardians.consent_detail(
             api_module._store.conn, program["athletes"][0]["id"],
         )
@@ -3433,7 +3433,7 @@ class TestFamilyClipWording:
         ).json()
         athlete = {"Authorization": f"Bearer {child['token']}"}
 
-        from athleteiq import guardians
+        from offdays import guardians
         store = api_module._store
         guardians.set_consent(
             store.conn, child["id"], made["parent"]["id"],
@@ -3456,7 +3456,7 @@ class TestFamilyClipWording:
         ).json()
         athlete = {"Authorization": f"Bearer {child['token']}"}
 
-        from athleteiq import guardians
+        from offdays import guardians
         store = api_module._store
         guardians.set_consent(
             store.conn, child["id"], made["parent"]["id"],
@@ -3564,7 +3564,7 @@ class TestCoachOnboardingEndpoint:
 
     def test_the_consent_gate_is_surfaced_to_the_coach(self, client, program):
         """The athlete gets a clear message and the coach used to get nothing."""
-        from athleteiq import guardians
+        from offdays import guardians
 
         athlete = program["athletes"][0]
         store = api_module._store
@@ -3623,7 +3623,7 @@ class TestAthleteOnboardingEndpoint:
         assert body["complete"] is True
 
     def test_an_athlete_waiting_on_a_parent_is_told_why(self, client, program):
-        from athleteiq import guardians
+        from offdays import guardians
 
         athlete = program["athletes"][0]
         store = api_module._store
@@ -3654,7 +3654,7 @@ class TestAthleteOnboardingEndpoint:
 class TestParentOnboardingEndpoint:
 
     def _linked(self, client, program):
-        from athleteiq import guardians
+        from offdays import guardians
 
         athlete = program["athletes"][0]
         store = api_module._store

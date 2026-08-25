@@ -22,10 +22,10 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import team_goals
-from athleteiq.db import connect
-from athleteiq.store import Store
-from athleteiq.team_goals import GoalError
+from offdays import team_goals
+from offdays.db import connect
+from offdays.store import Store
+from offdays.team_goals import GoalError
 
 TODAY = date(2026, 8, 20)
 START = TODAY - timedelta(days=6)
@@ -281,8 +281,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)

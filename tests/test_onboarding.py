@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from athleteiq import guardians
-from athleteiq import onboarding as O
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import guardians
+from offdays import onboarding as O
+from offdays.db import connect
+from offdays.store import Store
 
 
 @pytest.fixture
@@ -245,7 +245,7 @@ class TestTheStepsPointSomewhereReal:
         """A "Go" button that scrolls to nothing is worse than no button."""
         html = (
             Path(__file__).resolve().parent.parent
-            / "athleteiq" / "web" / "static" / "coach.html"
+            / "offdays" / "web" / "static" / "coach.html"
         ).read_text()
         ids = set(re.findall(r'id="([a-z0-9-]+)"', html))
         for step in (*O.PROGRAM_STEPS, *O.FAMILY_STEPS):

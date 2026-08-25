@@ -10,8 +10,8 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq.config import CONFIG
-from athleteiq.load import DayLoad, Zone, analyze, session_load
+from offdays.config import CONFIG
+from offdays.load import DayLoad, Zone, analyze, session_load
 
 TODAY = date(2026, 8, 23)
 

@@ -13,8 +13,8 @@ import {
   BallVision, PRESETS, BALLS, calibrate, matchPixel, radiusFromPose,
   workSize, ScaleMemory, WORK_PIXELS,
   BALL_TO_TORSO, TORSO_CM, RADIUS_TOLERANCE,
-} from '../../athleteiq/web/static/ballvision.js';
-import { LANDMARK_INDEX } from '../../athleteiq/web/static/ball.js';
+} from '../../offdays/web/static/ballvision.js';
+import { LANDMARK_INDEX } from '../../offdays/web/static/ball.js';
 
 const W = 192, H = 108;
 const SPECS = JSON.parse(process.env.DRILL_SPECS);

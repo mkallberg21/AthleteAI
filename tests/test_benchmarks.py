@@ -14,9 +14,9 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import benchmarks as B
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import benchmarks as B
+from offdays.db import connect
+from offdays.store import Store
 
 TODAY = date(2026, 8, 24)
 
@@ -112,7 +112,7 @@ class TestAgeBands:
         assert B.band_for(17, estimated=True).weekly_target <= B.DEFAULT_BAND.weekly_target
 
     def test_a_program_can_scale_the_budget_but_must_choose_to(self, monkeypatch):
-        from athleteiq.config import Config
+        from offdays.config import Config
 
         monkeypatch.setattr(B, "CONFIG", Config(budget_scale=1.5))
         scaled = B.scaled(B.band_for(13))
@@ -412,7 +412,7 @@ class TestTheCopyReadsLikeEnglish:
 #: that position does *not* apply -- that is its own suite below.
 SPECIALISING_AGE = 16
 
-#: Re-exported so the multi-sport suites do not import athleteiq.sports twice.
+#: Re-exported so the multi-sport suites do not import offdays.sports twice.
 B_SEASONS = ("fall", "winter", "spring", "summer")
 
 
@@ -555,7 +555,7 @@ class TestTheMixWorksWithNoPeersAtAll:
         assert mix["focus"]
 
     def test_the_mix_never_recommends_a_drill_that_does_not_exist(self, store, program):
-        from athleteiq.drills.catalog import DRILLS_BY_KEY
+        from offdays.drills.catalog import DRILLS_BY_KEY
         athlete = add_athlete(store, program, "Sam", SPECIALISING_AGE, position="Attack")
         for d in range(3):
             train(store, athlete["id"], TODAY - timedelta(days=d), minutes=12, seed=d + 2)

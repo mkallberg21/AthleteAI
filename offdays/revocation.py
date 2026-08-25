@@ -17,7 +17,7 @@ Here the default is soft-fail with a loud log, because a failed webhook is
 retried by the provider and the primary controls -- an allowlisted topic and a
 chain pinned to Amazon's roots -- do not depend on this one. A deployment that
 would rather drop bounce events than accept an unchecked certificate sets
-`ATHLETEIQ_SNS_REVOCATION_STRICT=1`.
+`OFFDAYS_SNS_REVOCATION_STRICT=1`.
 
 A `revoked` answer is always fatal, in either mode. That part is never a
 judgement call.

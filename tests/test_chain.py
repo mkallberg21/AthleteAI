@@ -16,7 +16,7 @@ import datetime
 
 import pytest
 
-from athleteiq import chain
+from offdays import chain
 
 NOW = datetime.datetime.now(datetime.timezone.utc)
 

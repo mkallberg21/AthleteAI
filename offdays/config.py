@@ -1,4 +1,4 @@
-"""Central configuration for AthleteIQ.
+"""Central configuration for 0FFDAYS.
 
 Everything tunable lives here so drills, scoring curves, and integrity limits
 can be adjusted without hunting through the codebase.
@@ -27,7 +27,7 @@ class ScoringConfig:
     # Hard ceiling on XP a single athlete can bank in one day. Without this,
     # the leaderboard rewards whoever has the most free time rather than
     # whoever is training well, and it invites grinding injuries.
-    daily_xp_cap: int = _env_int("ATHLETEIQ_DAILY_XP_CAP", 600)
+    daily_xp_cap: int = _env_int("OFFDAYS_DAILY_XP_CAP", 600)
 
     # A session must clear this to count toward a streak day.
     streak_min_xp: int = 25
@@ -166,7 +166,7 @@ class LoadConfig:
 class Config:
     db_path: Path = field(
         default_factory=lambda: Path(
-            os.environ.get("ATHLETEIQ_DB_PATH", _BASE.parent / "data" / "athleteiq.db")
+            os.environ.get("OFFDAYS_DB_PATH", _BASE.parent / "data" / "offdays.db")
         )
     )
     static_dir: Path = field(default_factory=lambda: _BASE / "web" / "static")
@@ -178,7 +178,7 @@ class Config:
     # Retention for per-rep timing rows. The aggregate session record is kept
     # indefinitely; the granular event stream is only needed for integrity
     # review and is pruned after this window.
-    rep_event_retention_days: int = _env_int("ATHLETEIQ_REP_RETENTION_DAYS", 45)
+    rep_event_retention_days: int = _env_int("OFFDAYS_REP_RETENTION_DAYS", 45)
 
     # Minimum age handling. Athletes at or under this age require a recorded
     # guardian consent before their name appears on any shared leaderboard.
@@ -188,50 +188,50 @@ class Config:
     # can raise or lower them, but has to choose to -- the app never quietly
     # assumes an athlete can take more than the guidance suggests.
     budget_scale: float = field(
-        default_factory=lambda: float(os.environ.get("ATHLETEIQ_BUDGET_SCALE", "1") or 1)
+        default_factory=lambda: float(os.environ.get("OFFDAYS_BUDGET_SCALE", "1") or 1)
     )
 
     # When true, a coach with no team assignments sees nothing rather than the
     # whole program. Off by default so accounts created before team assignment
     # existed keep working on upgrade; new deployments should turn it on.
     strict_team_scope: bool = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_STRICT_TEAM_SCOPE", "") == "1"
+        default_factory=lambda: os.environ.get("OFFDAYS_STRICT_TEAM_SCOPE", "") == "1"
     )
 
     # Web Push (VAPID). Absent these, notifications still generate and appear
     # in the in-app feed -- only the phone-level push is skipped, so nothing
     # about the product depends on a third-party service being configured.
     vapid_public_key: str = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_VAPID_PUBLIC_KEY", "")
+        default_factory=lambda: os.environ.get("OFFDAYS_VAPID_PUBLIC_KEY", "")
     )
     vapid_private_key: str = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_VAPID_PRIVATE_KEY", "")
+        default_factory=lambda: os.environ.get("OFFDAYS_VAPID_PRIVATE_KEY", "")
     )
     vapid_email: str = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_VAPID_EMAIL", "coach@example.com")
+        default_factory=lambda: os.environ.get("OFFDAYS_VAPID_EMAIL", "coach@example.com")
     )
 
     # SMTP for the weekly digest. Absent these the digest is still computed and
     # readable in the app -- only the send is skipped, so nothing about the
     # feature depends on a mail provider being configured.
-    smtp_host: str = field(default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_HOST", ""))
+    smtp_host: str = field(default_factory=lambda: os.environ.get("OFFDAYS_SMTP_HOST", ""))
     smtp_port: int = field(
-        default_factory=lambda: _env_int("ATHLETEIQ_SMTP_PORT", 587)
+        default_factory=lambda: _env_int("OFFDAYS_SMTP_PORT", 587)
     )
-    smtp_user: str = field(default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_USER", ""))
+    smtp_user: str = field(default_factory=lambda: os.environ.get("OFFDAYS_SMTP_USER", ""))
     smtp_password: str = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_PASSWORD", "")
+        default_factory=lambda: os.environ.get("OFFDAYS_SMTP_PASSWORD", "")
     )
     smtp_from: str = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SMTP_FROM", "AthleteIQ <no-reply@example.com>")
+        default_factory=lambda: os.environ.get("OFFDAYS_SMTP_FROM", "0FFDAYS <no-reply@example.com>")
     )
     # Base URL used for the dashboard link inside the email.
     app_base_url: str = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_BASE_URL", "")
+        default_factory=lambda: os.environ.get("OFFDAYS_BASE_URL", "")
     )
     # Signs unsubscribe links. Unset means links are forgeable, not broken --
     # a development default rather than a production one.
-    secret_key: str = field(default_factory=lambda: os.environ.get("ATHLETEIQ_SECRET", ""))
+    secret_key: str = field(default_factory=lambda: os.environ.get("OFFDAYS_SECRET", ""))
 
     # Per-provider webhook secrets. An empty secret means that provider's
     # endpoint is disabled -- absent configuration must never mean "trust
@@ -244,7 +244,7 @@ class Config:
     sns_topic_arns: tuple = field(
         default_factory=lambda: tuple(
             arn.strip()
-            for arn in os.environ.get("ATHLETEIQ_SNS_TOPIC_ARNS", "").split(",")
+            for arn in os.environ.get("OFFDAYS_SNS_TOPIC_ARNS", "").split(",")
             if arn.strip()
         )
     )
@@ -252,41 +252,41 @@ class Config:
     # the only thing establishing the certificate's provenance is the TLS
     # connection it arrived over.
     sns_verify_chain: bool = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_VERIFY_CHAIN", "1") != "0"
+        default_factory=lambda: os.environ.get("OFFDAYS_SNS_VERIFY_CHAIN", "1") != "0"
     )
     # Optional PEM bundle of trust anchors. Empty reads the system store.
     sns_ca_bundle: str = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_CA_BUNDLE", "")
+        default_factory=lambda: os.environ.get("OFFDAYS_SNS_CA_BUNDLE", "")
     )
     # Check the signing certificate against OCSP, falling back to a CRL.
     # Answers are cached for an hour, so this is roughly one network round trip
     # per hour rather than one per webhook.
     sns_check_revocation: bool = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_CHECK_REVOCATION", "1") != "0"
+        default_factory=lambda: os.environ.get("OFFDAYS_SNS_CHECK_REVOCATION", "1") != "0"
     )
     # What to do when revocation cannot be established. Soft-fail by default:
     # a responder outage should not stop bounce processing, and the primary
     # controls -- allowlisted topic, pinned chain -- do not depend on this one.
     # Set to 1 to refuse anything that cannot be cleared.
     sns_revocation_strict: bool = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_REVOCATION_STRICT", "") == "1"
+        default_factory=lambda: os.environ.get("OFFDAYS_SNS_REVOCATION_STRICT", "") == "1"
     )
 
     # Restrict anchors to Amazon's roots rather than every CA on the machine.
     # A host trusts ~150 roots; trusting all of them to vouch for an AWS
     # signing certificate makes the pinning pointless.
     sns_pin_amazon_roots: bool = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_PIN_AMAZON", "1") != "0"
+        default_factory=lambda: os.environ.get("OFFDAYS_SNS_PIN_AMAZON", "1") != "0"
     )
 
     # Whether to auto-confirm an SNS subscription for an allowlisted topic.
     sns_auto_confirm: bool = field(
-        default_factory=lambda: os.environ.get("ATHLETEIQ_SNS_AUTO_CONFIRM", "1") != "0"
+        default_factory=lambda: os.environ.get("OFFDAYS_SNS_AUTO_CONFIRM", "1") != "0"
     )
 
     webhook_secrets: dict = field(
         default_factory=lambda: {
-            provider: os.environ.get(f"ATHLETEIQ_WEBHOOK_SECRET_{provider.upper()}", "")
+            provider: os.environ.get(f"OFFDAYS_WEBHOOK_SECRET_{provider.upper()}", "")
             for provider in ("sendgrid", "postmark", "mailgun", "ses", "generic")
         }
     )

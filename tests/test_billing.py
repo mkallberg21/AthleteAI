@@ -12,9 +12,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import billing as B
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import billing as B
+from offdays.db import connect
+from offdays.store import Store
 
 
 @pytest.fixture

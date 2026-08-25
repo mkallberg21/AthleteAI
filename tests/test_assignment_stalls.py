@@ -18,9 +18,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import absence, assignments as assignments_mod, notifications
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import absence, assignments as assignments_mod, notifications
+from offdays.db import connect
+from offdays.store import Store
 
 TODAY = date(2026, 8, 20)
 START = TODAY - timedelta(days=5)

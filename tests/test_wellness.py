@@ -10,10 +10,10 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import wellness as W
-from athleteiq.db import connect
-from athleteiq.drills.base import Tissue
-from athleteiq.store import Store, StoreError
+from offdays import wellness as W
+from offdays.db import connect
+from offdays.drills.base import Tissue
+from offdays.store import Store, StoreError
 
 TODAY = date.today()
 
@@ -277,7 +277,7 @@ class TestRetention:
 
     def test_only_resolved_reports_are_ever_purged(self, store, athlete):
         """An open report is a live thing about a body that still hurts."""
-        from athleteiq.notifications import purge_old_wellness
+        from offdays.notifications import purge_old_wellness
         old = TODAY - timedelta(days=W.RETENTION_DAYS + 5)
         open_one = store.report_discomfort(athlete["id"], "knee", "sore", day=old)
         closed = store.report_discomfort(athlete["id"], "ankle", "sore", day=old)
@@ -291,7 +291,7 @@ class TestRetention:
         assert closed["id"] not in remaining
 
     def test_recent_history_is_left_alone(self, store, athlete):
-        from athleteiq.notifications import purge_old_wellness
+        from offdays.notifications import purge_old_wellness
         saved = store.report_discomfort(athlete["id"], "knee", "sore")
         store.resolve_discomfort(athlete["id"], saved["id"])
         purge_old_wellness(store.conn, TODAY)
@@ -305,7 +305,7 @@ class TestGuardianEscalation:
     @pytest.fixture
     def linked(self, store, program, athlete):
         """A real guardian, through the real invite flow."""
-        from athleteiq import guardians
+        from offdays import guardians
         invite = guardians.create_invite(
             store.conn, athlete["id"], created_by=athlete["id"], email="p@example.com",
         )
@@ -314,7 +314,7 @@ class TestGuardianEscalation:
         )
 
     def _report_and_notify(self, store, athlete, **kwargs):
-        from athleteiq.notifications import notify_discomfort
+        from offdays.notifications import notify_discomfort
         store.report_discomfort(athlete["id"], **kwargs)
         status = store.wellness_status(athlete["id"])
         return notify_discomfort(

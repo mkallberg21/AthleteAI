@@ -566,7 +566,7 @@ def _handle_ses(
 
     Verified against the message's own certificate rather than a shared secret,
     with the signing certificate's URL and the topic ARN both checked before
-    anything is fetched or believed. See `athleteiq.sns` for why each of those
+    anything is fetched or believed. See `offdays.sns` for why each of those
     matters.
     """
     try:

@@ -22,12 +22,12 @@ from datetime import date
 
 import pytest
 
-from athleteiq import adaptive
-from athleteiq.adaptive import AdaptiveError
-from athleteiq.db import connect
-from athleteiq.drills import DRILLS_BY_KEY
-from athleteiq.integrity import IntegrityResult
-from athleteiq.store import Store, StoreError
+from offdays import adaptive
+from offdays.adaptive import AdaptiveError
+from offdays.db import connect
+from offdays.drills import DRILLS_BY_KEY
+from offdays.integrity import IntegrityResult
+from offdays.store import Store, StoreError
 
 
 @pytest.fixture
@@ -253,7 +253,7 @@ class TestUnverifiedRepsStayOutOfComparisons:
         """Nobody has an incentive to overstate a number that only tightens
         their own load advisories, and a strong one to overstate a number on
         a board."""
-        from athleteiq.leaderboard import leaderboard
+        from offdays.leaderboard import leaderboard
 
         enable(store, athlete, "self_report")
         store.log_self_reported(
@@ -273,7 +273,7 @@ class TestUnverifiedRepsStayOutOfComparisons:
     def test_participation_still_counts_them(self, store, athlete):
         """Dropping the row would have removed the athlete from participation
         too, which is backwards -- turning up is exactly what this measures."""
-        from athleteiq import digest
+        from offdays import digest
 
         enable(store, athlete, "self_report")
         today = date.today()
@@ -315,8 +315,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)

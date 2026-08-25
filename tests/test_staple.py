@@ -16,9 +16,9 @@ import datetime
 
 import pytest
 
-from athleteiq import revocation as R
-from athleteiq import staple as S
-from athleteiq.db import connect, init_db
+from offdays import revocation as R
+from offdays import staple as S
+from offdays.db import connect, init_db
 
 NOW = datetime.datetime.now(datetime.timezone.utc)
 OCSP_URL = "http://ocsp.example.com"

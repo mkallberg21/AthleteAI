@@ -10,8 +10,8 @@ import random
 
 import pytest
 
-from athleteiq.drills import get_drill
-from athleteiq.integrity import RepEvent, SessionClaim, evaluate
+from offdays.drills import get_drill
+from offdays.integrity import RepEvent, SessionClaim, evaluate
 
 
 def realistic_reps(count: int, mean_gap_ms: float = 900, jitter: float = 190, seed: int = 11):

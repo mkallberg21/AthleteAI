@@ -11,8 +11,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq.db import connect
-from athleteiq.store import OFFLINE_BACKDATE_LIMIT_DAYS, Store, StoreError
+from offdays.db import connect
+from offdays.store import OFFLINE_BACKDATE_LIMIT_DAYS, Store, StoreError
 
 
 @pytest.fixture
@@ -199,7 +199,7 @@ class TestDayAttribution:
 
     def test_the_daily_cap_applies_to_the_credited_day(self, store, athlete):
         """Backdating must not be a way around the daily cap."""
-        from athleteiq.config import CONFIG
+        from offdays.config import CONFIG
 
         when = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
         for seed in range(6):

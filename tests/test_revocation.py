@@ -15,7 +15,7 @@ import datetime
 
 import pytest
 
-from athleteiq import revocation as R
+from offdays import revocation as R
 
 NOW = datetime.datetime.now(datetime.timezone.utc)
 OCSP_URL = "http://ocsp.example.com"
@@ -376,7 +376,7 @@ class TestSnsIntegration:
         from cryptography.hazmat.primitives.asymmetric import padding
         from cryptography.x509 import ocsp
 
-        from athleteiq import sns
+        from offdays import sns
 
         root_key, root = issue("Test Root CA", ca=True, endpoints=False)
         leaf_key, leaf = issue("sns.amazonaws.com", root_key, root)
@@ -410,7 +410,7 @@ class TestSnsIntegration:
             )
 
     def test_the_default_configuration_checks_revocation_softly(self):
-        from athleteiq.config import CONFIG
+        from offdays.config import CONFIG
 
         assert CONFIG.sns_check_revocation is True
         assert CONFIG.sns_revocation_strict is False

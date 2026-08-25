@@ -9,11 +9,11 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import rtp as R
-from athleteiq import wellness as W
-from athleteiq.db import connect
-from athleteiq.drills.base import Tissue
-from athleteiq.store import Store, StoreError
+from offdays import rtp as R
+from offdays import wellness as W
+from offdays.db import connect
+from offdays.drills.base import Tissue
+from offdays.store import Store, StoreError
 
 TODAY = date.today()
 

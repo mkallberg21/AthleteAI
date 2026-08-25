@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "athleteiq"
+name = "offdays"
 version = "0.1.0"
 description = "On-device training analysis for youth athletes: phone-camera drill counting that never uploads video, with gamification and coach reporting."
 requires-python = ">=3.10"
@@ -16,7 +16,7 @@ dependencies = [
 dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [tool.setuptools.packages.find]
-include = ["athleteiq*"]
+include = ["offdays*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

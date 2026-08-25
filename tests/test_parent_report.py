@@ -19,10 +19,10 @@ from datetime import date
 
 import pytest
 
-from athleteiq import billing, guardians as guardians_mod
-from athleteiq import notifications, parent_report
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import billing, guardians as guardians_mod
+from offdays import notifications, parent_report
+from offdays.db import connect
+from offdays.store import Store
 
 TODAY = date(2026, 8, 25)          # so "last complete month" is July 2026
 JULY = (date(2026, 7, 2), date(2026, 7, 5), date(2026, 7, 9), date(2026, 7, 13),
@@ -373,8 +373,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)
@@ -382,7 +382,7 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture
 def wired(client):
-    from athleteiq import api as api_mod
+    from offdays import api as api_mod
 
     store = api_mod.get_store()
     org = client.post(

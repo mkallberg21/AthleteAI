@@ -1,6 +1,13 @@
-# AthleteIQ
+# 0FFDAYS
 
 **On-device training analysis for youth athletes.**
+
+> **On the name.** The brand is **0FFDAYS**, with a zero. The Python package is
+> `offdays` and the environment variables are `OFFDAYS_*`, both with a letter
+> O — not a stylistic inconsistency but a hard constraint: `import 0ffdays` is
+> a syntax error and `0FFDAYS_DB=…` is not a valid shell assignment. The zero
+> belongs everywhere a person reads it and nowhere an interpreter does. Please
+> do not "fix" either one.
 
 Athletes record their own training with a phone camera. Pose analysis runs **in
 the browser on the athlete's device** — the video never leaves the phone. Only
@@ -68,7 +75,7 @@ pip install -r requirements.txt
 python scripts/seed_demo.py --db data/demo.db
 
 # Serve
-ATHLETEIQ_DB_PATH=data/demo.db uvicorn athleteiq.api:app --reload
+OFFDAYS_DB_PATH=data/demo.db uvicorn offdays.api:app --reload
 ```
 
 Open <http://127.0.0.1:8000/> and sign in with a token the seeder printed.
@@ -83,7 +90,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ```bash
 python -m pytest tests/ -q          # 2100 tests
 
-DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
+DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
 ```
 
@@ -95,7 +102,7 @@ counts — that is how the detector is verified without a camera and a stick.
 ## Architecture
 
 ```
-athleteiq/
+offdays/
   config.py         Scoring curves, integrity limits, retention, VAPID keys
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
@@ -234,7 +241,7 @@ One deliberate accommodation: **a coach with no assignments falls back to seeing
 the whole program.** Accounts created before team assignment existed have no
 assignment rows, and defaulting them to "sees nothing" would lock out every
 existing coach on deploy. New deployments should set
-`ATHLETEIQ_STRICT_TEAM_SCOPE=1`, which makes an unassigned coach see nothing
+`OFFDAYS_STRICT_TEAM_SCOPE=1`, which makes an unassigned coach see nothing
 instead; until then the dashboard flags any coach in that state. The empty-scope
 case is tested explicitly, because "no teams" silently meaning "all teams" is
 exactly the bug this feature would otherwise ship with.
@@ -409,7 +416,7 @@ straight through the check.
 **Trusting any valid AWS signature.** Anyone can create an SNS topic in their
 own account and have Amazon sign messages for it entirely legitimately, so a
 signature alone establishes only that the sender has an AWS account. The topic
-ARN is checked against `ATHLETEIQ_SNS_TOPIC_ARNS`, and an empty allowlist
+ARN is checked against `OFFDAYS_SNS_TOPIC_ARNS`, and an empty allowlist
 disables the endpoint rather than accepting everything.
 
 **Trusting the certificate because of how it arrived.** Checking the URL and
@@ -452,7 +459,7 @@ responder can be reached, the check proceeds with a warning logged. That is
 defeated by anyone who can block the request, which is exactly why browsers
 stopped relying on OCSP. It is the default here because a failed webhook is
 retried by the provider and the primary controls — allowlisted topic, pinned
-chain — do not depend on this one. Set `ATHLETEIQ_SNS_REVOCATION_STRICT=1` to
+chain — do not depend on this one. Set `OFFDAYS_SNS_REVOCATION_STRICT=1` to
 refuse anything that cannot be cleared. **A `revoked` answer is always fatal**,
 in either mode; that part is never a judgement call.
 
@@ -480,7 +487,7 @@ result: good via staple  (no network call made)
 That changes what soft-fail costs. Revocation soft-fails because refusing on an
 unreachable responder would let a CA outage take down bounce processing. Once
 staples are refreshed out of band — with their own retries, on their own
-schedule — **`ATHLETEIQ_SNS_REVOCATION_STRICT=1` stops being an availability
+schedule — **`OFFDAYS_SNS_REVOCATION_STRICT=1` stops being an availability
 risk**, because a missing staple is a condition the refresh job reports and
 `/api/coach/staples` shows, rather than a race decided while a webhook waits.
 
@@ -693,7 +700,7 @@ The blocker was going to say *"this dashboard is empty because it is scoped to
 your teams"*. Writing a test that checked the claim showed it was **false**: an
 unassigned coach falls back to seeing the *whole program*, which is a documented
 accommodation for accounts predating team assignment, switchable with
-`ATHLETEIQ_STRICT_TEAM_SCOPE=1`.
+`OFFDAYS_STRICT_TEAM_SCOPE=1`.
 
 The two cases are opposites, so the message branches:
 
@@ -1240,7 +1247,7 @@ athlete's age, keep single-sport specialisation late, take at least one or two
 full rest days a week, and take extended off-season breaks. This module spends a
 *fraction* of that age-hours allowance on solo work, because the rest belongs to
 team practice and games. They are deliberately conservative defaults, not a
-clinical instrument, and a program can scale them with `ATHLETEIQ_BUDGET_SCALE`.
+clinical instrument, and a program can scale them with `OFFDAYS_BUDGET_SCALE`.
 
 An unknown or estimated birth year falls back to the **11-12** band rather than
 an average one: guessing low is the safe direction to be wrong in.
@@ -2727,7 +2734,7 @@ configured at all** — Web Push is additive, not required.
 Every rule carries a dedupe key, so the scheduler can run as often as you like:
 
 ```bash
-0 * * * *  cd /srv/athleteiq && python scripts/run_notifications.py
+0 * * * *  cd /srv/offdays && python scripts/run_notifications.py
 ```
 
 Rules that fire today, all from `run_all`:
@@ -2745,8 +2752,8 @@ Rules that fire today, all from `run_all`:
 Badge unlocks and coach broadcasts fire from the events themselves rather than
 from the scheduler.
 
-To enable phone-level push, set `ATHLETEIQ_VAPID_PUBLIC_KEY`,
-`ATHLETEIQ_VAPID_PRIVATE_KEY`, and `ATHLETEIQ_VAPID_EMAIL`, and install
+To enable phone-level push, set `OFFDAYS_VAPID_PUBLIC_KEY`,
+`OFFDAYS_VAPID_PRIVATE_KEY`, and `OFFDAYS_VAPID_EMAIL`, and install
 `pywebpush`. Without them the generator still runs and the feed still fills.
 
 ---
@@ -2960,7 +2967,7 @@ contact with a real driveway:
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
-   they are not a substitute for a clinician. Treat `ATHLETEIQ_BUDGET_SCALE`
+   they are not a substitute for a clinician. Treat `OFFDAYS_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
 15. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
@@ -2975,7 +2982,7 @@ contact with a real driveway:
 19. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
-   refusing webhooks; turn on `ATHLETEIQ_SNS_REVOCATION_STRICT=1` once
+   refusing webhooks; turn on `OFFDAYS_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
 20. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's

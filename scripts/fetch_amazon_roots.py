@@ -2,13 +2,13 @@
 """Download Amazon's root CA certificates into a PEM bundle.
 
 Only needed where the system trust store does not already carry them --
-most Linux distributions do, and `athleteiq.chain.load_anchors()` finds them
+most Linux distributions do, and `offdays.chain.load_anchors()` finds them
 there without any of this. Run it when a container image ships a minimal CA
 bundle, or when you would rather pin to a file you control than to whatever the
 base image happens to include.
 
     python scripts/fetch_amazon_roots.py --out amazon-roots.pem
-    export ATHLETEIQ_SNS_CA_BUNDLE=$PWD/amazon-roots.pem
+    export OFFDAYS_SNS_CA_BUNDLE=$PWD/amazon-roots.pem
 
 Deliberately a fetch rather than a checked-in file: an embedded certificate is
 one that silently goes stale, and a root written into source control is a root
@@ -48,7 +48,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from athleteiq import chain
+    from offdays import chain
 
     if args.from_system:
         anchors = chain.load_anchors(pin_to_amazon=True)
@@ -80,7 +80,7 @@ def main() -> int:
     print(f"\nwrote {len(certificates)} certificates from {source} to {args.out}")
     for certificate in certificates:
         print(f"  {certificate.subject.rfc4514_string()}")
-    print(f"\n  export ATHLETEIQ_SNS_CA_BUNDLE={Path(args.out).resolve()}")
+    print(f"\n  export OFFDAYS_SNS_CA_BUNDLE={Path(args.out).resolve()}")
     return 0
 
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from athleteiq import dialect  # noqa: E402
+from offdays import dialect  # noqa: E402
 
 if __name__ == "__main__":
     print(dialect.render())

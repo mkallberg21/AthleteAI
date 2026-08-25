@@ -4,9 +4,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import guardians, notifications as N, recognition as R
-from athleteiq.db import connect
-from athleteiq.store import Store, StoreError
+from offdays import guardians, notifications as N, recognition as R
+from offdays.db import connect
+from offdays.store import Store, StoreError
 
 TODAY = date.today()
 
@@ -314,7 +314,7 @@ class TestAFamilyRunningItThemselves:
         ).fetchone()["n"] == 2
 
     def test_it_is_on_the_family_plan(self, family):
-        from athleteiq import billing
+        from offdays import billing
         plan = billing.get_subscription(family["store"].conn, family["org_id"]).plan
         assert plan.code == "family"
         assert plan.max_teams == 1 and plan.included_seats >= 2

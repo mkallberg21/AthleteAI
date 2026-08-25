@@ -15,8 +15,8 @@ import random
 
 import pytest
 
-from athleteiq.drills import get_drill
-from athleteiq.quality import (
+from offdays.drills import get_drill
+from offdays.quality import (
     RepFeature,
     analyze,
     offhand_deficit_threshold,
@@ -114,7 +114,7 @@ class TestScoring:
         assert report.measurable_reps == 0
 
     def test_a_drill_without_a_quality_spec_returns_no_score(self):
-        from athleteiq.drills.catalog import WALL_BALL
+        from offdays.drills.catalog import WALL_BALL
         from dataclasses import replace
 
         drill = replace(WALL_BALL, quality=None)

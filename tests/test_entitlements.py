@@ -25,10 +25,10 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import billing, entitlements
-from athleteiq.db import connect
-from athleteiq.entitlements import Audience, Tier
-from athleteiq.store import Store
+from offdays import billing, entitlements
+from offdays.db import connect
+from offdays.entitlements import Audience, Tier
+from offdays.store import Store
 
 TODAY = date(2026, 8, 25)
 
@@ -103,7 +103,7 @@ class TestTheCoachingProductIsCompleteAtZeroPayingParents:
     def test_the_roster_shows_paying_and_unpaid_children_alike(
         self, store, club
     ):
-        from athleteiq.leaderboard import coach_roster
+        from offdays.leaderboard import coach_roster
 
         names = {
             row["display_name"]
@@ -256,7 +256,7 @@ class TestNoCoachSurfaceRevealsWhoPays:
         store.conn.commit()
 
     def test_the_coach_roster_carries_no_billing_signal(self, store, club):
-        from athleteiq.leaderboard import coach_roster
+        from offdays.leaderboard import coach_roster
 
         payload = str(coach_roster(
             store.conn, club["org"], club["team"]["id"], "week")).lower()
@@ -267,7 +267,7 @@ class TestNoCoachSurfaceRevealsWhoPays:
     def test_the_evaluation_export_carries_none_either(self, store, club):
         """The tryout document. The worst possible place to learn which
         children come from families who could pay."""
-        from athleteiq import evaluation
+        from offdays import evaluation
 
         for athlete in (club["paying"], club["unpaid"], club["hardship"]):
             self._train(store, athlete)
@@ -278,7 +278,7 @@ class TestNoCoachSurfaceRevealsWhoPays:
             assert leak not in rows, f"the evaluation export leaks: {leak!r}"
 
     def test_paying_and_unpaid_rows_are_shaped_identically(self, store, club):
-        from athleteiq import evaluation
+        from offdays import evaluation
 
         for athlete in (club["paying"], club["unpaid"]):
             self._train(store, athlete)
@@ -290,7 +290,7 @@ class TestNoCoachSurfaceRevealsWhoPays:
         assert paying.weeks_available == unpaid.weeks_available
 
     def test_the_pre_practice_card_carries_none(self, store, club):
-        from athleteiq import practice
+        from offdays import practice
 
         card = str(practice.brief(
             store, club["org"], club["team"]["id"], today=TODAY).to_dict()).lower()
@@ -301,7 +301,7 @@ class TestNoCoachSurfaceRevealsWhoPays:
         """Structural rather than by inspection of output."""
         import inspect
 
-        from athleteiq import digest, evaluation, leaderboard, practice
+        from offdays import digest, evaluation, leaderboard, practice
 
         for module in (leaderboard, practice, evaluation, digest):
             source = inspect.getsource(module)
@@ -394,8 +394,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)
@@ -403,8 +403,8 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture
 def wired(client):
-    from athleteiq import api as api_mod
-    from athleteiq import guardians as guardians_mod
+    from offdays import api as api_mod
+    from offdays import guardians as guardians_mod
 
     store = api_mod.get_store()
     org = client.post(

@@ -8,8 +8,8 @@ roster spellings rather than canonical keys.
 
 import pytest
 
-from athleteiq import positions as P
-from athleteiq.drills.catalog import DRILLS_BY_KEY
+from offdays import positions as P
+from offdays.drills.catalog import DRILLS_BY_KEY
 
 
 class TestNormalisation:
@@ -118,13 +118,13 @@ class TestCrossSportTransfer:
 
     def test_every_drill_in_the_catalog_has_a_transfer_entry(self):
         """A drill with no entry silently renders a blank where the reason goes."""
-        from athleteiq import transfer
+        from offdays import transfer
         for key in DRILLS_BY_KEY:
             assert key in transfer.TRANSFERS, key
             assert transfer.TRANSFERS[key], key
 
     def test_the_home_sport_is_filtered_out(self):
-        from athleteiq import transfer
+        from offdays import transfer
         for key in DRILLS_BY_KEY:
             for item in transfer.for_drill(key, "lacrosse", limit=0):
                 assert item.sport.lower() != "lacrosse"
@@ -136,7 +136,7 @@ class TestCrossSportTransfer:
         characters and one of the most concrete lines in the table -- so the
         test bans the filler phrasings instead.
         """
-        from athleteiq import transfer
+        from offdays import transfer
         filler = ("helps with", "good for", "improves your", "builds your",
                   "is useful", "great for", "works your")
         for key, items in transfer.TRANSFERS.items():
@@ -148,12 +148,12 @@ class TestCrossSportTransfer:
 
     def test_stick_drills_are_not_padded_out(self):
         """A claim a kid can check and find false costs every other claim."""
-        from athleteiq import transfer
+        from offdays import transfer
         assert len(transfer.TRANSFERS["lax_quick_stick"]) <= 2
         assert len(transfer.TRANSFERS["lax_wall_ball"]) <= 2
 
     def test_the_blurb_reads_as_a_sentence(self):
-        from athleteiq import transfer
+        from offdays import transfer
         assert transfer.blurb("gen_lateral_bound", "lacrosse") == (
             "This one pays off in Basketball, Soccer and Tennis too."
         )
@@ -162,7 +162,7 @@ class TestCrossSportTransfer:
         )
 
     def test_an_unknown_drill_says_nothing_rather_than_guessing(self):
-        from athleteiq import transfer
+        from offdays import transfer
         assert transfer.for_drill("gen_nonexistent") == []
         assert transfer.blurb("gen_nonexistent") == ""
 
@@ -184,7 +184,7 @@ class TestEverySportIsWiredUpProperly:
 
     @pytest.mark.parametrize("sport", SPORTS)
     def test_the_sport_is_in_the_signup_catalog(self, sport):
-        from athleteiq import sports
+        from offdays import sports
         assert sports.BY_KEY.get(sport) is not None, sport
 
     def test_every_position_only_names_drills_that_exist(self):

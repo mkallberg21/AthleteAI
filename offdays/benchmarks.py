@@ -28,7 +28,7 @@ then deliberately set at the conservative end, because the cost of a child doing
 slightly too little unstructured skill work is nothing, and the cost of too much
 is an overuse injury at fourteen.
 
-They are a starting point a program can change (`ATHLETEIQ_BUDGET_SCALE`), not a
+They are a starting point a program can change (`OFFDAYS_BUDGET_SCALE`), not a
 clinical prescription, and the app says so where an athlete can see it.
 """
 

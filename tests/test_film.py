@@ -4,9 +4,9 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from athleteiq import film as F
-from athleteiq.db import connect
-from athleteiq.store import Store, StoreError
+from offdays import film as F
+from offdays.db import connect
+from offdays.store import Store, StoreError
 
 TODAY = date.today()
 
@@ -172,7 +172,7 @@ class TestThroughTheStore:
 
     def test_film_xp_is_capped_well_below_a_training_day(self, store, org, athlete):
         """A kid must not be able to out-earn training by watching video."""
-        from athleteiq.config import CONFIG
+        from offdays.config import CONFIG
         assert F.XP_DAILY_CAP < CONFIG.scoring.daily_xp_cap / 4
 
     def test_film_keeps_its_own_streak(self, store, org, athlete):

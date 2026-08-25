@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from athleteiq import roster
-from athleteiq.db import connect
-from athleteiq.store import Store, StoreError
+from offdays import roster
+from offdays.db import connect
+from offdays.store import Store, StoreError
 
 NOW = datetime(2026, 8, 23, tzinfo=timezone.utc)
 

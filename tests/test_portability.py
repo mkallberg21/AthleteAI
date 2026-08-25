@@ -26,9 +26,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from athleteiq import portability, roster as roster_mod
-from athleteiq.db import connect
-from athleteiq.store import Store
+from offdays import portability, roster as roster_mod
+from offdays.db import connect
+from offdays.store import Store
 
 TODAY = date(2026, 8, 25)
 
@@ -124,7 +124,7 @@ class TestItDocumentsItself:
 
     def test_a_readme_travels_with_it(self, store, program):
         readme = archive(store, program).read("README.txt").decode()
-        assert "AthleteIQ program export" in readme
+        assert "0FFDAYS program export" in readme
 
     def test_the_readme_names_every_file(self, store, program):
         z = archive(store, program)
@@ -245,7 +245,7 @@ class TestTheHealthExclusionIsStructural:
         from pathlib import Path
 
         schema = (Path(__file__).resolve().parent.parent
-                  / "athleteiq" / "db.py").read_text()
+                  / "offdays" / "db.py").read_text()
         tables = set(re.findall(
             r"CREATE TABLE IF NOT EXISTS ([a-z_]+)", schema))
         suspicious = {
@@ -265,7 +265,7 @@ class TestTheHealthExclusionIsStructural:
     ):
         """The exclusion is about who is downloading, not about hiding the
         data from the family it belongs to."""
-        from athleteiq import guardians as guardians_mod
+        from offdays import guardians as guardians_mod
 
         athlete = program["athletes"][0]
         store.report_discomfort(athlete["id"], "knee", "sore")
@@ -282,8 +282,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("ATHLETEIQ_DB", str(tmp_path / "api.db"))
-    from athleteiq import api
+    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+    from offdays import api
 
     api.app.dependency_overrides.clear()
     return TestClient(api.app)
@@ -291,7 +291,7 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture
 def wired(client):
-    from athleteiq import api as api_mod
+    from offdays import api as api_mod
 
     org = client.post(
         "/api/orgs", json={"name": "Northshore LC", "director_name": "Dir"}
