@@ -159,13 +159,7 @@
 
   <div class="card" id="recognition-card">
     <h2>Automatic recognition</h2>
-    <p class="small muted">
-      When an athlete logs a session at home, these go out in your name, on the
-      day. Write them once in your own voice &mdash; the shipped wording is a
-      placeholder, and it will read like one. Use
-      <code>{first_name}</code>, <code>{streak}</code>, <code>{coach}</code> or
-      <code>{team}</code> and they get filled in.
-    </p>
+    <p class="small muted" id="recognition-intro"></p>
     <div id="voice-box" style="margin-bottom:14px">
       <label for="voice-name">Someone senior who signs the big ones (optional)</label>
       <input id="voice-name" placeholder="Marcus Vale">
@@ -179,6 +173,12 @@
       <button class="secondary inline" id="voice-save">Save</button>
     </div>
     <div id="recognition-list"></div>
+    <details style="margin-top:14px" id="sent-box">
+      <summary class="small muted" style="cursor:pointer">
+        What has actually gone out
+      </summary>
+      <div id="recognition-sent" style="margin-top:8px">Loading&hellip;</div>
+    </details>
   </div>
 
   <div class="card hidden" id="shared-clips-card">
@@ -1065,6 +1065,17 @@ $('family-compare').addEventListener('change', async (event) => {
 async function loadRecognition() {
   let data;
   try { data = await api('/api/coach/recognition'); } catch { return; }
+  // A parent is writing to their own child, not to a squad.
+  $('recognition-intro').innerHTML = data.is_family
+    ? 'When your athlete logs a session at home, these go out from you, on the '
+      + 'day. The shipped wording is a placeholder and will read like one &mdash; '
+      + 'put it in your own words. Use <code>{first_name}</code>, '
+      + '<code>{streak}</code> or <code>{coach}</code> for your own name.'
+    : 'When an athlete logs a session at home, these go out in your name, on the '
+      + 'day. Write them once in your own voice &mdash; the shipped wording is a '
+      + 'placeholder, and it will read like one. Use <code>{first_name}</code>, '
+      + '<code>{streak}</code>, <code>{coach}</code> or <code>{team}</code>.';
+
   $('voice-name').value = data.voice.name || '';
   $('voice-title').value = data.voice.title || '';
   $('voice-box').classList.toggle('hidden', Boolean(data.is_family));
@@ -1085,8 +1096,14 @@ async function loadRecognition() {
           style="width:auto;min-height:auto;margin:0">
         Sign this one with the senior name above
       </label>`}
-      <button class="secondary inline" data-recog-save>Save</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <button class="secondary inline" data-recog-save>Save</button>
+        <button class="secondary inline" data-recog-preview>Preview</button>
+      </div>
+      <div class="small muted recog-preview"></div>
     </div>`).join('');
+
+  loadRecognitionSent();
 }
 
 $('voice-save').addEventListener('click', async () => {
@@ -1100,7 +1117,24 @@ $('voice-save').addEventListener('click', async () => {
   } catch (e) { showError(e.message); }
 });
 
+// Rendered by the server with the same function that sends it, so what is
+// previewed here and what a child reads on the day cannot drift apart.
 $('recognition-list').addEventListener('click', async (event) => {
+  const preview = event.target.closest('[data-recog-preview]');
+  if (preview) {
+    const row = preview.closest('[data-milestone]');
+    const target = row.querySelector('.recog-preview');
+    try {
+      const out = await api('/api/coach/recognition/preview', {
+        method: 'POST',
+        body: { body: row.querySelector('[data-recog-body]').value },
+      });
+      target.innerHTML = `<b>${esc(out.signed)} noticed</b><br>${esc(out.preview)}
+        <br><span class="small muted">as ${esc(out.as_read_by)} will read it</span>`;
+    } catch (e) { target.textContent = e.message; }
+    return;
+  }
+
   const button = event.target.closest('[data-recog-save]');
   if (!button) return;
   const row = button.closest('[data-milestone]');
@@ -1121,6 +1155,22 @@ $('recognition-list').addEventListener('click', async (event) => {
   await loadFamilyBoard();
   } catch (e) { showError(e.message); }
 });
+
+async function loadRecognitionSent() {
+  const target = $('recognition-sent');
+  try {
+    const { sent } = await api('/api/coach/recognition/sent');
+    target.innerHTML = sent.length ? sent.map((m) => `
+      <div class="msg">
+        <b>${esc(m.display_name)}</b>
+        <p>${esc(m.body)}</p>
+        <span class="small muted">${esc(m.created_at.slice(0, 10))}
+          &middot; from ${esc(m.from_name)}</span>
+      </div>`).join('')
+      : '<p class="small muted">Nothing sent yet. These go out on their own '
+        + 'when an athlete hits a milestone.</p>';
+  } catch (e) { target.textContent = e.message; }
+}
 
 function renderSharedClips(data, isFamily) {
   const clips = data.clips || [];

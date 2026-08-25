@@ -41,16 +41,32 @@ class Milestone:
     #: What a coach sees when choosing which to customise.
     description: str = ""
     default_body: str = ""
+    #: The same milestone as a parent would put it.
+    #:
+    #: A separate default rather than the coach one with the nouns swapped.
+    #: "See you at practice" and "the thing that separates players" are things
+    #: a coach says; a parent saying them sounds like a parent trying to talk
+    #: like a coach, and a child can hear the difference. Shorter and warmer on
+    #: purpose, and like the coach set these are placeholders a parent should
+    #: want to rewrite.
+    family_body: str = ""
+
+    def body_for(self, kind: str = "program") -> str:
+        if kind == "family" and self.family_body:
+            return self.family_body
+        return self.default_body
 
     def to_dict(
         self, body: str = "", customised: bool = False, from_voice: str = "",
+        kind: str = "program",
     ) -> dict[str, Any]:
+        shipped = self.body_for(kind)
         return {
             "key": self.key,
             "label": self.label,
             "streak": self.streak,
-            "default_body": self.default_body,
-            "body": body or self.default_body,
+            "default_body": shipped,
+            "body": body or shipped,
             "customised": customised,
             "from_voice": from_voice or self.default_voice,
         }
@@ -92,6 +108,9 @@ MILESTONES: tuple[Milestone, ...] = (
             "{first_name}, that is your first one logged. The hard part is "
             "starting and you have done it — see you at practice."
         ),
+        family_body=(
+            "{first_name}, you did the first one. Starting is the hard bit, and you started."
+        ),
     ),
     Milestone(
         key="streak_3",
@@ -100,6 +119,9 @@ MILESTONES: tuple[Milestone, ...] = (
         default_body=(
             "{first_name}, three days running. That is how a habit starts, and "
             "I noticed."
+        ),
+        family_body=(
+            "Three days running, {first_name}. I noticed, and I am not just saying that."
         ),
     ),
     Milestone(
@@ -110,6 +132,9 @@ MILESTONES: tuple[Milestone, ...] = (
             "Five days in a row, {first_name}. Most people do not get here. "
             "Well done."
         ),
+        family_body=(
+            "Five days, {first_name}. You did that on your own and I am proud of you."
+        ),
     ),
     Milestone(
         key="streak_10",
@@ -118,6 +143,9 @@ MILESTONES: tuple[Milestone, ...] = (
         default_body=(
             "{first_name}, ten days straight. That is real work and it will "
             "show up on the field. Proud of you."
+        ),
+        family_body=(
+            "Ten days straight, {first_name}. Nobody made you do any of them. That is the part that counts."
         ),
     ),
     Milestone(
@@ -128,6 +156,9 @@ MILESTONES: tuple[Milestone, ...] = (
             "Thirty days, {first_name}. A month of turning up when nobody made "
             "you. That is the thing that separates players."
         ),
+        family_body=(
+            "A whole month, {first_name}. Thirty days of choosing to. I hope you are as pleased with that as I am."
+        ),
     ),
     Milestone(
         key="streak_100",
@@ -136,6 +167,9 @@ MILESTONES: tuple[Milestone, ...] = (
         default_body=(
             "{first_name} — one hundred days. I am not sure what to say except "
             "that I have coached a long time and this is rare."
+        ),
+        family_body=(
+            "One hundred days, {first_name}. I do not really have words for it. Well done."
         ),
     ),
 )

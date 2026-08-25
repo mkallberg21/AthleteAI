@@ -327,3 +327,125 @@ class TestAFamilyRunningItThemselves:
             store.add_family_athlete(
                 program["org"], program["coach"]["id"], "Someone Else",
             )
+
+
+class TestAFamilyWritesItDifferently:
+    """A parent saying "see you at practice" sounds like a parent trying to
+    talk like a coach, and a child hears the difference."""
+
+    @pytest.fixture
+    def household(self, tmp_path):
+        store = Store(connect(tmp_path / "fam.db"))
+        made = store.create_family("The Pierces", "Dana Pierce")
+        child = store.add_family_athlete(
+            made["org_id"], made["parent"]["id"], "Jordan Pierce",
+            birth_year=TODAY.year - 12, join_code=made["team"]["join_code"],
+        )
+        return {"store": store, **made, "child": child}
+
+    def test_every_milestone_has_a_family_wording(self):
+        for milestone in R.MILESTONES:
+            assert milestone.family_body, milestone.key
+            assert milestone.family_body != milestone.default_body, milestone.key
+
+    def test_a_household_gets_the_family_wording(self, household):
+        templates = household["store"].recognition_templates(household["org_id"])
+        ten = next(t for t in templates if t["key"] == "streak_10")
+        assert "Nobody made you" in ten["body"]
+        assert "on the field" not in ten["body"]
+
+    def test_a_club_still_gets_the_coach_wording(self, program):
+        templates = program["store"].recognition_templates(program["org"])
+        ten = next(t for t in templates if t["key"] == "streak_10")
+        assert "show up on the field" in ten["body"]
+
+    def test_no_family_wording_mentions_practice_or_squads(self):
+        """The tells that give away borrowed coach language."""
+        for milestone in R.MILESTONES:
+            lowered = milestone.family_body.lower()
+            for word in ("practice", "squad", "team", "coached", "players"):
+                assert word not in lowered, (milestone.key, word)
+
+    def test_the_sent_message_uses_the_family_wording(self, household):
+        store = household["store"]
+        store.award_recognition(household["child"]["id"], sessions_before=0)
+        body = sent_to(store, household["child"]["id"])[0]["body"]
+        assert "Starting is the hard bit" in body
+
+    def test_a_parent_who_writes_their_own_still_wins(self, household):
+        store = household["store"]
+        store.set_recognition_template(
+            household["org_id"], "first_session", "Proud of you, {first_name}. Dad",
+            True, household["parent"]["id"],
+        )
+        store.award_recognition(household["child"]["id"], sessions_before=0)
+        assert sent_to(store, household["child"]["id"])[0]["body"] \
+            == "Proud of you, Jordan. Dad"
+
+
+class TestThePreviewCannotDriftFromTheRealThing:
+
+    @pytest.fixture
+    def household(self, tmp_path):
+        store = Store(connect(tmp_path / "p.db"))
+        made = store.create_family("The Pierces", "Dana Pierce")
+        child = store.add_family_athlete(
+            made["org_id"], made["parent"]["id"], "Jordan Pierce",
+            birth_year=TODAY.year - 12, join_code=made["team"]["join_code"],
+        )
+        return {"store": store, **made, "child": child}
+
+    def test_it_fills_in_the_real_child_and_the_real_sender(self, household):
+        out = household["store"].preview_recognition(
+            household["org_id"], "{first_name}, {streak} days. — {coach}",
+        )
+        assert out["preview"] == "Jordan, 10 days. — Dana Pierce"
+        assert out["as_read_by"] == "Jordan"
+        assert out["signed"] == "Dana Pierce"
+
+    def test_it_uses_the_same_renderer_that_sends(self, household):
+        """Not a copy of the token logic in the browser, which is how a
+        preview and the real message quietly stop matching."""
+        store = household["store"]
+        body = "{first_name} did {streak} — {coach}"
+        preview = store.preview_recognition(household["org_id"], body)["preview"]
+        direct = R.render(body, first_name="Jordan", streak=10,
+                          coach="Dana Pierce", team="Home")
+        assert preview == direct
+
+    def test_a_household_with_no_children_yet_still_previews(self, tmp_path):
+        store = Store(connect(tmp_path / "empty.db"))
+        made = store.create_family("New", "A Parent")
+        out = store.preview_recognition(made["org_id"], "Hi {first_name}")
+        assert "Your athlete" in out["preview"] or out["as_read_by"]
+
+
+class TestSeeingWhatWentOut:
+
+    def test_a_parent_can_read_the_messages_as_sent(self, program):
+        store = program["store"]
+        store.award_recognition(program["athlete"]["id"], sessions_before=0)
+        sent = store.recognition_sent(program["org"])
+        assert sent and sent[0]["display_name"] == "Jordan Pierce"
+        assert sent[0]["from_name"] == "Coach Ada"
+
+    def test_a_household_with_two_parents_does_not_read_as_two_messages(self, program):
+        store = program["store"]
+        guardians.redeem_invite(
+            store.conn,
+            guardians.create_invite(
+                store.conn, program["athlete"]["id"],
+                created_by=program["coach"]["id"],
+            )["code"],
+            "Second Parent",
+        )
+        store.award_recognition(program["athlete"]["id"], sessions_before=0)
+        assert len(store.recognition_sent(program["org"])) == 1
+
+    def test_another_program_is_not_in_the_list(self, program, tmp_path):
+        store = program["store"]
+        other = store.create_org("Rival")
+        stranger = store.create_user(other, "athlete", "Someone Else", birth_year=2012)
+        store.award_recognition(stranger["id"], sessions_before=0)
+        names = {row["display_name"] for row in store.recognition_sent(program["org"])}
+        assert "Someone Else" not in names

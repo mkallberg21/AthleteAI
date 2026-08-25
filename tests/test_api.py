@@ -3467,3 +3467,79 @@ class TestFamilyClipWording:
         assert client.get(
             "/api/coach/clips-shared", headers=headers,
         ).json()["clips"] == []
+
+
+class TestFamilyRecognitionView:
+
+    def _family(self, client):
+        made = client.post("/api/family", json={"parent_name": "Dana Pierce"}).json()
+        headers = {"Authorization": f"Bearer {made['parent']['token']}"}
+        child = client.post(
+            "/api/family/athletes",
+            json={"display_name": "Jordan Pierce", "birth_year": 2013},
+            headers=headers,
+        ).json()
+        return made, headers, child
+
+    def test_a_household_is_offered_the_family_wording(self, client):
+        _, headers, _ = self._family(client)
+        body = client.get("/api/coach/recognition", headers=headers).json()
+        assert body["is_family"] is True
+        ten = next(m for m in body["milestones"] if m["key"] == "streak_10")
+        assert "Nobody made you" in ten["body"]
+
+    def test_a_club_is_offered_the_coach_wording(self, client, program):
+        body = client.get("/api/coach/recognition", headers=program["director"]).json()
+        assert body["is_family"] is False
+        ten = next(m for m in body["milestones"] if m["key"] == "streak_10")
+        assert "show up on the field" in ten["body"]
+
+    def test_a_parent_can_preview_what_their_child_will_read(self, client):
+        _, headers, _ = self._family(client)
+        out = client.post(
+            "/api/coach/recognition/preview",
+            json={"body": "{first_name}, {streak} days. Love, {coach}"},
+            headers=headers,
+        ).json()
+        assert out["preview"] == "Jordan, 10 days. Love, Dana Pierce"
+        assert out["as_read_by"] == "Jordan"
+
+    def test_the_parent_can_write_their_own_and_see_it_land(self, client):
+        made, headers, child = self._family(client)
+        client.put(
+            "/api/coach/recognition",
+            json={"milestone": "first_session", "body": "Proud of you, {first_name}.",
+                  "enabled": True},
+            headers=headers,
+        )
+        athlete = {"Authorization": f"Bearer {child['token']}"}
+        do_session(client, athlete, drill="gen_squat", seed=6, gap=2000)
+
+        sent = client.get("/api/coach/recognition/sent", headers=headers).json()["sent"]
+        assert sent and sent[0]["body"] == "Proud of you, Jordan."
+        assert sent[0]["from_name"] == "Dana Pierce"
+
+    def test_the_child_and_the_parent_both_hold_a_copy(self, client):
+        made, headers, child = self._family(client)
+        athlete = {"Authorization": f"Bearer {child['token']}"}
+        do_session(client, athlete, drill="gen_squat", seed=7, gap=2000)
+
+        parent_view = client.get(
+            f"/api/parent/athletes/{child['id']}/messages", headers=headers,
+        ).json()
+        assert parent_view["messages"], "the parent's own copy"
+        assert parent_view["replies_allowed"] is False
+
+    def test_another_household_is_not_in_the_sent_list(self, client):
+        _, mine, child = self._family(client)
+        athlete = {"Authorization": f"Bearer {child['token']}"}
+        do_session(client, athlete, drill="gen_squat", seed=8, gap=2000)
+
+        theirs = client.post(
+            "/api/family", json={"parent_name": "Someone Else"},
+        ).json()
+        sent = client.get(
+            "/api/coach/recognition/sent",
+            headers={"Authorization": f"Bearer {theirs['parent']['token']}"},
+        ).json()["sent"]
+        assert sent == []

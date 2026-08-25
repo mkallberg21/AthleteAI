@@ -614,3 +614,8 @@ tbody tr:hover { background: var(--surface-2); }
 .shared-clip { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .shared-clip video { width: 100%; margin-top: 8px; border-radius: var(--radius);
                      background: #000; }
+
+/* Recognition preview: what the child will actually read, rendered by the
+   server with the same function that sends it. */
+.recog-preview:not(:empty) { margin-top: 8px; padding: 10px;
+                             border-radius: var(--radius); background: var(--surface-2); }

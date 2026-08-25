@@ -2060,6 +2060,40 @@ def recognition_templates(
     }
 
 
+class RecognitionPreview(BaseModel):
+    body: str = Field(default="", max_length=600)
+    athlete_id: int | None = None
+
+
+@app.post("/api/coach/recognition/preview")
+def preview_recognition(
+    body: RecognitionPreview,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What this message will look like when it lands.
+
+    Rendered by the same function that sends it, so the preview and the real
+    thing cannot drift. It matters most for a parent writing to their own
+    child, where there is no coach to notice the wording came out wrong.
+    """
+    return store.preview_recognition(principal.org_id, body.body, body.athlete_id)
+
+
+@app.get("/api/coach/recognition/sent")
+def recognition_sent(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What has actually gone out, and to whom.
+
+    A coach can ask their athletes. A parent writing these for their own
+    children is often the only person who would ever check, so it is worth
+    being able to see the messages as sent rather than as intended.
+    """
+    return {"sent": store.recognition_sent(principal.org_id)}
+
+
 @app.put("/api/coach/recognition")
 def set_recognition_template(
     body: RecognitionTemplate,

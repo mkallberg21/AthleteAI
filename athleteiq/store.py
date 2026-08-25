@@ -1101,7 +1101,13 @@ class Store:
     # ------------------------------------------------------------------
 
     def recognition_templates(self, org_id: int) -> list[dict[str, Any]]:
-        """Every milestone, with the coach's words where they have written any."""
+        """Every milestone, with the writer's own words where they wrote any.
+
+        The shipped defaults differ for a household: a parent saying "see you
+        at practice" sounds like a parent trying to talk like a coach, and a
+        child hears the difference.
+        """
+        kind = "family" if self.is_family(org_id) else "program"
         rows = {
             r["milestone"]: r for r in self.conn.execute(
                 "SELECT * FROM recognition_templates WHERE org_id = ?", (org_id,)
@@ -1114,6 +1120,7 @@ class Store:
                 body=row["body"] if row else "",
                 customised=row is not None,
                 from_voice=row["from_voice"] if row else "",
+                kind=kind,
             )
             entry["enabled"] = bool(row["enabled"]) if row else True
             out.append(entry)
@@ -1144,6 +1151,70 @@ class Store:
         return {
             "milestone": milestone, "body": text,
             "enabled": enabled, "from_voice": from_voice,
+        }
+
+    def recognition_sent(self, org_id: int, limit: int = 40) -> list[dict[str, Any]]:
+        """Recognition already sent to this program's athletes.
+
+        The athlete's own copy rather than a guardian's, so a household with
+        two parents linked does not read as two messages.
+        """
+        rows = self.conn.execute(
+            "SELECT n.title, n.body, n.from_name, n.created_at, u.display_name "
+            "FROM notifications n JOIN users u ON u.id = n.user_id "
+            "WHERE n.kind = ? AND n.is_copy = 0 AND u.org_id = ? "
+            "ORDER BY n.id DESC LIMIT ?",
+            (notifications.Kind.RECOGNITION, org_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def preview_recognition(
+        self, org_id: int, body: str, athlete_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Show exactly what a message will look like when it lands.
+
+        Rendered by the same function that sends it rather than a copy in the
+        browser, so what a parent reads in the preview and what their child
+        reads on the day cannot drift apart.
+        """
+        athlete = None
+        if athlete_id is not None:
+            athlete = self.conn.execute(
+                "SELECT display_name, org_id FROM users WHERE id = ? AND org_id = ?",
+                (athlete_id, org_id),
+            ).fetchone()
+        if athlete is None:
+            athlete = self.conn.execute(
+                "SELECT display_name, org_id FROM users WHERE org_id = ? "
+                "AND role = 'athlete' AND active = 1 ORDER BY id LIMIT 1",
+                (org_id,),
+            ).fetchone()
+
+        name = (athlete["display_name"] if athlete else "") or "Your athlete"
+        first_name = name.split()[0]
+        sender_id, sender = (
+            self._recognising_coach(int(athlete["id"]), org_id)
+            if athlete and "id" in athlete.keys()
+            else (None, "")
+        )
+        if not sender:
+            row = self.conn.execute(
+                "SELECT display_name FROM users WHERE org_id = ? AND role = 'director' "
+                "ORDER BY id LIMIT 1",
+                (org_id,),
+            ).fetchone()
+            sender = row["display_name"] if row else "Your coach"
+
+        team = self.conn.execute(
+            "SELECT name FROM teams WHERE org_id = ? ORDER BY id LIMIT 1", (org_id,)
+        ).fetchone()
+        return {
+            "preview": recognition.render(
+                body, first_name=first_name, streak=10,
+                coach=sender, team=team["name"] if team else "",
+            ),
+            "as_read_by": first_name,
+            "signed": sender,
         }
 
     def set_program_voice(self, org_id: int, name: str, title: str) -> dict[str, Any]:
@@ -1266,7 +1337,9 @@ class Store:
                 title = ""
 
             body = recognition.render(
-                template.get("body") or milestone.default_body,
+                template.get("body") or milestone.body_for(
+                    "family" if self.is_family(int(athlete["org_id"])) else "program"
+                ),
                 first_name=first_name, streak=streak.current,
                 coach=sender, team=team,
             )

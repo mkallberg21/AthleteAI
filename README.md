@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1520 tests
+python -m pytest tests/ -q          # 1538 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -642,6 +642,45 @@ The restraint is the design. A note from someone like that means something
 *because it does not arrive every week*, and putting their name on a three-day
 streak spends exactly what made it worth having. A program that never names one
 has every message signed by the athlete's own coach, rather than by nobody.
+
+### Recognition in a household
+
+A family gets a **different set of shipped words**, not the coach set with the
+nouns swapped. "See you at practice" and "the thing that separates players" are
+things a coach says; a parent saying them sounds like a parent trying to talk
+like a coach, and a child hears the difference.
+
+| | |
+|---|---|
+| Coach | *"{first_name}, ten days straight. That is real work and it will show up on the field. Proud of you."* |
+| Parent | *"Ten days straight, {first_name}. Nobody made you do any of them. That is the part that counts."* |
+
+A test asserts no family default contains "practice", "squad", "team", "coached"
+or "players" — the tells that give away borrowed language. Both sets are still
+placeholders a writer should want to replace.
+
+**A preview, rendered by the server.** A parent writing to their own child has
+no coach to notice the wording came out wrong, so the editor shows exactly what
+lands — filled with their actual child's name and their own, through *the same
+function that sends it* rather than a copy of the token logic in the browser.
+That is what stops a preview and the real message quietly drifting apart, and
+there is a test comparing the two.
+
+```
+Preview
+  "Dana Pierce noticed"
+  Jordan, 10 days and nobody made you. Love, Dana Pierce
+  (as Jordan will read it)
+```
+
+**And what actually went out.** A coach can ask their athletes how a message
+landed; a parent writing these for their own children is often the only person
+who would ever check. So the dashboard lists the messages as sent, to whom, and
+from whom — the athlete's own copy rather than a guardian's, so a household with
+two parents linked does not read as two messages.
+
+The senior-voice control stays hidden for a household, because there is no chain
+of command in a family to be higher up.
 
 ## Families running it themselves
 
