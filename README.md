@@ -708,6 +708,29 @@ for a family the day they sign up, and what they eventually pay is a business
 decision that has not been made, so it is set in one place rather than assumed
 across the code.
 
+### What a family inherits for free
+
+Because a family is a program with one household in it, the features written
+for a club work for a household without a second code path. **Wellness, injury
+reporting and return-to-play have no family-specific view and do not need one** —
+verified end to end rather than assumed:
+
+| | |
+|---|---|
+| Parent (as coach) sees the report | ✓ |
+| Parent (as guardian) gets the escalation alert | ✓ |
+| Parent can clear a head or neck return | ✓ — they *are* the guardian the rule requires |
+| The athlete's private note stays out of the coach view | ✓ |
+| ...and is readable in the parent portal | ✓ |
+
+Two rough edges, deliberately left rather than overlooked. The private note
+lands in the right place by a slightly odd route: hidden from the dashboard by
+design, visible in the parent portal because that parent is the guardian — so a
+household switches screens to get the whole picture. And the coach-side wellness
+copy still reads for a club ("goes to them and their parent or guardian, and not
+here"), which is odd when the parent is both. Neither is broken; both are
+wording, not behaviour.
+
 ## Messages go one way
 
 Every message an athlete receives is copied to their guardians, and that happens
