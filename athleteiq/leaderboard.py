@@ -138,10 +138,15 @@ def leaderboard(
         params = [start, org_id, *scope_params]
 
     elif board == "reps":
+        # Self-reported sessions are excluded here and only here. Nobody has an
+        # incentive to overstate a number that only tightens their own load
+        # advisories, and a strong one to overstate a number on a board -- so
+        # their reps feed their own overuse protection and never a comparison.
         sql = (
             base_select
             + "COALESCE((SELECT SUM(s.reps_total) FROM sessions s "
             "  WHERE s.athlete_id = u.id AND s.status = 'counted' "
+            "  AND s.self_reported = 0 "
             "  AND date(s.submitted_at) >= ?), 0) AS value "
             + base_from
         )

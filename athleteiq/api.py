@@ -41,6 +41,7 @@ from . import film as film_mod
 from . import guardians as guardians_mod
 from . import practice as practice_mod
 from . import absence as absence_mod
+from . import adaptive as adaptive_mod
 from . import evaluation as evaluation_mod
 from . import i18n
 from . import parent_report as parent_report_mod
@@ -52,6 +53,7 @@ from . import roster_sync
 from . import notifications as notify
 from .assignments import AssignmentError
 from .absence import AbsenceError
+from .adaptive import AdaptiveError
 from .team_goals import GoalError
 from .billing import BillingError
 from .guardians import GuardianError
@@ -121,6 +123,11 @@ async def _store_error_handler(_request, exc: StoreError) -> JSONResponse:
 
 @app.exception_handler(AssignmentError)
 async def _assignment_error_handler(_request, exc: AssignmentError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(AdaptiveError)
+async def _adaptive_error_handler(_request, exc: AdaptiveError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -2877,6 +2884,92 @@ def set_locale(
     entirely ordinary household.
     """
     return {"locale": store.set_locale(principal.id, body.locale)}
+
+
+class AdaptiveSetting(BaseModel):
+    athlete_id: int
+    accommodations: list[str] = Field(default_factory=list, max_length=10)
+    #: Logistics only. "Uses a chair for lower-body work" is training
+    #: information; anything more belongs with the family and their clinician.
+    note: str = Field(default="", max_length=300)
+
+
+@app.get("/api/adaptive/options")
+def adaptive_options() -> dict[str, Any]:
+    """What can be switched off, and why each exists.
+
+    Public reference data. Every string is about what our analysis cannot do,
+    never about an athlete -- a program evaluating this product should be able
+    to read the stance before signing up to it.
+    """
+    return {
+        "options": [
+            {"key": a.key, "label": a.label, "detail": a.detail}
+            for a in adaptive_mod.ACCOMMODATIONS
+        ],
+        "athlete_note": adaptive_mod.ATHLETE_NOTE,
+    }
+
+
+@app.get("/api/adaptive")
+def get_adaptive(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """An athlete reads their own; adults read the children they cover."""
+    if principal.role == "athlete":
+        if principal.id != athlete_id:
+            raise HTTPException(status_code=403, detail="not your athlete")
+    else:
+        _may_set_absence(store, principal, athlete_id)
+    return store.adaptive_profile(athlete_id).to_dict()
+
+
+@app.put("/api/adaptive")
+def set_adaptive(
+    body: AdaptiveSetting,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A guardian or the athlete's staff records what does not fit.
+
+    Same rule as a planned absence: an adult sets it. Unlike an absence, an
+    athlete could reasonably set this for themselves -- but the parts it
+    switches off are the parts that also gate self-reported sessions, so
+    leaving it with an adult keeps one door rather than two.
+    """
+    setter = _may_set_absence(store, principal, body.athlete_id)
+    return store.set_adaptive_profile(
+        body.athlete_id, body.accommodations,
+        set_by=principal.id, set_by_name=setter, note=body.note,
+    ).to_dict()
+
+
+class SelfReport(BaseModel):
+    drill_key: str = Field(min_length=1, max_length=60)
+    minutes: int = Field(ge=1, le=240)
+    reps: int = Field(default=0, ge=0, le=5_000)
+    note: str = Field(default="", max_length=200)
+
+
+@app.post("/api/sessions/self-reported", status_code=201)
+def log_self_reported(
+    body: SelfReport,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Log work the camera could not count.
+
+    Refused unless the accommodation is on, because a general self-report
+    button would be a way around the integrity layer for anybody who wanted
+    one. It exists here because the alternative is an athlete whose training
+    this app structurally cannot see, and a streak that punishes them for it.
+    """
+    return store.log_self_reported(
+        principal.id, body.drill_key, minutes=body.minutes,
+        reps=body.reps, note=body.note,
+    )
 
 
 @app.get("/api/technique/{drill_key}")

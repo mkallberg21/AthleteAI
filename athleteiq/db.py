@@ -425,6 +425,24 @@ CREATE TABLE IF NOT EXISTS badges (
 -- A coach's prescription. This is what turns free-form logging into a
 -- program: the athlete sees what was asked of them, and the coach sees who
 -- did it.
+-- Which parts of the camera analysis do not fit how an athlete trains.
+--
+-- Deliberately not a disability record and deliberately not a diagnosis. Every
+-- column here describes what *our tool* cannot do for this athlete, which is
+-- the honest framing and also the only one that keeps this table out of the
+-- territory of health data about a minor.
+CREATE TABLE IF NOT EXISTS adaptive_profiles (
+    athlete_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    -- Comma-separated accommodation keys. See adaptive.ACCOMMODATIONS.
+    accommodations TEXT NOT NULL DEFAULT '',
+    -- Logistics only: "uses a chair for lower-body work" is training
+    -- information. Anything more belongs with the family and their clinician.
+    note           TEXT NOT NULL DEFAULT '',
+    set_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    set_by_name    TEXT NOT NULL DEFAULT '',
+    updated_at     TEXT NOT NULL
+);
+
 -- A holiday, a tournament weekend, a school trip.
 --
 -- These days are *removed from the timeline* rather than credited as training.
@@ -815,6 +833,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("reserved", "INTEGER NOT NULL DEFAULT 0"),
         ("quality_score", "INTEGER"),
         ("quality_json", "TEXT"),
+        # Marked for ever on a session the camera could not count. Kept out of
+        # any statistic that needs a measured number, counted for turning up.
+        ("self_reported", "INTEGER NOT NULL DEFAULT 0"),
     ],
     "rep_events": [
         ("peak", "REAL"),

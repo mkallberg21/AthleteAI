@@ -31,13 +31,14 @@ from . import guardians as guardians_mod
 from . import load as load_mod
 from . import roster as roster_mod
 from . import absence
+from . import adaptive
 from . import i18n
 from . import injury_history
 from . import roster_sync
 from . import technique
 from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
-from .quality import RepFeature, analyze as analyze_quality
+from .quality import QualityReport, RepFeature, analyze as analyze_quality
 from .scoring import (
     AthleteStats,
     BADGES_BY_KEY,
@@ -1704,6 +1705,111 @@ class Store:
         return bool(row and row["kind"] == self.FAMILY_KIND)
 
     # ------------------------------------------------------------------
+    # Athletes the camera was not built for
+    # ------------------------------------------------------------------
+
+    def adaptive_profile(self, athlete_id: int) -> "adaptive.Profile":
+        return adaptive.get(self.conn, athlete_id)
+
+    def set_adaptive_profile(
+        self,
+        athlete_id: int,
+        accommodations: list[str],
+        *,
+        set_by: int | None = None,
+        set_by_name: str = "",
+        note: str = "",
+    ) -> "adaptive.Profile":
+        return adaptive.set_profile(
+            self.conn, athlete_id, accommodations,
+            set_by=set_by, set_by_name=set_by_name, note=note,
+        )
+
+    def log_self_reported(
+        self,
+        athlete_id: int,
+        drill_key: str,
+        *,
+        minutes: int,
+        reps: int = 0,
+        note: str = "",
+        day: date | None = None,
+    ) -> dict[str, Any]:
+        """Record work the camera could not count.
+
+        Gated on the accommodation, not offered to everybody: a general
+        self-report button would be a way around the integrity layer for any
+        athlete who wanted one. Here it exists because the alternative is an
+        athlete whose training this app structurally cannot see, and a streak
+        that punishes them for it.
+
+        Marked `self_reported` for ever. It counts for turning up -- streaks,
+        participation, the squad goal -- and is kept out of every statistic
+        that needs a measured number, because nobody measured it.
+        """
+        profile = adaptive.get(self.conn, athlete_id)
+        if not profile.may_self_report:
+            raise StoreError(
+                "self-reported sessions are not switched on for this athlete"
+            )
+        if drill_key not in DRILLS_BY_KEY:
+            raise StoreError(f"unknown drill: {drill_key!r}")
+        if minutes <= 0 or minutes > 240:
+            raise StoreError("minutes must be between 1 and 240")
+
+        day = day or _now().date()
+        stamp = f"{day.isoformat()}T12:00:00+00:00"
+        with transaction(self.conn) as conn:
+            cur = conn.execute(
+                "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, "
+                "  submitted_at, completed_at, duration_ms, reps_total, status, "
+                "  integrity_score, integrity_notes, self_reported) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,1)",
+                (athlete_id, drill_key, f"self-{new_token()}", stamp, stamp, stamp,
+                 minutes * 60_000, max(0, reps), "counted", 1.0,
+                 json.dumps([
+                     "Logged by the athlete because the camera could not count "
+                     "this work." + (f" Note: {note.strip()[:200]}" if note.strip() else "")
+                 ])),
+            )
+            session_id = int(cur.lastrowid)
+
+        # XP on the same footing as any other session of that length, because
+        # the point of the streak is turning up and they turned up.
+        awarded = self._award_self_reported(athlete_id, session_id, drill_key, day)
+        return {
+            "session_id": session_id,
+            "day": day.isoformat(),
+            "minutes": minutes,
+            "xp_awarded": awarded,
+            "self_reported": True,
+        }
+
+    def _award_self_reported(
+        self, athlete_id: int, session_id: int, drill_key: str, day: date
+    ) -> int:
+        """A flat, modest award. Deliberately not scaled by the reps claimed.
+
+        Scaling it would put a number nobody measured on the same footing as
+        one the app counted, and would hand exactly the wrong incentive to the
+        one path here that is not verified.
+        """
+        award = CONFIG.scoring.streak_min_xp
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT INTO xp_ledger(athlete_id, session_id, amount, reason, "
+                "day, created_at) VALUES (?,?,?,?,?,?)",
+                (athlete_id, session_id, award,
+                 f"{DRILLS_BY_KEY[drill_key].name} (logged by athlete)",
+                 day.isoformat(), _iso(_now())),
+            )
+            conn.execute(
+                "UPDATE sessions SET xp_awarded = ? WHERE id = ?",
+                (award, session_id),
+            )
+        return award
+
+    # ------------------------------------------------------------------
     # Language
     # ------------------------------------------------------------------
 
@@ -2296,7 +2402,12 @@ class Store:
             (athlete_id,),
         ).fetchone()["n"])
 
+        adaptive_profile = adaptive.get(self.conn, athlete_id)
         verdict = evaluate(claim, drill)
+        # An unusual movement pattern scores badly on checks written around a
+        # typical one. Held for a person is a conversation; rejected is a
+        # child told by software that they cheated.
+        verdict = adaptive.soften_verdict(verdict, adaptive_profile)
 
         # Ball drills carry a second verdict. The browser did the tracking, so
         # the browser is where these numbers came from, so the browser cannot
@@ -2329,19 +2440,32 @@ class Store:
         # Form quality reads the same rep stream the counting did, so it costs
         # nothing extra to collect and is the half of the signal a rep count
         # throws away.
-        report = analyze_quality(
-            drill,
-            [
-                RepFeature(
-                    t_ms=r.t_ms, hand=r.hand, confidence=r.confidence,
-                    peak=r.peak, rom=r.rom, cycle_ms=r.cycle_ms,
+        if adaptive_profile.scores_form:
+            report = analyze_quality(
+                drill,
+                [
+                    RepFeature(
+                        t_ms=r.t_ms, hand=r.hand, confidence=r.confidence,
+                        peak=r.peak, rom=r.rom, cycle_ms=r.cycle_ms,
+                    )
+                    for r in claim.reps
+                ],
+                # Suppressing the side comparison rather than filtering hands
+                # out: passing no dominant hand is what "do not compare sides"
+                # means to the scorer, and it keeps the per-rep data intact.
+                dominant_hand=hand if adaptive_profile.compares_sides else None,
+                hold_ms=claim.hold_ms,
+                duration_ms=claim.duration_ms,
+            )
+        else:
+            # Silent, not zero. A score of 34 against a range this athlete's
+            # body does not have is worse than no score at all.
+            report = QualityReport(
+                coaching_note=(
+                    "Technique scoring is off for you. Your counts, streak and "
+                    "consistency all work exactly the same."
                 )
-                for r in claim.reps
-            ],
-            dominant_hand=hand,
-            hold_ms=claim.hold_ms,
-            duration_ms=claim.duration_ms,
-        )
+            )
 
         today, effective_at = self._effective_day(completed_at)
         already = self._xp_on_day(athlete_id, today)

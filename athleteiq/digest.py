@@ -243,7 +243,18 @@ def measure_week(
         f"""
         SELECT s.athlete_id,
                date(COALESCE(s.completed_at, s.submitted_at)) AS day,
-               s.reps_total, s.reps_left, s.reps_right, s.quality_score,
+               -- Zeroed rather than the row dropped. A self-reported session
+               -- is real participation and belongs in the headline metric;
+               -- its rep count is a number nobody measured and belongs in no
+               -- volume total. Dropping the row would have removed the
+               -- athlete from participation too, which is backwards.
+               CASE WHEN s.self_reported = 1 THEN 0 ELSE s.reps_total END
+                 AS reps_total,
+               CASE WHEN s.self_reported = 1 THEN 0 ELSE s.reps_left END
+                 AS reps_left,
+               CASE WHEN s.self_reported = 1 THEN 0 ELSE s.reps_right END
+                 AS reps_right,
+               s.quality_score,
                u.dominant_hand
         FROM sessions s JOIN users u ON u.id = s.athlete_id
         WHERE s.athlete_id IN ({placeholders}) AND s.status = 'counted'
