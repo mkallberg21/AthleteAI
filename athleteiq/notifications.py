@@ -44,6 +44,7 @@ class Kind:
     GUARDIAN_DIGEST = "guardian_digest"
     DISCOMFORT = "discomfort"
     COACH_DIGEST = "coach_digest"
+    ASSIGNMENT_STALLED = "assignment_stalled"
     RECOGNITION = "recognition"
 
 
@@ -472,6 +473,134 @@ def generate_assignment_reminders(conn: sqlite3.Connection, today: date | None =
     return made
 
 
+#: Below this share of the squad finished at the halfway mark, an assignment
+#: is worth a second look. Set where it is: a third of a squad finishing by
+#: halfway is a normal distribution of effort, and firing below that would
+#: make this a weekly complaint rather than a signal.
+STALL_THRESHOLD = 0.33
+
+
+def _squad_progress(
+    conn: sqlite3.Connection, assignment, today: date
+) -> tuple[int, int]:
+    """How many finished, out of how many were actually able to.
+
+    Athletes who are hurt or away leave the denominator, the same rule the
+    pre-practice card, team goals and the evaluation export all use. A coach
+    told that eleven of eighteen finished, when four of the seven were on a
+    return-to-play ramp, is being handed a worse assignment than they set.
+    """
+    from . import absence as absence_mod
+    from . import assignments as assignments_mod
+    from . import team_goals as team_goals_mod
+
+    done = eligible = 0
+    away = set()
+    for progress in assignments_mod.compliance(conn, assignment):
+        athlete_id = progress.athlete_id
+        if team_goals_mod._excused(conn, athlete_id, today):
+            continue
+        if any(a.covers(today) for a in absence_mod.for_athlete(conn, athlete_id)):
+            away.add(athlete_id)
+            continue
+        eligible += 1
+        if progress.complete:
+            done += 1
+    return done, eligible
+
+
+def generate_assignment_stalls(
+    conn: sqlite3.Connection, today: date | None = None
+) -> int:
+    """Tell a coach when an assignment is not landing, and when it finishes.
+
+    The assignment loop currently reports compliance passively -- a coach who
+    does not open the dashboard never learns their assignment went nowhere.
+
+    Two touches, and both are deliberately about the *assignment* rather than
+    about the children. "Four of eighteen with three days left" invites a
+    coach to ask whether it was too much, unclear, or badly timed. A list of
+    names invites them to chase four kids, and a stalling assignment is more
+    often a coaching problem than a compliance one. The names exist on the
+    compliance table behind a login, already sorted worst-first, which is the
+    right place for a nudge and the wrong place for a broadcast.
+    """
+    from . import assignments as assignments_mod
+
+    today = today or _now().date()
+    made = 0
+
+    for row in conn.execute(
+        "SELECT id, created_by FROM assignments WHERE active = 1"
+    ):
+        assignment = assignments_mod.get(conn, int(row["id"]))
+        if assignment is None or not row["created_by"]:
+            continue
+        try:
+            start = date.fromisoformat(assignment.starts_on)
+            due = date.fromisoformat(assignment.due_on)
+        except ValueError:
+            continue
+
+        span = (due - start).days
+        if span < 2 or today < start:
+            continue
+        remaining = (due - today).days
+        done, eligible = _squad_progress(conn, assignment, today)
+        if not eligible:
+            continue
+        share = done / eligible
+
+        # 1. Halfway, and not landing. There is still time to do something.
+        halfway = start + timedelta(days=span // 2)
+        if today == halfway and share < STALL_THRESHOLD:
+            if enqueue(
+                conn,
+                int(row["created_by"]),
+                Kind.ASSIGNMENT_STALLED,
+                f"{assignment.title} is not landing",
+                f"{done} of {eligible} have finished it with {remaining} "
+                f"day{'' if remaining == 1 else 's'} left. Worth a look at "
+                "whether it is too much, unclear, or badly timed — there is "
+                "still time to change it.",
+                link="/app/coach.html",
+                dedupe_key=f"{Kind.ASSIGNMENT_STALLED}:{assignment.id}:half",
+            ):
+                made += 1
+
+        # 2. The day it closes. A coach who set an assignment deserves to know
+        #    how it went whether or not they opened the dashboard -- that is
+        #    the loop this closes.
+        if today == due:
+            if share >= 0.8:
+                body = (
+                    f"{done} of {eligible} finished it. That one worked."
+                )
+            elif share >= STALL_THRESHOLD:
+                body = (
+                    f"{done} of {eligible} finished it. The compliance table "
+                    "has who to check in with."
+                )
+            else:
+                body = (
+                    f"{done} of {eligible} finished it. When it lands that "
+                    "low it is usually the assignment rather than the squad — "
+                    "worth a smaller target or a longer window next time."
+                )
+            if enqueue(
+                conn,
+                int(row["created_by"]),
+                Kind.ASSIGNMENT_STALLED,
+                f"{assignment.title} closed",
+                body,
+                link="/app/coach.html",
+                dedupe_key=f"{Kind.ASSIGNMENT_STALLED}:{assignment.id}:closed",
+            ):
+                made += 1
+
+    return made
+
+
 def _assignment_gap(item: dict[str, Any]) -> str:
     """Say exactly what is still outstanding, not just that something is."""
     progress = item["progress"]
@@ -698,6 +827,7 @@ def run_all(conn: sqlite3.Connection, today: date | None = None) -> dict[str, in
     return {
         "streak_warnings": generate_streak_warnings(conn, today),
         "assignment_reminders": generate_assignment_reminders(conn, today),
+        "assignment_stalls": generate_assignment_stalls(conn, today),
         "rest_nudges": generate_rest_nudges(conn, today),
         "inactive": notify_inactive(conn, today=today),
         "guardian_digests": generate_guardian_digests(conn, today),
