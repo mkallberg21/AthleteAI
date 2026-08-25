@@ -39,6 +39,7 @@ from . import wellness as wellness_mod
 from . import transfer as transfer_mod
 from . import film as film_mod
 from . import guardians as guardians_mod
+from . import portability as portability_mod
 from . import practice as practice_mod
 from . import absence as absence_mod
 from . import adaptive as adaptive_mod
@@ -2970,6 +2971,60 @@ def log_self_reported(
         principal.id, body.drill_key, minutes=body.minutes,
         reps=body.reps, note=body.note,
     )
+
+
+@app.get("/api/org/export")
+def program_export(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> Response:
+    """Everything this program owns, as a zip of documented CSVs.
+
+    Directors only: it is the whole program's data, and that is a director's
+    call rather than an assistant coach's.
+
+    A cautious director asks the lock-in question and is right to. The answer
+    has to be an artifact rather than a promise -- a file they can take to a
+    competitor with enough documentation inside it that a stranger can use it
+    without asking us anything.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can export the whole program",
+        )
+    row = store.conn.execute(
+        "SELECT name FROM organizations WHERE id = ?", (principal.org_id,)
+    ).fetchone()
+    slug = "".join(
+        c.lower() if c.isalnum() else "-" for c in (row["name"] if row else "program")
+    ).strip("-") or "program"
+    return Response(
+        content=portability_mod.build(store.conn, principal.org_id),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{slug}-export.zip"'
+        },
+    )
+
+
+@app.get("/api/org/export/roster.csv", response_class=PlainTextResponse)
+def program_roster_csv(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> str:
+    """Just the roster, in the shape our own importer reads.
+
+    The piece a program most often wants on its own, and the file that proves
+    the format is a format: it round-trips through this product's own parser,
+    so it will parse anywhere.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can export the whole program",
+        )
+    return portability_mod.roster_csv(store.conn, principal.org_id)
 
 
 @app.get("/api/technique/{drill_key}")
