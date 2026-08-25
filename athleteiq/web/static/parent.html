@@ -39,6 +39,8 @@
     </details>
   </div>
 
+  <div id="reports"></div>
+
   <div id="athletes"></div>
 
   <div class="card">
@@ -168,6 +170,53 @@ function renderAthlete(a) {
   </div>`;
 }
 
+/**
+ * Last month, for each child.
+ *
+ * About their own child only. No rank, no percentile, no "above average for
+ * the squad" -- this is the document that gets held up at a kitchen table
+ * next to a sibling's, and comparing children here is the one thing it will
+ * not do.
+ */
+function renderReport(r) {
+  const section = (title, items) => !items.length ? '' : `
+    <div style="margin-top:12px">
+      <div class="small muted" style="text-transform:uppercase;letter-spacing:.05em">
+        ${esc(title)}</div>
+      <ul class="small" style="margin:6px 0 0;padding-left:18px;line-height:1.55">
+        ${items.map((i) => `<li>${esc(i)}</li>`).join('')}
+      </ul>
+    </div>`;
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+      <h2 style="margin:0">${esc(r.display_name)}</h2>
+      <span class="small muted">${esc(r.month_label)}</span>
+    </div>
+    <p style="margin:8px 0 0">${esc(r.headline)}</p>
+    <div class="stat-row" style="margin-top:10px">
+      <div class="stat"><b>${r.current.days}</b><span>days trained</span></div>
+      <div class="stat"><b>${r.current.sessions}</b><span>sessions</span></div>
+      <div class="stat"><b>${r.current.minutes}</b><span>minutes</span></div>
+    </div>
+    ${section('Worth knowing', r.highlights)}
+    ${section('What their coach said', r.recognition.map(
+      (m) => m.title + (m.from_name ? ` — ${m.from_name}` : '')))}
+    ${section('Looking after themselves', r.care)}
+    <p class="small muted" style="margin-top:12px">
+      This is about ${esc(r.display_name)} only. We do not rank children
+      against their teammates here or anywhere else.
+    </p>
+  </div>`;
+}
+
+async function loadReports(athletes) {
+  const reports = await Promise.all(athletes.map((a) =>
+    // One child's report failing must not blank the others'.
+    api(`/api/parent/athletes/${a.athlete_id}/report`).catch(() => null)));
+  $('reports').innerHTML = reports.filter(Boolean).map(renderReport).join('');
+}
+
 async function load() {
   $('err').classList.add('hidden');
   const data = await api('/api/guardians/me');
@@ -180,6 +229,7 @@ async function load() {
 
   wire();
   await loadDecisions();
+  await loadReports(data.athletes);
 }
 
 /**

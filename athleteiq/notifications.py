@@ -688,6 +688,8 @@ def run_all(conn: sqlite3.Connection, today: date | None = None) -> dict[str, in
         "rest_nudges": generate_rest_nudges(conn, today),
         "inactive": notify_inactive(conn, today=today),
         "guardian_digests": generate_guardian_digests(conn, today),
+        # Deduped on the month, so a nightly cron sends one, not thirty.
+        "parent_reports": _parent_reports(conn, today),
     }
 
 
@@ -767,3 +769,11 @@ def purge_expired_clips(conn: sqlite3.Connection, now: "datetime | None" = None)
         return conn.execute(
             "DELETE FROM shared_clips WHERE expires_at < ?", (cutoff,)
         ).rowcount
+
+
+def _parent_reports(conn: sqlite3.Connection, today: date | None) -> int:
+    """Imported here rather than at module scope: parent_report reads this
+    module for `enqueue`, and a top-level import would close the loop."""
+    from . import parent_report
+
+    return parent_report.generate(conn, today)

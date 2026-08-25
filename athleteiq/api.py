@@ -35,6 +35,7 @@ from . import transfer as transfer_mod
 from . import film as film_mod
 from . import guardians as guardians_mod
 from . import practice as practice_mod
+from . import parent_report as parent_report_mod
 from . import roster as roster_mod
 from . import season as season_mod
 from . import technique as technique_mod
@@ -2140,6 +2141,40 @@ class RecognitionTemplate(BaseModel):
     body: str = Field(default="", max_length=600)
     enabled: bool = True
     from_voice: Literal["coach", "voice"] = "coach"
+
+
+@app.get("/api/parent/athletes/{athlete_id}/report")
+def parent_monthly_report(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Last complete month, for one child, to their guardian.
+
+    The weekly team digest names nobody because it gets forwarded. This is
+    the opposite object -- one household, one child, and naming them is the
+    point. What it still will not do is compare them to their teammates.
+    """
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    report = parent_report_mod.build(store.conn, athlete_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="unknown athlete")
+    return {"subject": parent_report_mod.subject_line(report), **report.to_dict()}
+
+
+@app.get("/api/parent/athletes/{athlete_id}/report/preview",
+         response_class=HTMLResponse)
+def parent_monthly_report_preview(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> str:
+    """The email exactly as it will arrive, for a parent who wants to look."""
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    report = parent_report_mod.build(store.conn, athlete_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="unknown athlete")
+    return parent_report_mod.render_html(report)
 
 
 @app.get("/api/parent/athletes/{athlete_id}/drills")
