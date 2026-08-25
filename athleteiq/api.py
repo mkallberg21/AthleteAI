@@ -42,6 +42,7 @@ from . import guardians as guardians_mod
 from . import practice as practice_mod
 from . import absence as absence_mod
 from . import evaluation as evaluation_mod
+from . import i18n
 from . import parent_report as parent_report_mod
 from . import roster as roster_mod
 from . import season as season_mod
@@ -2830,6 +2831,52 @@ def cancel_absence(
 ) -> dict[str, Any]:
     _may_set_absence(store, principal, athlete_id)
     return {"removed": absence_mod.cancel(store.conn, absence_id, athlete_id)}
+
+
+@app.get("/api/i18n/{locale}")
+def strings(locale: str, prefix: str = "") -> dict[str, Any]:
+    """The string bundle for a page.
+
+    Public, like the drill catalog: it is interface copy and contains nothing
+    about anybody. `prefix` narrows it so a page does not ship copy it never
+    renders.
+    """
+    resolved = i18n.normalize(locale)
+    return {
+        "locale": resolved,
+        "locales": [{"code": c, "label": lb} for c, lb in i18n.LOCALES],
+        "strings": i18n.bundle(resolved, prefix),
+    }
+
+
+class LocaleSetting(BaseModel):
+    locale: str = Field(min_length=2, max_length=10)
+
+
+@app.get("/api/me/locale")
+def get_locale(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {
+        "locale": store.locale_for(principal.id),
+        "locales": [{"code": c, "label": lb} for c, lb in i18n.LOCALES],
+    }
+
+
+@app.put("/api/me/locale")
+def set_locale(
+    body: LocaleSetting,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Anyone sets their own.
+
+    A guardian's language is theirs, not their program's and not their
+    child's -- a Spanish-speaking parent of an English-speaking teenager is an
+    entirely ordinary household.
+    """
+    return {"locale": store.set_locale(principal.id, body.locale)}
 
 
 @app.get("/api/technique/{drill_key}")

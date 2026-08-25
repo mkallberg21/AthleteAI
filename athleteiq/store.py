@@ -31,6 +31,7 @@ from . import guardians as guardians_mod
 from . import load as load_mod
 from . import roster as roster_mod
 from . import absence
+from . import i18n
 from . import injury_history
 from . import roster_sync
 from . import technique
@@ -1348,9 +1349,14 @@ class Store:
                 sender = coach_name
                 title = ""
 
+            # The athlete's language, because the message is written to them.
+            # A guardian gets this copy as sent rather than a re-translation:
+            # showing a parent different words from the ones their child read
+            # would make one message look like two.
             body = recognition.render(
                 template.get("body") or milestone.body_for(
-                    "family" if self.is_family(int(athlete["org_id"])) else "program"
+                    "family" if self.is_family(int(athlete["org_id"])) else "program",
+                    self.locale_for(athlete_id),
                 ),
                 first_name=first_name, streak=streak.current,
                 coach=sender, team=team,
@@ -1696,6 +1702,29 @@ class Store:
             "SELECT kind FROM organizations WHERE id = ?", (org_id,)
         ).fetchone()
         return bool(row and row["kind"] == self.FAMILY_KIND)
+
+    # ------------------------------------------------------------------
+    # Language
+    # ------------------------------------------------------------------
+
+    def locale_for(self, user_id: int) -> str:
+        """One person's language. Per person, never per program.
+
+        A Spanish-speaking household inside an English-speaking club is the
+        common case rather than the edge one.
+        """
+        row = self.conn.execute(
+            "SELECT locale FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        return i18n.normalize(row["locale"] if row else None)
+
+    def set_locale(self, user_id: int, locale: str) -> str:
+        chosen = i18n.normalize(locale)
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE users SET locale = ? WHERE id = ?", (chosen, user_id)
+            )
+        return chosen
 
     # ------------------------------------------------------------------
     # Keeping a roster in step with wherever it lives
@@ -3007,6 +3036,7 @@ class Store:
     # ------------------------------------------------------------------
 
     def guardian_summary(self, guardian_id: int) -> dict[str, Any]:
+        locale = self.locale_for(guardian_id)
         """What a parent sees: their own children, and nothing else.
 
         Deliberately excludes two things the athlete and coach views carry.
@@ -3064,7 +3094,9 @@ class Store:
                     }
                     for a in assignments_mod.for_athlete(self.conn, athlete_id)
                 ],
-                "consents": guardians_mod.consent_detail(self.conn, athlete_id),
+                # In the guardian's own language, not the program's.
+                "consents": guardians_mod.consent_detail(
+                    self.conn, athlete_id, locale),
             })
 
         return {"athletes": athletes}

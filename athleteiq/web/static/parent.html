@@ -13,7 +13,8 @@
   <div class="brand">Athlete<span>IQ</span> <span class="small muted" style="font-weight:400">Parent</span></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="small muted" id="whoami"></span>
-    <button class="secondary inline" id="signout">Sign out</button>
+    <select id="lang" class="inline" aria-label="Language / Idioma"></select>
+    <button class="secondary inline" id="signout" data-i18n="parent.sign_out">Sign out</button>
   </div>
 </div>
 
@@ -44,36 +45,36 @@
   <div id="athletes"></div>
 
   <div class="card" id="away-card">
-    <h2>Going away</h2>
+    <h2 data-i18n="parent.away.title">Going away</h2>
     <p class="small muted">
       A holiday or a tournament weekend pauses a streak instead of breaking
       it. The days come out of the count rather than being added to it &mdash;
       they come back to the streak they earned, not a bigger one.
     </p>
-    <label for="away-athlete">Who</label>
+    <label for="away-athlete" data-i18n="parent.away.who">Who</label>
     <select id="away-athlete"></select>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <div style="flex:1;min-width:140px">
-        <label for="away-start">From</label>
+        <label for="away-start" data-i18n="parent.away.from">From</label>
         <input id="away-start" type="date">
       </div>
       <div style="flex:1;min-width:140px">
-        <label for="away-end">Until</label>
+        <label for="away-end" data-i18n="parent.away.until">Until</label>
         <input id="away-end" type="date">
       </div>
     </div>
-    <label for="away-reason">Why (optional)</label>
+    <label for="away-reason" data-i18n="parent.away.reason">Why (optional)</label>
     <input id="away-reason" placeholder="Family holiday" maxlength="200">
-    <button class="secondary" id="away-add">Add</button>
+    <button class="secondary" id="away-add" data-i18n="parent.away.add">Add</button>
     <div id="away-list" style="margin-top:12px"></div>
     <div id="away-err" class="err hidden"></div>
   </div>
 
   <div class="card">
-    <h2>Add another athlete</h2>
+    <h2 data-i18n="parent.add_athlete">Add another athlete</h2>
     <p class="small muted">If you have a second child in the program, paste their invite code.</p>
     <input id="link-code" placeholder="ABCD-EFGH-JKLM" autocomplete="off">
-    <button class="secondary" id="link-btn">Link athlete</button>
+    <button class="secondary" id="link-btn" data-i18n="parent.link">Link athlete</button>
     <div id="link-note" class="small hidden" style="margin-top:8px"></div>
   </div>
 
@@ -221,17 +222,21 @@ function renderReport(r) {
     </div>
     <p style="margin:8px 0 0">${esc(r.headline)}</p>
     <div class="stat-row" style="margin-top:10px">
-      <div class="stat"><b>${r.current.days}</b><span>days trained</span></div>
-      <div class="stat"><b>${r.current.sessions}</b><span>sessions</span></div>
-      <div class="stat"><b>${r.current.minutes}</b><span>minutes</span></div>
+      <div class="stat"><b>${r.current.days}</b>
+        <span>${esc(T('parent.days_trained', 'days trained'))}</span></div>
+      <div class="stat"><b>${r.current.sessions}</b>
+        <span>${esc(T('parent.sessions', 'sessions'))}</span></div>
+      <div class="stat"><b>${r.current.minutes}</b>
+        <span>${esc(T('parent.minutes', 'minutes'))}</span></div>
     </div>
-    ${section('Worth knowing', r.highlights)}
-    ${section('What their coach said', r.recognition.map(
-      (m) => m.title + (m.from_name ? ` — ${m.from_name}` : '')))}
-    ${section('Looking after themselves', r.care)}
+    ${section(T('parent.report.worth_knowing', 'Worth knowing'), r.highlights)}
+    ${section(T('parent.report.coach_said', 'What their coach said'),
+      r.recognition.map((m) => m.title + (m.from_name ? ` — ${m.from_name}` : '')))}
+    ${section(T('parent.report.looking_after', 'Looking after themselves'), r.care)}
     <p class="small muted" style="margin-top:12px">
-      This is about ${esc(r.display_name)} only. We do not rank children
-      against their teammates here or anywhere else.
+      ${esc(T('parent.report.no_ranking',
+        `This is about ${r.display_name} only. We do not rank children against `
+        + 'their teammates here or anywhere else.'))}
     </p>
   </div>`;
 }
@@ -265,9 +270,10 @@ async function loadAbsences(athletes) {
         </span>
         <span class="budget-n">${ab.days}d</span>
         <button class="secondary inline" data-cancel-away="${ab.id}"
-          data-athlete="${entry.athlete.athlete_id}">Remove</button>
+          data-athlete="${entry.athlete.athlete_id}">${
+            esc(T('parent.away.remove', 'Remove'))}</button>
       </div>`)).join('')
-    || '<p class="small muted">Nothing booked.</p>';
+    || `<p class="small muted">${esc(T('parent.away.none', 'Nothing booked.'))}</p>`;
 }
 
 $('away-add').addEventListener('click', async () => {
@@ -302,6 +308,54 @@ $('away-list').addEventListener('click', async (event) => {
       + `?athlete_id=${btn.dataset.athlete}`, { method: 'DELETE' });
     await load();
   } catch (e) { showError(e.message); btn.disabled = false; }
+});
+
+// ------------------------------------------------------------------ language
+//
+// A guardian sets their own, not their program's and not their child's. The
+// picker sits in the topbar rather than behind a settings page, because a
+// parent who cannot read the page cannot find a settings page either.
+
+let strings = {};
+
+/** One string, falling back to whatever the HTML already says. */
+function T(key, fallback = '') {
+  return strings[key] || fallback;
+}
+
+function applyStrings() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const value = strings[el.dataset.i18n];
+    if (value) el.textContent = value;
+  });
+  document.documentElement.lang = $('lang').value || 'en';
+}
+
+async function loadLanguage() {
+  let chosen = 'en';
+  try {
+    const mine = await api('/api/me/locale');
+    chosen = mine.locale;
+    $('lang').innerHTML = mine.locales
+      .map((l) => `<option value="${esc(l.code)}">${esc(l.label)}</option>`).join('');
+    $('lang').value = chosen;
+  } catch { /* not signed in yet, or offline */ }
+
+  try {
+    ({ strings } = await api(`/api/i18n/${chosen}?prefix=parent.`));
+  } catch { strings = {}; }
+  applyStrings();
+}
+
+$('lang').addEventListener('change', async () => {
+  try {
+    await api('/api/me/locale', { method: 'PUT', body: { locale: $('lang').value } });
+  } catch (e) { showError(e.message); return; }
+  // Reloads everything: consent copy and the monthly report are rendered
+  // server-side in the reader's language, so a client-only swap would leave
+  // half the page in the language they just left.
+  await loadLanguage();
+  await load();
 });
 
 async function load() {
@@ -591,7 +645,12 @@ $('link-btn').addEventListener('click', async () => {
 
 $('signout').addEventListener('click', logout);
 
-load().catch((e) => showError(e.message));
+// Language first: the consent copy and the monthly report come back from the
+// server already translated, so fetching them before the locale is known
+// would render the page once in the wrong one.
+loadLanguage()
+  .then(load)
+  .catch((e) => showError(e.message));
 </script>
 </body>
 </html>

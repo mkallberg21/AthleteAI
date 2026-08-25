@@ -109,14 +109,33 @@ FAMILY_SCOPE_COPY = {
 }
 
 
-def scopes_for(kind: str = "program") -> tuple[tuple[str, str, str], ...]:
-    """The consent list, worded for who is actually reading it."""
-    if kind != "family":
-        return SCOPES
-    return tuple(
-        (key, *FAMILY_SCOPE_COPY[key]) if key in FAMILY_SCOPE_COPY else (key, label, why)
-        for key, label, why in SCOPES
-    )
+def scopes_for(
+    kind: str = "program", locale: str = "en"
+) -> tuple[tuple[str, str, str], ...]:
+    """The consent list, worded for who is actually reading it.
+
+    Including which language they read. A consent screen somebody cannot read
+    is not consent, and this is the function every consent surface goes
+    through -- so translating here rather than at each call site is the
+    difference between a rule and an intention.
+    """
+    from . import i18n
+
+    locale = i18n.normalize(locale)
+    out = []
+    for key, label, why in SCOPES:
+        family = kind == "family" and key in FAMILY_SCOPE_COPY
+        stem = f"consent.family.{key}" if family else f"consent.{key}"
+        translated_label = i18n.t(f"{stem}.label", locale)
+        translated_why = i18n.t(f"{stem}.why", locale)
+        if family and not translated_label:
+            translated_label, translated_why = FAMILY_SCOPE_COPY[key]
+        out.append((
+            key,
+            translated_label or label,
+            translated_why or why,
+        ))
+    return tuple(out)
 
 
 class GuardianError(Exception):
@@ -388,7 +407,9 @@ def answered_scopes(conn: sqlite3.Connection, athlete_id: int) -> set[str]:
     }
 
 
-def consent_detail(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str, Any]]:
+def consent_detail(
+    conn: sqlite3.Connection, athlete_id: int, locale: str = "en"
+) -> list[dict[str, Any]]:
     """Every scope with its current state and description, for the portal.
 
     Worded for whoever is reading it: in a household the person granting the
@@ -409,7 +430,8 @@ def consent_detail(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str, 
             "description": description,
             "granted": state[key],
         }
-        for key, label, description in scopes_for(row["kind"] if row else "program")
+        for key, label, description in scopes_for(
+            row["kind"] if row else "program", locale)
     ]
 
 

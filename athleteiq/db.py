@@ -86,6 +86,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- Athlete's stated dominant hand, so the scorer knows which side is the
     -- off-hand rather than assuming right.
     dominant_hand    TEXT CHECK (dominant_hand IN ('left','right')),
+    -- Preferred language. Per person rather than per program: a
+    -- Spanish-speaking household inside an English-speaking club is the
+    -- common case, and a consent screen somebody cannot read is not consent.
+    locale           TEXT NOT NULL DEFAULT 'en',
     token_hash       TEXT NOT NULL UNIQUE,
     created_at       TEXT NOT NULL,
     active           INTEGER NOT NULL DEFAULT 1,
@@ -822,6 +826,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("claim_code_hash", "TEXT"),
         ("claim_expires_at", "TEXT"),
         ("birth_year_estimated", "INTEGER NOT NULL DEFAULT 0"),
+        # Per person, not per program: a Spanish-speaking household inside an
+        # English-speaking club is the common case, not the edge one.
+        ("locale", "TEXT NOT NULL DEFAULT 'en'"),
     ],
     "organizations": [
         ("position_emphasis_min_age", "INTEGER NOT NULL DEFAULT 15"),

@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1766 tests
+python -m pytest tests/ -q          # 1909 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
@@ -116,6 +116,11 @@ athleteiq/
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
   roster_sync.py    Keeping a roster in step with TeamSnap, SportsEngine, et al
+  team_goals.py     One number a squad chases together, capped so nobody carries it
+  absence.py        Holidays and tournaments: pausing a streak, not forgiving it
+  injury_history.py Prior injury, and the one line it is allowed to move
+  evaluation.py     The tryout artifact: participation and improvement, no volume
+  i18n.py           Spanish on the consent, parent and recognition surfaces
   practice.py       The pre-practice card: who is not training, and why
   season.py         Where a program is in its year, and what that does to load
   technique.py      What a good rep looks like, per drill, per weak component
@@ -2252,6 +2257,160 @@ written for an adult, about them, and reads that way.
 
 ---
 
+## Team goals
+
+Every other board here ranks individuals. The household board already showed
+the better pattern for a group that should not be ranked — one shared number,
+chased collaboratively — and the digest already leads on participation because
+it is the only metric whose marginal contributor is the athlete you want to
+reach.
+
+The shape is the design. **A goal counts athletes who each clear a small
+personal bar**, so contribution is binary and capped: the keen one doing six
+sessions moves it exactly as much as the quiet one doing three, and the only
+way it goes up is somebody new turning up. A goal denominated in reps or XP
+would do the opposite — let one athlete carry the squad, teaching everyone
+else they are not needed, and make a quiet one visibly the shortfall. That is
+a worse object than the leaderboard it replaces, because a leaderboard at
+least does not frame a child as the reason their team failed.
+
+**Nobody is ever named** — not who is in, not who is not, and deliberately not
+a *count* of who is not, because a shortfall count on a ten-person squad is a
+name with the name removed. An athlete sees their own standing and the squad
+total; a coach sees the squad total and uses their roster for names. The
+near-miss copy is the whole point: *"one more day and you are in"* is small,
+achievable, and aimed exactly where a participation metric should aim.
+
+An athlete on a hold or mid-ramp leaves the denominator rather than counting
+as missing — the same rule the pre-practice card uses.
+
+---
+
+## Planned absence
+
+Streaks forgive one missed day, which covers a bad week. They do not cover a
+family holiday or a tournament weekend, and those are predictable — which
+makes losing a streak to one a churn moment the product walked into with its
+eyes open.
+
+There are two ways to build this and only one is honest. Counting absence days
+as active days is easy and turns a fortnight away into twenty-one days of
+streak, which describes nothing the child did; a number nobody believes is a
+number nobody protects. So **the days are removed from the timeline instead**.
+The gap either side closes and the athlete comes back to exactly the streak
+they earned — eight, not twenty-two, in the test that pins it. They do not
+gain, they just do not lose.
+
+**A parent or a coach sets it, never the athlete.** A child who can declare
+their own absence has a button that undoes a missed day, and a streak with an
+undo button is not a streak. Windows are capped at a month, cannot start more
+than a week back, and cannot be booked a year out — each of those, unbounded,
+is the undo button wearing a hat.
+
+The nudges go quiet too, which is half the value: *"train today or lose it"* is
+exactly the message a booked holiday exists to stop sending.
+
+---
+
+## Injury history across seasons
+
+Prior injury is among the strongest predictors of the next one, so an athlete
+who ramped back from an ankle in March should not start August on the same
+thresholds as a teammate who never has.
+
+**It moves the caution line and nothing else.** A prior injury pulls the point
+at which this app raises a question down on the tissues involved. The stop line
+is deliberately untouched — moving it would mean a child with a history is told
+to stop on a week their teammate is told is fine. It never blocks training and
+never shrinks a budget. Influence decays with time and does not stack: three
+ankle niggles in a year is not three times the risk of one, and a scheme that
+added them up would eventually tighten a child's thresholds until the app told
+them to stop moving.
+
+**A coach does not get an injury history.** This is the line everything else
+rests on. They already see what an athlete is carrying *today*, because that
+changes today's session. A career count changes nothing about today's session
+and would change a tryout — and a child who learns that reporting pain costs
+them a place stops reporting pain, which takes the whole wellness subsystem
+with it. Tests assert nothing derived here reaches the coach roster, the
+pre-practice card, or the evaluation export.
+
+Building this found a real defect: completed return plans were never purged at
+all, despite the wellness module stating plainly that health data about a minor
+is not kept indefinitely. They now have a bounded two-year horizon — long
+enough to inform the season after the one it happened in, and no longer.
+
+---
+
+## The evaluation export
+
+Coaches will use this data at selection whether or not anybody designs for it.
+The realistic choice is not whether that happens — it is between shipping
+something deliberate and leaving a coach to screenshot a leaderboard, which is
+the worst version: ranked by volume, with a child's name at the bottom.
+
+**Volume is not in it.** Not reps, not XP, not minutes, not session counts.
+Volume mostly measures opportunity — a garage, a wall, and a lift to practice —
+and none of that is about the athlete. A test gives one athlete five times
+another's work and asserts the two rows come out identical. What is in it,
+turning up and getting better, is what a child controls.
+
+**It is not sorted by anything measured.** Alphabetical, always: a list ordered
+by form score reads top-down as best-to-worst whatever the header says, and a
+composite number is a ranking with one column.
+
+The hard part was the collision with the injury rule. An athlete who missed six
+weeks hurt has terrible participation and a selector must not be told why —
+hiding it makes them look lazy, showing it leaks health data at the exact
+moment somebody decides who to cut. The answer is neither: **weeks an athlete
+was told not to train, or was away with permission, leave their denominator.**
+Six of twelve weeks becomes six of seven, the rate is fair, and nothing in the
+rows says the word *ankle*.
+
+The caveats ride in the CSV as comment lines rather than living in the web
+page, because the file is what reaches the selection meeting.
+
+---
+
+## Spanish
+
+A meaningful share of youth-sports families in the United States speak Spanish
+at home. The places that matters are not the leaderboard or the drill picker —
+a child navigates those from icons and numbers regardless. They are the
+**parent portal, the consent flow, and the messages a coach sends home**: the
+surfaces where a guardian is asked to understand something and then agree to
+it. A consent screen somebody cannot read is not consent, and that is the whole
+argument.
+
+**The language belongs to the person, not the program.** A Spanish-speaking
+household inside an English-speaking club is the common case, so the preference
+is per user — a guardian sets their own, and a Spanish-speaking parent of an
+English-preferring teenager is an entirely ordinary household.
+
+`scopes_for` is where consent copy is built, so translating there rather than
+at each call site is the difference between a rule and an intention. Every
+consent surface inherits it.
+
+**We translate what we ship, not what a coach types.** The shipped recognition
+bodies have Spanish versions, including the separate warmer parent-voice set. A
+coach who rewrites one in English produces English: there is no translation
+service in this application, and inventing one silently would be worse than the
+gap. The payload carries a `translated` flag so the parent view can say which
+case it is in rather than leaving a reader to wonder.
+
+Register is *usted* throughout for guardians, which is what US Spanish-language
+school and club communication uses, with neutral vocabulary over regional.
+`i18n.missing()` reports untranslated keys, because a half-translated language
+is a promise the product does not keep and the gap should be visible rather
+than turning up on a consent form.
+
+> **These translations are not certified.** They were written for this codebase
+> rather than by a professional translator, and the consent copy is legally
+> adjacent. A program relying on it should have a native speaker review it
+> first.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -2585,3 +2744,36 @@ contact with a real driveway:
     so a child who trained hard all month in ways this app never saw appears
     quiet. The copy is careful not to scold, but it cannot know what it
     cannot see.
+34. **The Spanish translations are not certified.** They were written for this
+    codebase, not by a professional translator, and the consent copy is
+    legally adjacent — a program relying on it should have a native speaker
+    review it before launch. Coverage is also deliberately partial: the parent
+    portal, consent flow and shipped recognition messages are translated; the
+    athlete capture app, coach dashboard and drill catalog are not, because a
+    half-translated surface is worse than an honest boundary.
+35. **A coach's own words are never translated.** Custom recognition text
+    reaches a family in whatever language the coach typed it in. There is no
+    translation service in this application and adding one would mean sending
+    children's message content to a third party, which is a trade this product
+    should not make quietly. The payload flags which messages are shipped
+    defaults so a client can say so.
+36. **Team goals are only as fair as the integrity layer.** Clearing the
+    personal bar depends on sessions being counted, so an athlete who can fool
+    the rep counter can put themselves in the count. The cost is low by
+    design — the bar is small, contribution is binary, and nothing is awarded
+    to an individual for it.
+37. **Planned absence is trusted, not verified.** Nothing checks that a family
+    was actually away. A parent could book a month a year and keep a streak
+    alive through it; the caps make that visible rather than impossible, and
+    the judgement that this is a family's business rather than the app's is
+    deliberate.
+38. **The evaluation export cannot stop being misused.** It is designed to
+    resist the obvious misreadings — no ranking, no volume, no injury history,
+    caveats in the file itself — but a coach determined to sort the CSV by
+    form score can still do it. What the design buys is that the number they
+    sort by is one the athlete controls.
+39. **Injury history reads only completed return-to-play plans.** A child who
+    was hurt but never reported it, or reported it and never opened a ramp,
+    carries no history here. The signal is real when present and absent
+    fairly often, which makes it a reason to ask a question rather than
+    evidence of anything.

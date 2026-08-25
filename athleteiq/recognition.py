@@ -51,16 +51,37 @@ class Milestone:
     #: want to rewrite.
     family_body: str = ""
 
-    def body_for(self, kind: str = "program") -> str:
-        if kind == "family" and self.family_body:
-            return self.family_body
-        return self.default_body
+    def body_for(self, kind: str = "program", locale: str = "en") -> str:
+        """The shipped default, in the reader's language where we have one.
+
+        Shipped only. A coach who rewrites this in English produces English,
+        and there is no translation service in this application -- inventing
+        one silently would be worse than the gap. `translated_default` says
+        which case a caller is in so the parent view can be honest about it.
+        """
+        from . import i18n
+
+        locale = i18n.normalize(locale)
+        family = kind == "family" and self.family_body
+        key = f"recognition.family.{self.key}" if family else f"recognition.{self.key}"
+        translated = i18n.t(key, locale)
+        if translated:
+            return translated
+        return self.family_body if family else self.default_body
+
+    def has_translation(self, kind: str = "program", locale: str = "en") -> bool:
+        from . import i18n
+
+        locale = i18n.normalize(locale)
+        family = kind == "family" and self.family_body
+        key = f"recognition.family.{self.key}" if family else f"recognition.{self.key}"
+        return bool(i18n.STRINGS.get(key, {}).get(locale))
 
     def to_dict(
         self, body: str = "", customised: bool = False, from_voice: str = "",
-        kind: str = "program",
+        kind: str = "program", locale: str = "en",
     ) -> dict[str, Any]:
-        shipped = self.body_for(kind)
+        shipped = self.body_for(kind, locale)
         return {
             "key": self.key,
             "label": self.label,
@@ -69,6 +90,12 @@ class Milestone:
             "body": body or shipped,
             "customised": customised,
             "from_voice": from_voice or self.default_voice,
+            # False when a coach wrote their own: that text is in whatever
+            # language they typed it in, and the parent view says so rather
+            # than leaving a Spanish-reading parent to wonder why one message
+            # arrived in English.
+            "translated": bool(customised) is False
+                          and self.has_translation(kind, locale),
         }
 
     @property
