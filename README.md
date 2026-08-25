@@ -2567,6 +2567,39 @@ hard work the binding constraint instead of volume.
 
 ---
 
+## Closing the assignment loop
+
+Assignments reported compliance passively. A coach who set one and did not open
+the dashboard never learned it had gone nowhere — the loop ran outward and
+never came back.
+
+Two touches now close it, and **both are deliberately about the assignment
+rather than about the children.** At the halfway point, if under a third of the
+squad has finished, the coach hears that it is not landing and is asked whether
+it was too much, unclear, or badly timed — while there is still time to change
+it. On the due date they get the outcome whether it went well or badly, because
+somebody who set an assignment deserves to know how it went without going
+looking.
+
+The framing is the design. *"Four of eighteen with three days left"* invites a
+coach to ask what was wrong with the assignment. A list of names invites them
+to chase four kids — and a stalling assignment is more often a coaching problem
+than a compliance one. So when one closes below a third the copy says plainly
+that it is usually the assignment rather than the squad, and suggests a smaller
+target or a longer window next time. **No child is named**, in either touch.
+The names live on the compliance table behind a login, already sorted
+worst-first, which is the right place for a nudge and the wrong place for a
+broadcast.
+
+Athletes who are hurt or away leave the denominator, the same rule the
+pre-practice card, team goals and the evaluation export all use — a coach told
+that eleven of eighteen finished, when four of the seven were on a
+return-to-play ramp, has been handed a worse assignment than they set. A squad
+where nobody could train produces no notification at all: nought of nought is
+noise.
+
+---
+
 ## Notifications
 
 Every streak mechanic is really a notification mechanic. The app knew when a
@@ -2583,10 +2616,20 @@ Every rule carries a dedupe key, so the scheduler can run as often as you like:
 0 * * * *  cd /srv/athleteiq && python scripts/run_notifications.py
 ```
 
-Rules that fire today: streak at risk (only for streaks of 3+, since warning
-someone about a one-day streak is noise and noise costs you push permission),
-assignment due in two days and again on the due date, badge unlocked, week-long
-inactivity, and coach broadcasts to a team.
+Rules that fire today, all from `run_all`:
+
+| Rule | Goes to | Fires |
+|---|---|---|
+| Streak at risk | athlete | Only for streaks of 3+ — warning someone about a one-day streak is noise, and noise costs you push permission |
+| Assignment due | athlete | Two days out, and again on the due date. Two touches only |
+| Assignment stalled | the coach who set it | Halfway if under a third have finished, and again when it closes |
+| Rest nudge | athlete | When the load picture says a day off is worth more than a session |
+| Inactivity | athlete | After a week quiet — suppressed entirely during a planned absence |
+| Guardian digest | guardian | Weekly, per household |
+| Monthly parent report | guardian | Once a month, deduped on the month so a nightly cron sends one and not thirty |
+
+Badge unlocks and coach broadcasts fire from the events themselves rather than
+from the scheduler.
 
 To enable phone-level push, set `ATHLETEIQ_VAPID_PUBLIC_KEY`,
 `ATHLETEIQ_VAPID_PRIVATE_KEY`, and `ATHLETEIQ_VAPID_EMAIL`, and install
