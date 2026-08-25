@@ -421,6 +421,31 @@ CREATE TABLE IF NOT EXISTS badges (
 -- A coach's prescription. This is what turns free-form logging into a
 -- program: the athlete sees what was asked of them, and the coach sees who
 -- did it.
+-- A number a squad chases together.
+--
+-- The shape matters more than the fields. `target_athletes` is a count of
+-- people, and `per_athlete_days`/`per_athlete_sessions` is a small personal
+-- bar each of them has to clear. Contribution is therefore binary and capped:
+-- the committed athlete doing six sessions adds exactly what the quiet one
+-- doing three does, so the only way the number moves is somebody new turning
+-- up. A goal denominated in reps would do the opposite -- it would let one
+-- athlete carry the squad, and make a quiet one visibly the shortfall.
+CREATE TABLE IF NOT EXISTS team_goals (
+    id                   INTEGER PRIMARY KEY,
+    org_id               INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    team_id              INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    created_by           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    title                TEXT NOT NULL,
+    target_athletes      INTEGER NOT NULL,
+    per_athlete_days     INTEGER NOT NULL DEFAULT 0,
+    per_athlete_sessions INTEGER NOT NULL DEFAULT 0,
+    starts_on            TEXT NOT NULL,
+    ends_on              TEXT NOT NULL,
+    created_at           TEXT NOT NULL,
+    active               INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_team_goals_team ON team_goals(team_id, active);
+
 CREATE TABLE IF NOT EXISTS assignments (
     id              INTEGER PRIMARY KEY,
     org_id          INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

@@ -352,6 +352,58 @@
     <div id="assignments"></div>
   </div>
 
+  <div class="card" id="goals-card">
+    <h2>A number the squad chases together</h2>
+    <p class="small muted">
+      Not a leaderboard. A goal here counts <b>how many athletes</b> clear a
+      small personal bar &mdash; so the keen one doing six sessions moves it
+      exactly as much as the quiet one doing three, and the only way it goes
+      up is somebody new turning up. You see the total; nobody sees who is in
+      or who is not, including you. The names you need for a nudge are on your
+      roster above.
+    </p>
+
+    <details id="goal-form-wrap">
+      <summary class="small">Set a goal</summary>
+      <label for="g-team">Team</label>
+      <select id="g-team"></select>
+
+      <label for="g-title">What to call it</label>
+      <input id="g-title" placeholder="Everyone out three days" maxlength="120">
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:130px">
+          <label for="g-target">How many of us</label>
+          <input id="g-target" type="number" min="1" value="15">
+        </div>
+        <div style="flex:1;min-width:130px">
+          <label for="g-days">Days each</label>
+          <input id="g-days" type="number" min="0" max="6" value="3">
+        </div>
+        <div style="flex:1;min-width:130px">
+          <label for="g-sessions">Sessions each</label>
+          <input id="g-sessions" type="number" min="0" max="14" value="0">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px">
+          <label for="g-start">Starts</label>
+          <input id="g-start" type="date">
+        </div>
+        <div style="flex:1;min-width:140px">
+          <label for="g-end">Ends</label>
+          <input id="g-end" type="date">
+        </div>
+      </div>
+
+      <button id="g-create">Set the goal</button>
+      <div id="g-err" class="err hidden"></div>
+    </details>
+
+    <div id="goals" style="margin-top:12px"></div>
+  </div>
+
   <div class="card">
     <h2>Message the team</h2>
     <p class="small muted">Goes to every athlete's alerts, and their phone if they enabled push.</p>
@@ -883,6 +935,7 @@ async function loadAll() {
   ]);
 
   renderPractice(practiceCard);
+  await loadGoals();
 
   renderSummary(rosterData.athletes);
   renderAttention(rosterData.athletes);
@@ -1634,6 +1687,78 @@ async function loadTeams() {
   $('b-team').innerHTML = options;
   $('import-team').innerHTML = options;
   $('sync-team').innerHTML = options;
+  $('g-team').innerHTML = options;
+}
+
+// ------------------------------------------------------------- team goals
+
+function renderGoals(goals) {
+  $('goals').innerHTML = goals.length ? goals.map((g) => `
+    <div class="budget-row" style="flex-wrap:wrap">
+      <span class="budget-label">
+        <b>${esc(g.title)}</b>
+        <span class="small muted">${esc(g.bar)} each, to ${esc(g.ends_on)}</span>
+      </span>
+      <span class="budget-n">${g.counted}/${g.target_athletes}</span>
+      <span class="qbar" style="flex:1 1 120px">
+        <i class="${g.target_met ? 'good' : 'mid'}" style="width:${g.fraction * 100}%"></i>
+      </span>
+      <span class="small muted">${esc(g.headline)}</span>
+      ${g.excused ? `<span class="small muted">${g.excused} resting, not counted
+        either way.</span>` : ''}
+      <button class="secondary inline" data-close-goal="${g.id}">Close</button>
+    </div>`).join('')
+    : '<p class="small muted">No goals running.</p>';
+}
+
+async function loadGoals() {
+  const teamId = $('team').value;
+  const { goals } = await api(
+    `/api/coach/goals${teamId ? `?team_id=${teamId}` : ''}`);
+  renderGoals(goals);
+}
+
+$('g-create').addEventListener('click', async () => {
+  const err = $('g-err');
+  err.classList.add('hidden');
+  try {
+    await api('/api/coach/goals', {
+      method: 'POST',
+      body: {
+        team_id: Number($('g-team').value),
+        title: $('g-title').value || 'Team goal',
+        target_athletes: Number($('g-target').value),
+        per_athlete_days: Number($('g-days').value),
+        per_athlete_sessions: Number($('g-sessions').value),
+        starts_on: $('g-start').value,
+        ends_on: $('g-end').value,
+      },
+    });
+    $('goal-form-wrap').open = false;
+    await loadGoals();
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  }
+});
+
+// Delegated, and without {once} -- a one-shot listener here tears itself down
+// after the first click anywhere in the list.
+$('goals').addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-close-goal]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/coach/goals/${btn.dataset.closeGoal}`, { method: 'DELETE' });
+    await loadGoals();
+  } catch (e) { showError(e.message); btn.disabled = false; }
+});
+
+function defaultGoalDates() {
+  const start = new Date();
+  const end = new Date(start.getTime() + 6 * 86400000);
+  $('g-start').value = start.toISOString().slice(0, 10);
+  $('g-end').value = end.toISOString().slice(0, 10);
 }
 
 // ------------------------------------------------------------ season phase
@@ -2181,6 +2306,7 @@ $('signout').addEventListener('click', logout);
     // Before loadAll, because the skill-work table names drills from it.
     await loadDrillOptions();
     defaultAssignmentDates();
+    defaultGoalDates();
     await loadAll();
   } catch (e) { showError(e.message); }
 })();

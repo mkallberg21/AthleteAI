@@ -127,6 +127,11 @@
       <div id="load-action"></div>
     </div>
 
+    <div class="card hidden" id="goal-card">
+      <h2>Your squad</h2>
+      <div id="goal-list"></div>
+    </div>
+
     <div class="card hidden" id="assign-card">
       <h2>From your coach</h2>
       <div id="assignments"></div>
@@ -1015,6 +1020,38 @@ async function loadTrainingLoad() {
 
 // ---------------------------------------------------------- assignments
 
+/**
+ * The squad's shared number, and this athlete's own standing in it.
+ *
+ * Their own only. No teammate's status appears here, because a screen that
+ * showed one would be a leaderboard with extra steps -- and the whole reason
+ * this exists is to give the quiet athlete a reason to show up that is not
+ * about ranking.
+ */
+async function loadGoals() {
+  let goals = [];
+  try {
+    goals = (await api('/api/me/goals')).goals;
+  } catch {
+    // Offline: leave whatever is rendered rather than blanking it.
+    return;
+  }
+
+  $('goal-card').classList.toggle('hidden', goals.length === 0);
+  $('goal-list').innerHTML = goals.map((g) => `
+    <div class="budget-row" style="flex-wrap:wrap">
+      <span class="budget-label">
+        <b>${esc(g.title)}</b>
+        <span class="small muted">${esc(g.bar)} each</span>
+      </span>
+      <span class="budget-n">${g.counted}/${g.target_athletes}</span>
+      <span class="qbar" style="flex:1 1 120px">
+        <i class="${g.target_met ? 'good' : 'mid'}" style="width:${g.fraction * 100}%"></i>
+      </span>
+      <span class="small ${g.i_count ? 'muted' : ''}">${esc(g.my_note)}</span>
+    </div>`).join('');
+}
+
 async function loadAssignments() {
   let items = [];
   try {
@@ -1120,7 +1157,9 @@ async function syncQueue() {
   await refreshConnBanner();
   if (sent > 0) {
     // Scores, badges, and assignment progress all move when a backlog lands.
-    await Promise.all([loadHome(), loadAssignments(), loadNotifications()]);
+    await Promise.all([
+      loadHome(), loadAssignments(), loadNotifications(), loadGoals(),
+    ]);
   }
 }
 
@@ -2091,7 +2130,7 @@ $('review-close').addEventListener('click', async () => {
   discardRecording();
   await Promise.all([
     loadHome(), loadBudget(), loadStart(), loadAssignments(),
-    loadNotifications(), loadTrainingLoad(),
+    loadNotifications(), loadTrainingLoad(), loadGoals(),
   ]);
   show('home');
 });
@@ -2109,7 +2148,7 @@ $('done').addEventListener('click', async () => {
   discardRecording();
   await Promise.all([
     loadHome(), loadBudget(), loadStart(), loadAssignments(),
-    loadNotifications(), loadTrainingLoad(),
+    loadNotifications(), loadTrainingLoad(), loadGoals(),
   ]);
   show('home');
 });
@@ -2179,6 +2218,7 @@ window.addEventListener('pagehide', () => {
     loadAssignments();
     loadNotifications();
     loadTrainingLoad();
+    loadGoals();
     refreshConnBanner();
   } catch (e) {
     document.body.innerHTML = `<div class="wrap"><div class="card"><h2>Could not load</h2><p>${esc(e.message)}</p><a href="index.html">Sign in again</a></div></div>`;

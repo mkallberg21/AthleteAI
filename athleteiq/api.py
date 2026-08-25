@@ -38,10 +38,12 @@ from . import practice as practice_mod
 from . import parent_report as parent_report_mod
 from . import roster as roster_mod
 from . import season as season_mod
+from . import team_goals as team_goals_mod
 from . import technique as technique_mod
 from . import roster_sync
 from . import notifications as notify
 from .assignments import AssignmentError
+from .team_goals import GoalError
 from .billing import BillingError
 from .guardians import GuardianError
 from .roster import RosterError
@@ -110,6 +112,11 @@ async def _store_error_handler(_request, exc: StoreError) -> JSONResponse:
 
 @app.exception_handler(AssignmentError)
 async def _assignment_error_handler(_request, exc: AssignmentError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(GoalError)
+async def _goal_error_handler(_request, exc: GoalError) -> JSONResponse:
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -477,6 +484,108 @@ class CreateAssignmentRequest(BaseModel):
     notes: str = Field(default="", max_length=500)
     # Empty means the whole team, which is the common case.
     athlete_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+class CreateTeamGoal(BaseModel):
+    team_id: int
+    title: str = Field(min_length=1, max_length=120)
+    #: A count of people, not a quantity of work. See team_goals.py.
+    target_athletes: int = Field(ge=1, le=500)
+    per_athlete_days: int = Field(default=0, ge=0, le=team_goals_mod.MAX_PER_ATHLETE_DAYS)
+    per_athlete_sessions: int = Field(
+        default=0, ge=0, le=team_goals_mod.MAX_PER_ATHLETE_SESSIONS)
+    starts_on: str = Field(min_length=10, max_length=10)
+    ends_on: str = Field(min_length=10, max_length=10)
+
+
+@app.post("/api/coach/goals", status_code=201)
+def create_team_goal(
+    body: CreateTeamGoal,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Set a number the squad chases together.
+
+    The bar is capped in the model and again in the module, because a goal
+    denominated in volume is a different and worse object than this one -- it
+    lets one athlete carry the squad and makes a quiet one the shortfall.
+    """
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    goal_id = team_goals_mod.create(
+        store.conn,
+        org_id=principal.org_id,
+        team_id=body.team_id,
+        created_by=principal.id,
+        title=body.title,
+        target_athletes=body.target_athletes,
+        per_athlete_days=body.per_athlete_days,
+        per_athlete_sessions=body.per_athlete_sessions,
+        starts_on=body.starts_on,
+        ends_on=body.ends_on,
+    )
+    goal = team_goals_mod.get(store.conn, goal_id)
+    return goal.to_dict() if goal else {"id": goal_id}
+
+
+@app.get("/api/coach/goals")
+def list_team_goals(
+    team_id: int | None = None,
+    include_finished: bool = False,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Squad totals. Never who is in and never who is not.
+
+    A coach who wants names has a roster behind a login, where it is a working
+    tool rather than a thing that gets read out.
+    """
+    if team_id is not None:
+        if not principal.can_see_team(team_id):
+            raise HTTPException(
+                status_code=403, detail="you are not assigned to that team")
+        goals = team_goals_mod.for_team(
+            store.conn, team_id, include_finished=include_finished)
+    else:
+        goals = [
+            g for g in team_goals_mod.for_org(store.conn, principal.org_id)
+            if principal.can_see_team(g.team_id)
+        ]
+    return {"goals": [g.to_dict() for g in goals]}
+
+
+@app.delete("/api/coach/goals/{goal_id}")
+def close_team_goal(
+    goal_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    goal = team_goals_mod.get(store.conn, goal_id)
+    if goal is None or goal.org_id != principal.org_id:
+        raise HTTPException(status_code=404, detail="no such goal")
+    if not principal.can_see_team(goal.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    team_goals_mod.close(store.conn, goal_id)
+    return {"closed": True}
+
+
+@app.get("/api/me/goals")
+def my_team_goals(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """An athlete's own standing against their squad's goals.
+
+    Their own only. The squad total is here because it is the point of the
+    feature; no teammate's individual standing is, because that would make
+    this a leaderboard with extra steps.
+    """
+    return {
+        "goals": [
+            standing.to_dict()
+            for standing in team_goals_mod.for_athlete(store.conn, principal.id)
+        ]
+    }
 
 
 @app.post("/api/coach/assignments", status_code=201)
