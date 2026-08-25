@@ -81,10 +81,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1616 tests
+python -m pytest tests/ -q          # 1766 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 40 tests
+  node --test tests/js/*.test.mjs   # 98 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -100,7 +100,7 @@ athleteiq/
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
-    catalog.py      The 12 shipped drills
+    catalog.py      The 25 shipped drills
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
@@ -115,6 +115,11 @@ athleteiq/
   ball.py           Server-side checks on ball-tracked sessions
   guardians.py      Parent accounts, invites, consent, export and erasure
   roster.py         Bulk import: header detection, parsing, claim codes
+  roster_sync.py    Keeping a roster in step with TeamSnap, SportsEngine, et al
+  practice.py       The pre-practice card: who is not training, and why
+  season.py         Where a program is in its year, and what that does to load
+  technique.py      What a good rep looks like, per drill, per weak component
+  parent_report.py  The monthly report a guardian gets about their own child
   digest.py         Weekly team KPIs and the coach email
   billing.py        Plans, seats, entitlements, invoicing seam
   recognition.py    Milestones, coach templates, and who signs them
@@ -2089,6 +2094,164 @@ app knows the athlete's whole week.
 
 ---
 
+## Roster sync
+
+A CSV upload is a snapshot. The friction that kills a pilot is not the first
+import — it is week three, when two players join and nobody remembers to
+re-export. So a team can be connected to whatever system its roster already
+lives in, and stay current on its own.
+
+Adapters ship for **TeamSnap** and **SportsEngine**, plus a generic
+export-link provider so a league product nobody here has heard of still works
+if it can produce a CSV at a URL. Synced rows are rendered back to CSV and fed
+through the same forgiving parser the upload button uses, so there is one
+import path rather than two that drift.
+
+**Honesty about what is tested.** There are no TeamSnap or SportsEngine
+credentials in this environment, so those two adapters are written against
+published API shapes and have never been run against a live account. They
+carry `verified=False`, the coach UI says so in as many words, and tests
+assert they keep saying so. Only the export-link provider is genuinely
+verified end to end.
+
+Two decisions are load-bearing. The credential is **write-only above the
+store** — it goes in, the sync uses it, and no dashboard, API response, or log
+reads it back, because it reaches into a system holding children's contact
+details. And **departures are reported, never applied**: a child missing from
+a team-management app has not left the program, and that is a call for a
+person. A drop of more than half the roster refuses outright, because a wrong
+team id and a real exodus look identical from here and only one of them is
+plausible. Auto-sync stays off until a run has actually succeeded — putting a
+wrong team id on a nightly schedule is how it stops being noticed.
+
+---
+
+## The pre-practice card
+
+A coach standing on a field with a whistle in one hand and a phone in the
+other will not open five tabs. They have time for one card, read once, and
+what they need from it is not a report — it is the short list of decisions
+they have to make differently in the next hour: who is not training, who is on
+modified work, who is worth an eye, and what the squad has not got through.
+
+It composes the coach views that already exist rather than deriving its own
+numbers, so it cannot drift from the screen the coach opens next. It stops
+naming people after six and counts the rest, because a card that lists
+everybody is a card nobody reads — and a card nobody reads is worse than none,
+since it looks like diligence.
+
+**An athlete on a hold or a ramp never appears on the behind-on-work list**,
+and is out of its denominator too. A naive join of "who is behind" with "who
+is on the roster" tells a coach to go and push the child who is hurt: the
+exact wrong instruction, delivered at the exact moment they are deciding what
+to make them do. Most of that file's tests are about this one property.
+
+Building it turned up a bug in the harmful direction: the headline counted
+only the six people the card had room to show, so two athletes who needed
+modified work were reported as merely worth an eye. Counts now come from
+everyone.
+
+---
+
+## Season phases
+
+The age bands know how old a child is. They do not know whether it is
+February, and that changes the answer more than a birthday does. A program
+picks a phase, and it scales the weekly self-directed budget.
+
+| Phase | Scale | Why |
+|---|---|---|
+| Off-season | ×1.25 | Nothing on the team calendar, so their own work has room |
+| Pre-season | ×1.0 | The published budget, unmodified. The default |
+| In-season | ×0.6 | Practices and games already fill the week |
+| Post-season | ×0.4 | A deliberate break, and the lowest of the four |
+
+**In-season the budget goes down, not up.** That is the opposite of what a
+training app usually does, and it follows directly from what these numbers
+have always meant: work *on top of* team practice. A child in-season already
+has three practices and a game in their week, and holding a full off-season
+target on top of that is not ambition.
+
+Post-season is lower still, and the wording changes with the number. Scaling a
+budget down and then nudging a child to fill it anyway gives away the whole
+point of having a break, so the two branches that ask for more work go quiet —
+a blank week in November reads *"enjoy the break"* rather than *"nothing
+logged this week"*. The ceiling stays, though: a child training through their
+rest period is exactly who that message should still reach.
+
+The phase is **chosen, never inferred**. Sports do not share a season, a club
+may run two, and a wrong guess silently changes what every child in the
+program is told to do. Directors only, for the same reason. The squad roll-up
+takes the same scale as the athlete's own screen, so a coach counting "over
+budget" is counting against the number the child was shown.
+
+---
+
+## Technique references
+
+Form scoring could already tell a child their range was short. It could not
+tell them what *not short* looks like, and a score without a fix is a mark out
+of ten — which is the thing this product is otherwise careful not to hand a
+twelve-year-old.
+
+Every one of the 25 drills has cues written for it, keyed to the same
+component keys the scorer emits. `quality.weakest` is recorded on the report
+rather than re-derived by the caller, so the fix a child reads is always about
+the thing that actually scored lowest; a note and a fix disagreeing about what
+went wrong would be worse than no fix. Generic fallbacks exist for every
+component but are flagged `bespoke: false`, because "go deeper" is not advice
+and should not be dressed as coverage.
+
+The reference itself is **generated from each drill's own thresholds rather
+than filmed**. That sidesteps the third-party embed problem film study carries
+— an ad before a drill, a sidebar of recommendations, a way out of the app, in
+front of a child mid-session — but the better reason is that a generated
+reference is built from the same numbers the scorer marks against, so it
+cannot drift out of agreement with the score. A clip shot once and a threshold
+tuned later disagree silently, and the child pays for that. Tests assert the
+demonstrated tempo sits inside each drill's own scoring band and that every
+trace reaches the target it is demonstrating.
+
+A program that films its own can drop a file in `web/static/technique/` and it
+is offered alongside the trace. Nothing is shipped, and `has_clip` is read off
+the filesystem, so it cannot claim a clip that is not on the server.
+
+---
+
+## The monthly parent report
+
+The weekly team digest names nobody on purpose — it gets forwarded, pasted
+into team channels, and read aloud in car parks. The monthly parent report is
+the opposite object: one household, one child, and naming them is the point.
+That inversion is why it has its own rules rather than being a filter over the
+digest.
+
+**No child is compared to another.** Not a rank, not a percentile, not "above
+average for the squad". This product refuses volume comparison between
+children everywhere else, and a parent report is both the easiest place to
+quietly drop that refusal and the most damaging place to drop it — it is the
+document held up at a kitchen table next to a sibling's. What a child is
+measured against is their own last month and their own age-band budget, both
+of which a family can act on.
+
+**A quiet month is honest and kind.** Two sessions with exams on is a fact,
+not a failing. Writing those tests caught the first version swallowing a real
+drop in order to stay gentle: twelve sessions down to two came out as "a few
+sessions, which some months are". A big drop is now named in the quiet branch
+too, because a report that softens away the truth is not one a parent should
+be paying for. The subject line names the child and the month and never the
+session count — a notification preview is the last place a parent should first
+read a verdict.
+
+**Nothing in it is a medical claim.** Soreness appears as what the app did
+about it, never as an injury a parent is being informed of by software.
+Anything needing a grown-up reached that household the day it happened, and a
+monthly summary arriving as the first anyone hears of an injury would be a
+serious failure. It is not mirrored into the child's own alerts either: it is
+written for an adult, about them, and reads that way.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -2385,9 +2548,40 @@ contact with a real driveway:
     verification is a launch requirement.
 26. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
-    first. Direct TeamSnap/SportsEngine API sync is a separate integration.
+    first. The same is true of what a sync fetches, since it is rendered back
+    to CSV and fed through the same parser.
 27. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical
     assessment.
+28. **The TeamSnap and SportsEngine adapters have never run against a live
+    account.** There are no credentials for either in this environment, so
+    both are written against published API shapes and are unverified — they
+    say so in `verified`, in the API payload, and in the coach UI, and tests
+    assert they keep saying so. Expect the first real connection to need
+    fixes. Only the export-link provider is verified end to end. Neither
+    adapter refreshes an OAuth token either: a credential that expires has to
+    be re-entered, and the failure is recorded on the link where that team's
+    coach will see it.
+29. **Roster sync never removes anybody.** Departures are counted and named,
+    and applying them is left to a person. A program with heavy mid-season
+    turnover will accumulate athletes who have actually left, and will have
+    to prune them by hand. This is the deliberate side of a real cost.
+30. **The pre-practice card is only as current as the last submission.** It
+    reads what athletes have logged, so a squad that trains and submits after
+    practice gives their coach a card describing yesterday. There is nothing
+    live in it.
+31. **Season phase is program-wide.** A club running two sports in opposite
+    seasons has to pick one, and the other sport's athletes get the wrong
+    scale. Per-team phase is the obvious fix and is not built.
+32. **Technique references are diagrams, not demonstrations.** The generated
+    trace shows the shape, range and tempo of a rep — it cannot show grip,
+    stance, or where to look, and a written cue is a poor substitute for
+    watching someone do it. No clips ship, so until a program films its own,
+    the reference is a curve and four sentences.
+33. **The parent report is monthly and derived from logged sessions only.**
+    Work done at practice, at another club, or on a bike is invisible to it,
+    so a child who trained hard all month in ways this app never saw appears
+    quiet. The copy is careful not to scold, but it cannot know what it
+    cannot see.
