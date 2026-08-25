@@ -3543,3 +3543,59 @@ class TestFamilyRecognitionView:
             headers={"Authorization": f"Bearer {theirs['parent']['token']}"},
         ).json()["sent"]
         assert sent == []
+
+
+class TestCoachOnboardingEndpoint:
+
+    def test_a_new_program_is_told_where_to_start(self, client):
+        org = client.post(
+            "/api/orgs", json={"name": "Fresh", "director_name": "New Coach"},
+        ).json()
+        headers = {"Authorization": f"Bearer {org['director']['token']}"}
+        body = client.get("/api/coach/onboarding", headers=headers).json()
+        assert body["complete"] is False
+        assert body["next"]["key"] == "team"
+        assert body["required_total"] == 3
+
+    def test_it_finishes_once_the_chain_actually_works(self, client, program):
+        do_session(client, program["athletes"][0]["headers"], seed=11)
+        body = client.get("/api/coach/onboarding", headers=program["director"]).json()
+        assert body["complete"] is True
+
+    def test_the_consent_gate_is_surfaced_to_the_coach(self, client, program):
+        """The athlete gets a clear message and the coach used to get nothing."""
+        from athleteiq import guardians
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, athlete["id"], created_by=athlete["id"])
+        guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        store.conn.commit()
+
+        body = client.get("/api/coach/onboarding", headers=program["director"]).json()
+        assert body["blockers"]
+        assert body["blockers"][0]["key"] == "awaiting_consent"
+        assert athlete["display_name"] in body["blockers"][0]["detail"]
+
+    def test_a_household_gets_the_family_list(self, client):
+        made = client.post("/api/family", json={"parent_name": "Dana Pierce"}).json()
+        headers = {"Authorization": f"Bearer {made['parent']['token']}"}
+        body = client.get("/api/coach/onboarding", headers=headers).json()
+        assert body["kind"] == "family"
+        assert "team" not in {s["key"] for s in body["steps"]}
+
+    def test_an_athlete_cannot_read_the_setup_list(self, client, program):
+        assert client.get(
+            "/api/coach/onboarding", headers=program["athletes"][0]["headers"],
+        ).status_code == 403
+
+    def test_another_program_does_not_appear_in_it(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+        ).json()
+        body = client.get(
+            "/api/coach/onboarding",
+            headers={"Authorization": f"Bearer {rival['director']['token']}"},
+        ).json()
+        assert body["required_done"] == 0
+        assert body["blockers"] == []

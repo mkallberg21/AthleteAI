@@ -25,6 +25,7 @@ from . import digest as digest_mod
 from . import mailer
 from . import staple as staple_mod
 from . import webhooks as webhooks_mod
+from . import onboarding as onboarding_mod
 from . import positions as positions_mod
 from . import sports as sports_mod
 from . import recognition as recognition_mod
@@ -2043,6 +2044,25 @@ def parent_messages(
             "one-way — nobody can reply through the app, including you."
         ),
     }
+
+
+@app.get("/api/coach/onboarding")
+def coach_onboarding(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Where this program is in setting itself up.
+
+    Derived from the database every time rather than from a flag saying
+    somebody clicked "done" -- a remembered dismissal stays ticked after the
+    team is deleted, and cannot tell a director who came back a week later
+    where they actually got to.
+    """
+    return onboarding_mod.progress(
+        store.conn,
+        principal.org_id,
+        "family" if store.is_family(principal.org_id) else "program",
+    )
 
 
 @app.get("/api/coach/recognition")

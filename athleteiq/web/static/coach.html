@@ -42,6 +42,20 @@
 
   <div class="stat-row" id="summary"></div>
 
+  <div class="card hidden" id="setup-card">
+    <div class="budget-head">
+      <b id="setup-title">Getting set up</b>
+      <span class="small muted" id="setup-count"></span>
+    </div>
+    <div class="setup-bar"><i id="setup-fill" style="width:0%"></i></div>
+    <div id="setup-steps" style="margin-top:10px"></div>
+    <p class="small muted" id="setup-done-note" style="margin-top:10px"></p>
+  </div>
+
+  <div class="card hidden" id="blockers-card">
+    <div id="blockers"></div>
+  </div>
+
   <div class="card hidden" id="scope-card">
     <p class="scope-note" id="scope-note" style="margin:0"></p>
   </div>
@@ -323,7 +337,7 @@
     <div id="b-note" class="small muted hidden" style="margin-top:8px"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="roster-card">
     <h2>Roster</h2>
     <div style="overflow-x:auto">
       <table>
@@ -360,7 +374,7 @@
     <div id="review"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="import-card">
     <h2>Import a roster</h2>
     <p class="small muted">
       Drop in a CSV from TeamSnap, SportsEngine, a school export, or a
@@ -1015,6 +1029,72 @@ $('wellness-watch').addEventListener('click', async (event) => {
     });
     await loadAll();
   } catch (e) { showError(e.message); }
+});
+
+/**
+ * The setup checklist, computed server-side from real state.
+ *
+ * Never a remembered dismissal: a step un-ticks itself if the thing it
+ * describes goes away, which is the difference between a checklist that is
+ * true and one that was true once.
+ */
+async function loadSetup() {
+  let data;
+  try { data = await api('/api/coach/onboarding'); } catch { return; }
+
+  // Blockers are separate from setup: they are breakage, not progress, and
+  // they can turn up long after onboarding is finished.
+  const stuck = data.blockers || [];
+  $('blockers-card').classList.toggle('hidden', stuck.length === 0);
+  $('blockers').innerHTML = stuck.map((b) => `
+    <div class="advisory caution">
+      <span class="dotmark"></span>
+      <div><b>${esc(b.title)}</b><em>${esc(b.detail)}</em></div>
+    </div>`).join('');
+
+  // Once the required steps are done the whole thing goes away. A setup guide
+  // that never leaves stops being a guide and becomes furniture.
+  const optionalLeft = data.steps.filter((s) => !s.required && !s.done).length;
+  if (data.complete && optionalLeft === 0) {
+    $('setup-card').classList.add('hidden');
+    return;
+  }
+  $('setup-card').classList.remove('hidden');
+
+  $('setup-title').textContent = data.complete
+    ? 'Set up — a few optional things left'
+    : 'Getting set up';
+  $('setup-count').textContent = `${data.required_done} of ${data.required_total}`;
+  $('setup-fill').style.width =
+    `${Math.round((data.required_done / Math.max(1, data.required_total)) * 100)}%`;
+
+  $('setup-steps').innerHTML = data.steps.map((step) => `
+    <div class="setup-step ${step.done ? 'done' : ''}">
+      <span class="setup-tick">${step.done ? '&check;' : ''}</span>
+      <div>
+        <b>${esc(step.title)}</b>${step.required ? '' : ' <span class="small muted">optional</span>'}
+        ${step.done ? '' : `<div class="small muted">${esc(step.detail)}</div>`}
+        ${step.done || !step.why ? '' : `<div class="small muted"><em>${esc(step.why)}</em></div>`}
+      </div>
+      ${step.done || !step.anchor ? ''
+        : `<button class="secondary inline" data-goto="${esc(step.anchor)}">Go</button>`}
+    </div>`).join('');
+
+  $('setup-done-note').textContent = data.complete
+    ? 'Nothing above is required. This panel disappears once they are done too.'
+    : '';
+}
+
+$('setup-steps').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-goto]');
+  if (!button) return;
+  const target = document.getElementById(button.dataset.goto);
+  if (!target) return;
+  // Opened as well as scrolled to: several of these live inside a collapsed
+  // <details>, and scrolling to a closed box looks like nothing happened.
+  target.classList.remove('hidden');
+  target.querySelectorAll('details').forEach((d) => { d.open = true; });
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
 async function loadFamilyBoard() {
@@ -1782,6 +1862,7 @@ $('signout').addEventListener('click', logout);
     }
 
     await loadBilling();
+    await loadSetup();
     await loadStaff(orgs.role === 'director');
     await loadPositionSettings(orgs.role === 'director');
     await loadTeams();

@@ -619,3 +619,20 @@ tbody tr:hover { background: var(--surface-2); }
    server with the same function that sends it. */
 .recog-preview:not(:empty) { margin-top: 8px; padding: 10px;
                              border-radius: var(--radius); background: var(--surface-2); }
+
+/* Setup checklist. Derived from real state, and it disappears when done --
+   a guide that never leaves stops being a guide and becomes furniture. */
+.setup-bar { height: 5px; border-radius: 99px; background: var(--surface-2);
+             overflow: hidden; margin-top: 8px; }
+.setup-bar i { display: block; height: 100%; background: var(--accent);
+               transition: width .4s ease; }
+.setup-step { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0;
+              border-bottom: 1px solid var(--border); }
+.setup-step:last-child { border-bottom: none; }
+.setup-step.done { opacity: .55; }
+.setup-step > div { flex: 1; }
+.setup-tick { flex: none; width: 18px; height: 18px; border-radius: 99px;
+              border: 1px solid var(--border); display: flex; align-items: center;
+              justify-content: center; font-size: 11px; margin-top: 2px; }
+.setup-step.done .setup-tick { background: var(--accent-dim); border-color: var(--accent-dim);
+                               color: var(--text); }

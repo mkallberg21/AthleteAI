@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1538 tests
+python -m pytest tests/ -q          # 1564 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -118,6 +118,7 @@ athleteiq/
   digest.py         Weekly team KPIs and the coach email
   billing.py        Plans, seats, entitlements, invoicing seam
   recognition.py    Milestones, coach templates, and who signs them
+  onboarding.py     Setup checklist derived from state, and what is blocking
   family.py         The household board, which is not a leaderboard
   mailer.py         Outbound queue: retries, suppression, unsubscribe
   webhooks.py       Inbound delivery events: verification, bounce handling
@@ -607,6 +608,58 @@ The streak shown here is the same number the athlete sees on their own screen,
 recovery days and wellness check-ins included. Two different numbers for the same
 word would be worse than not showing it — and saying you are sore must not cost
 a streak on the family board either.
+
+## Setting up a new program
+
+A director who signs up lands on a dashboard of fifteen cards, fourteen of them
+empty, with nothing saying which one matters first. Every feature works and none
+of them is reachable, because the order is invisible: a team has to exist before
+an athlete can join one, an athlete before a code can be handed out, and a code
+before anything happens at all.
+
+| | Step | |
+|---|---|---|
+| 1 | Create your first team | required |
+| 2 | Add your athletes | required |
+| 3 | Get one athlete training | required |
+| 4 | Invite the parents | optional |
+| 5 | Write one message in your own voice | optional |
+| 6 | Add another coach | optional |
+
+Step 3 is the one that earns its place: it is the only step that proves the
+whole chain works — code handed over, app installed, camera pointed, session
+counted. And it turns on a session that actually **counted**, so a recording the
+integrity layer held for review does not tick it. There is a test for that.
+
+**Every step is computed from the database, never from a flag saying somebody
+clicked "done".** A remembered dismissal is a checklist that lies: it stays
+ticked after the team is deleted, and it cannot tell a director who got half-way
+and came back a week later where they actually are. A step un-ticks itself if
+the thing it describes goes away — also tested, by deleting the team.
+
+And it ends. Once the required steps are done the panel collapses, because a
+setup guide that never leaves stops being a guide and becomes furniture.
+
+A household gets a shorter list: no team step, because signing up creates one;
+no staff or parent steps, because there is nobody to invite. It says "children"
+rather than "athletes".
+
+### The gate that surprises people
+
+Separate from the steps is a **blockers** panel, because these are not setup —
+they are breakage, and they turn up long after onboarding is finished.
+
+The one that matters is the consent gate. Enforcement begins the *moment a
+parent is linked*, so a director who invites parents on Monday finds their
+athletes locked out on Tuesday. The athlete sees a clear message; the coach used
+to see nothing at all and had to work it out. Now:
+
+> **3 athletes waiting on a parent** — Jordan P., Sam R. and Alex T. cannot
+> record anything until their parent accepts in their own portal. Nothing is
+> broken — this is the consent gate doing its job, and it switches on the moment
+> a parent is linked.
+
+Naming it before it bites is most of the value in this whole module.
 
 ## Recognition, and who it comes from
 
