@@ -40,6 +40,16 @@
     </p>
   </div>
 
+  <div class="card" id="practice-card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+      <h2 style="margin:0">Before practice</h2>
+      <span class="small muted" id="practice-roster"></span>
+    </div>
+    <p class="small muted" id="practice-headline" style="margin:6px 0 0"></p>
+    <div id="practice-people" style="margin-top:12px"></div>
+    <div id="practice-coverage" style="margin-top:12px"></div>
+  </div>
+
   <div class="stat-row" id="summary"></div>
 
   <div class="card hidden" id="setup-card">
@@ -846,11 +856,16 @@ async function loadAll() {
   const teamId = $('team').value ? Number($('team').value) : null;
   const window_ = $('window').value;
 
-  const [rosterData, standingsData, reviewData] = await Promise.all([
+  const [rosterData, standingsData, reviewData, practiceCard] = await Promise.all([
     api(`/api/coach/roster?window=${window_}${teamId ? `&team_id=${teamId}` : ''}`),
     api(`/api/standings?window=${window_}`),
     api('/api/coach/review-queue'),
+    // Always today, whatever window the rest of the dashboard is showing --
+    // the question this card answers is about the next hour.
+    api(`/api/coach/practice${teamId ? `?team_id=${teamId}` : ''}`),
   ]);
+
+  renderPractice(practiceCard);
 
   renderSummary(rosterData.athletes);
   renderAttention(rosterData.athletes);
@@ -1604,7 +1619,50 @@ async function loadTeams() {
   $('sync-team').innerHTML = options;
 }
 
-// -------------------------------------------------------------- roster sync
+// ------------------------------------------------------- before practice
+
+const PRACTICE_KINDS = {
+  hold: { label: 'Not training', cls: 'bad' },
+  modify: { label: 'Modified', cls: 'warn' },
+  watch: { label: 'Keep an eye', cls: 'ok' },
+};
+
+function renderPractice(card) {
+  $('practice-roster').textContent = card.team_name
+    ? `${esc(card.team_name)} · ${card.roster} on the roster`
+    : `${card.roster} athletes`;
+  $('practice-headline').textContent = card.headline;
+
+  // A quiet day is stated, not left blank -- an empty card reads as a
+  // loading bug, and "nothing to flag" is a thing a coach can act on.
+  $('practice-people').innerHTML = card.people.length ? `
+    <table>
+      <tbody>${card.people.map((p) => `
+        <tr>
+          <td><b>${esc(p.display_name)}</b></td>
+          <td><span class="pill ${PRACTICE_KINDS[p.kind]?.cls || 'ok'}">${
+            esc(PRACTICE_KINDS[p.kind]?.label || p.kind)}</span></td>
+          <td>${esc(p.line)}<br><span class="small muted">${esc(p.detail)}</span></td>
+        </tr>`).join('')}</tbody>
+    </table>
+    ${card.hidden ? `<p class="small muted">and ${card.hidden} more &mdash;
+      open Wellness for the full list.</p>` : ''}`
+    : '';
+
+  $('practice-coverage').innerHTML = card.coverage.length ? card.coverage.map((c) => `
+    <div class="budget-row">
+      <span class="budget-label">${esc(c.title)}</span>
+      <span class="budget-n">${c.done}/${c.total}</span>
+      ${c.behind_total ? `<span class="small muted">
+        ${c.behind.map(esc).join(', ')}${
+          c.behind_total > c.behind.length
+            ? ` and ${c.behind_total - c.behind.length} more` : ''} to check in with</span>`
+        : '<span class="small muted">all caught up</span>'}
+    </div>`).join('')
+    : '<p class="small muted">No assignments running.</p>';
+}
+
+// ------------------------------------------------------------ roster sync
 
 let providers = [];
 

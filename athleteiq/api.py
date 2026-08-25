@@ -34,6 +34,7 @@ from . import wellness as wellness_mod
 from . import transfer as transfer_mod
 from . import film as film_mod
 from . import guardians as guardians_mod
+from . import practice as practice_mod
 from . import roster as roster_mod
 from . import roster_sync
 from . import notifications as notify
@@ -2435,6 +2436,26 @@ def team_ball_drills(
         store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
     )
     return store.team_ball_drills([a["athlete_id"] for a in athletes])
+
+
+@app.get("/api/coach/practice")
+def practice_briefing(
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The ninety seconds before practice starts.
+
+    One card: who is not training, who is on modified work, who is worth an
+    eye, and what the squad has not got through. Composed from the same
+    functions the full screens use, so it cannot drift from the screen a coach
+    opens next.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    return practice_mod.brief(
+        store, principal.org_id, team_id, scope=principal.scope_filter()
+    ).to_dict()
 
 
 @app.get("/api/coach/wellness")
