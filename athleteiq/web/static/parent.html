@@ -26,6 +26,19 @@
     </p>
   </div>
 
+  <div class="card hidden" id="decide-card">
+    <b id="decide-title">One thing to decide</b>
+    <p class="small muted" id="decide-promise"></p>
+    <div id="decide-blocked"></div>
+    <div id="decide-steps"></div>
+    <details style="margin-top:12px">
+      <summary class="small muted" style="cursor:pointer">
+        What you can always do
+      </summary>
+      <ul class="small muted" id="decide-rights" style="margin:8px 0 0 18px"></ul>
+    </details>
+  </div>
+
   <div id="athletes"></div>
 
   <div class="card">
@@ -166,6 +179,55 @@ async function load() {
       + 'Use an invite code from your coach below.</p></div>';
 
   wire();
+  await loadDecisions();
+}
+
+/**
+ * What a guardian still has to decide.
+ *
+ * A parent who said *no* has decided, and the panel treats that as finished --
+ * a checklist that keeps asking after an answer is not respecting it. The
+ * separate "cannot train yet" line is about consequence, not about a task.
+ */
+async function loadDecisions() {
+  let data;
+  try { data = await api('/api/guardians/onboarding'); } catch { return; }
+  if (!data.athletes.length) { $('decide-card').classList.add('hidden'); return; }
+
+  const pending = data.athletes.flatMap((a) => a.steps.filter((s) => !s.done));
+  if (!pending.length && !data.blocked.length) {
+    $('decide-card').classList.add('hidden');
+    return;
+  }
+  $('decide-card').classList.remove('hidden');
+
+  $('decide-title').textContent = data.complete
+    ? 'Everything is decided'
+    : `${data.required_total - data.required_done} decision${
+        data.required_total - data.required_done === 1 ? '' : 's'} to make`;
+  $('decide-promise').textContent = data.complete ? '' : data.promise;
+
+  // Stated whether or not anything is pending: an athlete sitting locked out
+  // is the thing a parent most needs to know, and it can be true long after
+  // every decision has been made.
+  $('decide-blocked').innerHTML = !data.blocked.length ? '' : `
+    <div class="advisory caution">
+      <span class="dotmark"></span>
+      <div><b>${data.blocked.map(esc).join(', ')} cannot train yet</b>
+        <em>Training is paused until you allow it. That may be exactly what you
+          intended &mdash; if not, the switch is on their card below.</em></div>
+    </div>`;
+
+  $('decide-steps').innerHTML = data.athletes.map((a) => a.steps.map((step) => `
+    <div class="setup-step ${step.done ? 'done' : ''}">
+      <span class="setup-tick">${step.done ? '&check;' : ''}</span>
+      <div>
+        <b>${esc(step.title)}</b>${step.required ? '' : ' <span class="small muted">optional</span>'}
+        ${step.done ? '' : `<div class="small muted">${esc(step.detail)}</div>`}
+      </div>
+    </div>`).join('')).join('');
+
+  $('decide-rights').innerHTML = data.rights.map((r) => `<li>${esc(r)}</li>`).join('');
 }
 
 // Loaded on open rather than up front: a parent with three children should
@@ -305,6 +367,10 @@ function wire() {
             granted: box.checked,
           },
         });
+        // The panel is about these switches, so it goes stale the instant one
+        // moves. Refreshed here rather than on the next page load, which is
+        // the difference between a checklist and a snapshot.
+        await loadDecisions();
       } catch (e) {
         box.checked = !box.checked;
         showError(e.message);

@@ -373,6 +373,21 @@ def current_consents(conn: sqlite3.Connection, athlete_id: int) -> dict[str, boo
     return state
 
 
+def answered_scopes(conn: sqlite3.Connection, athlete_id: int) -> set[str]:
+    """Scopes a guardian has actually decided, either way.
+
+    `current_consents` collapses "never asked" and "asked and said no" into
+    the same False, which is right for enforcement and wrong for onboarding:
+    a parent who said no has made their decision, and a checklist that keeps
+    asking is not respecting it.
+    """
+    return {
+        row["scope"] for row in conn.execute(
+            "SELECT DISTINCT scope FROM consents WHERE athlete_id = ?", (athlete_id,)
+        )
+    }
+
+
 def consent_detail(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str, Any]]:
     """Every scope with its current state and description, for the portal.
 

@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1582 tests
+python -m pytest tests/ -q          # 1599 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -681,6 +681,47 @@ The athlete already meets this at the moment they press start. Saying it on the
 home screen means they find out *before* choosing a drill and being refused,
 which is the difference between "waiting on my mum" and "this app is broken".
 A test asserts the coach's version names the athlete and this one does not.
+
+### What a new parent is asked
+
+Shortest of the three, and short for a different reason. A director has a
+program to set up and an athlete has an app to try; a parent's job here is not
+to set anything up at all. It is to make **one decision that is genuinely
+theirs**, and padding that with tasks would dress a consent screen up as a
+product tour.
+
+| | Step | |
+|---|---|---|
+| 1 | Decide whether *{name}* can train | required |
+| 2 | Choose how they appear on team boards | optional |
+
+Asked **per child**, not per account: a guardian with two children can easily
+have decided for one and not the other, and the one still waiting is the one who
+cannot train.
+
+### Answered is not the same as granted
+
+The distinction that shapes this whole panel. `current_consents` collapses
+"never asked" and "asked and said no" into the same `False` — correct for
+enforcement, wrong here. **A parent who said no has decided**, and a checklist
+that keeps asking after an answer is not respecting it. So a declined consent
+marks the step done and the panel goes quiet.
+
+What does *not* go quiet is the consequence, which is reported separately:
+
+> **Robin Pierce cannot train yet** — Training is paused until you allow it.
+> That may be exactly what you intended — if not, the switch is on their card
+> below.
+
+Deciding and allowing are different things, and only the second is what the
+athlete is waiting on. Tested both ways: saying no completes the decision *and*
+leaves the child listed as blocked.
+
+Alongside sits what a guardian can always do — withdraw any permission, download
+everything, delete it all, and see every message their athlete is sent.
+**Stated, not made into steps.** None of it is a task to complete and all of it
+is worth knowing on day one, because it is the difference between granting a
+permission and handing something over.
 
 ### The gate that surprises people
 

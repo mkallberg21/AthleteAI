@@ -3649,3 +3649,72 @@ class TestAthleteOnboardingEndpoint:
         do_session(client, one["headers"], seed=13)
         body = client.get("/api/me/onboarding", headers=two["headers"]).json()
         assert body["complete"] is False, "each athlete gets their own state"
+
+
+class TestParentOnboardingEndpoint:
+
+    def _linked(self, client, program):
+        from athleteiq import guardians
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, athlete["id"], created_by=athlete["id"])
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "Dana Pierce")
+        store.conn.commit()
+        return athlete, guardian, {"Authorization": f"Bearer {guardian['token']}"}
+
+    def test_a_new_parent_is_asked_the_one_thing_that_matters(self, client, program):
+        athlete, _, headers = self._linked(client, program)
+        body = client.get("/api/guardians/onboarding", headers=headers).json()
+        assert body["complete"] is False
+        assert body["next"]["display_name"] == athlete["display_name"]
+        assert body["athletes"][0]["steps"][0]["key"] == "participation"
+
+    def test_it_says_the_child_cannot_train_yet(self, client, program):
+        athlete, _, headers = self._linked(client, program)
+        body = client.get("/api/guardians/onboarding", headers=headers).json()
+        assert athlete["display_name"] in body["blocked"]
+
+    def test_deciding_yes_clears_it_and_unblocks_the_athlete(self, client, program):
+        athlete, _, headers = self._linked(client, program)
+        client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "participation",
+                  "granted": True},
+            headers=headers,
+        )
+        body = client.get("/api/guardians/onboarding", headers=headers).json()
+        assert body["complete"] is True and body["blocked"] == []
+        # And the thing it claims is genuinely true now.
+        assert client.post(
+            "/api/sessions/start", json={"drill_key": "gen_squat"},
+            headers=athlete["headers"],
+        ).status_code == 201
+
+    def test_deciding_no_is_finished_but_still_blocking(self, client, program):
+        athlete, _, headers = self._linked(client, program)
+        client.post(
+            "/api/guardians/consent",
+            json={"athlete_id": athlete["id"], "scope": "participation",
+                  "granted": False},
+            headers=headers,
+        )
+        body = client.get("/api/guardians/onboarding", headers=headers).json()
+        assert body["complete"] is True, "they decided; do not keep asking"
+        assert athlete["display_name"] in body["blocked"]
+
+    def test_a_parent_only_sees_their_own_children(self, client, program):
+        _, _, headers = self._linked(client, program)
+        other = program["athletes"][1]
+        body = client.get("/api/guardians/onboarding", headers=headers).json()
+        assert other["display_name"] not in {
+            a["display_name"] for a in body["athletes"]
+        }
+
+    def test_an_athlete_asking_gets_nothing_of_anyone_elses(self, client, program):
+        """Reachable by any signed-in principal, and a guardian of nobody is
+        exactly what an athlete is."""
+        body = client.get(
+            "/api/guardians/onboarding", headers=program["athletes"][0]["headers"],
+        ).json()
+        assert body["athletes"] == []

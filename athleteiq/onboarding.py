@@ -31,6 +31,8 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
+from . import guardians
+
 
 @dataclass(frozen=True)
 class Step:
@@ -370,4 +372,87 @@ def athlete_progress(conn: sqlite3.Connection, athlete_id: int) -> dict[str, Any
         "required_total": len(required),
         "promise": PROMISE,
         "blockers": athlete_blockers(conn, athlete_id),
+    }
+
+
+#: What a guardian can always do, stated rather than made into steps. None of
+#: it is a task to complete; all of it is worth knowing on day one, because it
+#: is the difference between granting a permission and handing something over.
+PARENT_RIGHTS = (
+    "Withdraw any permission at any time, and it takes effect immediately.",
+    "Download everything held about your athlete, in one file.",
+    "Delete their training history, or the whole account, permanently.",
+    "See every message they are sent. Nobody can reply through the app.",
+)
+
+
+def parent_progress(conn: sqlite3.Connection, guardian_id: int) -> dict[str, Any]:
+    """What a guardian still has to decide, per child.
+
+    Short on purpose, and short for a different reason than the athlete's: a
+    parent's job here is not to set anything up, it is to make one decision
+    that is genuinely theirs to make. Padding that with tasks would dress a
+    consent screen up as a product tour.
+
+    Per athlete rather than per account, because a guardian with two children
+    can easily have decided for one and not the other -- and the one who is
+    waiting is the one who cannot train.
+    """
+    rows = conn.execute(
+        "SELECT u.id, u.display_name FROM guardians g "
+        "JOIN users u ON u.id = g.athlete_id "
+        "WHERE g.guardian_id = ? AND u.active = 1 ORDER BY u.id",
+        (guardian_id,),
+    ).fetchall()
+
+    athletes: list[dict[str, Any]] = []
+    for row in rows:
+        athlete_id = int(row["id"])
+        name = row["display_name"] or "your athlete"
+        first = name.split()[0]
+        answered = guardians.answered_scopes(conn, athlete_id)
+        granted = guardians.current_consents(conn, athlete_id)
+
+        decided = guardians.Scope.PARTICIPATION in answered
+        athletes.append({
+            "athlete_id": athlete_id,
+            "display_name": name,
+            "steps": [
+                {
+                    "key": "participation",
+                    "title": f"Decide whether {first} can train",
+                    "detail": (
+                        "Their phone counts reps and the video never leaves it. "
+                        "Their coach sees the numbers, not the footage."
+                    ),
+                    "required": True,
+                    "done": decided,
+                },
+                {
+                    "key": "leaderboard_name",
+                    "title": f"Choose how {first} appears on team boards",
+                    "detail": (
+                        "Left alone they show up under an initial and a jersey "
+                        "number, still competing. This is only about their name."
+                    ),
+                    "required": False,
+                    "done": guardians.Scope.LEADERBOARD_NAME in answered,
+                },
+            ],
+            # Decided-and-declined is a finished decision, not an unfinished
+            # one. What it is not is training: that is the blocker below.
+            "decided": decided,
+            "blocking": not granted.get(guardians.Scope.PARTICIPATION, False),
+        })
+
+    waiting = [a for a in athletes if not a["decided"]]
+    return {
+        "athletes": athletes,
+        "next": waiting[0] if waiting else None,
+        "complete": not waiting,
+        "required_done": sum(1 for a in athletes if a["decided"]),
+        "required_total": len(athletes),
+        "blocked": [a["display_name"] for a in athletes if a["blocking"]],
+        "promise": PROMISE,
+        "rights": list(PARENT_RIGHTS),
     }

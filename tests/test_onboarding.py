@@ -386,3 +386,152 @@ class TestWhatAnAthleteIsToldIsStoppingThem:
         theirs = O.blockers(store.conn, program["org"])[0]
         assert "Jordan P." not in mine["detail"], "not addressed in the third person"
         assert "Jordan P." in theirs["detail"]
+
+
+class TestWhatAParentHasToDecide:
+    """A parent's job here is not to set anything up. It is to make one
+    decision that is genuinely theirs, and padding that with tasks would dress
+    a consent screen up as a product tour."""
+
+    @pytest.fixture
+    def family(self, program):
+        store = program["store"]
+        team = store.create_team(program["org"], "U13")
+        kids = []
+        for name, year in (("Jordan Pierce", 2012), ("Robin Pierce", 2016)):
+            child = store.create_user(
+                program["org"], "athlete", name, birth_year=year,
+                dominant_hand="right",
+            )
+            store.join_team(team["join_code"], child["id"])
+            kids.append(child)
+
+        invite = guardians.create_invite(
+            store.conn, kids[0]["id"], created_by=program["director"]["id"],
+        )
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "Dana Pierce")
+        second = guardians.create_invite(
+            store.conn, kids[1]["id"], created_by=program["director"]["id"],
+        )
+        guardians.link_existing(store.conn, second["code"], guardian["guardian_id"])
+        store.conn.commit()
+        return {"store": store, "guardian": guardian, "kids": kids}
+
+    def test_it_asks_per_child_not_per_account(self, family):
+        """A guardian with two children can easily have decided for one."""
+        result = O.parent_progress(family["store"].conn, family["guardian"]["guardian_id"])
+        assert result["required_total"] == 2
+        assert {a["display_name"] for a in result["athletes"]} == {
+            "Jordan Pierce", "Robin Pierce",
+        }
+
+    def test_the_first_undecided_child_is_next(self, family):
+        result = O.parent_progress(family["store"].conn, family["guardian"]["guardian_id"])
+        assert result["next"]["display_name"] == "Jordan Pierce"
+
+    def test_saying_no_finishes_the_decision(self, family):
+        """A parent who said no has decided. A checklist that keeps asking
+        after an answer is not respecting it."""
+        store = family["store"]
+        for child in family["kids"]:
+            guardians.set_consent(
+                store.conn, child["id"], family["guardian"]["guardian_id"],
+                guardians.Scope.PARTICIPATION, False,
+            )
+        store.conn.commit()
+        result = O.parent_progress(store.conn, family["guardian"]["guardian_id"])
+        assert result["complete"] is True
+        assert result["next"] is None
+
+    def test_but_the_child_is_still_reported_as_unable_to_train(self, family):
+        """Deciding and allowing are different things, and the second is what
+        the athlete is waiting on."""
+        store = family["store"]
+        guardians.set_consent(
+            store.conn, family["kids"][0]["id"], family["guardian"]["guardian_id"],
+            guardians.Scope.PARTICIPATION, False,
+        )
+        store.conn.commit()
+        result = O.parent_progress(store.conn, family["guardian"]["guardian_id"])
+        assert "Jordan Pierce" in result["blocked"]
+
+    def test_saying_yes_clears_both(self, family):
+        store = family["store"]
+        for child in family["kids"]:
+            guardians.set_consent(
+                store.conn, child["id"], family["guardian"]["guardian_id"],
+                guardians.Scope.PARTICIPATION, True,
+            )
+        store.conn.commit()
+        result = O.parent_progress(store.conn, family["guardian"]["guardian_id"])
+        assert result["complete"] is True and result["blocked"] == []
+
+    def test_the_leaderboard_choice_is_offered_but_never_required(self, family):
+        """Left alone it stays off, which is the safe answer -- so it is worth
+        surfacing once and never insisting on."""
+        result = O.parent_progress(family["store"].conn, family["guardian"]["guardian_id"])
+        step = next(
+            s for s in result["athletes"][0]["steps"] if s["key"] == "leaderboard_name"
+        )
+        assert step["required"] is False
+        assert "still competing" in step["detail"]
+
+    def test_the_promise_is_shown_before_the_decision(self, family):
+        result = O.parent_progress(family["store"].conn, family["guardian"]["guardian_id"])
+        assert "never leaves" in result["promise"]
+
+    def test_what_they_can_always_do_is_stated_not_made_into_tasks(self, family):
+        """None of it is something to complete; all of it is worth knowing."""
+        result = O.parent_progress(family["store"].conn, family["guardian"]["guardian_id"])
+        joined = " ".join(result["rights"]).lower()
+        for promise in ("withdraw", "download", "delete", "nobody can reply"):
+            assert promise in joined
+        keys = {s["key"] for a in result["athletes"] for s in a["steps"]}
+        assert keys == {"participation", "leaderboard_name"}
+
+    def test_a_guardian_of_nobody_gets_an_empty_answer(self, program):
+        store = program["store"]
+        stranger = store.create_user(program["org"], "coach", "Not A Parent")
+        result = O.parent_progress(store.conn, stranger["id"])
+        assert result["athletes"] == [] and result["complete"] is True
+
+    def test_another_familys_children_are_not_listed(self, family, program):
+        store = family["store"]
+        other_child = store.create_user(
+            program["org"], "athlete", "Someone Else", birth_year=2012,
+        )
+        invite = guardians.create_invite(
+            store.conn, other_child["id"], created_by=program["director"]["id"],
+        )
+        guardians.redeem_invite(store.conn, invite["code"], "Another Parent")
+        store.conn.commit()
+        result = O.parent_progress(store.conn, family["guardian"]["guardian_id"])
+        assert "Someone Else" not in {a["display_name"] for a in result["athletes"]}
+
+
+class TestAnsweredIsNotTheSameAsGranted:
+
+    def test_the_helper_tells_a_no_from_a_silence(self, program):
+        store = program["store"]
+        child = store.create_user(program["org"], "athlete", "Jordan P.", birth_year=2012)
+        invite = guardians.create_invite(
+            store.conn, child["id"], created_by=program["director"]["id"],
+        )
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        store.conn.commit()
+
+        assert guardians.answered_scopes(store.conn, child["id"]) == set()
+        guardians.set_consent(
+            store.conn, child["id"], guardian["guardian_id"],
+            guardians.Scope.PARTICIPATION, False,
+        )
+        store.conn.commit()
+
+        assert guardians.Scope.PARTICIPATION in guardians.answered_scopes(
+            store.conn, child["id"]
+        )
+        # And enforcement still reads it as not allowed, which is the point of
+        # keeping the two ideas apart.
+        assert guardians.current_consents(
+            store.conn, child["id"]
+        )[guardians.Scope.PARTICIPATION] is False

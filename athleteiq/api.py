@@ -2046,6 +2046,20 @@ def parent_messages(
     }
 
 
+@app.get("/api/guardians/onboarding")
+def parent_onboarding(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What this guardian still has to decide, per child.
+
+    Short for a different reason than the athlete's: a parent's job here is
+    not to set anything up, it is to make one decision that is genuinely
+    theirs. Padding it with tasks would dress a consent screen up as a tour.
+    """
+    return onboarding_mod.parent_progress(store.conn, principal.id)
+
+
 @app.get("/api/me/onboarding")
 def athlete_onboarding(
     principal: Principal = Depends(_athlete),
