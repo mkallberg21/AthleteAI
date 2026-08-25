@@ -399,6 +399,44 @@
     <div id="import-err" class="err hidden"></div>
   </div>
 
+  <div class="card" id="sync-card">
+    <h2>Keep a roster in step</h2>
+    <p class="small muted">
+      A CSV is a snapshot. Connect a team to wherever its roster actually
+      lives and it stays current on its own &mdash; nobody has to remember to
+      re-export in week three when two players join.
+    </p>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1 1 200px">
+        <label for="sync-provider">Where the roster lives</label>
+        <select id="sync-provider"></select>
+      </div>
+      <div style="flex:1 1 200px">
+        <label for="sync-team">Team</label>
+        <select id="sync-team"></select>
+      </div>
+    </div>
+
+    <div id="sync-note" class="small muted" style="margin-top:8px"></div>
+
+    <label for="sync-ref" id="sync-ref-label">Team ID</label>
+    <input id="sync-ref" autocomplete="off" spellcheck="false">
+
+    <label for="sync-token" id="sync-token-label">Access token</label>
+    <input id="sync-token" type="password" autocomplete="off" spellcheck="false">
+    <p class="small muted">
+      Stored for the sync to use and never shown again &mdash; not here, not
+      in a log. Disconnect and reconnect to replace it.
+    </p>
+
+    <button id="sync-connect" style="margin-top:10px">Connect and preview</button>
+
+    <div id="sync-result" class="hidden" style="margin-top:16px"></div>
+    <div id="sync-links" style="margin-top:16px"></div>
+    <div id="sync-err" class="err hidden"></div>
+  </div>
+
   <div class="card hidden" id="slips-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px" class="no-print">
       <h2 style="margin:0">Claim codes</h2>
@@ -1563,6 +1601,171 @@ async function loadTeams() {
   $('a-team').innerHTML = options;
   $('b-team').innerHTML = options;
   $('import-team').innerHTML = options;
+  $('sync-team').innerHTML = options;
+}
+
+// -------------------------------------------------------------- roster sync
+
+let providers = [];
+
+function providerSpec(key) {
+  return providers.find((p) => p.key === key) || null;
+}
+
+function renderProviderFields() {
+  const spec = providerSpec($('sync-provider').value);
+  if (!spec) return;
+  $('sync-ref-label').textContent = spec.team_field;
+  $('sync-token-label').textContent = spec.credential_label;
+  const help = spec.help_url
+    ? ` <a href="${esc(spec.help_url)}" target="_blank" rel="noopener">Where do I find these?</a>`
+    : '';
+  // An adapter written against published docs but never run against a real
+  // account is worth having and worth saying so about. A coach who knows the
+  // first run is a rehearsal will read the preview instead of trusting it.
+  $('sync-note').innerHTML = spec.verified
+    ? `${esc(spec.note || '')}${help}`
+    : `<b>Not yet tested against a live ${esc(spec.label)} account.</b>
+       ${esc(spec.note || '')} Read the preview before you let it write.${help}`;
+}
+
+function renderSyncResult(result) {
+  const box = $('sync-result');
+  box.classList.remove('hidden');
+  if (result.error) {
+    box.innerHTML = `<div class="advisory caution">${esc(result.error)}</div>`;
+    return;
+  }
+  const departed = result.departures.length ? `
+    <p class="small" style="margin-top:10px">
+      <b>${result.departures.length} on our roster ${result.departures.length === 1
+        ? 'is' : 'are'} not on theirs:</b>
+      ${result.departures.map((d) => esc(d.display_name)).join(', ')}.
+      Nobody has been removed &mdash; a child who leaves a team-management app
+      has not left your program, and that is a call for a person to make.
+    </p>` : '';
+  const warnings = result.warnings.length ? `
+    <ul class="small muted" style="margin-top:10px">
+      ${result.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}
+    </ul>` : '';
+  box.innerHTML = `
+    <div class="stat-row">
+      <span class="stat"><b>${result.fetched}</b> on their roster</span>
+      <span class="stat"><b>${result.created}</b> to add</span>
+      <span class="stat"><b>${result.updated}</b> to update</span>
+      <span class="stat"><b>${result.unchanged}</b> unchanged</span>
+    </div>
+    <p class="small muted" style="margin-top:8px">
+      ${result.dry_run ? 'Nothing has been written yet.' : 'Applied.'}
+    </p>
+    ${departed}${warnings}`;
+}
+
+async function renderSyncLinks() {
+  const { links } = await api('/api/coach/roster/links');
+  $('sync-links').innerHTML = links.length ? `
+    <table>
+      <thead><tr><th>Team</th><th>Source</th><th>Last run</th><th></th></tr></thead>
+      <tbody>${links.map((l) => `
+        <tr>
+          <td><b>${esc(l.team_name)}</b></td>
+          <td>${esc(l.label)}
+            ${l.verified ? '' : '<span class="pill warn">untested</span>'}</td>
+          <td class="small">${l.last_run_at ? fmtDate(l.last_run_at) : 'never'}</td>
+          <td>
+            <button class="secondary inline" data-sync="${l.team_id}"
+              data-provider="${esc(l.provider)}">Sync now</button>
+            <label class="small" style="display:inline-flex;gap:4px;align-items:center">
+              <input type="checkbox" data-auto="${l.team_id}"
+                data-provider="${esc(l.provider)}" ${l.auto_sync ? 'checked' : ''}>
+              keep in step
+            </label>
+            <button class="secondary inline" data-unlink="${l.team_id}"
+              data-provider="${esc(l.provider)}">Disconnect</button>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>`
+    : '<p class="small muted">No teams connected yet.</p>';
+}
+
+$('sync-provider').addEventListener('change', renderProviderFields);
+
+$('sync-connect').addEventListener('click', async () => {
+  const btn = $('sync-connect');
+  btn.disabled = true;
+  $('sync-err').classList.add('hidden');
+  try {
+    const { preview } = await api('/api/coach/roster/link', {
+      method: 'POST',
+      body: {
+        team_id: Number($('sync-team').value),
+        provider: $('sync-provider').value,
+        token: $('sync-token').value,
+        remote_ref: $('sync-ref').value,
+      },
+    });
+    $('sync-token').value = '';
+    renderSyncResult(preview);
+    await renderSyncLinks();
+  } catch (e) {
+    $('sync-err').textContent = e.message;
+    $('sync-err').classList.remove('hidden');
+  } finally { btn.disabled = false; }
+});
+
+// Delegated, and deliberately without {once} -- a one-shot listener here tears
+// itself down after the first click anywhere in the table.
+$('sync-links').addEventListener('click', async (event) => {
+  const sync = event.target.closest('[data-sync]');
+  const unlink = event.target.closest('[data-unlink]');
+  if (sync) {
+    sync.disabled = true;
+    try {
+      renderSyncResult(await api('/api/coach/roster/sync', {
+        method: 'POST',
+        body: {
+          team_id: Number(sync.dataset.sync),
+          provider: sync.dataset.provider,
+          apply: true,
+        },
+      }));
+      await Promise.all([renderSyncLinks(), loadTeams(), loadAll()]);
+    } catch (e) { showError(e.message); } finally { sync.disabled = false; }
+  } else if (unlink) {
+    const query = `team_id=${unlink.dataset.unlink}&provider=${
+      encodeURIComponent(unlink.dataset.provider)}`;
+    try {
+      await api(`/api/coach/roster/link?${query}`, { method: 'DELETE' });
+      await renderSyncLinks();
+    } catch (e) { showError(e.message); }
+  }
+});
+
+$('sync-links').addEventListener('change', async (event) => {
+  const box = event.target.closest('[data-auto]');
+  if (!box) return;
+  try {
+    await api('/api/coach/roster/auto-sync', {
+      method: 'POST',
+      body: {
+        team_id: Number(box.dataset.auto),
+        provider: box.dataset.provider,
+        on: box.checked,
+      },
+    });
+  } catch (e) {
+    box.checked = !box.checked;
+    showError(e.message);
+  }
+  await renderSyncLinks();
+});
+
+async function loadProviders() {
+  ({ providers } = await api('/api/coach/roster/providers'));
+  $('sync-provider').innerHTML = providers
+    .map((p) => `<option value="${esc(p.key)}">${esc(p.label)}</option>`).join('');
+  renderProviderFields();
+  await renderSyncLinks();
 }
 
 // ------------------------------------------------------------ roster import
@@ -1866,6 +2069,7 @@ $('signout').addEventListener('click', logout);
     await loadStaff(orgs.role === 'director');
     await loadPositionSettings(orgs.role === 'director');
     await loadTeams();
+    await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.
     await loadDrillOptions();
     defaultAssignmentDates();

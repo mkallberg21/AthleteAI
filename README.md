@@ -2334,13 +2334,15 @@ contact with a real driveway:
    though they are not remotely the same week. Capturing sessions per week per
    sport would sharpen it, at the cost of a form a twelve-year-old will not
    fill in — which is the trade the season picker deliberately takes.
-13. **Positions are modelled for lacrosse only.** Another sport gets honest
-   silence — `for_sport` returns nothing, athletes fall back to the generic
-   mix, and the join form falls back to free text. Adding a sport means adding
-   its positions *and* the sport-specific drills their emphasis would point at;
-   half of that is worse than neither, since a soccer emphasis built only from
-   the general strength drills would recommend the same mix to every position
-   on the pitch.
+13. **Every sport shares one bodyweight drill catalog.** All sixteen sports
+   have their own positions and their own emphasis, but that emphasis is drawn
+   from the same eighteen general movements — a volleyball middle and a rugby
+   prop get different *proportions* of the same exercises, not different
+   exercises. That is honest for physical preparation, which really is largely
+   shared. Sport-specific *skill* drills exist in six sports only (the five
+   ball drills plus lacrosse stick work); the other ten get physical
+   preparation and film. A sport with no position model at all still falls
+   back to the generic mix, but no shipped sport is in that state.
 14. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's

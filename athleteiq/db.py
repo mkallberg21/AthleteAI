@@ -294,6 +294,29 @@ CREATE TABLE IF NOT EXISTS shared_clip_views (
 );
 CREATE INDEX IF NOT EXISTS idx_shared_clip_views ON shared_clip_views(clip_id);
 
+-- A team wired up to wherever its roster actually lives.
+--
+-- `token` reaches back into a system holding children's contact details, so it
+-- is write-only everywhere above this line: it goes in, is used by the sync,
+-- and is never returned to a dashboard, an API response, or a log.
+CREATE TABLE IF NOT EXISTS roster_links (
+    id          INTEGER PRIMARY KEY,
+    org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    team_id     INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    provider    TEXT NOT NULL,
+    token       TEXT NOT NULL DEFAULT '',
+    remote_ref  TEXT NOT NULL,
+    -- Off until a coach has seen one dry run and agreed with it. A sync that
+    -- starts writing the moment it is connected is a sync nobody trusts.
+    auto_sync   INTEGER NOT NULL DEFAULT 0,
+    last_run_at TEXT,
+    last_result TEXT NOT NULL DEFAULT '',
+    created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL,
+    UNIQUE (team_id, provider)
+);
+CREATE INDEX IF NOT EXISTS idx_roster_links_org ON roster_links(org_id);
+
 CREATE TABLE IF NOT EXISTS recognition_templates (
     org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     milestone   TEXT NOT NULL,

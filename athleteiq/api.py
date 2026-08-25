@@ -35,6 +35,7 @@ from . import transfer as transfer_mod
 from . import film as film_mod
 from . import guardians as guardians_mod
 from . import roster as roster_mod
+from . import roster_sync
 from . import notifications as notify
 from .assignments import AssignmentError
 from .billing import BillingError
@@ -1279,6 +1280,139 @@ def import_roster(
         issue_guardian_invites=body.invite_guardians,
     )
     return {"summary": plan.to_dict()["summary"], **result}
+
+
+# ---------------------------------------------------------------------------
+# Roster links -- keeping a roster in step with wherever it already lives
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/coach/roster/providers")
+def roster_providers() -> dict[str, Any]:
+    """What a team can connect to, and how honest we are about each."""
+    return {
+        "providers": [
+            {
+                "key": p.key,
+                "label": p.label,
+                "credential_label": p.credential_label,
+                "team_field": p.team_field,
+                "help_url": p.help_url,
+                "verified": p.verified,
+                "note": p.note,
+            }
+            for p in roster_sync.PROVIDERS
+        ]
+    }
+
+
+class RosterLink(BaseModel):
+    team_id: int
+    provider: str = Field(min_length=1, max_length=40)
+    # Reaches back into a system holding children's contact details. It is
+    # stored, used by the sync, and never read back out.
+    token: str = Field(min_length=1, max_length=4_000)
+    remote_ref: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/coach/roster/link", status_code=201)
+def link_roster(
+    body: RosterLink,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Connect a team to its roster source, then immediately dry-run it.
+
+    The dry run is not optional. A wrong team id is the overwhelmingly common
+    first mistake here, and it looks exactly like a real roster until somebody
+    reads the names.
+    """
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    link = store.link_roster(
+        principal.org_id, body.team_id, body.provider,
+        body.token, body.remote_ref, principal.id,
+    )
+    return {"link": link, "preview": store.sync_roster(
+        principal.org_id, body.team_id, body.provider, dry_run=True)}
+
+
+@app.get("/api/coach/roster/links")
+def roster_links(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {"links": [
+        link for link in store.roster_links(principal.org_id)
+        if principal.can_see_team(link["team_id"])
+    ]}
+
+
+class RosterSyncRequest(BaseModel):
+    team_id: int
+    provider: str = Field(min_length=1, max_length=40)
+    apply: bool = False
+
+
+@app.post("/api/coach/roster/sync")
+def sync_roster(
+    body: RosterSyncRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    return store.sync_roster(
+        principal.org_id, body.team_id, body.provider,
+        dry_run=not body.apply, actor_id=principal.id,
+    )
+
+
+class RosterAutoSync(BaseModel):
+    team_id: int
+    provider: str = Field(min_length=1, max_length=40)
+    on: bool
+
+
+@app.post("/api/coach/roster/auto-sync")
+def set_roster_auto_sync(
+    body: RosterAutoSync,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Hand the sync permission to write, once a coach has seen a run."""
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    if body.on:
+        # Not merely "a run happened" -- connecting dry-runs, so that would
+        # always be true and would guard nothing. A run that *worked* is the
+        # evidence that the team id is right, and a wrong team id is the
+        # mistake this is here to keep off a schedule.
+        link = store.roster_link(body.team_id, body.provider)
+        last = link["last_result"] or {}
+        if not last.get("ok"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "the last sync did not succeed, so this cannot run "
+                    "unattended yet: " + (last.get("error") or "it has not run")
+                ),
+            )
+    return store.set_roster_auto_sync(
+        principal.org_id, body.team_id, body.provider, body.on)
+
+
+@app.delete("/api/coach/roster/link")
+def unlink_roster(
+    team_id: int,
+    provider: str,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Disconnect. Athletes already imported stay -- they are ours now."""
+    if not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    return {"removed": store.unlink_roster(principal.org_id, team_id, provider)}
 
 
 @app.get("/api/coach/roster/template")

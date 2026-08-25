@@ -30,6 +30,7 @@ from . import billing as billing_mod
 from . import guardians as guardians_mod
 from . import load as load_mod
 from . import roster as roster_mod
+from . import roster_sync
 from . import notifications as notify
 from .integrity import RepEvent, SessionClaim, evaluate
 from .quality import RepFeature, analyze as analyze_quality
@@ -1684,6 +1685,195 @@ class Store:
             "SELECT kind FROM organizations WHERE id = ?", (org_id,)
         ).fetchone()
         return bool(row and row["kind"] == self.FAMILY_KIND)
+
+    # ------------------------------------------------------------------
+    # Keeping a roster in step with wherever it lives
+    # ------------------------------------------------------------------
+
+    def link_roster(
+        self,
+        org_id: int,
+        team_id: int,
+        provider: str,
+        token: str,
+        remote_ref: str,
+        actor_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Wire a team up to its roster source.
+
+        Auto-sync starts off. A coach sees one dry run first and agrees with
+        it before anything is allowed to write -- a sync that starts changing
+        a roster the moment it is connected is a sync nobody trusts, and the
+        first run is exactly when a wrong team id shows up.
+        """
+        if provider not in roster_sync.BY_KEY:
+            raise StoreError(f"unknown roster provider: {provider!r}")
+        if not remote_ref.strip():
+            raise StoreError(
+                f"{roster_sync.BY_KEY[provider].team_field} is required"
+            )
+        team = self.conn.execute(
+            "SELECT id FROM teams WHERE id = ? AND org_id = ?", (team_id, org_id)
+        ).fetchone()
+        if team is None:
+            raise StoreError("no such team in this program")
+
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT INTO roster_links(org_id, team_id, provider, token, "
+                "remote_ref, created_by, created_at) VALUES (?,?,?,?,?,?,?) "
+                "ON CONFLICT(team_id, provider) DO UPDATE SET "
+                "token = excluded.token, remote_ref = excluded.remote_ref",
+                (org_id, team_id, provider, token.strip(), remote_ref.strip(),
+                 actor_id, _iso(_now())),
+            )
+        return self.roster_link(team_id, provider)
+
+    def roster_link(self, team_id: int, provider: str) -> dict[str, Any]:
+        """One link, without its token. The token never comes back out."""
+        row = self.conn.execute(
+            "SELECT id, org_id, team_id, provider, remote_ref, auto_sync, "
+            "  last_run_at, last_result, token != '' AS has_token "
+            "FROM roster_links WHERE team_id = ? AND provider = ?",
+            (team_id, provider),
+        ).fetchone()
+        if row is None:
+            raise StoreError("that team is not linked to that provider")
+        spec = roster_sync.BY_KEY[row["provider"]]
+        return {
+            "id": int(row["id"]),
+            "team_id": int(row["team_id"]),
+            "provider": row["provider"],
+            "label": spec.label,
+            "remote_ref": row["remote_ref"],
+            "auto_sync": bool(row["auto_sync"]),
+            "has_token": bool(row["has_token"]),
+            "last_run_at": row["last_run_at"],
+            "last_result": json.loads(row["last_result"]) if row["last_result"] else None,
+            "verified": spec.verified,
+            "note": spec.note,
+        }
+
+    def roster_links(self, org_id: int) -> list[dict[str, Any]]:
+        return [
+            {**self.roster_link(int(r["team_id"]), r["provider"]), "team_name": r["name"]}
+            for r in self.conn.execute(
+                "SELECT rl.team_id, rl.provider, t.name FROM roster_links rl "
+                "JOIN teams t ON t.id = rl.team_id WHERE rl.org_id = ? ORDER BY t.name",
+                (org_id,),
+            )
+        ]
+
+    def unlink_roster(self, org_id: int, team_id: int, provider: str) -> bool:
+        with transaction(self.conn) as conn:
+            return bool(conn.execute(
+                "DELETE FROM roster_links WHERE org_id = ? AND team_id = ? "
+                "AND provider = ?",
+                (org_id, team_id, provider),
+            ).rowcount)
+
+    def set_roster_auto_sync(self, org_id: int, team_id: int, provider: str, on: bool):
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE roster_links SET auto_sync = ? WHERE org_id = ? "
+                "AND team_id = ? AND provider = ?",
+                (1 if on else 0, org_id, team_id, provider),
+            )
+        return self.roster_link(team_id, provider)
+
+    def sync_roster(
+        self,
+        org_id: int,
+        team_id: int,
+        provider: str,
+        dry_run: bool = True,
+        actor_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Fetch, compare, and -- unless this is a dry run -- apply.
+
+        Departures are counted and reported but never applied. Somebody
+        vanishing from a remote roster is the one event continuous sync adds
+        that a one-off import never had, and the tempting thing to do with it
+        is delete.
+        """
+        row = self.conn.execute(
+            "SELECT token, remote_ref FROM roster_links WHERE org_id = ? "
+            "AND team_id = ? AND provider = ?",
+            (org_id, team_id, provider),
+        ).fetchone()
+        if row is None:
+            raise StoreError("that team is not linked to that provider")
+
+        spec = roster_sync.BY_KEY[provider]
+        result = roster_sync.SyncResult(provider=provider, dry_run=dry_run)
+        try:
+            rows = spec.fetch(row["token"], row["remote_ref"])
+        except roster_sync.SyncError as exc:
+            result.error = str(exc)
+            self._record_sync(team_id, provider, result)
+            return result.to_dict()
+
+        result.fetched = len(rows)
+        if not rows:
+            result.error = (
+                "They returned an empty roster. Nothing has been changed — "
+                "that is almost always a wrong team id rather than an empty team."
+            )
+            self._record_sync(team_id, provider, result)
+            return result.to_dict()
+
+        plan = self.resolve_import(org_id, roster_mod.parse(roster_sync.rows_to_csv(rows)))
+        result.created = len(plan.creates)
+        result.updated = len(plan.updates)
+        result.unchanged = max(0, len(plan.athletes) - result.created - result.updated)
+        result.warnings = [
+            w for a in plan.athletes for w in a.warnings
+        ][:10]
+
+        seen = {roster_mod.match_key(a.display_name) for a in plan.athletes if a.ok}
+        result.departures = roster_sync.find_departures(self.conn, team_id, seen)
+
+        on_roster = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM team_members tm JOIN users u ON u.id = tm.user_id "
+            "WHERE tm.team_id = ? AND u.role = 'athlete' AND u.active = 1",
+            (team_id,),
+        ).fetchone()["n"]
+        # A wrong team id and a mass exodus look identical from here, and only
+        # one of them is plausible. Refusing is recoverable; applying is not.
+        if on_roster and len(result.departures) / on_roster > roster_sync.DEPARTURE_ALARM:
+            result.error = (
+                f"{len(result.departures)} of {on_roster} athletes are missing "
+                "from their roster. That is more likely a wrong team id than a "
+                "real change, so nothing has been applied."
+            )
+            self._record_sync(team_id, provider, result)
+            return result.to_dict()
+
+        if not dry_run:
+            self.apply_import(org_id, team_id, plan, actor_id or 0)
+
+        self._record_sync(team_id, provider, result)
+        return result.to_dict()
+
+    def _record_sync(self, team_id: int, provider: str, result) -> None:
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE roster_links SET last_run_at = ?, last_result = ? "
+                "WHERE team_id = ? AND provider = ?",
+                (_iso(_now()), json.dumps(result.to_dict()), team_id, provider),
+            )
+
+    def due_roster_syncs(self, older_than_hours: int = 12) -> list[tuple[int, int, str]]:
+        """Links with auto-sync on that have not run recently."""
+        cutoff = _iso(_now() - timedelta(hours=older_than_hours))
+        return [
+            (int(r["org_id"]), int(r["team_id"]), r["provider"])
+            for r in self.conn.execute(
+                "SELECT org_id, team_id, provider FROM roster_links "
+                "WHERE auto_sync = 1 AND (last_run_at IS NULL OR last_run_at < ?)",
+                (cutoff,),
+            )
+        ]
 
     # ------------------------------------------------------------------
     # Org / team / user setup
