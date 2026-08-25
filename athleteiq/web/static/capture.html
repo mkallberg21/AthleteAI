@@ -86,6 +86,7 @@
         <span>0</span><span id="budget-target-label"></span>
       </div>
       <p class="budget-detail" id="budget-detail"></p>
+      <p class="small muted hidden" id="budget-phase"></p>
       <div id="budget-advisories"></div>
       <div id="specialisation-note" class="hidden"></div>
       <div id="sport-advisories"></div>
@@ -476,6 +477,12 @@ async function loadBudget() {
   $('budget-band').textContent = `${b.band.label} · ${b.band.weekly_target} min/week`;
   $('budget-detail').textContent = b.detail;
   $('budget-target-label').textContent = `${b.band.weekly_target} min — a good week`;
+
+  // Why this number is not the number it was last month. Without it, a budget
+  // that drops when the season starts reads as the app moving the goalposts.
+  const phase = $('budget-phase');
+  phase.textContent = b.phase ? b.phase.athlete_note : '';
+  phase.classList.toggle('hidden', !b.phase);
 
   // Capped at the recommended maximum rather than running on: a bar that keeps
   // filling past the point of "enough" reads as a target to beat.

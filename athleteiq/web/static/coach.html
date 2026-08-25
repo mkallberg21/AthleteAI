@@ -146,6 +146,23 @@
     <div id="spec-status" class="small muted" style="margin-top:8px"></div>
   </div>
 
+  <div class="card hidden" id="season-card">
+    <h2>Where the season is</h2>
+    <p class="small muted">
+      These budgets only ever counted work <i>on top of</i> team practice, so
+      the phase changes them. In-season the figure goes <b>down</b> &mdash;
+      your athletes already have practices and games in their week, and
+      stacking a full off-season target on top of that is how a season ends
+      badly. Nothing is inferred from the calendar; sports do not share a
+      season and a wrong guess would quietly change what every child here is
+      told to do.
+    </p>
+    <label for="season-phase">This program is currently</label>
+    <select id="season-phase"></select>
+    <div id="season-note" class="small muted" style="margin-top:8px"></div>
+    <div id="season-err" class="err hidden"></div>
+  </div>
+
   <div class="card hidden" id="budget-card">
     <h2>Time outside practice</h2>
     <p class="small muted">
@@ -1619,6 +1636,38 @@ async function loadTeams() {
   $('sync-team').innerHTML = options;
 }
 
+// ------------------------------------------------------------ season phase
+
+async function loadSeason(isDirector) {
+  const data = await api('/api/org/season');
+  $('season-card').classList.remove('hidden');
+  const select = $('season-phase');
+  select.innerHTML = data.phases
+    .map((p) => `<option value="${esc(p.key)}">${esc(p.label)}</option>`).join('');
+  select.value = data.phase.key;
+  // Read-only for an assistant coach: the server refuses the write anyway,
+  // and a control that looks live but is not is worse than one that is plain.
+  select.disabled = !isDirector;
+  const note = (key) =>
+    data.phases.find((p) => p.key === key)?.coach_note || '';
+  $('season-note').textContent = note(data.phase.key);
+
+  select.addEventListener('change', async () => {
+    $('season-err').classList.add('hidden');
+    try {
+      await api('/api/org/season', {
+        method: 'PUT', body: { phase: select.value },
+      });
+      $('season-note').textContent = note(select.value);
+      // Every budget on the page was computed against the old phase.
+      await loadAll();
+    } catch (e) {
+      $('season-err').textContent = e.message;
+      $('season-err').classList.remove('hidden');
+    }
+  });
+}
+
 // ------------------------------------------------------- before practice
 
 const PRACTICE_KINDS = {
@@ -2126,6 +2175,7 @@ $('signout').addEventListener('click', logout);
     await loadSetup();
     await loadStaff(orgs.role === 'director');
     await loadPositionSettings(orgs.role === 'director');
+    await loadSeason(orgs.role === 'director');
     await loadTeams();
     await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.

@@ -41,6 +41,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import positions
+from . import season
 from . import sports
 from . import transfer
 from .config import CONFIG
@@ -248,6 +249,10 @@ class TimeBudget:
     detail: str
     fraction: float = 0.0          # of the target, for a progress bar
     over_by_minutes: float = 0.0
+    #: Where the program is in its year. Carried so a screen can explain why
+    #: this week's number differs from last month's, rather than leaving an
+    #: athlete to conclude the app moved the goalposts on them.
+    phase: "season.Phase | None" = None
 
     @property
     def is_enough(self) -> bool:
@@ -266,6 +271,7 @@ class TimeBudget:
             "fraction": round(self.fraction, 3),
             "over_by_minutes": round(self.over_by_minutes),
             "is_enough": self.is_enough,
+            "phase": self.phase.to_dict() if self.phase else None,
         }
 
 
@@ -282,13 +288,21 @@ def _words(n: int) -> str:
 
 
 def assess_time(
-    band: AgeBand, week: WeekOfTraining, first_name: str = ""
+    band: AgeBand,
+    week: WeekOfTraining,
+    first_name: str = "",
+    phase: "season.Phase | None" = None,
 ) -> TimeBudget:
     """Where an athlete sits against their budget, and what to say about it.
 
     The wording carries as much of this feature as the arithmetic does. It has
     to be able to say *stop* without sounding like a telling-off, and *that is
     enough* without sounding like a shrug.
+
+    During a post-season break it must also be able to say *nothing* -- the
+    two branches that would otherwise encourage more work go quiet. Scaling
+    the budget down and then nudging a child to fill it anyway would give away
+    the entire point of having a break.
     """
     minutes = week.minutes
     fraction = minutes / band.weekly_target if band.weekly_target else 0.0
@@ -297,7 +311,22 @@ def assess_time(
     # sentence whose verb was written for "you".
     greeting = f"{first_name}, " if first_name else ""
 
+    resting = phase is not None and phase.key == "postseason"
+
     if week.sessions == 0:
+        # A blank week during the break is the plan working, not a lapse, and
+        # this is the screen where saying otherwise would do the damage.
+        if resting:
+            return TimeBudget(
+                band=band, week=week, status=Status.FULL,
+                headline="Enjoy the break",
+                detail=(
+                    "Nothing logged, and that is fine right now — the rest "
+                    "between seasons is what lets you come back fresh. Pick it "
+                    "up when pre-season starts."
+                ),
+                fraction=0.0, phase=phase,
+            )
         return TimeBudget(
             band=band, week=week, status=Status.UNKNOWN,
             headline="Nothing logged this week",
@@ -307,7 +336,7 @@ def assess_time(
                 f"session{_s(band.days_target)} of about {band.weekly_target // band.days_target} "
                 "minutes, not an evening job."
             ),
-            fraction=0.0,
+            fraction=0.0, phase=phase,
         )
 
     if minutes > band.weekly_max:
@@ -321,7 +350,7 @@ def assess_time(
                 "than this."
             ),
             fraction=min(2.0, fraction),
-            over_by_minutes=minutes - band.weekly_max,
+            over_by_minutes=minutes - band.weekly_max, phase=phase,
         )
 
     if minutes >= band.weekly_target:
@@ -334,7 +363,7 @@ def assess_time(
                 "your age. Anything else is a bonus, not a requirement — go and do "
                 "something else."
             ),
-            fraction=min(1.5, fraction),
+            fraction=min(1.5, fraction), phase=phase,
         )
 
     if minutes >= band.weekly_min:
@@ -346,7 +375,20 @@ def assess_time(
                 f"{round(minutes)} minutes so far. Another {round(remaining)} would "
                 f"round the week out, but this is already a solid week."
             ),
-            fraction=fraction,
+            fraction=fraction, phase=phase,
+        )
+
+    if resting:
+        # Under target during the break. Under target *is* the target.
+        return TimeBudget(
+            band=band, week=week, status=Status.GOOD,
+            headline="Ticking over nicely",
+            detail=(
+                f"{round(minutes)} minutes during the break is plenty. There is "
+                "nothing to catch up on — this is the part of the year where "
+                "doing less is the training."
+            ),
+            fraction=fraction, phase=phase,
         )
 
     remaining = max(0, band.weekly_target - minutes)
@@ -364,7 +406,7 @@ def assess_time(
         band=band, week=week, status=Status.BUILDING,
         headline="Building the habit",
         detail=f"{counted}. {more} gets you to a good week for your age.",
-        fraction=fraction,
+        fraction=fraction, phase=phase,
     )
 
 
@@ -859,7 +901,8 @@ def report(
     """An athlete's time budget first, then how they compare inside it."""
     row = conn.execute(
         "SELECT u.id, u.org_id, u.display_name, u.birth_year, "
-        "       u.birth_year_estimated, o.sport, o.position_emphasis_min_age "
+        "       u.birth_year_estimated, o.sport, o.position_emphasis_min_age, "
+        "       o.season_phase "
         "FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = ?",
         (athlete_id,),
     ).fetchone()
@@ -877,9 +920,14 @@ def report(
     # week shows up here. Expecting the same solo volume from them as from a
     # single-sport athlete overstates what is left to give.
     band = _rescaled(band, sports.budget_scale(profile))
+    # Last, and on top of the others: where the program is in its year. In
+    # season this pulls the figure *down*, because the child is already at
+    # three practices a week and none of that is counted here.
+    phase = season.get(row["season_phase"])
+    band = _rescaled(band, phase.scale)
     week = week_of_training(conn, athlete_id, today)
     first_name = (row["display_name"] or "").split()[0] if row["display_name"] else ""
-    budget = assess_time(band, week, first_name)
+    budget = assess_time(band, week, first_name, phase)
 
     # Most recent membership wins: an athlete who moved up a team mid-season
     # is playing where they play now, not where the older row says.
@@ -970,6 +1018,7 @@ def program_summary(
     athlete_ids: list[int],
     today: date | None = None,
     sport: str = "lacrosse",
+    phase: "season.Phase | None" = None,
 ) -> dict[str, Any]:
     """How a squad sits against their budgets.
 
@@ -983,6 +1032,7 @@ def program_summary(
     of their own drill-mix guidance, so a coach needs to see the typo.
     """
     today = today or datetime.now(timezone.utc).date()
+    phase = phase or season.DEFAULT
     by_position: dict[str, int] = {}
     raw_positions: list[str] = []
     specialisation_counts: dict[str, int] = {}
@@ -1023,7 +1073,12 @@ def program_summary(
 
         age = year - int(row["birth_year"]) if row["birth_year"] else None
         band = scaled(band_for(age, bool(row["birth_year_estimated"])))
-        budget = assess_time(band, week_of_training(conn, athlete_id, today))
+        # The same season scale the athlete's own screen applies. Without it a
+        # coach counts "over budget" against a different number than the one
+        # the child was shown, and the two screens quietly disagree.
+        band = _rescaled(band, phase.scale) if phase else band
+        budget = assess_time(
+            band, week_of_training(conn, athlete_id, today), phase=phase)
         counts[budget.status] += 1
         if budget.status == Status.OVER:
             over.append({
@@ -1040,6 +1095,7 @@ def program_summary(
         "counts": counts,
         "over_budget": over,
         "roster": len(athlete_ids),
+        "phase": phase.to_dict(),
         "positions": [
             {"key": key, "label": known.get(key, key.title()), "count": n}
             for key, n in sorted(by_position.items(), key=lambda kv: -kv[1])

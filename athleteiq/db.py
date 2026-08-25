@@ -39,6 +39,13 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- and that call belongs to the director, not to us. Set above the oldest
     -- band (99) to keep every athlete on the general mix permanently.
     position_emphasis_min_age INTEGER NOT NULL DEFAULT 15,
+    -- Where the program is in its year. Scales the self-directed weekly
+    -- budget, because the age bands know how old a child is and not whether
+    -- it is February. In-season the figure goes *down*: these budgets have
+    -- only ever counted work on top of team practice, and in-season there is
+    -- already a lot of that. Chosen, never inferred -- sports do not share a
+    -- season, and a wrong guess quietly changes what every child is told.
+    season_phase TEXT NOT NULL DEFAULT 'preseason',
     -- A senior figure in the program whose recognition carries extra weight --
     -- a director of player development, a former professional. Optional, and
     -- absent means every message comes from the athlete's own coach.
@@ -774,6 +781,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("voice_title", "TEXT NOT NULL DEFAULT ''"),
         ("kind", "TEXT NOT NULL DEFAULT 'program'"),
         ("sibling_compare", "INTEGER NOT NULL DEFAULT 0"),
+        ("season_phase", "TEXT NOT NULL DEFAULT 'preseason'"),
     ],
     "recognition_templates": [
         ("from_voice", "TEXT NOT NULL DEFAULT 'coach'"),

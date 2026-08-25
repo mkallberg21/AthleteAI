@@ -36,6 +36,7 @@ from . import film as film_mod
 from . import guardians as guardians_mod
 from . import practice as practice_mod
 from . import roster as roster_mod
+from . import season as season_mod
 from . import roster_sync
 from . import notifications as notify
 from .assignments import AssignmentError
@@ -1646,11 +1647,19 @@ def team_budgets(
     sport = _org_sport(store, principal.org_id)
     return {
         **benchmarks_mod.program_summary(
-            store.conn, [a["athlete_id"] for a in athletes], sport=sport
+            store.conn, [a["athlete_id"] for a in athletes], sport=sport,
+            phase=season_mod.get(_org_phase(store, principal.org_id)),
         ),
         "bands": [b.to_dict() for b in benchmarks_mod.AGE_BANDS],
         "sport": sport,
     }
+
+
+def _org_phase(store: Store, org_id: int) -> str:
+    row = store.conn.execute(
+        "SELECT season_phase FROM organizations WHERE id = ?", (org_id,)
+    ).fetchone()
+    return row["season_phase"] if row else ""
 
 
 def _org_sport(store: Store, org_id: int) -> str:
@@ -1658,6 +1667,49 @@ def _org_sport(store: Store, org_id: int) -> str:
         "SELECT sport FROM organizations WHERE id = ?", (org_id,)
     ).fetchone()
     return (row["sport"] if row else None) or "lacrosse"
+
+
+class SeasonPhaseSetting(BaseModel):
+    phase: str = Field(min_length=1, max_length=40)
+
+
+@app.get("/api/org/season")
+def get_season_phase(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {
+        "phase": season_mod.get(_org_phase(store, principal.org_id)).to_dict(),
+        "phases": [p.to_dict() for p in season_mod.PHASES],
+    }
+
+
+@app.put("/api/org/season")
+def set_season_phase(
+    body: SeasonPhaseSetting,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Where this program is in its year.
+
+    Directors only, and chosen rather than inferred. Sports do not share a
+    season, a club may run two, and getting it wrong silently changes what
+    every child in the program is told to do -- which is exactly the kind of
+    change that should have a person's name on it.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can change the season phase",
+        )
+    if body.phase not in season_mod.BY_KEY:
+        raise HTTPException(status_code=400, detail=f"unknown phase: {body.phase}")
+    with transaction(store.conn) as conn:
+        conn.execute(
+            "UPDATE organizations SET season_phase = ? WHERE id = ?",
+            (body.phase, principal.org_id),
+        )
+    return {"phase": season_mod.BY_KEY[body.phase].to_dict()}
 
 
 class SpecialisationSetting(BaseModel):
