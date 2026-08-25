@@ -2086,6 +2086,14 @@ def coach_onboarding(
     team is deleted, and cannot tell a director who came back a week later
     where they actually got to.
     """
+    # A coach who joined a program somebody else built gets orientation
+    # rather than a setup checklist: the teams and athletes already exist, and
+    # handing them "create your first team" would be telling them to redo work
+    # that is done.
+    if not principal.is_director:
+        return onboarding_mod.staff_progress(
+            store.conn, principal.id, principal.org_id,
+        )
     return onboarding_mod.progress(
         store.conn,
         principal.org_id,

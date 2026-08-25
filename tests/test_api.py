@@ -3718,3 +3718,87 @@ class TestParentOnboardingEndpoint:
             "/api/guardians/onboarding", headers=program["athletes"][0]["headers"],
         ).json()
         assert body["athletes"] == []
+
+
+class TestJoiningCoachOnboarding:
+
+    def _coach(self, client, program, assign=True):
+        store = api_module._store
+        coach = store.create_user(program["org"]["org_id"], "coach", "Coach Ada")
+        if assign:
+            client.post(
+                "/api/coach/staff/assign",
+                json={"user_id": coach["id"], "team_id": program["team"]["id"]},
+                headers=program["director"],
+            )
+        return coach, {"Authorization": f"Bearer {coach['token']}"}
+
+    def test_a_joining_coach_gets_orientation_not_setup(self, client, program):
+        _, headers = self._coach(client, program)
+        body = client.get("/api/coach/onboarding", headers=headers).json()
+        assert body["kind"] == "joining"
+        assert body["required_total"] == 0
+        assert "team" not in {s["key"] for s in body["steps"]}
+
+    def test_the_director_of_the_same_program_still_gets_setup(self, client, program):
+        body = client.get("/api/coach/onboarding", headers=program["director"]).json()
+        assert body["kind"] == "program"
+        assert body["required_total"] == 3
+
+    def test_an_unassigned_coach_is_told_they_see_everything(self, client, program):
+        """The default is that an unassigned coach falls back to the whole
+        program, so telling them their dashboard is empty would be false --
+        and seeing four hundred children when you coach twelve is worth
+        knowing about."""
+        _, headers = self._coach(client, program, assign=False)
+        body = client.get("/api/coach/onboarding", headers=headers).json()
+        assert body["blockers"][0]["key"] == "unscoped"
+        assert "whole program" in body["blockers"][0]["title"]
+
+        # And the notice matches what they are genuinely looking at.
+        roster = client.get("/api/coach/roster?window=week", headers=headers).json()
+        assert len(roster["athletes"]) == body["scope"]["athletes"] > 0
+
+    def test_being_assigned_clears_it_and_the_roster_fills(self, client, program):
+        _, headers = self._coach(client, program)
+        body = client.get("/api/coach/onboarding", headers=headers).json()
+        assert body["blockers"] == []
+        assert body["scope"]["athletes"] == len(program["athletes"])
+        roster = client.get("/api/coach/roster?window=week", headers=headers).json()
+        assert len(roster["athletes"]) == body["scope"]["athletes"]
+
+    def test_the_review_count_matches_the_queue_they_actually_see(self, client, program):
+        """A number on a checklist that disagrees with the screen it points at
+        is worse than no number."""
+        _, headers = self._coach(client, program)
+        athlete = program["athletes"][0]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "soc_juggle"},
+            headers=athlete["headers"],
+        ).json()
+        client.post(
+            "/api/sessions/submit",
+            json={"session_id": started["session_id"], "nonce": started["nonce"],
+                  "duration_ms": 28_000,
+                  "reps": [{"t_ms": i * 900 + (i % 3) * 70, "hand": "left",
+                            "confidence": 0.4} for i in range(30)],
+                  "mean_confidence": 0.4, "track_quality": 0.06},
+            headers=athlete["headers"],
+        )
+        body = client.get("/api/coach/onboarding", headers=headers).json()
+        queue = client.get("/api/coach/review-queue", headers=headers).json()
+        assert body["scope"]["review_waiting"] == len(queue["sessions"]) == 1
+
+    def test_a_coach_from_another_program_sees_none_of_this(self, client, program):
+        rival = client.post(
+            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+        ).json()
+        store = api_module._store
+        outsider = store.create_user(rival["org_id"], "coach", "Someone Else")
+        body = client.get(
+            "/api/coach/onboarding",
+            headers={"Authorization": f"Bearer {outsider['token']}"},
+        ).json()
+        # Their own program is empty, and this program's athletes are not
+        # theirs to count however they are scoped.
+        assert body["scope"]["athletes"] == 0

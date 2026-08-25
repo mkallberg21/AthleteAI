@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import guardians
+from .config import CONFIG
 
 
 @dataclass(frozen=True)
@@ -167,6 +168,36 @@ ATHLETE_STEPS: tuple[Step, ...] = (
         anchor="film-card",
     ),
 )
+
+JOINING_STEPS: tuple[Step, ...] = (
+    Step(
+        key="recognition",
+        title="Make the milestone messages yours",
+        detail="Replace one of the shipped lines with something you would say.",
+        why=(
+            "These go out signed with your name to the athletes on your teams. "
+            "Worth knowing before the first one does."
+        ),
+        required=False,
+        anchor="recognition-card",
+    ),
+    Step(
+        key="assignment",
+        title="Set some work for your team",
+        detail="A drill, a target and a window. They see it on their home screen.",
+        required=False,
+        anchor="roster-card",
+    ),
+    Step(
+        key="review",
+        title="Clear the review queue",
+        detail="Sessions the app held rather than counted, waiting on a person.",
+        why="Usually a framing or a signal problem, not anyone doing anything wrong.",
+        required=False,
+        anchor="review-card",
+    ),
+)
+
 
 #: Said once, at the start, and never again. It is the thing that makes an
 #: athlete and their parent comfortable, and it is true -- so it is worth the
@@ -455,4 +486,144 @@ def parent_progress(conn: sqlite3.Connection, guardian_id: int) -> dict[str, Any
         "blocked": [a["display_name"] for a in athletes if a["blocking"]],
         "promise": PROMISE,
         "rights": list(PARENT_RIGHTS),
+    }
+
+
+def staff_progress(
+    conn: sqlite3.Connection, user_id: int, org_id: int
+) -> dict[str, Any]:
+    """Orientation for a coach who joined a program somebody else built.
+
+    Deliberately not the setup checklist. The teams, the athletes and the
+    roster already exist; being handed "create your first team" would be
+    telling them to redo work that is already done.
+
+    There are also no required steps, and that is honest rather than an
+    oversight: everything that has to happen for an assistant coach to start
+    is done *by somebody else*. What they need is to know what they can see,
+    what happens in their name, and what is waiting for them.
+    """
+    teams = conn.execute(
+        "SELECT t.id, t.name FROM team_staff ts JOIN teams t ON t.id = ts.team_id "
+        "WHERE ts.user_id = ? ORDER BY t.name",
+        (user_id,),
+    ).fetchall()
+    team_ids = [int(t["id"]) for t in teams]
+
+    athletes = 0
+    review = 0
+    assignments = 0
+    if not team_ids and not CONFIG.strict_team_scope:
+        # Unassigned and unrestricted: the honest count is the whole program,
+        # because that is genuinely what they are looking at.
+        athletes = _count(
+            conn,
+            "SELECT COUNT(*) FROM users WHERE org_id = ? AND role = 'athlete' "
+            "AND active = 1",
+            (org_id,),
+        )
+        review = _count(
+            conn,
+            "SELECT COUNT(*) FROM sessions s JOIN users u ON u.id = s.athlete_id "
+            "WHERE u.org_id = ? AND s.status = 'review'",
+            (org_id,),
+        )
+    if team_ids:
+        marks = ",".join("?" for _ in team_ids)
+        athletes = _count(
+            conn,
+            f"SELECT COUNT(DISTINCT tm.user_id) FROM team_members tm "
+            f"WHERE tm.team_id IN ({marks})",
+            tuple(team_ids),
+        )
+        review = _count(
+            conn,
+            f"SELECT COUNT(*) FROM sessions s "
+            f"JOIN team_members tm ON tm.user_id = s.athlete_id "
+            f"WHERE tm.team_id IN ({marks}) AND s.status = 'review'",
+            tuple(team_ids),
+        )
+        assignments = _count(
+            conn,
+            f"SELECT COUNT(*) FROM assignments WHERE team_id IN ({marks})",
+            tuple(team_ids),
+        )
+
+    done = {
+        "recognition": _count(
+            conn,
+            "SELECT COUNT(*) FROM recognition_templates WHERE org_id = ? "
+            "AND updated_by = ?",
+            (org_id, user_id),
+        ) > 0,
+        "assignment": assignments > 0,
+        "review": review == 0,
+    }
+
+    # Not offered when there is nothing in it. "Clear the review queue" with an
+    # empty queue is a tick for having done nothing, which teaches an athlete's
+    # coach that the list is decorative.
+    steps = [s for s in JOINING_STEPS if s.key != "review" or review > 0]
+    rendered = [s.to_dict(done.get(s.key, False)) for s in steps]
+
+    blocking: list[dict[str, Any]] = []
+    if not team_ids:
+        # What an unassigned coach actually sees depends on how the program is
+        # configured, and the two cases are opposites -- so the message has to
+        # branch rather than guess. Saying "your dashboard is empty" to someone
+        # looking at four hundred children would be worse than saying nothing.
+        if CONFIG.strict_team_scope:
+            blocking.append({
+                "key": "not_assigned",
+                "title": "You are not on a team yet",
+                "detail": (
+                    "A director has to assign you before any athletes appear. "
+                    "Nothing is broken and there is nothing for you to fix — "
+                    "this dashboard is empty because it is scoped to your "
+                    "teams, not because the program is."
+                ),
+            })
+        else:
+            blocking.append({
+                "key": "unscoped",
+                "title": "You can currently see the whole program",
+                "detail": (
+                    "You are not assigned to a team, so this shows every "
+                    "athlete rather than yours. Ask a director to assign you "
+                    "and it narrows to the ones you actually coach — which is "
+                    "how it should sit at a club with hundreds of children."
+                ),
+            })
+
+    return {
+        "kind": "joining",
+        "steps": rendered,
+        "next": next((s for s in rendered if not s["done"]), None),
+        # No required steps, so a coach is never told they are unfinished for
+        # something only a director can do.
+        "complete": True,
+        "required_done": 0,
+        "required_total": 0,
+        "blockers": blocking,
+        "scope": {
+            "teams": [{"id": int(t["id"]), "name": t["name"]} for t in teams],
+            "athletes": athletes,
+            "review_waiting": review,
+        },
+        "facts": [
+            (
+                f"You see {athletes} athlete{'s' if athletes != 1 else ''} across "
+                f"{len(teams)} team{'s' if len(teams) != 1 else ''} — the ones you "
+                "are assigned to, and nobody else's."
+            ) if teams else (
+                f"You can see {athletes} athlete"
+                f"{'s' if athletes != 1 else ''} — everyone in the program, "
+                "because you are not assigned to a team."
+            ),
+            "Counts, form scores and load. Never their video: that stays on their phone.",
+            (
+                "Milestone messages to your athletes go out signed with your "
+                "name, automatically, on the day they earn one."
+            ),
+        ],
     }

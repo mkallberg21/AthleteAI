@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1599 tests
+python -m pytest tests/ -q          # 1616 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -643,6 +643,54 @@ setup guide that never leaves stops being a guide and becomes furniture.
 A household gets a shorter list: no team step, because signing up creates one;
 no staff or parent steps, because there is nobody to invite. It says "children"
 rather than "athletes".
+
+### A coach joining a program someone else built
+
+A different job, so a different panel. The teams, athletes and roster already
+exist — handing an assistant coach "create your first team" would be telling
+them to redo work that is done.
+
+**Nothing is required of them, and that is honest rather than an oversight.**
+Everything that has to happen for an assistant coach to start is done by
+somebody else. What they get instead is orientation and three optional steps:
+
+| | |
+|---|---|
+| Make the milestone messages yours | *These go out signed with your name.* |
+| Set some work for your team | |
+| Clear the review queue | *only when something is actually in it* |
+
+The first one matters more than it looks. Milestone messages to a coach's
+athletes go out **automatically, signed by them** — a coach might otherwise
+first learn this when an athlete thanks them for something they did not write.
+The step ticks for the person who wrote it, not for the program, so a director's
+wording is not this coach's step.
+
+The review step is absent when the queue is empty, because a tick for having
+done nothing teaches a coach the list is decorative. The count it shows is the
+same query the review queue runs — a number on a checklist that disagrees with
+the screen it points at is worse than no number, and there is a test asserting
+they match.
+
+### The finding this turned up
+
+The blocker was going to say *"this dashboard is empty because it is scoped to
+your teams"*. Writing a test that checked the claim showed it was **false**: an
+unassigned coach falls back to seeing the *whole program*, which is a documented
+accommodation for accounts predating team assignment, switchable with
+`ATHLETEIQ_STRICT_TEAM_SCOPE=1`.
+
+The two cases are opposites, so the message branches:
+
+| Scoping | What they are told |
+|---|---|
+| Default | **You can currently see the whole program** — not assigned to a team, so this shows every athlete rather than yours. Ask a director to assign you. |
+| Strict | **You are not on a team yet** — nothing is broken; this is empty because it is scoped to your teams, not because the program is. |
+
+Telling someone their dashboard is empty while they are looking at four hundred
+children would have been worse than saying nothing at all. Both branches are
+tested, and the default one asserts the athlete count matches the roster they
+can genuinely see.
 
 ### What a new athlete sees
 

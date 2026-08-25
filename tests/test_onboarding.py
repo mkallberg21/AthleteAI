@@ -535,3 +535,165 @@ class TestAnsweredIsNotTheSameAsGranted:
         assert guardians.current_consents(
             store.conn, child["id"]
         )[guardians.Scope.PARTICIPATION] is False
+
+
+class TestACoachWhoJoinedSomebodyElsesProgram:
+    """The teams, athletes and roster already exist. Handing them "create your
+    first team" would be telling them to redo work that is done."""
+
+    @pytest.fixture
+    def joined(self, program):
+        store = program["store"]
+        team = store.create_team(program["org"], "U15 Boys")
+        for name in ("Jordan P.", "Sam R.", "Alex T."):
+            athlete = store.create_user(
+                program["org"], "athlete", name, birth_year=2011,
+                dominant_hand="right",
+            )
+            store.join_team(team["join_code"], athlete["id"])
+        coach = store.create_user(program["org"], "coach", "Coach Ada")
+        return {"store": store, "team": team, "coach": coach}
+
+    def _assign(self, joined):
+        store = joined["store"]
+        store.conn.execute(
+            "INSERT OR IGNORE INTO team_staff(team_id, user_id, role, created_at) "
+            "VALUES (?,?,'coach',datetime('now'))",
+            (joined["team"]["id"], joined["coach"]["id"]),
+        )
+        store.conn.commit()
+
+    def test_they_are_not_told_to_build_what_exists(self, joined, program):
+        result = O.staff_progress(
+            joined["store"].conn, joined["coach"]["id"], program["org"],
+        )
+        keys = {s["key"] for s in result["steps"]}
+        assert "team" not in keys and "athletes" not in keys
+        assert result["kind"] == "joining"
+
+    def test_nothing_is_required_of_them(self, joined, program):
+        """Honest rather than an oversight: everything that has to happen for
+        an assistant coach to start is done by somebody else."""
+        result = O.staff_progress(
+            joined["store"].conn, joined["coach"]["id"], program["org"],
+        )
+        assert result["required_total"] == 0
+        assert result["complete"] is True
+
+    def test_an_unassigned_coach_is_told_they_see_everything(self, joined, program):
+        """The two scoping modes are opposites, so the message has to branch
+        rather than guess. By default an unassigned coach falls back to the
+        whole program -- telling them their dashboard is empty while they look
+        at every child in the club would be worse than saying nothing."""
+        result = O.staff_progress(
+            joined["store"].conn, joined["coach"]["id"], program["org"],
+        )
+        assert result["blockers"][0]["key"] == "unscoped"
+        assert "whole program" in result["blockers"][0]["title"]
+        assert result["scope"]["athletes"] == 3, "and the count says so too"
+
+    def test_under_strict_scoping_they_are_told_the_opposite(self, joined, program, monkeypatch):
+        # CONFIG is frozen, so the module's reference to it is replaced rather
+        # than the value mutated.
+        from types import SimpleNamespace
+
+        monkeypatch.setattr(O, "CONFIG", SimpleNamespace(strict_team_scope=True))
+        result = O.staff_progress(
+            joined["store"].conn, joined["coach"]["id"], program["org"],
+        )
+        assert result["blockers"][0]["key"] == "not_assigned"
+        assert "Nothing is broken" in result["blockers"][0]["detail"]
+        assert result["scope"]["athletes"] == 0
+
+    def test_assigning_them_clears_it_and_shows_their_scope(self, joined, program):
+        self._assign(joined)
+        result = O.staff_progress(
+            joined["store"].conn, joined["coach"]["id"], program["org"],
+        )
+        assert result["blockers"] == []
+        assert result["scope"]["athletes"] == 3
+        assert [t["name"] for t in result["scope"]["teams"]] == ["U15 Boys"]
+
+    def test_they_are_told_messages_go_out_in_their_name(self, joined, program):
+        """A coach might not realise that, and the first they would know is an
+        athlete thanking them for something they did not write."""
+        self._assign(joined)
+        facts = " ".join(O.staff_progress(
+            joined["store"].conn, joined["coach"]["id"], program["org"],
+        )["facts"])
+        assert "signed with your name" in facts
+        assert "stays on their phone" in facts
+
+    def test_the_scope_line_counts_only_their_own_athletes(self, joined, program):
+        store = joined["store"]
+        other = store.create_team(program["org"], "U13")
+        stranger = store.create_user(
+            program["org"], "athlete", "Not Theirs", birth_year=2013,
+        )
+        store.join_team(other["join_code"], stranger["id"])
+        self._assign(joined)
+
+        result = O.staff_progress(store.conn, joined["coach"]["id"], program["org"])
+        assert result["scope"]["athletes"] == 3, "the U13 athlete is not theirs"
+
+    def test_writing_a_message_ticks_only_for_the_one_who_wrote_it(
+        self, joined, program,
+    ):
+        """The director's wording is not this coach's step."""
+        store = joined["store"]
+        self._assign(joined)
+        store.set_recognition_template(
+            program["org"], "streak_5", "From the director.", True,
+            program["director"]["id"],
+        )
+        mine = steps(O.staff_progress(store.conn, joined["coach"]["id"], program["org"]))
+        assert mine["recognition"]["done"] is False
+
+        store.set_recognition_template(
+            program["org"], "streak_3", "From me.", True, joined["coach"]["id"],
+        )
+        after = steps(O.staff_progress(store.conn, joined["coach"]["id"], program["org"]))
+        assert after["recognition"]["done"] is True
+
+    def test_the_review_step_is_absent_when_the_queue_is_empty(self, joined, program):
+        """A tick for having done nothing teaches a coach the list is
+        decorative."""
+        self._assign(joined)
+        keys = {s["key"] for s in O.staff_progress(
+            joined["store"].conn, joined["coach"]["id"], program["org"],
+        )["steps"]}
+        assert "review" not in keys
+
+    def test_it_appears_when_something_is_actually_waiting(self, joined, program):
+        store = joined["store"]
+        self._assign(joined)
+        athlete = store.conn.execute(
+            "SELECT user_id FROM team_members WHERE team_id = ? LIMIT 1",
+            (joined["team"]["id"],),
+        ).fetchone()["user_id"]
+
+        # Held through the real submit path rather than an INSERT: a
+        # hand-written row has to track eighteen NOT NULL columns and would
+        # rot the next time the schema moves. A ball drill the tracker barely
+        # saw is genuinely held rather than rejected.
+        slot = store.start_session(athlete, "soc_juggle")
+        reps = [
+            {"t_ms": i * 900 + (i % 3) * 70, "hand": "left", "confidence": 0.4,
+             "speed": 1.2, "part": "left_ankle"}
+            for i in range(30)
+        ]
+        held = store.submit_session(
+            athlete, slot["session_id"], slot["nonce"], duration_ms=28_000,
+            reps=reps, mean_confidence=0.4, track_quality=0.06,
+        )
+        assert held["status"] == "review"
+
+        result = O.staff_progress(store.conn, joined["coach"]["id"], program["org"])
+        assert result["scope"]["review_waiting"] == 1
+        assert "review" in {s["key"] for s in result["steps"]}
+
+    def test_a_director_still_gets_the_setup_checklist(self, program):
+        """Two different jobs: one builds a program, the other joins one."""
+        result = O.progress(program["store"].conn, program["org"])
+        assert "team" in {s["key"] for s in result["steps"]}
+        assert result["required_total"] == 3
