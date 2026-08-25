@@ -55,6 +55,12 @@ class Plan:
     max_staff: int                   # 0 means unlimited
     blurb: str = ""
     payer: str = PAYER_PROGRAM
+    #: Per rostered athlete, per season. The model this product actually
+    #: sells on; `price_cents` stays for the legacy seat plans.
+    per_athlete_season_cents: int = 0
+    #: Retired plans stay resolvable so existing rows keep working, and stay
+    #: out of anything a club is shown. See RETIRED_NOTE.
+    offered: bool = True
 
     @property
     def is_free(self) -> bool:
@@ -112,6 +118,7 @@ PLANS: tuple[Plan, ...] = (
     ),
     Plan(
         code="team",
+        offered=False,
         name="Team",
         price_cents=4900,
         included_seats=60,
@@ -122,6 +129,7 @@ PLANS: tuple[Plan, ...] = (
     ),
     Plan(
         code="program",
+        offered=False,
         name="Program",
         price_cents=14900,
         included_seats=200,
@@ -129,6 +137,31 @@ PLANS: tuple[Plan, ...] = (
         max_teams=12,
         max_staff=25,
         blurb="Multiple age groups under one athletic department.",
+    ),
+    Plan(
+        code="club_roster",
+        name="Club",
+        # Per rostered athlete, per season. A club funds it by adding a line
+        # to its own season fee -- so the money still comes from parents, but
+        # through the channel they already pay through, at the moment they
+        # are already paying, with no second checkout and no chasing.
+        #
+        # This is why per-athlete rather than seat tiers: a club adding $40 to
+        # dues needs to know exactly what it owes per player, and a tiered
+        # plan makes that a division problem whose answer changes every time
+        # somebody joins.
+        price_cents=0,
+        per_athlete_season_cents=2500,
+        included_seats=0,
+        extra_seat_cents=0,
+        max_teams=0,
+        max_staff=0,
+        payer=PAYER_PROGRAM,
+        blurb=(
+            "Every rostered athlete, billed to the club per season. Clubs "
+            "cover it by adding a line to their own season fee, which costs "
+            "the club nothing and returns a sponsorship rebate."
+        ),
     ),
     Plan(
         code="club_free",
@@ -155,6 +188,7 @@ PLANS: tuple[Plan, ...] = (
     ),
     Plan(
         code="club",
+        offered=False,
         name="Club",
         price_cents=39900,
         included_seats=600,
@@ -218,13 +252,21 @@ class Subscription:
 
     @property
     def unlimited_seats(self) -> bool:
-        """A household-paid plan does not meter the club at all.
+        """Plans with no seat count to be over.
 
-        Metering a club that is not being charged would be pure friction: it
-        would stop a director importing their roster to protect revenue that
-        does not exist.
+        A household-paid plan does not meter the club at all -- metering a
+        club that is not being charged would be pure friction, stopping a
+        director importing their roster to protect revenue that does not
+        exist.
+
+        A per-athlete plan has no ceiling by construction: you cannot exceed a
+        seat allowance when every athlete *is* a seat. Without this the roster
+        plan blocked growth at four athletes, because `included_seats` is zero
+        for a plan that does not use it -- which would have broken every club
+        on the model this product sells.
         """
-        return self.plan.payer == PAYER_HOUSEHOLD
+        return (self.plan.payer == PAYER_HOUSEHOLD
+                or self.plan.per_athlete_season_cents > 0)
 
     @property
     def seat_limit(self) -> int:
@@ -813,4 +855,206 @@ def expire_households(conn: sqlite3.Connection, today: date | None = None) -> in
             "WHERE status = 'active' AND period_end < ?",
             (today,),
         ).rowcount
+
+# ---------------------------------------------------------------------------
+# A club buying for its whole roster
+#
+# The club is invoiced per rostered athlete per season and covers it by adding
+# a line to its own season fee. The money still comes from parents, but through
+# the channel they already pay through, at the moment they are already paying:
+# no second checkout, no chasing, and no coach explaining a subscription.
+#
+# It also removes the failure mode the household model has to design around.
+# Every athlete is covered, so coverage is never partial and the coach's view
+# is never a function of who bought what.
+# ---------------------------------------------------------------------------
+
+#: What a club is told to add to each player's season fee. Their number to
+#: set, not ours -- but a recommendation is worth making, because a director
+#: who has to invent it will either under-recover or not bother.
+#:
+#: On a season that runs into four figures this is about two per cent, and it
+#: leaves the club a margin that funds the sponsorship story below.
+RECOMMENDED_DUES_ADD_CENTS = 4000
+
+#: Share of what a club pays that comes back to them, earmarked for covering
+#: families who cannot afford the season at all.
+#:
+#: The rate is a range rather than a constant because it is a commercial lever
+#: -- a club negotiating hard gets the top of it. What is *not* negotiable is
+#: what it is for: this is the club's scholarship fund, not a volume discount
+#: dressed up as one.
+REBATE_RATE_MIN = 0.05
+REBATE_RATE_MAX = 0.10
+REBATE_RATE_DEFAULT = 0.075
+
+
+def _rostered(conn: sqlite3.Connection, org_id: int) -> int:
+    return int(conn.execute(
+        "SELECT COUNT(*) FROM memberships m JOIN users u ON u.id = m.user_id "
+        "WHERE m.org_id = ? AND m.role = 'athlete' AND m.active = 1 "
+        "AND u.active = 1",
+        (org_id,),
+    ).fetchone()[0])
+
+
+def prorated_cents(plan: Plan, months_left: int) -> int:
+    """What one athlete costs when they join partway through a season.
+
+    A player who turns up in week ten should not cost a full season, and a
+    club that gets billed as though they did will stop adding late joiners --
+    which would quietly turn a billing rule into a reason to leave a child off
+    a roster.
+    """
+    months = max(0, min(SEASON_MONTHS, months_left))
+    if not months:
+        return 0
+    return round(plan.per_athlete_season_cents * months / SEASON_MONTHS)
+
+
+@dataclass
+class RosterInvoice:
+    org_id: int
+    athletes: int
+    per_athlete_cents: int
+    dues_add_cents: int
+    rebate_rate: float
+
+    @property
+    def total_cents(self) -> int:
+        return self.athletes * self.per_athlete_cents
+
+    @property
+    def dues_collected_cents(self) -> int:
+        """What the club takes in if it adds the recommended line to its fee."""
+        return self.athletes * self.dues_add_cents
+
+    @property
+    def club_margin_cents(self) -> int:
+        """What is left over after paying us. The club's, to do as it likes
+        with -- most will put it where the rebate goes."""
+        return self.dues_collected_cents - self.total_cents
+
+    @property
+    def rebate_cents(self) -> int:
+        return round(self.total_cents * self.rebate_rate)
+
+    @property
+    def sponsorship_pot_cents(self) -> int:
+        """Margin plus rebate: the number that makes this an easy yes.
+
+        A director is not being asked to find budget. They are being shown a
+        line that funds their own scholarship fund.
+        """
+        return self.club_margin_cents + self.rebate_cents
+
+    def to_dict(self) -> dict[str, Any]:
+        def money(cents: int) -> str:
+            return f"${cents / 100:,.2f}"
+
+        return {
+            "org_id": self.org_id,
+            "athletes": self.athletes,
+            "season_months": SEASON_MONTHS,
+            "per_athlete_cents": self.per_athlete_cents,
+            "total_cents": self.total_cents,
+            "total_display": money(self.total_cents),
+            "recommended_dues_add_cents": self.dues_add_cents,
+            "dues_collected_cents": self.dues_collected_cents,
+            "club_margin_cents": self.club_margin_cents,
+            "rebate_rate": self.rebate_rate,
+            "rebate_cents": self.rebate_cents,
+            "sponsorship_pot_cents": self.sponsorship_pot_cents,
+            "sponsorship_pot_display": money(self.sponsorship_pot_cents),
+            "costs_the_club_directly": 0,
+        }
+
+
+def roster_invoice(
+    conn: sqlite3.Connection,
+    org_id: int,
+    *,
+    rebate_rate: float = REBATE_RATE_DEFAULT,
+    dues_add_cents: int = RECOMMENDED_DUES_ADD_CENTS,
+) -> RosterInvoice:
+    """What this club owes for a season, and what the arrangement returns."""
+    if not REBATE_RATE_MIN <= rebate_rate <= REBATE_RATE_MAX:
+        raise BillingError(
+            f"the sponsorship rebate is between {REBATE_RATE_MIN:.0%} and "
+            f"{REBATE_RATE_MAX:.0%}"
+        )
+    plan = get_plan("club_roster")
+    return RosterInvoice(
+        org_id=org_id,
+        athletes=_rostered(conn, org_id),
+        per_athlete_cents=plan.per_athlete_season_cents,
+        dues_add_cents=dues_add_cents,
+        rebate_rate=rebate_rate,
+    )
+
+
+def accrue_rebate(
+    conn: sqlite3.Connection,
+    org_id: int,
+    amount_cents: int,
+    *,
+    reason: str = "season invoice",
+    rate: float = REBATE_RATE_DEFAULT,
+) -> int:
+    """Record sponsorship credit earned on an amount the club has paid.
+
+    Accrued rather than netted off the invoice on purpose. A discount
+    disappears into a smaller number nobody looks at; a fund with a balance is
+    something a director can point at in a board meeting and spend on a named
+    family. The whole commercial argument here is that it is the second thing.
+    """
+    if amount_cents <= 0:
+        return 0
+    credit = round(amount_cents * rate)
+    conn.execute(
+        "INSERT INTO sponsorship_credits(org_id, amount_cents, reason, "
+        "  created_at) VALUES (?,?,?,?)",
+        (org_id, credit, reason, _iso(_now())),
+    )
+    conn.commit()
+    return credit
+
+
+def spend_rebate(
+    conn: sqlite3.Connection, org_id: int, amount_cents: int, reason: str
+) -> int:
+    """Draw the fund down. Refuses to overdraw rather than going negative."""
+    balance = rebate_balance(conn, org_id)
+    if amount_cents > balance:
+        raise BillingError(
+            f"the sponsorship fund holds ${balance / 100:,.2f}, "
+            f"which is less than ${amount_cents / 100:,.2f}"
+        )
+    conn.execute(
+        "INSERT INTO sponsorship_credits(org_id, amount_cents, reason, "
+        "  created_at) VALUES (?,?,?,?)",
+        (org_id, -abs(amount_cents), reason, _iso(_now())),
+    )
+    conn.commit()
+    return rebate_balance(conn, org_id)
+
+
+def rebate_balance(conn: sqlite3.Connection, org_id: int) -> int:
+    return int(conn.execute(
+        "SELECT COALESCE(SUM(amount_cents), 0) FROM sponsorship_credits "
+        "WHERE org_id = ?",
+        (org_id,),
+    ).fetchone()[0])
+
+
+def rebate_ledger(
+    conn: sqlite3.Connection, org_id: int, limit: int = 100
+) -> list[dict[str, Any]]:
+    return [
+        dict(r) for r in conn.execute(
+            "SELECT amount_cents, reason, created_at FROM sponsorship_credits "
+            "WHERE org_id = ? ORDER BY id DESC LIMIT ?",
+            (org_id, limit),
+        )
+    ]
 

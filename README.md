@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2070 tests
+python -m pytest tests/ -q          # 2100 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
@@ -2546,111 +2546,114 @@ child is told about their training week.
 
 ---
 
-## The club tier: free to the club, bought by the parent
+## How this is sold
 
-A director should be able to say yes without a budget line, a procurement
-cycle, or a board meeting — those are what actually kill a youth-sports pilot,
-not price. So the club plan is **free, for ever, unlimited**: teams, staff,
-athletes, no meter. Parents who want the parent-facing product buy it for their
-own child.
+**The club buys a seat for every rostered athlete — $25 per athlete per
+season — and covers it by adding a line to its own season fee.**
 
-### The structural decision that makes it work
+The money still comes from parents, but through the channel they already pay
+through, at the moment they are already paying. No second checkout, no
+chasing, no coach explaining a subscription. And every athlete is covered, so
+coverage is never partial and a coach's view is never a function of who bought
+what.
 
-Parent-paid club software dies of partial adoption, not of price. If what a
-*coach* sees depended on which parents paid, a club at 40% adoption would have
-a 40% dashboard, would stop opening it, and would drop the product — at which
-point nobody pays at all.
+### What a 200-athlete club sees
 
-So the line is drawn by **who consumes a feature**, never by how valuable it
-is. **The coaching product is complete at zero paying parents.** A club with
-nobody paying and a club with everybody paying have exactly the same coach
-experience.
+| | |
+|---|---|
+| We invoice the club | **$5,000** / season |
+| Club adds to dues | $40 / player → collects $8,000 |
+| Club margin | $3,000 |
+| Sponsorship rebate (7.5%) | $375 |
+| **Into their scholarship fund** | **$3,375** |
+| **Out of the club's own budget** | **$0** |
+
+A director is not being asked to find budget. They are shown a line that funds
+their own scholarship fund. The $40 is a recommendation, not a rule — it is
+about two per cent of a season fee that runs into four figures, and the club
+sets its own number.
+
+### The rebate is a fund, not a discount
+
+5–10% of what a club pays comes back, earmarked for families who cannot afford
+the season at all. It is **accrued as a ledger with a balance**, not netted off
+the invoice, and that is deliberate: a discount disappears into a smaller
+number nobody looks at, while a fund is something a director can point at in a
+board meeting and spend on a named family. Spending it records what it went to,
+because a director will be asked.
+
+The rate is a commercial lever within a bounded band. What is *not* negotiable
+is what it is for — it is the club's scholarship money, not a volume discount
+in disguise.
+
+### Late joiners are prorated
+
+A player who turns up in week ten costs a fraction of a season. A club billed
+in full for a late joiner will stop adding late joiners, which turns a billing
+rule into a reason to leave a child off a roster.
+
+### One price for a paying club
+
+The seat-metered tiers — Team at $49/mo, Program at $149, Club at $399 — are
+**retired**. They stay resolvable so clubs already on them keep working, and
+they are offered to nobody.
+
+The reason is worth recording, because it is the second time the same mistake
+appeared in this pricing. A sponsorship SKU was priced *above* the seat plans
+and would never have been chosen. The seat plans were then priced 3.4× to 7.5×
+*below* per-athlete, and would have won every time:
+
+| Club size | Roster plan @ $25 | Old seat plan |
+|---|---|---|
+| 40 | $1,000/season | $245 (Team) |
+| 200 | $5,000/season | $745 (Program) |
+| 600 | $15,000/season | $1,995 (Club) |
+
+A price that always loses to another price you publish is not an option — it
+is a trap for whoever reads the pricing page carefully. There is now exactly
+one plan offered to a paying club, and a test asserts it.
+
+### If a club will not buy
+
+`club_free` remains: the club pays nothing, and parents who want the
+parent-facing product buy it for their own child at $29 a season ($19 sibling,
+free from the third, $48 household cap). A club buying for its whole roster
+pays less per head than a family buying alone, which is the right direction —
+a club committing its entire roster with no acquisition cost should not pay
+more than one family.
+
+That tier is where the free/paid line matters, and the line is drawn by **who
+consumes a feature**, never by how valuable it is.
 
 | Free for ever | Why |
 |---|---|
 | Training, streaks, XP, badges | A child can always train. An adult's payment problem is not a reason to lock a fourteen-year-old out |
-| Everything a coach sees | Roster, assignments, compliance, pre-practice card, digest, evaluation export — coverage can never break their view |
+| Everything a coach sees | Roster, assignments, compliance, pre-practice card, digest, evaluation export — if coverage could break a coach's view, a club at partial adoption would drop the product |
 | Soreness, injury, return-to-play, load | Charging a family for injury prevention for a child is indefensible, and an unpaid child who stays quiet is the outcome |
 | Adaptive accommodations | Charging for accessibility is indefensible |
 | Technique cues and reference | Form scoring without the fix is a mark out of ten. Charging to say *how to be right* is the worst thing that could go behind this paywall |
 | Consent, export, erasure, guardian alert copies | Rights, not features |
 
 What a parent buys is the parent product: the monthly report, history beyond
-30 days, peer context for their child's age band, film study, coach video
-review, and other-sport tracking. A family that does not buy it loses nothing
-their child needs and nothing their coach relies on.
-
-### The price
-
-| | Per season (5 months) |
-|---|---|
-| First child | **$29** |
-| Second child | **$19** |
-| Third child onward | **Free** |
-| Monthly alternative | $8/month |
-
-Seasonal rather than monthly for three reasons: youth sports is seasonal and
-parents already budget that way; monthly billing invites a cancellation
-decision twelve times a year instead of two; and a card failure in February
-would put a support burden on a club that is paying nothing.
-
-A household caps at **$48 a season** however many children are in it. A family
-with three kids in a club is already the one paying the most, and charging them
-three times over is how a product acquires a reputation among exactly the
-parents who talk to other parents.
-
-For scale: a club season runs into four figures. This is priced to be a
-decision a parent makes once, quickly.
+30 days, peer context, film study, coach video review, and other-sport
+tracking.
 
 ### Hardship, and who is allowed to know
 
-A parent can grant themselves the full parent product, free, in one click. **No
-coach is involved and nobody is notified** — a family that has to ask their
+A parent can grant themselves the full parent product free, in one click, with
+**no coach involved and nobody notified** — a family that has to ask their
 child's coach for a discount is a family that will not ask.
 
 And **no coach-facing surface reveals which families pay.** Not a badge, not a
-count, not an ordering; paid, sponsored and hardship are indistinguishable
-everywhere a coach can see. This product already promises it does not score
-what a household can afford, and a dashboard that quietly showed which children
-came from paying families would make that false in the one place it matters
-most — at tryouts. Tests assert the coach roster, the pre-practice card and the
-evaluation export carry no billing signal, and that no coach-facing module even
-imports the entitlement layer.
-
-### If the club would rather cover it
-
-They buy a seat-metered plan — Team, Program or Club — and **those include the
-parent product for every athlete on the roster.** That is what paying for seats
-means here.
-
-There is deliberately **no separate sponsorship price**, and the reason is
-worth recording. One was written first, at $19 an athlete per season, and it
-came out between 2.5× and 5.7× more expensive than simply buying the seat plan
-that fits the same roster:
-
-| Club size | Sponsorship at $19/athlete | Cheapest seat plan that fits |
-|---|---|---|
-| 40 | $760/season | $245/season (Team) |
-| 200 | $3,800/season | $745/season (Program) |
-| 600 | $11,400/season | $1,995/season (Club) |
-
-No club would ever rationally have chosen it. A third price that always loses
-to one you already publish is not an option, it is a trap for whoever reads
-the pricing page carefully — so it is gone, and a test asserts the constant no
-longer exists.
-
-Sponsorship survives as a *mechanism* with no price attached: a club-free
-program can quietly cover particular families, which is the scaled-up version
-of the hardship path — a director who knows their community covering the
-families who will not ask. It costs that club nothing.
-
-A new program starts on a trial of a paid plan, so during the trial every
-family has the parent product. An evaluation shaped by limits the club would
-not hit in practice is not an evaluation.
+count, not an ordering. This matters less under the roster plan, where
+everyone is covered, and the guarantee holds anyway because a club can move
+between plans mid-season. Tests assert the coach roster, the pre-practice card
+and the evaluation export carry no billing signal, and that no coach-facing
+module even imports the entitlement layer.
 
 ### What lapsing costs a child
 
-Nothing. Training, safety, consent, and everything a coach sees carry on
+Nothing. Training, safety, consent and everything a coach sees carry on
 untouched; the parent product goes dormant. Nobody is told, least of all a
 coach.
 
@@ -3109,4 +3112,14 @@ contact with a real driveway:
     themselves in one click. That is deliberate: verification would mean
     asking a family to prove poverty to their child's sports club, which is a
     worse outcome than some families taking it who could have paid.
+49. **The roster plan is priced against club dues, not against costs.** $25
+    an athlete works because a club can add $40 to a four-figure season fee
+    without a parent noticing. It has never been tested against a club that
+    negotiates, against a rec league whose season fee is $200 rather than
+    $1,800, or against a competitor undercutting it. The seat tiers it
+    replaces are retired rather than deleted, so reversing this is possible.
+50. **The sponsorship rebate is tracked but not settled.** The ledger accrues
+    and draws down correctly; whether the balance is paid as cash, credited
+    against next season, or drawn as software seats is a commercial decision
+    nobody has made, and no money moves either way without a processor.
 

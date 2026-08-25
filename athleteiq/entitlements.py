@@ -254,8 +254,12 @@ def _org_covers(conn: sqlite3.Connection, athlete_id: int) -> bool:
     if row is None:
         return False
     plan = billing.PLANS_BY_CODE.get(row["plan_code"])
-    return bool(plan and plan.payer == billing.PAYER_PROGRAM
-                and plan.price_cents > 0)
+    if plan is None or plan.payer != billing.PAYER_PROGRAM:
+        return False
+    # Either the club buys a seat for every rostered athlete, or it is on one
+    # of the retired seat tiers. Both mean the club paid for the whole
+    # product, families included.
+    return plan.per_athlete_season_cents > 0 or plan.price_cents > 0
 
 
 def for_athlete(

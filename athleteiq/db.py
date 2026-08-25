@@ -664,6 +664,23 @@ CREATE TABLE IF NOT EXISTS team_staff (
 CREATE INDEX IF NOT EXISTS idx_team_staff_user ON team_staff(user_id);
 
 -- One row per program. Absent means the free plan.
+-- A club's sponsorship fund: credit earned on what they have paid, and drawn
+-- down when they cover a family who cannot afford the season.
+--
+-- A ledger rather than a balance column so the club can see where it came from
+-- and where it went. Accrued rather than netted off the invoice on purpose: a
+-- discount disappears into a smaller number nobody looks at, and a fund with a
+-- balance is something a director can point at and spend on a named family.
+CREATE TABLE IF NOT EXISTS sponsorship_credits (
+    id           INTEGER PRIMARY KEY,
+    org_id       INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    -- Positive is earned, negative is spent.
+    amount_cents INTEGER NOT NULL,
+    reason       TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sponsorship_org ON sponsorship_credits(org_id);
+
 -- What one child's family has bought, under a club-free plan.
 --
 -- Per athlete rather than per guardian: a household with two children in

@@ -496,7 +496,11 @@ class TestOverTheWire:
             headers=wired["director"]).json()
         assert body["cost_to_the_club_cents"] == 0
 
-    def test_the_pricing_page_points_a_paying_club_at_seat_plans(self, client):
+    def test_the_pricing_page_offers_one_paid_club_plan(self, client):
+        """The seat tiers are retired, so the page that once pointed a paying
+        club at them now points at the roster plan and nothing else. One
+        price for a paying club is the whole point."""
         body = client.get("/api/pricing").json()
         assert "sponsorship" not in body
-        assert body["club_pays_instead"]["plans"]
+        assert body["club_pays_instead"]["plans"] == []
+        assert body["club_roster"]["per_athlete_season_cents"] > 0

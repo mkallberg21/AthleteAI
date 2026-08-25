@@ -34,22 +34,37 @@ def add_athletes(store, org_id, count, start=0):
     return made
 
 
+def _seat_metered(plan) -> bool:
+    """Billed to the club by seat allowance rather than per head."""
+    return (plan.payer == B.PAYER_PROGRAM
+            and plan.price_cents > 0
+            and plan.per_athlete_season_cents == 0)
+
+
 class TestPlans:
     def test_every_plan_is_internally_consistent(self):
         for plan in B.PLANS:
             assert plan.price_cents >= 0
             assert plan.extra_seat_cents >= 0
-            # Only a plan the club is billed for has a seat allowance to be
-            # consistent about. A household-paid plan is not on that ladder:
-            # the club is charged nothing, so metering it would be friction
-            # protecting revenue that does not exist.
-            if plan.payer == B.PAYER_PROGRAM:
+            # Only a *seat-metered* plan has an allowance to be consistent
+            # about. Neither of the plans this product now sells is one: the
+            # roster plan bills per athlete, so every athlete is a seat and
+            # there is no ceiling, and the club-free plan bills the club
+            # nothing at all.
+            if _seat_metered(plan):
                 assert plan.included_seats > 0
 
     def test_plans_ascend_in_capacity(self):
-        seats = [p.included_seats for p in B.PLANS
-                 if p.payer == B.PAYER_PROGRAM]
+        seats = [p.included_seats for p in B.PLANS if _seat_metered(p)]
         assert seats == sorted(seats)
+
+    def test_a_per_athlete_plan_has_no_seat_ceiling(self):
+        """You cannot exceed a seat allowance when every athlete is a seat.
+        Getting this wrong blocked roster growth at four athletes."""
+        for plan in B.PLANS:
+            if plan.per_athlete_season_cents > 0:
+                assert plan.included_seats == 0
+                assert plan.max_teams == 0 and plan.max_staff == 0
 
     def test_a_household_paid_plan_charges_and_meters_nothing(self):
         """Stated as its own invariant rather than as an exception to the

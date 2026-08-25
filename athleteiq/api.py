@@ -3086,6 +3086,21 @@ def pricing() -> dict[str, Any]:
             "trial_days": billing_mod.HOUSEHOLD_TRIAL_DAYS,
             "examples": [billing_mod.household_quote(n) for n in (1, 2, 3)],
         },
+        "club_roster": {
+            "plan": billing_mod.PLANS_BY_CODE["club_roster"].to_dict(),
+            "per_athlete_season_cents":
+                billing_mod.PLANS_BY_CODE["club_roster"].per_athlete_season_cents,
+            "recommended_dues_add_cents": billing_mod.RECOMMENDED_DUES_ADD_CENTS,
+            "rebate_rate_min": billing_mod.REBATE_RATE_MIN,
+            "rebate_rate_max": billing_mod.REBATE_RATE_MAX,
+            "note": (
+                "The club buys a seat for every rostered athlete and covers it "
+                "by adding a line to its own season fee. The money still comes "
+                "from parents, through the channel they already pay through — "
+                "so the club is out nothing, every athlete is covered, and a "
+                "share comes back for families who cannot afford the season."
+            ),
+        },
         "club_pays_instead": {
             "note": (
                 "A club that would rather cover its families buys a "
@@ -3096,7 +3111,8 @@ def pricing() -> dict[str, Any]:
             ),
             "plans": [
                 p.to_dict() for p in billing_mod.PLANS
-                if p.payer == billing_mod.PAYER_PROGRAM and p.price_cents > 0
+                if p.offered and p.payer == billing_mod.PAYER_PROGRAM
+                and p.price_cents > 0
             ],
         },
         "features": entitlements.catalog(),
@@ -3158,6 +3174,77 @@ def sponsor(
     covered = billing_mod.sponsor_athletes(
         store.conn, principal.org_id, body.athlete_ids or None)
     return {"sponsored": covered, "cost_to_the_club_cents": 0}
+
+
+class RebateSpend(BaseModel):
+    amount_cents: int = Field(ge=1, le=1_000_000)
+    reason: str = Field(min_length=1, max_length=200)
+
+
+@app.get("/api/org/invoice")
+def org_invoice(
+    # Bounded at the edge as well as in the module, so an out-of-range rate
+    # is a 422 like every other bad parameter rather than arriving as a
+    # payment error.
+    rebate_rate: float = Query(
+        default=billing_mod.REBATE_RATE_DEFAULT,
+        ge=billing_mod.REBATE_RATE_MIN, le=billing_mod.REBATE_RATE_MAX),
+    dues_add_cents: int = Query(
+        default=billing_mod.RECOMMENDED_DUES_ADD_CENTS, ge=0, le=50_000),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What a season costs this club, and what the arrangement returns.
+
+    Written to be read by a director deciding, so it leads with the number
+    that makes it an easy yes: they are not being asked to find budget, they
+    are being shown a line that funds their own scholarship fund.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can see the invoice")
+    invoice = billing_mod.roster_invoice(
+        store.conn, principal.org_id,
+        rebate_rate=rebate_rate, dues_add_cents=dues_add_cents)
+    return {
+        **invoice.to_dict(),
+        "sponsorship_fund_cents": billing_mod.rebate_balance(
+            store.conn, principal.org_id),
+    }
+
+
+@app.get("/api/org/sponsorship-fund")
+def sponsorship_fund(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The fund's balance and where it came from and went."""
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can see the fund")
+    return {
+        "balance_cents": billing_mod.rebate_balance(store.conn, principal.org_id),
+        "ledger": billing_mod.rebate_ledger(store.conn, principal.org_id),
+    }
+
+
+@app.post("/api/org/sponsorship-fund/spend", status_code=201)
+def spend_sponsorship_fund(
+    body: RebateSpend,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Draw the fund down for a family who cannot afford the season.
+
+    The reason is recorded because a director will be asked where it went,
+    and the answer should be in the product rather than in their memory.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can spend the fund")
+    balance = billing_mod.spend_rebate(
+        store.conn, principal.org_id, body.amount_cents, body.reason)
+    return {"balance_cents": balance}
 
 
 @app.get("/api/technique/{drill_key}")
