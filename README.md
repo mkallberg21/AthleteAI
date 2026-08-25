@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1909 tests
+python -m pytest tests/ -q          # 1999 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
@@ -121,6 +121,9 @@ athleteiq/
   injury_history.py Prior injury, and the one line it is allowed to move
   evaluation.py     The tryout artifact: participation and improvement, no volume
   i18n.py           Spanish on the consent, parent and recognition surfaces
+  adaptive.py       Athletes the camera was not built for, and what changes
+  portability.py    The whole program as documented CSVs — the lock-in answer
+  dialect.py        What a Postgres migration would actually cost, measured
   practice.py       The pre-practice card: who is not training, and why
   season.py         Where a program is in its year, and what that does to load
   technique.py      What a good rep looks like, per drill, per weak component
@@ -139,7 +142,7 @@ athleteiq/
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
-  store.py          The only module that speaks SQL
+  store.py          The largest SQL surface (~39% of queries; see dialect.py)
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
@@ -155,6 +158,7 @@ athleteiq/
 scripts/
   seed_demo.py            Demo program with six weeks of history
   run_notifications.py    Scheduled nudge generation and delivery
+  migration_scope.py      What a Postgres migration would actually cost
 ```
 
 ### The drill spec is the load-bearing idea
@@ -2411,6 +2415,112 @@ than turning up on a consent form.
 
 ---
 
+## Adaptive athletes
+
+Pose estimation assumes a body with two arms, two legs, and a typical range of
+motion at every joint. That assumption runs through every layer here: the
+counter reads joint angles, form scoring marks a rep against a target range,
+the off-hand comparison assumes two sides that should match, and the integrity
+layer treats an unusual movement pattern as evidence of cheating.
+
+For an athlete who moves differently, each of those becomes a small insult
+delivered by software. **Saying nothing is not neutral** — a product that
+scores an adaptive athlete as a deficient typical athlete has taken a position
+and simply not admitted to it.
+
+**The framing is deliberate.** This is not a disability flag and it records no
+diagnosis. It records that *our camera analysis does not fit how this athlete
+trains* — a limitation of the tool, stated as one. Tests assert that no option
+or piece of copy uses clinical language, and the sentence an athlete finds on
+their own settings screen is about the app's limits and ends *"not of you"*.
+
+| Accommodation | What changes |
+|---|---|
+| Do not score technique | Form scoring goes **silent, not to zero** — 34/100 against a range their body does not have is worse than no score |
+| Do not compare sides | The off-hand gap disappears from their screens and their coach's |
+| Own history only | Peer benchmarks drop to their own trend; they are not a poor version of a pool that is not theirs |
+| Let them log a session | Work the camera could not count still happened |
+
+**Integrity never auto-rejects them.** Any accommodation at all buys this, and
+it is not separately switchable. Where the usual rules would reject, the
+session is held for review instead — the score untouched, with a note saying
+why so a coach reading the queue is not guessing. A held session gets a person;
+a rejected one gets a child told by software that they cheated, and that must
+not happen because a movement looked unfamiliar.
+
+Self-reported sessions are marked for ever, earn flat XP that does not scale
+with the reps claimed, and stay out of the reps board — nobody has an incentive
+to overstate a number that only tightens their own load advisories, and a
+strong one to overstate a number on a board. Their reps *do* reach their own
+load history, because overuse protection matters most for an athlete whose
+training this app structurally cannot see.
+
+The honest limit: this makes the product usable and fair. It does not make the
+pose counter work for a movement it cannot see, and no setting can.
+
+---
+
+## Program export, and the lock-in question
+
+A cautious director asks it and is right to. The answer is an artifact rather
+than a promise: a zip of documented CSVs they can take to a competitor, a
+spreadsheet, or their own analyst.
+
+Three things make it portability rather than a checkbox. It is **complete** —
+every table a program owns, because an export that drops the inconvenient parts
+is the lock-in it claims to answer. It **documents itself from inside** — a
+README travels in the archive naming every file, column and unit, since an
+export whose meaning lives in our documentation stops making sense the day a
+program leaves. And **the roster comes back in**: `athletes.csv` is written in
+the shape our own importer reads, and a test re-imports it and asserts it
+updates the same squad rather than duplicating it. If it parses here it parses
+anywhere.
+
+What is left out took more thought than what is in. **No wellness or injury
+records** — the one that would be wrong by default. A guardian can already
+export their own child's complete record and that is their right; a director
+exporting the program does not get a bulk health file on every child in the
+club. The whole wellness subsystem rests on a child believing that saying *"my
+knee hurts"* does not travel. **No credentials** either: token hashes, claim
+codes and provider tokens are keys to accounts rather than program data. The
+README inside says both, and says why.
+
+---
+
+## What a Postgres migration would cost
+
+This README used to say `store.py` was "the only module that speaks SQL", and
+an outside review repeated it back as a reason a district-wide migration would
+be cheap. It was not true. **Twenty-four modules execute SQL across 371 call
+sites, and store.py holds 39% of them** — an estimate built on that sentence
+would have been wrong by a factor of two and a half.
+
+So the inventory is now measured rather than remembered. `dialect.py` scans for
+every SQLite-specific construct and reports where it lives; `scripts/migration_scope.py`
+prints it; and tests assert both that the README matches the code and that the
+tool is not over-counting itself.
+
+```
+SQL lives in 24 modules across 371 call sites.
+store.py holds 39% of them.
+
+866 occurrences are mechanical (search-and-replace with tests behind it).
+55 need judgement.
+```
+
+The judgement work is the real cost: `lastrowid` has to become `INSERT ...
+RETURNING` threaded back through nineteen call sites, `INSERT OR REPLACE`
+fires different cascades than `ON CONFLICT DO UPDATE`, and the SQLite date
+functions sit inside comparisons where a timezone assumption changes what a
+child is told about their training week.
+
+> **This scopes the migration; it does not perform one.** No Postgres driver is
+> installed in this environment and nothing has been run against a server. A
+> blind port of a working, heavily-tested system against a database you cannot
+> run is how a silently wrong query about a child's training load ships.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -2777,3 +2887,27 @@ contact with a real driveway:
     carries no history here. The signal is real when present and absent
     fairly often, which makes it a reason to ask a question rather than
     evidence of anything.
+40. **Nothing here makes the pose counter work for a movement it cannot see.**
+    The adaptive accommodations make the product usable and fair for an
+    athlete the camera misreads — they suppress a score rather than compute a
+    fair one, and they open a self-report path rather than a measurement. A
+    genuinely inclusive counter would need a different model and probably a
+    different sensor, and no setting substitutes for that.
+41. **Self-reported sessions are unverified by construction.** They are gated
+    on an accommodation an adult sets, marked for ever, earn flat XP and stay
+    off the reps board — but an athlete who wanted to inflate their own streak
+    could. The trade is deliberate: the alternative is a child whose training
+    this app structurally cannot see, punished by a streak for it.
+42. **The Postgres migration is scoped, not done.** No driver is installed
+    here and nothing has been run against a server. `dialect.py` measures what
+    the work is; it does not do any of it, and the product runs on SQLite
+    only.
+43. **The program export is a snapshot, not a sync.** There is no incremental
+    feed and no API for another product to pull from continuously. A director
+    leaving takes a file; they do not get a migration path that keeps two
+    systems in step while they move.
+44. **The assignment-stall notification cannot tell a bad assignment from a
+    bad week.** It reports that completion is low and suggests the assignment
+    may be the problem, which is usually right and sometimes is not — exam
+    week and a flu going round look identical from here.
+
