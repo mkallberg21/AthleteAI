@@ -664,6 +664,32 @@ CREATE TABLE IF NOT EXISTS team_staff (
 CREATE INDEX IF NOT EXISTS idx_team_staff_user ON team_staff(user_id);
 
 -- One row per program. Absent means the free plan.
+-- What one child's family has bought, under a club-free plan.
+--
+-- Per athlete rather than per guardian: a household with two children in
+-- different clubs is one family and two entitlements, and a guardian-level row
+-- would have to invent an answer for which club it applied to.
+--
+-- `source` distinguishes paid, sponsored (the club covered it), hardship
+-- (granted free, no questions) and trial. That distinction is for the family
+-- and for reconciliation; it is never surfaced anywhere a coach can see, and a
+-- test enforces that. A dashboard that quietly showed which children came from
+-- paying households would break the promise that this product does not score
+-- what a family can afford.
+CREATE TABLE IF NOT EXISTS household_subscriptions (
+    athlete_id   INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    source       TEXT NOT NULL DEFAULT 'paid'
+                 CHECK (source IN ('paid','sponsored','hardship','trial')),
+    status       TEXT NOT NULL DEFAULT 'active'
+                 CHECK (status IN ('active','lapsed','canceled')),
+    period_start TEXT NOT NULL,
+    period_end   TEXT NOT NULL,
+    external_ref TEXT NOT NULL DEFAULT '',
+    updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_household_status
+    ON household_subscriptions(status, period_end);
+
 CREATE TABLE IF NOT EXISTS subscriptions (
     org_id             INTEGER PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
     plan_code          TEXT NOT NULL,

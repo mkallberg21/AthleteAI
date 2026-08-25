@@ -43,6 +43,7 @@ from . import portability as portability_mod
 from . import practice as practice_mod
 from . import absence as absence_mod
 from . import adaptive as adaptive_mod
+from . import entitlements
 from . import evaluation as evaluation_mod
 from . import i18n
 from . import parent_report as parent_report_mod
@@ -2287,6 +2288,7 @@ def parent_monthly_report(
     point. What it still will not do is compare them to their teammates.
     """
     guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    _require_feature(store, athlete_id, "parent_report")
     report = parent_report_mod.build(store.conn, athlete_id)
     if report is None:
         raise HTTPException(status_code=404, detail="unknown athlete")
@@ -2302,6 +2304,7 @@ def parent_monthly_report_preview(
 ) -> str:
     """The email exactly as it will arrive, for a parent who wants to look."""
     guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    _require_feature(store, athlete_id, "parent_report")
     report = parent_report_mod.build(store.conn, athlete_id)
     if report is None:
         raise HTTPException(status_code=404, detail="unknown athlete")
@@ -2323,7 +2326,12 @@ def parent_drill_log(
     child that something was queried is worse than reading it here.
     """
     guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
-    return store.drill_log(athlete_id, days)
+    # Clamped rather than refused: a family without the parent plan still sees
+    # the last month, which is enough for their child's own progress to be
+    # visible. The limit is felt looking back over a season, which is exactly
+    # who the paid product is for.
+    window = entitlements.for_athlete(store.conn, athlete_id).history_days
+    return store.drill_log(athlete_id, min(days, window) if window else days)
 
 
 @app.get("/api/parent/athletes/{athlete_id}/clips")
@@ -2766,6 +2774,31 @@ class ScheduleAbsence(BaseModel):
     reason: str = Field(default="", max_length=200)
 
 
+def _require_feature(store: Store, athlete_id: int, key: str) -> None:
+    """Refuse a household feature this family has not got.
+
+    One function, so the free-forever list cannot be worked around by a call
+    site that forgets. `Entitlement.has` returns True for anything free
+    regardless of payment, so passing a free key here is a no-op by
+    construction rather than by discipline.
+
+    402 rather than 403: this is not a permission problem and the copy should
+    not read like one. A family that has not bought the parent product has
+    done nothing wrong.
+    """
+    if entitlements.for_athlete(store.conn, athlete_id).has(key):
+        return
+    feature = entitlements.BY_KEY.get(key)
+    raise HTTPException(
+        status_code=402,
+        detail=(
+            f"{feature.label if feature else key} is part of the parent plan. "
+            "Your child keeps training, and everything their coach sees is "
+            "unaffected."
+        ),
+    )
+
+
 def _may_set_absence(store: Store, principal: Principal, athlete_id: int) -> str:
     """A guardian of this child, or staff at their program. Not the athlete.
 
@@ -3025,6 +3058,92 @@ def program_roster_csv(
             detail="only a director can export the whole program",
         )
     return portability_mod.roster_csv(store.conn, principal.org_id)
+
+
+@app.get("/api/pricing")
+def pricing() -> dict[str, Any]:
+    """The whole feature line and what a household pays, in public.
+
+    A family deciding whether to pay should be able to read exactly what they
+    are and are not buying -- including the reason every free feature is free,
+    which is the part that stops the line moving quietly later.
+    """
+    return {
+        "club": {
+            "plan": billing_mod.PLANS_BY_CODE["club_free"].to_dict(),
+            "costs_the_club": 0,
+            "note": (
+                "Free for the club, for ever. Everything a coach or an athlete "
+                "needs is included at zero paying parents."
+            ),
+        },
+        "household": {
+            "season_months": billing_mod.SEASON_MONTHS,
+            "first_child_cents": billing_mod.HOUSEHOLD_SEASON_CENTS,
+            "sibling_cents": billing_mod.HOUSEHOLD_SIBLING_CENTS,
+            "free_from_child": billing_mod.HOUSEHOLD_FREE_FROM_CHILD,
+            "monthly_cents": billing_mod.HOUSEHOLD_MONTHLY_CENTS,
+            "trial_days": billing_mod.HOUSEHOLD_TRIAL_DAYS,
+            "examples": [billing_mod.household_quote(n) for n in (1, 2, 3)],
+        },
+        "sponsorship": {
+            "per_athlete_season_cents": billing_mod.SPONSOR_SEASON_CENTS,
+            "note": (
+                "A club that would rather cover its families can. Cheaper per "
+                "athlete than a household pays, and it reaches the families "
+                "who would never have bought."
+            ),
+        },
+        "features": entitlements.catalog(),
+    }
+
+
+@app.get("/api/parent/athletes/{athlete_id}/plan")
+def household_plan(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What this family has, and what a season would cost them."""
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    children = len(guardians_mod.athletes_for(store.conn, principal.id))
+    return {
+        **entitlements.for_athlete(store.conn, athlete_id).to_dict(),
+        "quote": billing_mod.household_quote(children),
+    }
+
+
+@app.post("/api/parent/athletes/{athlete_id}/plan/hardship", status_code=201)
+def request_hardship(
+    athlete_id: int,
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The parent product, free, no questions and nobody told.
+
+    Self-service on purpose. A family that has to ask their child's coach for
+    a discount is a family that will not ask, and this product already
+    promises it does not score what a household can afford.
+    """
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    billing_mod.grant_hardship(store.conn, athlete_id, actor=f"guardian:{principal.id}")
+    return entitlements.for_athlete(store.conn, athlete_id).to_dict()
+
+
+@app.post("/api/org/sponsor", status_code=201)
+def sponsor(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A club covering the parent product for every athlete on its roster."""
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can sponsor the program")
+    covered = billing_mod.sponsor_athletes(store.conn, principal.org_id)
+    return {
+        "sponsored": covered,
+        "season_cost_cents": covered * billing_mod.SPONSOR_SEASON_CENTS,
+    }
 
 
 @app.get("/api/technique/{drill_key}")

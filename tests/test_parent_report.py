@@ -19,7 +19,7 @@ from datetime import date
 
 import pytest
 
-from athleteiq import guardians as guardians_mod
+from athleteiq import billing, guardians as guardians_mod
 from athleteiq import notifications, parent_report
 from athleteiq.db import connect
 from athleteiq.store import Store
@@ -54,6 +54,10 @@ def family(store):
         store.conn, kid["id"], parent["guardian_id"],
         guardians_mod.Scope.PARTICIPATION, True,
     )
+    # The report is part of the parent plan under a club-free tier. These
+    # tests are about what the report says, so they buy it; whether it is
+    # gated correctly is tested in test_entitlements.py.
+    billing.start_household(store.conn, kid["id"])
     return {"org": org, "director": director, "team": team,
             "kid": kid, "parent": parent}
 
@@ -290,6 +294,17 @@ class TestSending:
             (family["kid"]["id"],),
         ).fetchone()["n"] == 0
 
+    def test_a_family_without_the_parent_plan_is_not_sent_one(
+        self, store, family
+    ):
+        """The report is what the club-free tier sells. Emailing it to
+        families who have not bought it gives the product away -- and sending
+        a deliberately worse version instead would be a worse thing to put in
+        a parent's inbox than sending nothing."""
+        store.conn.execute("DELETE FROM household_subscriptions")
+        store.conn.commit()
+        assert parent_report.generate(store.conn, TODAY) == 0
+
     def test_a_child_with_no_guardian_produces_nothing(self, store, family):
         """There is no sensible fallback recipient for a report about a
         child, so an orphan notification is worse than none."""
@@ -374,6 +389,7 @@ def wired(client):
         store.conn, kid["id"], parent["guardian_id"],
         guardians_mod.Scope.PARTICIPATION, True,
     )
+    billing.start_household(store.conn, kid["id"])
     return {"store": store, "kid": kid, "team": team, "director": director,
             "parent": {"Authorization": f"Bearer {parent['token']}"}}
 

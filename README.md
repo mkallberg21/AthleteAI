@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2010 tests
+python -m pytest tests/ -q          # 2064 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
@@ -124,6 +124,7 @@ athleteiq/
   adaptive.py       Athletes the camera was not built for, and what changes
   portability.py    The whole program as documented CSVs — the lock-in answer
   dialect.py        What a Postgres migration would actually cost, measured
+  entitlements.py   The free/paid line, and why each free thing is free
   practice.py       The pre-practice card: who is not training, and why
   season.py         Where a program is in its year, and what that does to load
   technique.py      What a good rep looks like, per drill, per weak component
@@ -2545,6 +2546,93 @@ child is told about their training week.
 
 ---
 
+## The club tier: free to the club, bought by the parent
+
+A director should be able to say yes without a budget line, a procurement
+cycle, or a board meeting — those are what actually kill a youth-sports pilot,
+not price. So the club plan is **free, for ever, unlimited**: teams, staff,
+athletes, no meter. Parents who want the parent-facing product buy it for their
+own child.
+
+### The structural decision that makes it work
+
+Parent-paid club software dies of partial adoption, not of price. If what a
+*coach* sees depended on which parents paid, a club at 40% adoption would have
+a 40% dashboard, would stop opening it, and would drop the product — at which
+point nobody pays at all.
+
+So the line is drawn by **who consumes a feature**, never by how valuable it
+is. **The coaching product is complete at zero paying parents.** A club with
+nobody paying and a club with everybody paying have exactly the same coach
+experience.
+
+| Free for ever | Why |
+|---|---|
+| Training, streaks, XP, badges | A child can always train. An adult's payment problem is not a reason to lock a fourteen-year-old out |
+| Everything a coach sees | Roster, assignments, compliance, pre-practice card, digest, evaluation export — coverage can never break their view |
+| Soreness, injury, return-to-play, load | Charging a family for injury prevention for a child is indefensible, and an unpaid child who stays quiet is the outcome |
+| Adaptive accommodations | Charging for accessibility is indefensible |
+| Technique cues and reference | Form scoring without the fix is a mark out of ten. Charging to say *how to be right* is the worst thing that could go behind this paywall |
+| Consent, export, erasure, guardian alert copies | Rights, not features |
+
+What a parent buys is the parent product: the monthly report, history beyond
+30 days, peer context for their child's age band, film study, coach video
+review, and other-sport tracking. A family that does not buy it loses nothing
+their child needs and nothing their coach relies on.
+
+### The price
+
+| | Per season (5 months) |
+|---|---|
+| First child | **$29** |
+| Second child | **$19** |
+| Third child onward | **Free** |
+| Monthly alternative | $8/month |
+
+Seasonal rather than monthly for three reasons: youth sports is seasonal and
+parents already budget that way; monthly billing invites a cancellation
+decision twelve times a year instead of two; and a card failure in February
+would put a support burden on a club that is paying nothing.
+
+A household caps at **$48 a season** however many children are in it. A family
+with three kids in a club is already the one paying the most, and charging them
+three times over is how a product acquires a reputation among exactly the
+parents who talk to other parents.
+
+For scale: a club season runs into four figures. This is priced to be a
+decision a parent makes once, quickly.
+
+### Hardship, and who is allowed to know
+
+A parent can grant themselves the full parent product, free, in one click. **No
+coach is involved and nobody is notified** — a family that has to ask their
+child's coach for a discount is a family that will not ask.
+
+And **no coach-facing surface reveals which families pay.** Not a badge, not a
+count, not an ordering; paid, sponsored and hardship are indistinguishable
+everywhere a coach can see. This product already promises it does not score
+what a household can afford, and a dashboard that quietly showed which children
+came from paying families would make that false in the one place it matters
+most — at tryouts. Tests assert the coach roster, the pre-practice card and the
+evaluation export carry no billing signal, and that no coach-facing module even
+imports the entitlement layer.
+
+### If the club would rather cover it
+
+Some will, and the ones that do have a budget and a view about equity.
+Sponsorship is **$19 per athlete per season** — cheaper than a family pays,
+because it arrives without acquisition cost and reaches the families who would
+never have bought. The seat-metered `club` plan at $399/month also remains for
+clubs that prefer a single invoice.
+
+### What lapsing costs a child
+
+Nothing. Training, safety, consent, and everything a coach sees carry on
+untouched; the parent product goes dormant. Nobody is told, least of all a
+coach.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -2984,4 +3072,18 @@ contact with a real driveway:
     who does, and no amount of copy removes that entirely. The alternative is
     fabricating a number, which would be worse. Programs using this at
     selection should read the preamble aloud.
+46. **The club-free tier is a conversion bet, not a certainty.** Its revenue
+    depends on parent adoption, which for consumer freemium is commonly
+    15–25% rather than the 35%+ that would match the seat-metered Club plan.
+    A club of 200 at 20% is roughly $1,160 a season. The bet is that zero
+    friction to the club buys far more clubs; if it does not, the seat-metered
+    plan is still there and is the better per-club number.
+47. **There is still no payment processor.** `ManualGateway` records what
+    happened and charges nothing. Household subscriptions, sponsorship and
+    hardship all work end to end against it, so the seam is exercised — but
+    no card has ever been charged by this code.
+48. **Hardship is unverified by design.** Any guardian can grant it to
+    themselves in one click. That is deliberate: verification would mean
+    asking a family to prove poverty to their child's sports club, which is a
+    worse outcome than some families taking it who could have paid.
 

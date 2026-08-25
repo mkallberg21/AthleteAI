@@ -39,6 +39,11 @@ class BillingError(Exception):
     """An action that the program's current plan does not permit."""
 
 
+#: Who the invoice goes to.
+PAYER_PROGRAM = "program"     # the club is billed for seats
+PAYER_HOUSEHOLD = "household"  # the club is billed nothing; families opt in
+
+
 @dataclass(frozen=True)
 class Plan:
     code: str
@@ -49,6 +54,7 @@ class Plan:
     max_teams: int                   # 0 means unlimited
     max_staff: int                   # 0 means unlimited
     blurb: str = ""
+    payer: str = PAYER_PROGRAM
 
     @property
     def is_free(self) -> bool:
@@ -125,6 +131,29 @@ PLANS: tuple[Plan, ...] = (
         blurb="Multiple age groups under one athletic department.",
     ),
     Plan(
+        code="club_free",
+        name="Club",
+        # Nothing, and unlimited, on purpose. A director should be able to say
+        # yes without a budget line, a procurement cycle, or a board meeting --
+        # those are what actually kill a youth-sports pilot, not price.
+        #
+        # The coaching product is complete at zero paying parents, so a club
+        # here is never running a degraded version of anything while it waits
+        # for families to opt in. See entitlements.py for why that is
+        # structural rather than generous.
+        price_cents=0,
+        included_seats=0,       # unlimited; see `seat_limit`
+        extra_seat_cents=0,
+        max_teams=0,
+        max_staff=0,
+        payer=PAYER_HOUSEHOLD,
+        blurb=(
+            "Free for the club, for ever. Unlimited teams, staff and athletes. "
+            "Parents who want the parent product buy it for their own child; "
+            "everything a coach or an athlete needs is included."
+        ),
+    ),
+    Plan(
         code="club",
         name="Club",
         price_cents=39900,
@@ -188,9 +217,21 @@ class Subscription:
         return max(0, (ends.date() - _now().date()).days)
 
     @property
+    def unlimited_seats(self) -> bool:
+        """A household-paid plan does not meter the club at all.
+
+        Metering a club that is not being charged would be pure friction: it
+        would stop a director importing their roster to protect revenue that
+        does not exist.
+        """
+        return self.plan.payer == PAYER_HOUSEHOLD
+
+    @property
     def seat_limit(self) -> int:
         """Seats the program may fill: whatever the plan includes, or more if
         they have deliberately bought extra."""
+        if self.unlimited_seats:
+            return 10 ** 9
         return max(self.plan.included_seats, self.seats_purchased)
 
     @property
@@ -199,6 +240,8 @@ class Subscription:
 
     @property
     def over_seats(self) -> bool:
+        if self.unlimited_seats:
+            return False
         return self.usage.athletes > self.seat_limit + SEAT_GRACE
 
     @property
@@ -216,6 +259,8 @@ class Subscription:
 
     @property
     def monthly_cents(self) -> int:
+        if self.unlimited_seats:
+            return 0
         return self.plan.seat_cost_cents(max(self.usage.athletes, self.plan.included_seats))
 
     def to_dict(self) -> dict[str, Any]:
@@ -232,7 +277,8 @@ class Subscription:
                 "staff": self.usage.staff,
             },
             "seat_limit": self.seat_limit,
-            "seats_remaining": self.seats_remaining,
+            "seats_remaining": None if self.unlimited_seats else self.seats_remaining,
+            "payer": self.plan.payer,
             "over_seats": self.over_seats,
             "can_grow": self.can_grow,
             "monthly_cents": self.monthly_cents,
@@ -581,3 +627,184 @@ def run_billing_cycle(
 
     conn.commit()
     return raised
+
+# ---------------------------------------------------------------------------
+# What a parent pays, under a club-free plan
+#
+# Priced against what a youth-sports family is already spending rather than
+# against what the software costs to run. A club season runs into four figures;
+# an add-on that a parent has to think about is an add-on they decline, so this
+# sits at the level of a couple of coffees and is charged once a season rather
+# than monthly.
+#
+# Seasonal, not monthly, for three reasons. Youth sports is seasonal and
+# parents already budget that way. Monthly billing invites a cancellation
+# decision twelve times a year instead of two. And a monthly card failure in
+# February would put a support burden on a club that is paying nothing.
+# ---------------------------------------------------------------------------
+
+#: One season, in months. Five covers a typical club season with the shoulder
+#: weeks either side.
+SEASON_MONTHS = 5
+
+#: Per athlete, per season. The second child in a household is discounted and
+#: the third onward is free: a family with three children in a club is already
+#: the one paying the most, and charging them three times over is how a
+#: product acquires a reputation among exactly the parents who talk to other
+#: parents.
+HOUSEHOLD_SEASON_CENTS = 2900
+HOUSEHOLD_SIBLING_CENTS = 1900
+HOUSEHOLD_FREE_FROM_CHILD = 3
+
+#: For a family that would rather pay monthly. Deliberately worse value than a
+#: season, and deliberately not much worse -- a punitive gap would just read as
+#: a trap.
+HOUSEHOLD_MONTHLY_CENTS = 800
+
+#: What a club pays per athlete per season if it decides to cover its families
+#: itself. Cheaper than a household pays, because it arrives without
+#: acquisition cost and covers everybody including the families who would never
+#: have bought.
+SPONSOR_SEASON_CENTS = 1900
+
+#: How a family got their entitlement.
+SOURCE_PAID = "paid"
+SOURCE_SPONSORED = "sponsored"
+SOURCE_HARDSHIP = "hardship"
+SOURCE_TRIAL = "trial"
+
+#: A new family gets the parent product for a season's first weeks without
+#: paying, so the monthly report they are being asked to buy is one they have
+#: actually read.
+HOUSEHOLD_TRIAL_DAYS = 21
+
+
+def household_price_cents(child_index: int) -> int:
+    """Season price for the nth child in one household, 1-based."""
+    if child_index >= HOUSEHOLD_FREE_FROM_CHILD:
+        return 0
+    return HOUSEHOLD_SEASON_CENTS if child_index <= 1 else HOUSEHOLD_SIBLING_CENTS
+
+
+def household_quote(children: int) -> dict[str, Any]:
+    """What a household with this many athletes would pay for a season."""
+    lines = [
+        {"child": i + 1, "cents": household_price_cents(i + 1)}
+        for i in range(max(0, children))
+    ]
+    total = sum(line["cents"] for line in lines)
+    return {
+        "children": children,
+        "lines": lines,
+        "season_total_cents": total,
+        "season_total_display": f"${total / 100:,.2f}",
+        "monthly_alternative_cents": HOUSEHOLD_MONTHLY_CENTS * max(0, children),
+        "per_month_equivalent_cents": round(total / SEASON_MONTHS) if children else 0,
+    }
+
+
+def household_subscription(
+    conn: sqlite3.Connection, athlete_id: int
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT * FROM household_subscriptions WHERE athlete_id = ?",
+        (athlete_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def start_household(
+    conn: sqlite3.Connection,
+    athlete_id: int,
+    *,
+    source: str = SOURCE_PAID,
+    days: int | None = None,
+    actor: str = "system",
+    today: date | None = None,
+) -> dict[str, Any]:
+    """Give this child's family the parent product.
+
+    Per athlete rather than per guardian: a household with two children in
+    different clubs is one family and two entitlements, and a guardian-level
+    subscription would have to invent an answer for which club it applied to.
+    """
+    if source not in (SOURCE_PAID, SOURCE_SPONSORED, SOURCE_HARDSHIP,
+                      SOURCE_TRIAL):
+        raise BillingError(f"unknown entitlement source: {source!r}")
+
+    today = today or _now().date()
+    span = days if days is not None else (
+        HOUSEHOLD_TRIAL_DAYS if source == SOURCE_TRIAL else SEASON_MONTHS * 30
+    )
+    end = today + timedelta(days=span)
+    conn.execute(
+        "INSERT INTO household_subscriptions(athlete_id, source, status, "
+        "  period_start, period_end, updated_at) VALUES (?,?,'active',?,?,?) "
+        "ON CONFLICT(athlete_id) DO UPDATE SET source = excluded.source, "
+        "  status = 'active', period_start = excluded.period_start, "
+        "  period_end = excluded.period_end, updated_at = excluded.updated_at",
+        (athlete_id, source, today.isoformat(), end.isoformat(), _iso(_now())),
+    )
+    conn.commit()
+    return household_subscription(conn, athlete_id) or {}
+
+
+def grant_hardship(
+    conn: sqlite3.Connection, athlete_id: int, actor: str = "self"
+) -> dict[str, Any]:
+    """The parent product, free, no questions, no coach involved.
+
+    Self-service and silent by design. A family that has to ask their child's
+    coach for a discount is a family that will not ask, and this product
+    already promises it does not score what a household can afford -- a
+    hardship path that ran through the club would make that promise hollow.
+
+    Indistinguishable from a paid entitlement everywhere a coach can see, which
+    is the point rather than a side effect.
+    """
+    return start_household(
+        conn, athlete_id, source=SOURCE_HARDSHIP,
+        days=SEASON_MONTHS * 30, actor=actor,
+    )
+
+
+def sponsor_athletes(
+    conn: sqlite3.Connection, org_id: int, athlete_ids: list[int] | None = None
+) -> int:
+    """A club covering the parent product for its own families.
+
+    Some clubs will want to, and the ones that do are the ones with a budget
+    and a view about equity. It is cheaper per athlete than a family pays and
+    it reaches the families who would never have bought, which is where the
+    value is.
+    """
+    if athlete_ids is None:
+        athlete_ids = [
+            int(r["user_id"])
+            for r in conn.execute(
+                "SELECT m.user_id FROM memberships m JOIN users u ON u.id = m.user_id "
+                "WHERE m.org_id = ? AND m.role = 'athlete' AND m.active = 1 "
+                "AND u.active = 1",
+                (org_id,),
+            )
+        ]
+    for athlete_id in athlete_ids:
+        start_household(conn, athlete_id, source=SOURCE_SPONSORED)
+    return len(athlete_ids)
+
+
+def expire_households(conn: sqlite3.Connection, today: date | None = None) -> int:
+    """Lapse households whose season has ended.
+
+    Lapsing is quiet and costs a child nothing: training, safety, consent and
+    everything a coach sees carry on untouched. What stops is the parent
+    product. Nobody is told, least of all a coach.
+    """
+    today = (today or _now().date()).isoformat()
+    with conn:
+        return conn.execute(
+            "UPDATE household_subscriptions SET status = 'lapsed' "
+            "WHERE status = 'active' AND period_end < ?",
+            (today,),
+        ).rowcount
+

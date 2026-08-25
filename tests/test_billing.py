@@ -37,13 +37,37 @@ def add_athletes(store, org_id, count, start=0):
 class TestPlans:
     def test_every_plan_is_internally_consistent(self):
         for plan in B.PLANS:
-            assert plan.included_seats > 0
             assert plan.price_cents >= 0
             assert plan.extra_seat_cents >= 0
+            # Only a plan the club is billed for has a seat allowance to be
+            # consistent about. A household-paid plan is not on that ladder:
+            # the club is charged nothing, so metering it would be friction
+            # protecting revenue that does not exist.
+            if plan.payer == B.PAYER_PROGRAM:
+                assert plan.included_seats > 0
 
     def test_plans_ascend_in_capacity(self):
-        seats = [p.included_seats for p in B.PLANS]
+        seats = [p.included_seats for p in B.PLANS
+                 if p.payer == B.PAYER_PROGRAM]
         assert seats == sorted(seats)
+
+    def test_a_household_paid_plan_charges_and_meters_nothing(self):
+        """Stated as its own invariant rather than as an exception to the
+        others, so "free to the club" cannot drift into "cheap"."""
+        for plan in B.PLANS:
+            if plan.payer != B.PAYER_HOUSEHOLD:
+                continue
+            assert plan.price_cents == 0
+            assert plan.extra_seat_cents == 0
+            assert plan.max_teams == 0        # 0 means unlimited here
+            assert plan.max_staff == 0
+
+    def test_exactly_one_plan_is_household_paid(self):
+        """More than one would mean two answers to "what does a club pay",
+        which is the question this tier exists to make trivial."""
+        household = [p for p in B.PLANS if p.payer == B.PAYER_HOUSEHOLD]
+        assert len(household) == 1
+        assert household[0].code == "club_free"
 
     def test_per_seat_price_falls_as_plans_grow(self):
         """Otherwise there is no reason to move up."""

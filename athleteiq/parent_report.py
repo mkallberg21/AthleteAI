@@ -538,8 +538,17 @@ def generate(conn: sqlite3.Connection, today: date | None = None) -> int:
         "WHERE a.role = 'athlete' AND a.active = 1 AND p.active = 1"
     ).fetchall()
 
+    from . import entitlements
+
     for pair in pairs:
-        report = build(conn, int(pair["athlete_id"]), today)
+        athlete_id = int(pair["athlete_id"])
+        # The report is the parent product. Emailing it to families who have
+        # not bought it would give away the one thing the club-free tier sells
+        # -- and sending a deliberately worse version instead would be a
+        # worse thing to put in a parent's inbox than sending nothing.
+        if not entitlements.for_athlete(conn, athlete_id).has("parent_report"):
+            continue
+        report = build(conn, athlete_id, today)
         if report is None:
             continue
         if notifications.enqueue(
@@ -549,8 +558,8 @@ def generate(conn: sqlite3.Connection, today: date | None = None) -> int:
             subject_line(report),
             report.headline,
             link="/app/parent.html",
-            dedupe_key=f"parent_report:{pair['athlete_id']}:{start.isoformat()}",
-            about_athlete_id=int(pair["athlete_id"]),
+            dedupe_key=f"parent_report:{athlete_id}:{start.isoformat()}",
+            about_athlete_id=athlete_id,
             # Already addressed to the guardian. Mirroring would post a report
             # written for a parent into the child's own alerts, where "a few
             # sessions rather than a routine" reads very differently.
