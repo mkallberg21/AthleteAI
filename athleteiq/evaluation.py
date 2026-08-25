@@ -90,7 +90,11 @@ class Row:
             "form_now": self.form_now,
             "form_change": self.form_change,
             "trend": self.trend,
-            "samples": self.samples,
+            # `samples` is deliberately not published. It is kept for the
+            # trend logic and nothing renders it, but "12 weeks trained, 0
+            # scored sessions" is a signature -- and the one thing it
+            # signatures is an athlete whose accommodations a selector must
+            # not learn about. A shown trend already implies enough samples.
         }
 
 
@@ -106,6 +110,12 @@ PREAMBLE = (
     "Participation is measured against weeks each athlete was available, so "
     "somebody who was injured or away is not penalised for it. The reason is "
     "not shown, and past injuries are not in this document at all.\n"
+    "A blank form score means our analysis had no reading for that athlete. "
+    "That happens for several reasons — the camera could not see the movement "
+    "clearly, or technique scoring is switched off because our analysis does "
+    "not fit how they train. It is not a judgement about the athlete and it "
+    "is not a gap in their effort. Do not read it as one, and do not ask us "
+    "which reason applies to which athlete.\n"
     "This is one input among many. It does not know how a child plays."
 )
 

@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2004 tests
+python -m pytest tests/ -q          # 2010 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
@@ -2363,6 +2363,16 @@ turning up and getting better, is what a child controls.
 by form score reads top-down as best-to-worst whatever the header says, and a
 composite number is a ranking with one column.
 
+A blank form score is stated rather than left to inference. An athlete whose
+technique is not scored — because the camera could not read the movement, or
+because our analysis does not fit how they train — would otherwise show twelve
+weeks of training against an empty form column, and on a tryout document that
+is a signature for exactly the children who must not be identifiable there.
+The sample count is not published, the row is byte-identical to a camera
+failure, and the file itself tells the coach what a blank means and asks them
+not to draw the inference. It cannot be made perfectly non-inferable without
+fabricating a score, which would be far worse.
+
 The hard part was the collision with the injury rule. An athlete who missed six
 weeks hurt has terrible participation and a selector must not be told why —
 hiding it makes them look lazy, showing it leaks health data at the exact
@@ -2924,4 +2934,11 @@ contact with a real driveway:
     bad week.** It reports that completion is low and suggests the assignment
     may be the problem, which is usually right and sometimes is not — exam
     week and a flu going round look identical from here.
+45. **A blank form score on the evaluation export is still a weak signal.**
+    The row is made identical to a camera failure, the sample count is
+    withheld, and the file asks a coach not to infer from it — but an athlete
+    who trains every week and never has a score is distinguishable from one
+    who does, and no amount of copy removes that entirely. The alternative is
+    fabricating a number, which would be worse. Programs using this at
+    selection should read the preamble aloud.
 

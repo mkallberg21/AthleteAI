@@ -291,6 +291,94 @@ class TestTheCaveatsTravelWithIt:
         assert "one input among many" in build(store, squad).preamble
 
 
+class TestAnAdaptiveAthleteIsNotIdentifiableHere:
+    """A tryout document is the worst possible place to learn which children
+    have accommodations, and the leak arrives by inference rather than by
+    column: an athlete whose technique is not scored has a blank form score
+    for ever, and "trained every week, never scored" is a signature.
+
+    It cannot be made perfectly non-inferable without lying -- fabricating a
+    form score would be far worse. What it can be is indistinguishable from
+    the other reasons a reading is missing, and stated plainly enough that a
+    coach is told not to draw the inference at all.
+    """
+
+    def _rows(self, store, squad):
+        adaptive_kid = squad["athletes"]["Jordan Pierce"]
+        store.set_adaptive_profile(adaptive_kid["id"], ["no_form_score"])
+        # Identical training for an adaptive athlete and a typical one.
+        for week in range(12):
+            day = TODAY - timedelta(weeks=11 - week)
+            train(store, adaptive_kid, day)
+            train(store, squad["athletes"]["Zoe Ableman"], day)
+        return build(store, squad)
+
+    def test_the_sample_count_is_not_published(self, store, squad):
+        """The sharpest edge of the tell: twelve weeks trained and zero
+        scored sessions is a signature, and nothing renders the number."""
+        export = self._rows(store, squad)
+        assert "samples" not in row(export, "Jordan Pierce").to_dict()
+
+    def test_the_trend_column_reads_the_same_as_any_other_missing_reading(
+        self, store, squad
+    ):
+        export = self._rows(store, squad)
+        adaptive = row(export, "Jordan Pierce")
+        never_trained = row(export, "Sam Reyes")
+        assert adaptive.trend == never_trained.trend == Trend.UNKNOWN
+        assert adaptive.form_now is None and adaptive.form_change is None
+
+    def test_nothing_in_the_row_names_the_accommodation(self, store, squad):
+        export = self._rows(store, squad)
+        text = str(row(export, "Jordan Pierce").to_dict()).lower()
+        for leak in ("adaptive", "accommodation", "no_form_score", "not scored",
+                     "switched off"):
+            assert leak not in text, f"the row names it: {leak!r}"
+
+    def test_the_csv_row_is_the_same_shape_as_a_camera_failure(
+        self, store, squad
+    ):
+        """A coach comparing two blank rows cannot tell which is which."""
+        export = self._rows(store, squad)
+        lines = {
+            line.split(",")[0]: line.split(",")[1:]
+            for line in export.to_csv().splitlines()
+            if line and not line.startswith("#") and not line.startswith("Athlete")
+        }
+        adaptive = lines["Jordan Pierce"]
+        # An athlete who trained identically but whose sessions the camera
+        # read normally, with the score columns blanked as a camera failure
+        # would leave them. Everything else must match.
+        camera_failed = list(lines["Zoe Ableman"])
+        camera_failed[3] = camera_failed[4] = ""      # form score, form change
+        camera_failed[5] = "not enough data"          # trend
+        assert adaptive == camera_failed, (
+            f"adaptive row {adaptive} is distinguishable from a camera "
+            f"failure {camera_failed}"
+        )
+
+    def test_the_file_tells_the_coach_not_to_infer(self, store, squad):
+        """An inference a coach makes unprompted is worse than a fact they
+        are handed. The caveat travels in the CSV, not just the web page."""
+        csv_text = self._rows(store, squad).to_csv()
+        assert "A blank form score means our analysis had no reading" in csv_text
+        assert "not a judgement about the athlete" in csv_text
+        assert "which reason applies to which athlete" in csv_text
+
+    def test_the_export_still_reads_nothing_from_the_profile_table(
+        self, store, squad
+    ):
+        """The inference channel is the residual risk. A direct read would be
+        the outright failure, and there is not one."""
+        import inspect
+
+        from athleteiq import evaluation as evaluation_mod
+
+        source = inspect.getsource(evaluation_mod)
+        assert "adaptive_profiles" not in source
+        assert "adaptive" not in source.replace("adaptive_profiles", "")
+
+
 # ---------------------------------------------------------------------------
 # Over the wire
 # ---------------------------------------------------------------------------
