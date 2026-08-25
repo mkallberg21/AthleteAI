@@ -2046,6 +2046,20 @@ def parent_messages(
     }
 
 
+@app.get("/api/me/onboarding")
+def athlete_onboarding(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Where a new athlete is, and what is stopping them.
+
+    Deliberately shorter than a coach's. Someone setting up a program will
+    read six steps; a twelve-year-old who wants to go outside will read one,
+    and the one that matters is recording a session.
+    """
+    return onboarding_mod.athlete_progress(store.conn, principal.id)
+
+
 @app.get("/api/coach/onboarding")
 def coach_onboarding(
     principal: Principal = Depends(_staff),

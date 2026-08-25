@@ -23,6 +23,13 @@
 
   <!-- ---------- Home ---------- -->
   <section id="view-home">
+    <div class="card hidden" id="start-card">
+      <b id="start-title">First time here</b>
+      <p class="small muted" id="start-promise"></p>
+      <div id="start-blockers"></div>
+      <div id="start-steps"></div>
+    </div>
+
     <div class="conn" id="conn"><i></i><span id="conn-text">Online</span></div>
 
     <div class="card hidden" id="film-card">
@@ -645,6 +652,56 @@ const FEELINGS = [
   ['sore', '😖', 'Quite sore'],
   ['hurts', '🤕', 'Something hurts'],
 ];
+
+/**
+ * The athlete's own short checklist.
+ *
+ * One required step, because a twelve-year-old who wants to go outside will
+ * read one. Computed from real state like the coach's, so it un-ticks itself
+ * and disappears when there is nothing left to say.
+ */
+async function loadStart() {
+  let data;
+  try { data = await api('/api/me/onboarding'); } catch { return; }
+
+  // Only the browser knows whether it was installed, so the client answers
+  // that one rather than the server guessing.
+  const installed = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  const steps = data.steps.map(
+    (s) => (s.key === 'install' ? { ...s, done: installed } : s),
+  );
+
+  const blockers = data.blockers || [];
+  const left = steps.filter((s) => !s.done).length;
+  if (!blockers.length && left === 0) {
+    $('start-card').classList.add('hidden');
+    return;
+  }
+  $('start-card').classList.remove('hidden');
+
+  // The promise is worth saying once, before anybody points a camera at a
+  // child, and never again after they have actually recorded something.
+  const fresh = !steps.find((s) => s.key === 'first_session').done;
+  $('start-title').textContent = fresh ? 'First time here' : 'A couple more things';
+  $('start-promise').textContent = fresh ? data.promise : '';
+
+  $('start-blockers').innerHTML = blockers.map((b) => `
+    <div class="advisory warning">
+      <span class="dotmark"></span>
+      <div><b>${esc(b.title)}</b><em>${esc(b.detail)}</em></div>
+    </div>`).join('');
+
+  $('start-steps').innerHTML = steps.map((step) => `
+    <div class="setup-step ${step.done ? 'done' : ''}">
+      <span class="setup-tick">${step.done ? '&check;' : ''}</span>
+      <div>
+        <b>${esc(step.title)}</b>${step.required ? '' : ' <span class="small muted">optional</span>'}
+        ${step.done ? '' : `<div class="small muted">${esc(step.detail)}</div>`}
+        ${step.done || !step.why ? '' : `<div class="small muted"><em>${esc(step.why)}</em></div>`}
+      </div>
+    </div>`).join('');
+}
 
 async function loadWellness() {
   if (!wellnessForm) {
@@ -1933,7 +1990,7 @@ $('review-send').addEventListener('click', async () => {
 $('review-close').addEventListener('click', async () => {
   discardRecording();
   await Promise.all([
-    loadHome(), loadBudget(), loadAssignments(),
+    loadHome(), loadBudget(), loadStart(), loadAssignments(),
     loadNotifications(), loadTrainingLoad(),
   ]);
   show('home');
@@ -1951,7 +2008,7 @@ $('back').addEventListener('click', () => { stopCamera(); show('home'); });
 $('done').addEventListener('click', async () => {
   discardRecording();
   await Promise.all([
-    loadHome(), loadBudget(), loadAssignments(),
+    loadHome(), loadBudget(), loadStart(), loadAssignments(),
     loadNotifications(), loadTrainingLoad(),
   ]);
   show('home');
@@ -2010,6 +2067,7 @@ window.addEventListener('pagehide', () => {
     const boot = await api('/api/me');
     homeSport = boot.sport || null;
     await loadWellness();
+    await loadStart();
     await loadFilm();
     await loadDrills();
     await loadHome(boot);

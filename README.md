@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1564 tests
+python -m pytest tests/ -q          # 1582 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 40 tests
@@ -643,6 +643,44 @@ setup guide that never leaves stops being a guide and becomes furniture.
 A household gets a shorter list: no team step, because signing up creates one;
 no staff or parent steps, because there is nobody to invite. It says "children"
 rather than "athletes".
+
+### What a new athlete sees
+
+Shorter, on purpose. Someone setting up a program will read six steps; a
+twelve-year-old who wants to go outside will read one — so there is exactly one
+required step, and it is **record a drill**.
+
+| | Step | |
+|---|---|---|
+| 1 | Record one drill | required |
+| 2 | Put it on your home screen | optional |
+| 3 | Say how you feel | optional |
+| 4 | Watch one clip | optional, *only if the program has curated any* |
+
+The film step is absent where a program has curated nothing, because telling a
+kid to watch a clip that does not exist is a step they cannot take. The install
+step is left for the browser to answer — only it knows, so the server reports it
+undone rather than guessing, and the client fills it in from `display-mode`.
+
+Above the steps, once and never again, is the thing that makes an athlete and
+their parent comfortable — said before anybody points a camera at a child:
+
+> Your phone watches you and counts the reps. The video never leaves it — not to
+> us, not to your coach. What they see is the numbers.
+
+### The same gate, in the second person
+
+The consent blocker appears here too, worded for the person who cannot record
+rather than about them:
+
+> **Waiting on a parent** — Recording is paused until a parent or guardian says
+> yes in their own portal. Nothing is wrong and nothing is lost — give them a
+> nudge and everything here switches on.
+
+The athlete already meets this at the moment they press start. Saying it on the
+home screen means they find out *before* choosing a drill and being refused,
+which is the difference between "waiting on my mum" and "this app is broken".
+A test asserts the coach's version names the athlete and this one does not.
 
 ### The gate that surprises people
 

@@ -256,3 +256,133 @@ class TestTheStepsPointSomewhereReal:
         for step in (*O.PROGRAM_STEPS, *O.FAMILY_STEPS):
             assert step.title and step.detail, step.key
             assert len(step.detail) > 20, step.key
+
+
+class TestTheAthleteGetsAShorterOne:
+    """Someone setting up a program will read six steps. A twelve-year-old who
+    wants to go outside will read one."""
+
+    @pytest.fixture
+    def athlete(self, program):
+        store = program["store"]
+        team = store.create_team(program["org"], "U13")
+        person = store.create_user(
+            program["org"], "athlete", "Jordan P.", birth_year=2012,
+            dominant_hand="right",
+        )
+        store.join_team(team["join_code"], person["id"])
+        return person
+
+    def test_there_is_exactly_one_required_step(self, program, athlete):
+        result = O.athlete_progress(program["store"].conn, athlete["id"])
+        assert result["required_total"] == 1
+        assert result["next"]["key"] == "first_session"
+
+    def test_recording_one_session_is_the_whole_requirement(self, program, athlete):
+        store = program["store"]
+        assert O.athlete_progress(store.conn, athlete["id"])["complete"] is False
+        train(store, athlete["id"])
+        assert O.athlete_progress(store.conn, athlete["id"])["complete"] is True
+
+    def test_a_held_session_does_not_count(self, program, athlete):
+        store = program["store"]
+        slot = store.start_session(athlete["id"], "gen_squat")
+        reps = [{"t_ms": i * 2000, "confidence": 0.9, "rom": 78.0,
+                 "peak": 55.0, "cycle_ms": 2000} for i in range(1, 30)]
+        store.submit_session(
+            athlete["id"], slot["session_id"], slot["nonce"],
+            duration_ms=60_000, reps=reps, mean_confidence=0.9,
+        )
+        assert O.athlete_progress(store.conn, athlete["id"])["complete"] is False
+
+    def test_the_promise_is_stated_before_anyone_films_a_child(self, program, athlete):
+        promise = O.athlete_progress(program["store"].conn, athlete["id"])["promise"]
+        assert "never leaves" in promise
+        assert "not to your coach" in promise
+
+    def test_the_install_step_is_left_for_the_browser_to_answer(self, program, athlete):
+        """Only the browser knows, so the server reports it undone rather than
+        guessing."""
+        result = steps(O.athlete_progress(program["store"].conn, athlete["id"]))
+        assert result["install"]["done"] is False
+        assert result["install"]["required"] is False
+
+    def test_a_checkin_ticks_its_own_step(self, program, athlete):
+        store = program["store"]
+        store.check_in(athlete["id"], "fine")
+        assert steps(O.athlete_progress(store.conn, athlete["id"]))["check_in"]["done"]
+
+    def test_film_is_not_offered_when_the_program_has_curated_none(self, program, athlete):
+        """Telling a kid to watch a clip that does not exist is a step they
+        cannot take."""
+        keys = {s["key"] for s in O.athlete_progress(
+            program["store"].conn, athlete["id"])["steps"]}
+        assert "film" not in keys
+
+    def test_film_appears_once_a_coach_adds_one(self, program, athlete):
+        store = program["store"]
+        store.create_clip(program["org"], "dQw4w9WgXcQ", "Sliding early",
+                          start_s=0, end_s=60)
+        keys = {s["key"] for s in O.athlete_progress(store.conn, athlete["id"])["steps"]}
+        assert "film" in keys
+
+
+class TestWhatAnAthleteIsToldIsStoppingThem:
+
+    @pytest.fixture
+    def athlete(self, program):
+        store = program["store"]
+        team = store.create_team(program["org"], "U13")
+        person = store.create_user(
+            program["org"], "athlete", "Jordan P.", birth_year=2012,
+            dominant_hand="right",
+        )
+        store.join_team(team["join_code"], person["id"])
+        return person
+
+    def test_a_linked_parent_who_has_not_answered_is_explained(self, program, athlete):
+        """They meet this at the moment they press start. Saying it on the home
+        screen is the difference between "waiting on my mum" and "this app is
+        broken"."""
+        store = program["store"]
+        invite = guardians.create_invite(
+            store.conn, athlete["id"], created_by=program["director"]["id"],
+        )
+        guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        store.conn.commit()
+
+        found = O.athlete_blockers(store.conn, athlete["id"])
+        assert len(found) == 1
+        assert "Nothing is wrong" in found[0]["detail"]
+        assert "nudge" in found[0]["detail"]
+
+    def test_it_clears_when_they_say_yes(self, program, athlete):
+        store = program["store"]
+        invite = guardians.create_invite(
+            store.conn, athlete["id"], created_by=program["director"]["id"],
+        )
+        guardian = guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        guardians.set_consent(
+            store.conn, athlete["id"], guardian["guardian_id"],
+            guardians.Scope.PARTICIPATION, True,
+        )
+        store.conn.commit()
+        assert O.athlete_blockers(store.conn, athlete["id"]) == []
+
+    def test_no_parent_linked_means_nothing_to_wait_for(self, program, athlete):
+        assert O.athlete_blockers(program["store"].conn, athlete["id"]) == []
+
+    def test_the_wording_is_for_a_child_not_a_coach(self, program, athlete):
+        """The coach's version names athletes and explains the gate; this one
+        is addressed to the person who cannot record."""
+        store = program["store"]
+        invite = guardians.create_invite(
+            store.conn, athlete["id"], created_by=program["director"]["id"],
+        )
+        guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        store.conn.commit()
+
+        mine = O.athlete_blockers(store.conn, athlete["id"])[0]
+        theirs = O.blockers(store.conn, program["org"])[0]
+        assert "Jordan P." not in mine["detail"], "not addressed in the third person"
+        assert "Jordan P." in theirs["detail"]

@@ -134,6 +134,47 @@ FAMILY_STEPS: tuple[Step, ...] = (
 )
 
 
+ATHLETE_STEPS: tuple[Step, ...] = (
+    Step(
+        key="first_session",
+        title="Record one drill",
+        detail="Pick anything from the list. Two minutes is a real session.",
+        why="Nothing else here does anything until you have done one.",
+        anchor="drill-list",
+    ),
+    Step(
+        key="install",
+        title="Put it on your home screen",
+        detail="Your phone's share menu, then Add to Home Screen.",
+        why="It then works in a driveway with no signal, and syncs later.",
+        required=False,
+        anchor="",
+    ),
+    Step(
+        key="check_in",
+        title="Say how you feel",
+        detail="One tap. It never costs you a streak — that is the whole point.",
+        required=False,
+        anchor="wellness-card",
+    ),
+    Step(
+        key="film",
+        title="Watch one clip",
+        detail="A couple of minutes of film, with something to look for.",
+        required=False,
+        anchor="film-card",
+    ),
+)
+
+#: Said once, at the start, and never again. It is the thing that makes an
+#: athlete and their parent comfortable, and it is true -- so it is worth the
+#: line before anyone points a camera at a child.
+PROMISE = (
+    "Your phone watches you and counts the reps. The video never leaves it — "
+    "not to us, not to your coach. What they see is the numbers."
+)
+
+
 def _count(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
     row = conn.execute(sql, params).fetchone()
     return int(row[0]) if row else 0
@@ -246,4 +287,87 @@ def progress(
         "required_done": sum(1 for s in required if s["done"]),
         "required_total": len(required),
         "blockers": blockers(conn, org_id),
+    }
+
+
+def athlete_blockers(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str, Any]]:
+    """What is stopping this athlete from recording, in their own words.
+
+    The athlete already meets this at the moment they press start. Saying it on
+    the home screen instead means they find out before choosing a drill and
+    getting refused, which is the difference between "waiting on my mum" and
+    "this app is broken".
+    """
+    linked = conn.execute(
+        "SELECT 1 FROM guardians WHERE athlete_id = ? LIMIT 1", (athlete_id,)
+    ).fetchone()
+    if linked is None:
+        return []
+    granted = conn.execute(
+        "SELECT 1 FROM consents WHERE athlete_id = ? AND scope = 'participation' "
+        "AND granted = 1 LIMIT 1",
+        (athlete_id,),
+    ).fetchone()
+    if granted is not None:
+        return []
+    return [{
+        "key": "awaiting_consent",
+        "title": "Waiting on a parent",
+        "detail": (
+            "Recording is paused until a parent or guardian says yes in their "
+            "own portal. Nothing is wrong and nothing is lost — give them a "
+            "nudge and everything here switches on."
+        ),
+    }]
+
+
+def athlete_progress(conn: sqlite3.Connection, athlete_id: int) -> dict[str, Any]:
+    """Where a new athlete is, computed the same way a coach's is.
+
+    Deliberately short. A coach setting up a program will read six steps; a
+    twelve-year-old who wants to go outside will read one, and the one that
+    matters is recording a session.
+    """
+    org = conn.execute(
+        "SELECT org_id FROM users WHERE id = ?", (athlete_id,)
+    ).fetchone()
+    org_id = int(org["org_id"]) if org else 0
+
+    done = {
+        "first_session": _count(
+            conn,
+            "SELECT COUNT(*) FROM sessions WHERE athlete_id = ? AND status = 'counted'",
+            (athlete_id,),
+        ) > 0,
+        "check_in": _count(
+            conn, "SELECT COUNT(*) FROM wellness_checkins WHERE athlete_id = ?",
+            (athlete_id,),
+        ) > 0,
+        "film": _count(
+            conn,
+            "SELECT COUNT(*) FROM clip_watches WHERE athlete_id = ? AND verdict = 'watched'",
+            (athlete_id,),
+        ) > 0,
+        # Only the browser knows whether it was installed, so the client fills
+        # this in. Reported as not done rather than guessed at here.
+        "install": False,
+    }
+
+    # Not offered where the program has curated nothing: telling a kid to watch
+    # a clip that does not exist is a step they cannot take.
+    has_film = _count(
+        conn, "SELECT COUNT(*) FROM clips WHERE org_id = ? AND active = 1", (org_id,)
+    ) > 0
+    steps = [s for s in ATHLETE_STEPS if s.key != "film" or has_film]
+
+    rendered = [s.to_dict(done.get(s.key, False)) for s in steps]
+    required = [s for s in rendered if s["required"]]
+    return {
+        "steps": rendered,
+        "next": next((s for s in rendered if not s["done"]), None),
+        "complete": all(s["done"] for s in required),
+        "required_done": sum(1 for s in required if s["done"]),
+        "required_total": len(required),
+        "promise": PROMISE,
+        "blockers": athlete_blockers(conn, athlete_id),
     }

@@ -3599,3 +3599,53 @@ class TestCoachOnboardingEndpoint:
         ).json()
         assert body["required_done"] == 0
         assert body["blockers"] == []
+
+
+class TestAthleteOnboardingEndpoint:
+
+    def test_a_new_athlete_is_told_the_one_thing_to_do(self, client, program):
+        athlete = program["athletes"][0]
+        body = client.get("/api/me/onboarding", headers=athlete["headers"]).json()
+        assert body["required_total"] == 1
+        assert body["next"]["key"] == "first_session"
+        assert body["complete"] is False
+
+    def test_the_promise_comes_before_the_camera(self, client, program):
+        body = client.get(
+            "/api/me/onboarding", headers=program["athletes"][0]["headers"],
+        ).json()
+        assert "never leaves" in body["promise"]
+
+    def test_one_session_finishes_it(self, client, program):
+        athlete = program["athletes"][0]
+        do_session(client, athlete["headers"], seed=12)
+        body = client.get("/api/me/onboarding", headers=athlete["headers"]).json()
+        assert body["complete"] is True
+
+    def test_an_athlete_waiting_on_a_parent_is_told_why(self, client, program):
+        from athleteiq import guardians
+
+        athlete = program["athletes"][0]
+        store = api_module._store
+        invite = guardians.create_invite(store.conn, athlete["id"], created_by=athlete["id"])
+        guardians.redeem_invite(store.conn, invite["code"], "A Parent")
+        store.conn.commit()
+
+        body = client.get("/api/me/onboarding", headers=athlete["headers"]).json()
+        assert body["blockers"][0]["key"] == "awaiting_consent"
+        # And the thing they are being told about is genuinely true right now.
+        assert client.post(
+            "/api/sessions/start", json={"drill_key": "gen_squat"},
+            headers=athlete["headers"],
+        ).status_code == 400
+
+    def test_a_coach_does_not_get_the_athlete_list(self, client, program):
+        assert client.get(
+            "/api/me/onboarding", headers=program["director"],
+        ).status_code == 403
+
+    def test_one_athlete_cannot_read_anothers(self, client, program):
+        one, two = program["athletes"]
+        do_session(client, one["headers"], seed=13)
+        body = client.get("/api/me/onboarding", headers=two["headers"]).json()
+        assert body["complete"] is False, "each athlete gets their own state"
