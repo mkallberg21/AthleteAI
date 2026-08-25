@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import random
 import zipfile
 from datetime import date, timedelta
@@ -197,6 +198,79 @@ class TestWhatIsDeliberatelyLeftOut:
         manifest = json.loads(archive(store, program).read("manifest.json"))
         assert set(manifest["excluded"]) == {
             "wellness_and_injury", "credentials", "video"}
+
+
+class TestTheHealthExclusionIsStructural:
+    """The word-scan above proves no health data came out of *this* fixture.
+
+    That is the weaker half. A scan over the output passes an empty health
+    table and would fail the day a child is called Ankle. These check what the
+    export *reads*, which is the actual guarantee, and they are written so a
+    health table added next year is excluded by default rather than by
+    somebody remembering.
+    """
+
+    #: Every table in the schema holding something about a child's body.
+    #: adaptive_profiles sits with them deliberately: it records what our tool
+    #: cannot do rather than anything clinical, but a downloadable list of
+    #: which children have accommodations is the same object by another name.
+    HEALTH_TABLES = {
+        "wellness_checkins", "discomfort_reports", "return_plans",
+        "return_plan_events", "adaptive_profiles",
+    }
+
+    def test_the_export_reads_none_of_them(self, store, program):
+        for table in portability._tables(store.conn, program["org"]):
+            referenced = set(re.findall(
+                r"(?:FROM|JOIN)\s+([a-z_]+)", table.sql, re.IGNORECASE))
+            leaked = referenced & self.HEALTH_TABLES
+            assert not leaked, f"{table.name}.csv reads {leaked}"
+
+    def test_it_reads_only_tables_on_the_allowlist(self, store, program):
+        """Named rather than pattern-matched, the same discipline the binary
+        column guard uses. A new table is excluded until somebody adds it here
+        in a diff, with this test asking them why."""
+        for table in portability._tables(store.conn, program["org"]):
+            referenced = set(re.findall(
+                r"(?:FROM|JOIN)\s+([a-z_]+)", table.sql, re.IGNORECASE))
+            outside = referenced - portability.SOURCE_TABLES
+            assert not outside, f"{table.name}.csv reads {outside}, not allowed"
+
+    def test_no_health_table_is_on_the_allowlist(self, store, program):
+        assert not (portability.SOURCE_TABLES & self.HEALTH_TABLES)
+
+    def test_every_health_table_in_the_schema_is_covered(self, store, program):
+        """If somebody adds a health table and does not list it above, this
+        fails rather than quietly leaving it unguarded."""
+        from pathlib import Path
+
+        schema = (Path(__file__).resolve().parent.parent
+                  / "athleteiq" / "db.py").read_text()
+        tables = set(re.findall(
+            r"CREATE TABLE IF NOT EXISTS ([a-z_]+)", schema))
+        suspicious = {
+            t for t in tables
+            if any(word in t for word in
+                   ("wellness", "discomfort", "injur", "health", "return_plan",
+                    "adaptive", "medical", "symptom"))
+        }
+        missed = suspicious - self.HEALTH_TABLES
+        assert not missed, (
+            f"{missed} looks like health data and is not covered by this "
+            "test's list -- add it, and check it is out of the export"
+        )
+
+    def test_a_guardian_can_still_export_their_own_childs_record(
+        self, store, program
+    ):
+        """The exclusion is about who is downloading, not about hiding the
+        data from the family it belongs to."""
+        from athleteiq import guardians as guardians_mod
+
+        athlete = program["athletes"][0]
+        store.report_discomfort(athlete["id"], "knee", "sore")
+        record = guardians_mod.export_athlete(store.conn, athlete["id"])
+        assert "knee" in str(record)
 
 
 # ---------------------------------------------------------------------------

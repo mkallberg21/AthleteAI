@@ -81,7 +81,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 1999 tests
+python -m pytest tests/ -q          # 2004 tests
 
 DRILL_SPECS="$(python -c 'import json;from athleteiq.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 98 tests
@@ -2484,6 +2484,20 @@ club. The whole wellness subsystem rests on a child believing that saying *"my
 knee hurts"* does not travel. **No credentials** either: token hashes, claim
 codes and provider tokens are keys to accounts rather than program data. The
 README inside says both, and says why.
+
+That exclusion is enforced structurally rather than by inspection. Each export
+table carries the query that produced it, and tests assert those queries read
+nothing outside a named allowlist — the same discipline the binary-column
+privacy guard uses, so a table added next year is excluded by default and
+somebody has to add it in a diff with a test asking them why. A further test
+scans the schema for anything that looks like health data and fails if it is
+not on the list of things known to be excluded. `adaptive_profiles` is on that
+list deliberately: it records what our tool cannot do rather than anything
+clinical, but a downloadable list of which children have accommodations is the
+same object by another name.
+
+None of this hides anything from the family it belongs to — a guardian's own
+export still carries their child's complete record, and a test pins that too.
 
 ---
 

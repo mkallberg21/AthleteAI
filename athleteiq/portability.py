@@ -64,12 +64,36 @@ def _csv(rows: list[sqlite3.Row], columns: list[str]) -> str:
     return out.getvalue()
 
 
+#: Tables a program export is allowed to read. Named rather than
+#: pattern-matched, the same discipline the binary-column privacy guard uses:
+#: a new table is excluded by default and somebody has to consciously add it
+#: here, in a diff, with a test that will ask them why.
+#:
+#: The health tables are absent deliberately and permanently --
+#: `wellness_checkins`, `discomfort_reports`, `return_plans`,
+#: `return_plan_events` and `adaptive_profiles`. A guardian can export their
+#: own child's complete record and that is their right; a director exporting
+#: the program does not get a bulk health file on every child in the club.
+#: `adaptive_profiles` sits with them: it records what our tool cannot do
+#: rather than anything clinical, but a downloadable list of which children
+#: have accommodations is the same object by another name.
+SOURCE_TABLES: frozenset[str] = frozenset({
+    "users", "teams", "team_members", "sessions", "assignments",
+    "team_goals", "badges", "xp_ledger", "organizations",
+})
+
+
 @dataclass
 class Table:
     name: str
     columns: list[str]
     rows: list[sqlite3.Row]
     describes: str
+    #: The query that produced these rows. Carried so a test can prove what
+    #: this export reads rather than infer it from what came out -- a
+    #: word-scan over the output would pass an empty health table and fail
+    #: the day a child is called Ankle.
+    sql: str = ""
 
     @property
     def filename(self) -> str:
@@ -118,10 +142,13 @@ Exported {exported_at} · schema version {version}
 
 
 def _tables(conn: sqlite3.Connection, org_id: int) -> list[Table]:
+    ran: list[str] = []
+
     def q(sql: str, params: tuple = (org_id,)) -> list[sqlite3.Row]:
+        ran.append(sql)
         return list(conn.execute(sql, params))
 
-    return [
+    tables = [
         Table(
             "athletes",
             ["first_name", "last_name", "jersey", "position", "birth_year",
@@ -213,6 +240,13 @@ def _tables(conn: sqlite3.Connection, org_id: int) -> list[Table]:
             "Every XP award, with what earned it.",
         ),
     ]
+    # Pair each table with the query that produced it. Recorded rather than
+    # re-derived so a test can assert what this export *reads*, which is the
+    # guarantee -- scanning the output would pass an empty health table and
+    # would fail the day a child is called Ankle.
+    for table, sql in zip(tables, ran):
+        table.sql = sql
+    return tables
 
 
 def manifest(conn: sqlite3.Connection, org_id: int, tables: list[Table]) -> dict[str, Any]:
