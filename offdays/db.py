@@ -260,6 +260,11 @@ CREATE TABLE IF NOT EXISTS clip_watches (
     -- seconds forty times does not read as having watched it.
     seen_json    TEXT NOT NULL DEFAULT '[]',
     verdict      TEXT NOT NULL DEFAULT 'partial',
+    -- How many deliberate passes through the clip this row represents. A
+    -- second look is the point of the film module rather than a failure of
+    -- it, so it is counted rather than prevented -- and counted here, on the
+    -- watch, so that no separate table has to be kept in step with it.
+    looks        INTEGER NOT NULL DEFAULT 1,
     answered     INTEGER,
     answer_ok    INTEGER,
     xp_awarded   INTEGER NOT NULL DEFAULT 0,
@@ -919,6 +924,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "rep_events": [
         ("zone", "TEXT"),
+    ],
+    "clip_watches": [
+        ("looks", "INTEGER NOT NULL DEFAULT 1"),
     ],
 }
 

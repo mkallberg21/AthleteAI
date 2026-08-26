@@ -17,6 +17,7 @@ from .config import CONFIG
 from . import sports
 from . import ball as ball_mod
 from . import goalie
+from . import rewatch
 from . import notifications
 from . import recognition
 from .drills.catalog import ALL_DRILLS
@@ -684,6 +685,21 @@ class Store:
                 "that actually teaches something"
             )
 
+        # A highlight reel is not a bad video; it is a video that teaches
+        # nothing while looking exactly like film study. It fills the shelf, it
+        # earns the same XP, and the athlete comes away having watched somebody
+        # else be good at lacrosse. Refused rather than warned about, because a
+        # warning on a screen a coach sees once is a warning nobody reads -- and
+        # the fix is to retitle it, which costs nothing.
+        marker = film.looks_like_highlights(title)
+        if marker is not None:
+            raise StoreError(
+                f"\u201c{marker}\u201d in the title -- this shelf is for clips that "
+                "teach a decision, not for highlight reels. " + film.WHAT_TO_CUT
+                + " If it really does teach something, give it a title that "
+                "says what."
+            )
+
         parsed = film.Question(**question) if question else None
         if parsed is not None and not (0 <= parsed.answer < len(parsed.options)):
             raise StoreError("the answer has to be one of the options")
@@ -769,19 +785,40 @@ class Store:
                 (athlete_id, day.isoformat()),
             )
         }
-        out = []
-        if not state.spent:
-            for row in self.conn.execute(
-                "SELECT * FROM clips WHERE org_id = ? AND active = 1 ORDER BY id DESC",
-                (org_id,),
-            ):
-                clip = self._row_to_clip(row)
-                if clip.id in seen or not clip.suits(age, state.band):
-                    continue
-                out.append(clip.to_dict())
-                if len(out) >= limit:
-                    break
-        return {"day": state.to_dict(), "clips": out}
+        out: list[dict[str, Any]] = []
+        # Anything already watched, offered back rather than hidden. Going over
+        # a clip a second time is what film study is; a feed that removed a
+        # clip the moment it was watched made the one thing an athlete is most
+        # likely to want -- another look before practice -- the one thing the
+        # screen would not give them.
+        #
+        # Kept in its own list so a revisit never displaces a new clip, and so
+        # the screen can say plainly which is which.
+        again: list[dict[str, Any]] = []
+        for row in self.conn.execute(
+            "SELECT * FROM clips WHERE org_id = ? AND active = 1 ORDER BY id DESC",
+            (org_id,),
+        ):
+            clip = self._row_to_clip(row)
+            if not clip.suits(age, state.band):
+                continue
+            if clip.id in seen:
+                again.append({
+                    **clip.to_dict(),
+                    "looks": rewatch.for_athlete(self.conn, athlete_id, clip.id),
+                })
+                continue
+            if state.spent or len(out) >= limit:
+                continue
+            out.append(clip.to_dict())
+        return {
+            "day": state.to_dict(),
+            "clips": out,
+            "again": again,
+            # Said before anything is recorded. Nothing else in this product
+            # watches a child quietly and this will not be the first thing.
+            "rewatch_notice": rewatch.NOTICE,
+        }
 
     def start_watch(
         self, athlete_id: int, clip_id: int, day: date | None = None
@@ -795,7 +832,8 @@ class Store:
 
         state = self.film_day(athlete_id, day)
         existing = self.conn.execute(
-            "SELECT id FROM clip_watches WHERE athlete_id = ? AND clip_id = ? AND day = ?",
+            "SELECT id, looks, verdict FROM clip_watches "
+            "WHERE athlete_id = ? AND clip_id = ? AND day = ?",
             (athlete_id, clip_id, day.isoformat()),
         ).fetchone()
         # The cap gates starting something new. Finishing a clip already begun
@@ -806,14 +844,41 @@ class Store:
 
         now = _iso(_now())
         if existing is not None:
-            return {"watch_id": int(existing["id"]), "resumed": True}
+            looks = int(existing["looks"])
+            # A clip already covered and started again is a deliberate second
+            # pass, not a resume. Counted, never blocked: the daily cap exists
+            # against burning a kid out on new material, and refusing to let
+            # them re-check something they have already seen would make this
+            # feature useless exactly when it matters, the night before a game.
+            #
+            # Nothing about the watch state is reset. Coverage stays where it
+            # was, so a second pass cannot manufacture credit that a first one
+            # did not earn.
+            if existing["verdict"] == film.Verdict.WATCHED:
+                looks += 1
+                with transaction(self.conn) as conn:
+                    conn.execute(
+                        "UPDATE clip_watches SET looks = ? WHERE id = ?",
+                        (looks, int(existing["id"])),
+                    )
+            return {
+                "watch_id": int(existing["id"]),
+                "resumed": True,
+                "looks": looks,
+                "rewatch_notice": rewatch.NOTICE,
+            }
         with transaction(self.conn) as conn:
             cur = conn.execute(
                 "INSERT INTO clip_watches(athlete_id, clip_id, day, started_at, "
                 "last_beat_at) VALUES (?,?,?,?,?)",
                 (athlete_id, clip_id, day.isoformat(), now, now),
             )
-        return {"watch_id": int(cur.lastrowid), "resumed": False}
+        return {
+            "watch_id": int(cur.lastrowid),
+            "resumed": False,
+            "looks": rewatch.for_athlete(self.conn, athlete_id, clip_id),
+            "rewatch_notice": rewatch.NOTICE,
+        }
 
     def record_beat(
         self,
@@ -886,7 +951,22 @@ class Store:
         Being wrong about a slide is the entire reason to watch film, so the
         reward is for attention rather than correctness -- and it is capped
         low so that a kid cannot out-earn training by watching video.
+
+        Paid once per clip, ever. Rewatching is deliberately outside the
+        economy: the moment it pays, the cheapest XP in the product is
+        replaying yesterday's clip with the sound on, and the second look --
+        the behaviour this whole feature exists to encourage -- stops meaning
+        anything the moment it is worth points.
         """
+        paid = self.conn.execute(
+            "SELECT 1 FROM clip_watches w "
+            "WHERE w.athlete_id = ? AND w.xp_awarded > 0 AND w.id != ? "
+            "  AND w.clip_id = (SELECT clip_id FROM clip_watches WHERE id = ?)",
+            (athlete_id, watch_id, watch_id),
+        ).fetchone()
+        if paid is not None:
+            return 0
+
         already = self.conn.execute(
             "SELECT COALESCE(SUM(xp_awarded), 0) AS t FROM clip_watches "
             "WHERE athlete_id = ? AND day = ?",
@@ -934,6 +1014,31 @@ class Store:
             "correct": correct,
             "answer": int(question["answer"]),
             "because": question.get("because", ""),
+        }
+
+    def second_looks(
+        self, athlete_ids: list[int], days: int = 28
+    ) -> dict[str, Any]:
+        """Clips these athletes went back to, grouped by clip.
+
+        Grouped by clip rather than by athlete because the useful output is a
+        practice plan. The same rows sorted athlete-first would be a list of
+        the kids who need the most help, which nobody asked for and which
+        would be read that way whatever it was labelled.
+        """
+        start = (_now().date() - timedelta(days=days - 1)).isoformat()
+        clips = rewatch.for_clips(self.conn, athlete_ids, since=start)
+        return {
+            "days": days,
+            "clips": [clip.to_dict() for clip in clips],
+            # Said on the coach's screen too, so nobody reads this list as a
+            # list of athletes who are behind.
+            "how_to_read": (
+                "Going back to a clip is the film module working. These are "
+                "the athletes checking their own understanding, and the clips "
+                "worth a few minutes at practice -- not a list of who is "
+                "struggling."
+            ),
         }
 
     def film_history(

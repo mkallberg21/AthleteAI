@@ -209,9 +209,9 @@ class TestThroughTheStore:
                 store.start_watch(athlete["id"], clip["id"])
             except StoreError:
                 break
-        assert store.start_watch(athlete["id"], clips[0]["id"]) == {
-            "watch_id": started["watch_id"], "resumed": True,
-        }
+        again = store.start_watch(athlete["id"], clips[0]["id"])
+        assert again["watch_id"] == started["watch_id"]
+        assert again["resumed"] is True
 
     def test_clips_too_long_for_a_band_are_not_offered_to_it(self, store, org, athlete):
         self._clip(store, org, title="Long one", end_s=160)

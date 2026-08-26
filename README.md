@@ -88,7 +88,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2396 tests
+python -m pytest tests/ -q          # 2443 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 138 tests
@@ -2907,6 +2907,82 @@ problem is not a throwing problem.
 
 ---
 
+## Second looks
+
+An athlete who reruns the slide-and-recovery clip before Tuesday's practice
+because they want to be sure is doing exactly what film study is for. Every
+instinct a piece of software has about repeated views — that they mean
+confusion, that a number should go down — is wrong here.
+
+Two things were in the way. The feed **removed a clip the moment it was
+watched**, so the one thing an athlete is most likely to want was the one thing
+the screen would not give them. And a rewatch on a later day created a fresh
+row and **paid XP again**, which made the cheapest points in the product
+replaying yesterday's clip with the sound on.
+
+Both are fixed. Watched clips come back in their own `again` list so a revisit
+never displaces new material, and a clip pays **once, ever**.
+
+### The rules that keep it from becoming an accusation
+
+**A second look is never worth XP and never costs any.** The moment it pays,
+somebody farms it; the moment it costs, nobody does it. It sits outside the
+economy, which is also the honest description of what it is.
+
+**A second look is never blocked.** The daily cap still gates *new* material —
+that burnout guard survives this feature intact — but re-checking something
+already seen is allowed past it. Capping it would make the feature useless
+exactly when it matters, the night before a game. Restarting resets none of the
+watch state, so a second pass cannot manufacture credit a first one did not
+earn.
+
+**The athlete is told.** The film screen carries a plain sentence, in English
+and Spanish, saying the coach can see when they have gone back — before
+anything is recorded. Nothing else in this product watches a child quietly, and
+a kid who finds out later that rewatching was reported is a kid who stops
+rewatching.
+
+**The clip is the subject, never the athlete.** What a coach gets is "three
+athletes went back to Sliding and Recovery", which is a practice plan. The
+per-athlete list sits underneath, and there is no ranking of who rewatched
+most — that list would be read as a list of the kids who are slow within a week
+of shipping. The response carries the sentence explaining how to read it, and a
+test asserts no note or phrase next to a child's name contains the words
+"struggling", "behind", "weak", or "slow".
+
+The one number that genuinely points at the material rather than the athletes
+is `unsettled`: how many came back and *still* have the comprehension question
+wrong. Two or more, and the note stops suggesting a five-minute chat and starts
+saying to walk it through on the field.
+
+A bug worth recording: `answered` stores the option index the athlete picked,
+not a flag. The first version tested it for truthiness, which read every
+athlete who picked the first option as having never answered at all.
+
+### The shelf stays IQ clips
+
+A highlight reel is not a bad video. It is a video that **teaches nothing while
+looking exactly like film study** — it fills the shelf, it earns the same XP,
+and the athlete comes away having watched somebody else be good at lacrosse for
+four minutes.
+
+Nobody here can watch the video, so the coach's own title is the entire
+evidence. Clips whose titles read as highlight reels — "Top 10", "Best of",
+"Mixtape", "Compilation", "Highlights" — are **refused**, not warned about: a
+warning on a screen a coach sees once is a warning nobody reads, and the fix is
+to retitle it, which costs nothing.
+
+The marker list is deliberately narrow, multi-word phrases rather than bare
+words, because lacrosse is full of vocabulary a keen filter would eat. A test
+asserts "Top of the fan spacing" and "Best angle to take on a ground ball" both
+sail through, because a filter coaches route around protects nothing at all.
+
+The curriculum response now carries `what_to_cut` and `not_this`, read at the
+one moment the advice can still change what a coach picks — immediately before
+they go looking for footage. The same rule is enforced on the way back in.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -3413,7 +3489,23 @@ contact with a real driveway:
     about any other count here. The integrity layer is what covers it, not this
     design.
 
-59. **Two of the nine cells are never called.** A ball straight at the chest
+59. **The highlight filter reads titles, not video.** Nothing here can watch
+    the clip, so a montage titled "Defensive rotations" sails straight
+    through. It raises the cost of putting the wrong thing on the shelf; it
+    does not prevent it.
+
+60. **A second look is a weak signal about understanding.** An athlete may
+    rewatch because they were interrupted, because a sibling walked in, or
+    because they liked it. It says they went back, and the coach-facing text
+    is careful to claim nothing more.
+
+61. **Second looks are visible to coaches with no opt-out.** An athlete who
+    would rather not have that seen has only one way to avoid it, which is not
+    to rewatch — the exact behaviour the feature exists to encourage. The
+    notice makes it honest rather than making it optional, and whether that
+    trade is right is worth revisiting with real athletes.
+
+62. **Two of the nine cells are never called.** A ball straight at the chest
     needs the hands to come forward, and forward is what a single camera reads
     worst, so chest-high and hip-high middle are observable but never targets.
     A goalie who only ever gets beaten straight on will not learn it here.

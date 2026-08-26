@@ -3997,3 +3997,81 @@ class TestACuedSessionEndToEnd:
         second = client.post("/api/sessions/submit", json=payload, headers=headers).json()
         assert second["duplicate"] is True
         assert second["saves"] == first["saves"]
+
+
+class TestSecondLooksThroughTheApi:
+    """The coach-facing half of the rewatch feature, at the edge."""
+
+    def _clip(self, client, program):
+        return client.post(
+            "/api/coach/clips",
+            json={
+                "video": "https://youtu.be/aaaaaaaaaaa",
+                "title": "Sliding and recovery",
+                "focus": "Team defence",
+                "end_s": 150,
+            },
+            headers=program["director"],
+        ).json()
+
+    def _rewatch(self, client, headers, clip_id):
+        started = client.post(
+            f"/api/film/{clip_id}/start", json={}, headers=headers,
+        ).json()
+        api_module._store.conn.execute(
+            "UPDATE clip_watches SET verdict = 'watched', watched_s = 150, "
+            "seen_json = ? WHERE id = ?",
+            (json.dumps(list(range(150))), started["watch_id"]),
+        )
+        api_module._store.conn.commit()
+        return client.post(
+            f"/api/film/{clip_id}/start", json={}, headers=headers,
+        ).json()
+
+    def test_an_athlete_is_told_before_anything_is_recorded(self, client, program):
+        clip = self._clip(client, program)
+        started = client.post(
+            f"/api/film/{clip['id']}/start", json={},
+            headers=program["athletes"][0]["headers"],
+        ).json()
+        assert "coach can see" in started["rewatch_notice"]
+
+    def test_a_second_look_reaches_the_coach(self, client, program):
+        clip = self._clip(client, program)
+        again = self._rewatch(client, program["athletes"][0]["headers"], clip["id"])
+        assert again["looks"] == 2
+
+        res = client.get("/api/coach/film/second-looks", headers=program["director"])
+        assert res.status_code == 200
+        body = res.json()
+        assert [c["title"] for c in body["clips"]] == ["Sliding and recovery"]
+        assert body["clips"][0]["athletes"][0]["phrase"] == "took a second look"
+
+    def test_it_says_how_to_read_itself(self, client, program):
+        res = client.get("/api/coach/film/second-looks", headers=program["director"])
+        assert "not a list of who is struggling" in res.json()["how_to_read"]
+
+    def test_an_athlete_cannot_read_the_coach_view(self, client, program):
+        res = client.get(
+            "/api/coach/film/second-looks",
+            headers=program["athletes"][0]["headers"],
+        )
+        assert res.status_code in (401, 403)
+
+    def test_a_highlight_reel_is_refused_at_the_edge(self, client, program):
+        res = client.post(
+            "/api/coach/clips",
+            json={
+                "video": "https://youtu.be/aaaaaaaaaaa",
+                "title": "Top 10 Sick Goals 2024",
+                "end_s": 150,
+            },
+            headers=program["director"],
+        )
+        assert res.status_code == 400
+        assert "highlight reel" in res.json()["detail"]
+
+    def test_the_curriculum_says_what_to_cut_before_a_coach_goes_looking(self, client):
+        body = client.get("/api/curriculum/lacrosse").json()
+        assert "the interesting part is the shot" in body["what_to_cut"]
+        assert "Not highlight reels" in body["not_this"]

@@ -2042,6 +2042,29 @@ def team_film(
     return store.team_film([a["athlete_id"] for a in athletes])
 
 
+@app.get("/api/coach/film/second-looks")
+def film_second_looks(
+    team_id: int | None = None,
+    days: int = Query(default=28, ge=1, le=180),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Which clips athletes went back to for another look.
+
+    The most useful thing in the film module for a coach who is planning a
+    practice, and the easiest to turn into something ugly. It is grouped by
+    clip, it is never ranked by athlete, and the response carries the sentence
+    explaining how to read it -- because a list of children's names next to a
+    count is a list that gets read as a ranking no matter what it is called.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
+    )
+    return store.second_looks([a["athlete_id"] for a in athletes], days=days)
+
+
 @app.get("/api/coach/clips")
 def list_clips(
     principal: Principal = Depends(_staff),

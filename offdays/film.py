@@ -150,6 +150,54 @@ def embed_url(provider: str, video_id: str, start_s: int, end_s: int | None) -> 
     return f"https://www.youtube-nocookie.com/embed/{video_id}?" + "&".join(params)
 
 
+# ---------------------------------------------------------------------------
+# Keeping the shelf full of the right thing
+# ---------------------------------------------------------------------------
+
+#: What a clip on this shelf is for, in one sentence a coach can act on.
+WHAT_TO_CUT = (
+    "Cut the two seconds before the play and the two seconds after it. A clip "
+    "here should show a decision -- where the slide came from, when the cut "
+    "was made, who was left open and why -- not the finish. If the interesting "
+    "part is the shot, it is the wrong clip."
+)
+
+#: Titles that give away a highlight reel.
+#:
+#: This is the only check available: nobody here can watch the video, so the
+#: coach's own title is the entire evidence. It is a weak signal and a
+#: deliberately narrow list -- multi-word phrases rather than single words,
+#: because lacrosse is full of terms ("top of the fan", "X", "the crease")
+#: that a keen filter would eat.
+#:
+#: A highlight reel is not a bad video. It is a video that teaches nothing
+#: while looking exactly like film study, which is worse: it fills the shelf,
+#: it earns the XP, and the athlete comes away having watched somebody else be
+#: good at lacrosse for four minutes.
+HIGHLIGHT_MARKERS = (
+    "highlight", "top 10", "top ten", "top 5", "top five", "best of",
+    "best goals", "best plays", "top plays", "mixtape", "mix tape",
+    "compilation", "hype", "pump up", "sick shots", "nasty shots",
+    "filthy", "insane goals", "crazy goals", "goals of the",
+)
+
+
+def looks_like_highlights(title: str) -> str | None:
+    """The marker that gives a title away, or None.
+
+    Matched against the coach's own title rather than anything fetched from the
+    provider, so the fix is always within reach: rename it. And if a clip that
+    genuinely teaches something cannot be described without calling it a
+    highlight reel, the title was the problem to begin with -- that is the text
+    the athlete sees above the video.
+    """
+    low = (title or "").lower()
+    for marker in HIGHLIGHT_MARKERS:
+        if marker in low:
+            return marker
+    return None
+
+
 @dataclass(frozen=True)
 class Question:
     """A single check that the clip was understood, not merely played.

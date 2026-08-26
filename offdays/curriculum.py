@@ -617,6 +617,17 @@ def catalogue() -> dict[str, Any]:
             "enforced per age band, so target_s is already inside the ceiling "
             "for each topic's minimum age."
         ),
+        # Carried on the response a coach reads immediately before going to
+        # find footage, which is the only moment this advice can still change
+        # what they pick. The same rule is enforced on the way back in.
+        "what_to_cut": film.WHAT_TO_CUT,
+        "not_this": (
+            "Not highlight reels. A montage of finishes teaches nothing while "
+            "looking exactly like film study -- it fills the shelf, it earns "
+            "the same XP, and the athlete comes away having watched somebody "
+            "else be good at lacrosse. Clips whose titles read as highlight "
+            "reels are refused."
+        ),
     }
 
 
