@@ -214,10 +214,64 @@ test('a track that locked onto the wrong thing re-acquires', () => {
 test('every ball drill is exercised by this file', () => {
   // The mirror of the calibration harness rule: a ball drill added without a
   // test here would be unguarded in both files and look green in both.
+  // The lacrosse family is covered as a family below rather than one name at
+  // a time: they all share LACROSSE_BALL, so listing each key here would grow
+  // a rubber-stamp list while the loop is what actually exercises them.
   const covered = new Set(['soc_juggle', 'bkb_dribble', 'vb_set',
-                           'bb_wall_throw', 'ten_wall_rally', 'lax_wall_ball']);
-  const missing = SPECS.filter((d) => d.ball && !covered.has(d.key)).map((d) => d.key);
+                           'bb_wall_throw', 'ten_wall_rally']);
+  const missing = SPECS
+    .filter((d) => d.ball && !covered.has(d.key) && d.sport !== 'lacrosse')
+    .map((d) => d.key);
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
+});
+
+test('every lacrosse drill shares one ball', () => {
+  // A lacrosse ball is a lacrosse ball. If a pattern ever drifts to its own
+  // size or colour the detector's size prior silently stops matching it.
+  const lax = SPECS.filter((d) => d.sport === 'lacrosse');
+  assert.ok(lax.length >= 9, 'expected the full wall ball routine');
+  for (const drill of lax) {
+    assert.ok(drill.ball, `${drill.key} has no ball`);
+    assert.equal(drill.ball.diameter_cm, 6.35, `${drill.key} ball size drifted`);
+    assert.equal(drill.ball.colour, 'white', `${drill.key} ball colour drifted`);
+    assert.equal(drill.ball.detector, 'vision', `${drill.key} uses the general model`);
+  }
+});
+
+test('no lacrosse drill can be blocked by an unseen ball', () => {
+  // The ball is the detector's weakest subject -- smallest and fastest in the
+  // catalogue. Requiring it anywhere would punish a child for our blind spot.
+  for (const drill of SPECS.filter((d) => d.sport === 'lacrosse')) {
+    assert.equal(drill.ball.mode, 'confirm', `${drill.key} counts on the ball`);
+    assert.equal(drill.ball.required, false, `${drill.key} requires the ball`);
+  }
+});
+
+test('every lacrosse drill corroborates from a real throw', () => {
+  // The loop that makes the coverage exemption above honest.
+  for (const drill of SPECS.filter((d) => d.sport === 'lacrosse')) {
+    const counter = new BallRepCounter(drill);
+    run(counter, bounce({ floor: 0.45, apex: 1.5, every: 2, frames: 300 }),
+        pose({ left_wrist: { x: 0.52, y: 0.45 },
+               right_wrist: { x: 0.60, y: 0.45 } }));
+    const confirmation = counter.confirmation();
+    assert.ok(confirmation.ball_contacts > 0,
+      `${drill.key} saw no contacts in a clean throw sequence`);
+    assert.ok(confirmation.track_quality > 0, `${drill.key} tracked nothing`);
+  }
+});
+
+test('the fast patterns gate contacts tighter than the slow ones', () => {
+  // Quick stick and one-handed reps arrive faster than the standard 400ms
+  // window assumes; a gate longer than the rep it polices would throw away
+  // every second contact.
+  const gap = (key) => spec(key).ball.min_gap_ms;
+  assert.ok(gap('lax_quick_stick') < gap('lax_wall_ball'));
+  assert.ok(gap('lax_wall_ball_one_hand') < gap('lax_wall_ball'));
+  for (const key of ['lax_quick_stick', 'lax_wall_ball_one_hand']) {
+    assert.ok(gap(key) < spec(key).counter.min_rep_ms,
+      `${key} gates contacts slower than its own fastest legal rep`);
+  }
 });
 
 test('every count-mode drill can actually count through its own spec', () => {

@@ -17,6 +17,8 @@ value would mark every honest rep short.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from .base import (
     BallSpec,
     Category,
@@ -35,6 +37,44 @@ from .base import (
 # --------------------------------------------------------------------------
 # Lacrosse
 # --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# Lacrosse
+# --------------------------------------------------------------------------
+
+#: Every lacrosse drill uses the same ball, so it is described once here
+#: rather than repeated per drill. A men's and women's lacrosse ball are both
+#: 6.2-6.5cm and always white, orange or yellow at this level -- the detector
+#: takes white as the hard case and the rest come free, because a coloured
+#: ball against a wall is easier than a white one.
+#:
+#: Always `confirm` and never `required`. A lacrosse ball is the smallest and
+#: fastest object in this catalogue and the detector's weakest subject, so
+#: failing to see one is at least as likely to be our blind spot as the
+#: athlete's honesty. Requiring it would punish children for a model's limit.
+#: What it can still do is catch the opposite case: a session where the ball
+#: was tracked clearly and never once left a hand.
+LACROSSE_BALL = BallSpec(
+    mode="confirm",
+    required=False,
+    contact="body",
+    parts=("left_wrist", "right_wrist"),
+    min_gap_ms=400,
+    min_speed=0.40,
+    attribute_side=False,
+    min_track_quality=0.30,
+    # The purpose-built detector rather than the general model: a lacrosse
+    # ball is not in the general model's vocabulary, and this one runs every
+    # frame instead of every fourth, which matters at this speed.
+    detector="vision",
+    colour="white",
+    diameter_cm=6.35,
+)
+
+#: Same ball, shorter gate. Quick stick and one-handed reps come faster than
+#: the 400ms the standard window assumes, and a gate longer than the rep it is
+#: policing would throw away every second contact.
+LACROSSE_BALL_FAST = replace(LACROSSE_BALL, min_gap_ms=250)
 
 WALL_BALL = DrillSpec(
     key="lax_wall_ball",
@@ -78,29 +118,7 @@ WALL_BALL = DrillSpec(
         min_duration_ms=15_000,
     ),
     tracks_handedness=True,
-    ball=BallSpec(
-        mode="confirm",
-        # Never required. A lacrosse ball is not in the detector's vocabulary
-        # -- it knows basketballs and tennis balls, not a 6cm ball moving at
-        # speed against a wall -- so failing to see one is at least as likely
-        # to be the detector's blind spot as the athlete's honesty. Requiring
-        # it would punish children for a model's limitation. What it *can* do
-        # is catch the opposite case: a session where the ball was tracked
-        # clearly and never once left a hand.
-        required=False,
-        contact="body",
-        parts=("left_wrist", "right_wrist"),
-        min_gap_ms=400,
-        min_speed=0.40,
-        attribute_side=False,
-        min_track_quality=0.30,
-        # The purpose-built detector rather than the general model, because a
-        # lacrosse ball is not in the general model's vocabulary. It also runs
-        # every frame instead of every fourth, which matters for a ball moving
-        # this fast.
-        detector="vision",
-        colour="white",
-    ),
+    ball=LACROSSE_BALL,
     setup_hint=(
         "Prop the phone up so it can see you and the wall. Side-on reads hands "
         "best, but any angle counts."
@@ -156,6 +174,7 @@ QUICK_STICK = DrillSpec(
         max_reps_per_second=4.0, min_reps_per_second=0.25, min_reps=10
     ),
     tracks_handedness=True,
+    ball=LACROSSE_BALL_FAST,
     setup_hint="Closer to the wall than wall ball. No cradle -- catch and go.",
     quality=QualitySpec(
         target_rom=0.28,
@@ -170,6 +189,324 @@ QUICK_STICK = DrillSpec(
     ),
     load=LoadSpec(load_per_rep=0.30, throws_per_rep=1.0, tissue=Tissue.THROWING),
 )
+
+# --------------------------------------------------------------------------
+# The wall ball routine
+#
+# A real wall ball routine is a named sequence of patterns, not one exercise
+# repeated. These are the patterns a coach calls out, each shipped as its own
+# drill so an athlete can be assigned "off hand only, 100" rather than "wall
+# ball" and hope.
+#
+# **The detector does not recognise which pattern is being thrown.** It reads
+# top-hand height above the shoulder line and counts cycles; it cannot see
+# whether the ball went behind a back. The athlete picks the pattern, exactly
+# as they pick squats over lunges, and what each spec below encodes is the
+# *shape a good rep of that pattern has* -- its range, its tempo, and which
+# hand should be on top. That is what makes the form score mean something
+# different for one-handed than for a full two-handed throw, and it is the
+# honest limit of what pose can offer here.
+# --------------------------------------------------------------------------
+
+WALL_BALL_STRONG = DrillSpec(
+    key="lax_wall_ball_strong",
+    name="Wall Ball - Strong Hand",
+    sport="lacrosse",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Every rep with your dominant hand on top, full throwing motion. The "
+        "baseline pattern the rest of the routine is measured against."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.WALL_BALL_CYCLE,
+        joints=("left_wrist", "right_wrist", "left_shoulder", "right_shoulder"),
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.05, up_threshold=0.18,
+        min_rep_ms=450, max_rep_ms=6_000, rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=1.0, daily_rep_cap=600,
+        diminishing_after_reps=200, diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0, min_reps_per_second=0.10,
+        min_reps=10, min_duration_ms=15_000,
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL,
+    setup_hint="Side-on to the phone. Dominant hand on top every rep.",
+    quality=QualitySpec(
+        target_rom=0.47, tempo_min_ms=550, tempo_max_ms=2_200,
+        w_consistency=0.40, w_depth=0.25, w_tempo=0.15, w_endurance=0.20,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=0.35, throws_per_rep=1.0, tissue=Tissue.THROWING),
+)
+
+WALL_BALL_OFFHAND = DrillSpec(
+    key="lax_wall_ball_offhand",
+    name="Wall Ball - Off Hand",
+    sport="lacrosse",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Every rep with your weaker hand on top. The hardest pattern in the "
+        "routine and the one that changes a player fastest."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.WALL_BALL_CYCLE,
+        joints=("left_wrist", "right_wrist", "left_shoulder", "right_shoulder"),
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.05, up_threshold=0.18,
+        min_rep_ms=450, max_rep_ms=7_000, rising_completes=True,
+    ),
+    # Worth more per rep, because it is harder and it is the single thing this
+    # product most wants a young player to do. Nothing else in the catalogue
+    # is paid above 1.4.
+    scoring=ScoringSpec(
+        xp_per_rep=1.6, daily_rep_cap=500,
+        diminishing_after_reps=200, diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0, min_reps_per_second=0.08,
+        min_reps=10, min_duration_ms=15_000,
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL,
+    setup_hint="Weak hand on top. It will feel wrong; that is the point.",
+    quality=QualitySpec(
+        # Deliberately the same target as the strong hand. Scoring a shorter
+        # motion as acceptable here would teach a permanently shorter off-hand
+        # throw, which is the exact habit this drill exists to break.
+        target_rom=0.47,
+        # Wider consistency band: an off hand is genuinely more variable early
+        # on, and marking that as failure would just make the drill miserable.
+        consistency_target=0.20,
+        tempo_min_ms=600, tempo_max_ms=2_800,
+        w_consistency=0.30, w_depth=0.35, w_tempo=0.10, w_endurance=0.25,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=0.35, throws_per_rep=1.0, tissue=Tissue.THROWING),
+)
+
+WALL_BALL_ONE_HAND = DrillSpec(
+    key="lax_wall_ball_one_hand",
+    name="Wall Ball - One Handed",
+    sport="lacrosse",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Bottom hand off the stick. Short, controlled throws that build the "
+        "top-hand strength a one-handed catch in traffic needs."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.WALL_BALL_CYCLE,
+        joints=("left_wrist", "right_wrist", "left_shoulder", "right_shoulder"),
+        smoothing=0.25,
+    ),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=0.14,
+        min_rep_ms=320, max_rep_ms=3_000, rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=350, diminishing_after_reps=120),
+    validation=ValidationSpec(
+        max_reps_per_second=3.5, min_reps_per_second=0.15, min_reps=10
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL_FAST,
+    setup_hint="One hand only, close to the wall. Short and controlled.",
+    quality=QualitySpec(
+        # A one-handed throw is a shorter motion by design, so the target is
+        # lower rather than the athlete being marked down for the pattern.
+        target_rom=0.32,
+        tempo_min_ms=400, tempo_max_ms=1_800,
+        w_consistency=0.45, w_depth=0.20, w_tempo=0.20, w_endurance=0.15,
+        min_reps=12,
+    ),
+    # Lighter per rep than a full throw, but it is still an overhead motion on
+    # a young shoulder and it counts toward throwing volume.
+    load=LoadSpec(load_per_rep=0.25, throws_per_rep=1.0, tissue=Tissue.THROWING),
+)
+
+WALL_BALL_CROSS = DrillSpec(
+    key="lax_wall_ball_cross",
+    name="Wall Ball - Cross Handed",
+    sport="lacrosse",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Catch on one side, switch hands, throw from the other. Builds the "
+        "hand exchange a dodge actually needs."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.WALL_BALL_CYCLE,
+        joints=("left_wrist", "right_wrist", "left_shoulder", "right_shoulder"),
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.05, up_threshold=0.16,
+        min_rep_ms=550, max_rep_ms=7_000, rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=400, diminishing_after_reps=150),
+    validation=ValidationSpec(
+        max_reps_per_second=2.5, min_reps_per_second=0.08, min_reps=10
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL,
+    setup_hint="Catch one side, switch, throw the other. Alternate every rep.",
+    quality=QualitySpec(
+        target_rom=0.44,
+        tempo_min_ms=600, tempo_max_ms=2_600,
+        # Both hands are used by design, so an even split is the goal rather
+        # than a warning -- the off-hand share is read as balance here.
+        w_consistency=0.35, w_depth=0.25, w_tempo=0.15, w_endurance=0.25,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=0.35, throws_per_rep=1.0, tissue=Tissue.THROWING),
+)
+
+WALL_BALL_BTB = DrillSpec(
+    key="lax_wall_ball_btb",
+    name="Wall Ball - Behind the Back",
+    sport="lacrosse",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Catch, wrap behind the back, release. Showy, but it is real hand "
+        "control and it is how a player learns where the head is without "
+        "looking."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.WALL_BALL_CYCLE,
+        joints=("left_wrist", "right_wrist", "left_shoulder", "right_shoulder"),
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.02, up_threshold=0.13,
+        min_rep_ms=500, max_rep_ms=6_000, rising_completes=True,
+    ),
+    # A lower cap than the rest of the routine on purpose. This is a garnish,
+    # and a child grinding 600 behind-the-back reps is not building a lacrosse
+    # player.
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=200, diminishing_after_reps=80),
+    validation=ValidationSpec(
+        max_reps_per_second=2.5, min_reps_per_second=0.06, min_reps=8
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL,
+    setup_hint="Wrap behind the back and release. Slow is fine.",
+    quality=QualitySpec(
+        # The hand never gets as high behind the back, so the target reflects
+        # the pattern rather than marking every rep short.
+        target_rom=0.36,
+        consistency_target=0.22,
+        tempo_min_ms=700, tempo_max_ms=3_200,
+        w_consistency=0.40, w_depth=0.20, w_tempo=0.15, w_endurance=0.25,
+        min_reps=10,
+    ),
+    load=LoadSpec(load_per_rep=0.30, throws_per_rep=1.0, tissue=Tissue.THROWING),
+)
+
+WALL_BALL_SPLIT = DrillSpec(
+    key="lax_wall_ball_split",
+    name="Wall Ball - Split Dodge",
+    sport="lacrosse",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Catch, split dodge, throw from the new hand. Footwork and hands in "
+        "one rep, which is how they happen in a game."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.WALL_BALL_CYCLE,
+        joints=("left_wrist", "right_wrist", "left_shoulder", "right_shoulder"),
+        smoothing=0.32,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.05, up_threshold=0.18,
+        min_rep_ms=700,
+        # Long, because the dodge happens between the catch and the throw and
+        # a rep that takes four seconds is a rep done properly, not a pause.
+        max_rep_ms=9_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.5, daily_rep_cap=300, diminishing_after_reps=120),
+    validation=ValidationSpec(
+        max_reps_per_second=1.6, min_reps_per_second=0.05, min_reps=8
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL,
+    setup_hint="Catch, plant, split, throw from the other hand. Sell the dodge.",
+    quality=QualitySpec(
+        target_rom=0.46,
+        consistency_target=0.20,
+        tempo_min_ms=900, tempo_max_ms=4_500,
+        w_consistency=0.30, w_depth=0.30, w_tempo=0.15, w_endurance=0.25,
+        min_reps=10,
+    ),
+    # Legs are doing real work here as well as the shoulder, so it carries
+    # more load per rep than a standing throw.
+    load=LoadSpec(load_per_rep=0.70, throws_per_rep=1.0, tissue=Tissue.THROWING),
+)
+
+GROUND_BALL = DrillSpec(
+    key="lax_ground_ball",
+    name="Ground Balls",
+    sport="lacrosse",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Roll the ball out, scoop through it, come up ready. The most "
+        "repeated skill in the sport after passing, and the one that decides "
+        "most youth games."
+    ),
+    signal=SignalSpec(
+        # Whole-body height, not a joint angle: a scoop is the body dropping
+        # over the ball and driving back up, and the hands are busy holding a
+        # stick the camera cannot see anyway.
+        kind=SignalKind.BODY_HEIGHT,
+        joints=(),
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        down_threshold=0.30, up_threshold=0.80,
+        # Nobody scoops properly in under a second. A faster cycle is a bend,
+        # not a ground ball.
+        min_rep_ms=900, max_rep_ms=8_000, rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.5, daily_rep_cap=300, diminishing_after_reps=100),
+    validation=ValidationSpec(
+        max_reps_per_second=1.2, min_reps_per_second=0.05,
+        min_reps=8, min_duration_ms=20_000,
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL,
+    setup_hint=(
+        "Roll the ball a few feet, scoop through it and come up. Phone side-on "
+        "so it can see you get low."
+    ),
+    quality=QualitySpec(
+        # Getting low is the whole skill. A shallow bend is the single most
+        # common fault and the one this score should be about.
+        target_rom=0.68,
+        tempo_min_ms=1_100, tempo_max_ms=5_000,
+        w_consistency=0.25, w_depth=0.45, w_tempo=0.10, w_endurance=0.20,
+        min_reps=8,
+    ),
+    load=LoadSpec(
+        load_per_rep=1.4,
+        # No overhead throw, so this must not inflate throwing volume -- the
+        # thing that hurts young shoulders. It is a legs-and-back drill.
+        throws_per_rep=0.0,
+        tissue=Tissue.LOWER_BODY,
+    ),
+)
+
 
 # --------------------------------------------------------------------------
 # Strength
@@ -1004,6 +1341,13 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     GEN_SIDE_PLANK,
     WALL_BALL,
     QUICK_STICK,
+    WALL_BALL_STRONG,
+    WALL_BALL_OFFHAND,
+    WALL_BALL_ONE_HAND,
+    WALL_BALL_CROSS,
+    WALL_BALL_BTB,
+    WALL_BALL_SPLIT,
+    GROUND_BALL,
     PUSH_UP,
     SQUAT,
     SIT_UP,

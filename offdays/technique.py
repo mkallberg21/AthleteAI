@@ -285,6 +285,116 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when your throws start dropping short.",
             "tired reps groove a tired throw"),
     ),
+    "lax_wall_ball_strong": (
+        Cue("depth", "Take the stick back past your ear and follow through at "
+                     "the target, every rep.",
+            "a short flick will not survive a game"),
+        Cue("tempo", "Catch, cradle once, throw. Do not rush the catch to get "
+                     "to the throw.",
+            "rushed hands are where drops come from"),
+        Cue("consistency", "Pick one brick and hit it. Aim small.",
+            "a target is what turns reps into accuracy"),
+        Cue("offhand", "If your strong hand is this far ahead, the off-hand "
+                       "set is the one that will actually move your game.",
+            "defenders find your weak hand in about one possession"),
+        Cue("endurance", "Stop when your throws start dropping short.",
+            "tired reps groove a tired throw"),
+    ),
+    "lax_wall_ball_offhand": (
+        Cue("depth", "Same full motion as your strong hand -- back past the "
+                     "ear, full follow-through. Do not shorten it because it "
+                     "feels awkward.",
+            "a shortened off-hand throw becomes permanent"),
+        Cue("tempo", "Slower than your strong side is fine. Complete beats "
+                     "quick here.",
+            "you are building a motion, not a highlight"),
+        Cue("consistency", "It will be scattered at first. Aim at the same "
+                           "spot anyway and let it come in.",
+            "the scatter closes faster than you expect"),
+        Cue("offhand", "This whole drill is the off hand. Keep the weak hand "
+                       "on top for every single rep, even the last ones.",
+            "the reps you swap back on are the reps that do not count"),
+        Cue("endurance", "Finish the set before the motion shortens, not "
+                         "after.",
+            "a short tired rep teaches the short version"),
+    ),
+    "lax_wall_ball_one_hand": (
+        Cue("depth", "Short and controlled -- this is not a full throw. Wrist "
+                     "and forearm, not the whole arm.",
+            "the point is control, not distance"),
+        Cue("tempo", "Quick hands, close to the wall. If you are stepping "
+                     "into it you are too far back.",
+            "distance turns this into a different drill"),
+        Cue("consistency", "Same height every rep. Chest to head, not over "
+                           "the shoulder.",
+            "a repeatable one-hander is what you can use in traffic"),
+        Cue("offhand", "Do a set with each hand. The bottom hand comes off "
+                       "either way.",
+            "one-handed catches happen on both sides"),
+        Cue("endurance", "Stop when your grip starts sliding.",
+            "top-hand strength is the thing being built"),
+    ),
+    "lax_wall_ball_cross": (
+        Cue("depth", "Complete the switch before you throw. Hands finish, "
+                     "then the throw starts.",
+            "a rushed exchange is where the ball comes out"),
+        Cue("tempo", "Catch, switch, throw. Three beats, not one scramble.",
+            "the switch is the skill, not the throw"),
+        Cue("consistency", "Alternate every single rep. Same spot on the wall "
+                           "from both sides.",
+            "the point is that both sides look the same"),
+        Cue("offhand", "Half these reps are off-hand throws by design -- give "
+                       "them the same motion as the strong side.",
+            "an even split is what this drill is for"),
+        Cue("endurance", "When the switches get sloppy, stop.",
+            "a sloppy exchange practised is a sloppy exchange kept"),
+    ),
+    "lax_wall_ball_btb": (
+        Cue("depth", "Wrap it properly behind your back rather than round "
+                     "your hip.",
+            "round the hip is a different, easier throw"),
+        Cue("tempo", "Slow is fine. Nobody does this fast at first.",
+            "control comes before speed on this one"),
+        Cue("consistency", "Same release point each time, even if the ball "
+                           "goes everywhere at first.",
+            "you are learning where the head is without looking"),
+        Cue("offhand", "Try a few on your other side once the strong side "
+                       "lands.",
+            "it is worth knowing you can"),
+        Cue("endurance", "Keep the set short. This is a garnish, not a meal.",
+            "a hundred of these builds less than twenty good regular throws"),
+    ),
+    "lax_wall_ball_split": (
+        Cue("depth", "Plant hard and change direction. A step across is not a "
+                     "split dodge.",
+            "the plant is what beats a defender"),
+        Cue("tempo", "Catch, plant, split, throw. Let the footwork finish "
+                     "before the hands go.",
+            "hands and feet arriving together is what sells it"),
+        Cue("consistency", "Same footwork every rep, both directions.",
+            "a dodge you can only go one way with is half a dodge"),
+        Cue("offhand", "Split both ways so you throw off both hands.",
+            "a one-way dodge gets scouted in a half"),
+        Cue("endurance", "Stop when your plant goes soft.",
+            "soft plants are how ankles and knees get hurt"),
+    ),
+    "lax_ground_ball": (
+        Cue("depth", "Get low -- bend your knees and drop your hips, do not "
+                     "just reach down with your hands.",
+            "reaching is the single most common way ground balls are lost"),
+        Cue("tempo", "Scoop through the ball and keep moving. Do not stop "
+                     "over it.",
+            "stopping over a ground ball is how you get hit"),
+        Cue("consistency", "Same low position every rep. Bottom hand near the "
+                           "ground.",
+            "the low hand is what gets under the ball"),
+        Cue("offhand", "Scoop from your weak side too -- the ball does not "
+                       "care which hand you like.",
+            "a ground ball you can only take one way is one you often lose"),
+        Cue("endurance", "When you stop getting all the way down, the set is "
+                         "over.",
+            "a shallow scoop is a missed ground ball with extra steps"),
+    ),
     "lax_quick_stick": (
         Cue("depth", "Catch and release in one motion, hands soft.",
             "the whole drill is about not winding up"),

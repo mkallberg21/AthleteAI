@@ -104,9 +104,13 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("attack", "attackman", "attackmen", "attacker", "att", "a",
                  "offense", "offence", "forward"),
         emphasis={
-            "lax_wall_ball": 0.35, "lax_quick_stick": 0.20,
-            "gen_lateral_bound": 0.12, "gen_squat": 0.10,
-            "gen_squat_jump": 0.08, "gen_plank": 0.08, "gen_push_up": 0.07,
+            # Dodging is the job, so the split-dodge pattern earns real weight
+            # here and nowhere else on the field gets as much of it.
+            "lax_wall_ball": 0.16, "lax_wall_ball_offhand": 0.14,
+            "lax_wall_ball_split": 0.12, "lax_quick_stick": 0.12,
+            "lax_wall_ball_one_hand": 0.08, "lax_ground_ball": 0.06,
+            "gen_lateral_bound": 0.10, "gen_squat": 0.08,
+            "gen_squat_jump": 0.06, "gen_plank": 0.04, "gen_push_up": 0.04,
         },
         plural_label="attackers",
         focus="Hands and tight-space quickness. Most of your time is stick work.",
@@ -116,10 +120,14 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("midfield", "midfielder", "midfielders", "middie", "middy",
                  "mid", "mids", "m", "mf", "midi"),
         emphasis={
-            "lax_wall_ball": 0.30, "lax_quick_stick": 0.10,
-            "gen_high_knees": 0.12, "gen_squat_jump": 0.10,
-            "gen_lateral_bound": 0.10, "gen_squat": 0.10, "gen_burpee": 0.08,
-            "gen_plank": 0.05, "gen_push_up": 0.05,
+            # The broadest stick diet on the field, because a midfielder does
+            # a bit of everyone else's job.
+            "lax_wall_ball": 0.14, "lax_wall_ball_offhand": 0.12,
+            "lax_wall_ball_split": 0.10, "lax_wall_ball_cross": 0.08,
+            "lax_ground_ball": 0.08, "lax_quick_stick": 0.06,
+            "gen_high_knees": 0.10, "gen_squat_jump": 0.08,
+            "gen_lateral_bound": 0.07, "gen_squat": 0.07, "gen_burpee": 0.05,
+            "gen_plank": 0.03, "gen_push_up": 0.02,
         },
         plural_label="midfielders",
         focus="You cover more ground than anyone. Stick work plus an engine.",
@@ -130,9 +138,14 @@ LACROSSE: tuple[Position, ...] = (
                  "defencemen", "defensemen", "d", "def", "close d",
                  "close defense", "close defence", "pole", "dpole", "d pole"),
         emphasis={
-            "lax_wall_ball": 0.22, "gen_lateral_bound": 0.18, "gen_squat": 0.15,
-            "gen_high_knees": 0.10, "gen_push_up": 0.10, "gen_plank": 0.10,
-            "gen_squat_jump": 0.08, "gen_pull_up": 0.07,
+            # Ground balls lead: a defender who wins them ends possessions,
+            # and the off-hand set is here because defenders are the players
+            # most often allowed to neglect it.
+            "lax_ground_ball": 0.16, "lax_wall_ball": 0.12,
+            "lax_wall_ball_offhand": 0.12, "lax_wall_ball_one_hand": 0.06,
+            "gen_lateral_bound": 0.16, "gen_squat": 0.12,
+            "gen_high_knees": 0.08, "gen_push_up": 0.06, "gen_plank": 0.06,
+            "gen_pull_up": 0.06,
         },
         plural_label="defenders",
         focus="Footwork and strength first, but a defender still needs hands.",
@@ -144,9 +157,13 @@ LACROSSE: tuple[Position, ...] = (
                  "d mid", "dmid", "d midfield", "defensive midfield",
                  "defensive midfielder"),
         emphasis={
-            "lax_wall_ball": 0.25, "gen_lateral_bound": 0.15, "gen_squat": 0.12,
-            "gen_high_knees": 0.12, "gen_burpee": 0.10, "gen_squat_jump": 0.10,
-            "gen_plank": 0.08, "gen_push_up": 0.08,
+            # This position's own focus line has always said "ground balls and
+            # legs". Until now there was no ground ball drill to put behind it.
+            "lax_ground_ball": 0.20, "lax_wall_ball": 0.12,
+            "lax_wall_ball_offhand": 0.10, "lax_wall_ball_one_hand": 0.05,
+            "gen_lateral_bound": 0.13, "gen_high_knees": 0.10,
+            "gen_squat": 0.10, "gen_burpee": 0.08, "gen_squat_jump": 0.07,
+            "gen_plank": 0.03, "gen_push_up": 0.02,
         },
         plural_label="long-stick midfielders",
         focus="A defender's job at a midfielder's pace. Ground balls and legs.",
@@ -156,9 +173,15 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("fogo", "faceoff", "face off", "face-off", "faceoff specialist",
                  "fo", "fogos", "draw", "draw specialist", "draw control"),
         emphasis={
-            "lax_quick_stick": 0.20, "lax_wall_ball": 0.18,
-            "gen_squat_jump": 0.15, "gen_plank": 0.12, "gen_push_up": 0.10,
-            "gen_pull_up": 0.10, "gen_burpee": 0.10, "gen_lateral_bound": 0.05,
+            # The clamp itself is not something pose can see, but everything
+            # after it is: a face-off is won at the whistle and finished on a
+            # ground ball, and one-handed work is the closest this catalogue
+            # gets to the grip strength the clamp needs.
+            "lax_ground_ball": 0.22, "lax_quick_stick": 0.14,
+            "lax_wall_ball_one_hand": 0.10, "lax_wall_ball": 0.08,
+            "lax_wall_ball_offhand": 0.06,
+            "gen_squat_jump": 0.10, "gen_plank": 0.08, "gen_pull_up": 0.08,
+            "gen_push_up": 0.06, "gen_burpee": 0.05, "gen_lateral_bound": 0.03,
         },
         plural_label="face-off specialists",
         focus="One explosive move, repeated. Grip, core and a fast first step.",
@@ -168,9 +191,14 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("goalie", "goalies", "goal", "goalkeeper", "goaltender",
                  "keeper", "gk", "g", "netminder", "net"),
         emphasis={
-            "lax_quick_stick": 0.28, "lax_wall_ball": 0.18,
-            "gen_lateral_bound": 0.18, "gen_plank": 0.12,
-            "gen_squat_jump": 0.10, "gen_squat": 0.08, "gen_push_up": 0.06,
+            # No off-hand set here: this position carries offhand_matters=False
+            # because a goalie's hands do not swap, and prescribing the drill
+            # anyway would contradict that. One-handed work stands in for the
+            # outlet, and ground balls for the start of every clear.
+            "lax_quick_stick": 0.22, "lax_wall_ball_one_hand": 0.12,
+            "lax_wall_ball": 0.12, "lax_ground_ball": 0.08,
+            "gen_lateral_bound": 0.16, "gen_plank": 0.10,
+            "gen_squat_jump": 0.08, "gen_squat": 0.07, "gen_push_up": 0.05,
         },
         plural_label="goalies",
         focus="Hands, reactions and a hard first step sideways.",

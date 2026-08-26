@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2102 tests
+python -m pytest tests/ -q          # 2186 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 107 tests
+  node --test tests/js/*.test.mjs   # 111 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -107,7 +107,7 @@ offdays/
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
-    catalog.py      The 25 shipped drills
+    catalog.py      The 32 shipped drills
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
@@ -2211,7 +2211,7 @@ tell them what *not short* looks like, and a score without a fix is a mark out
 of ten — which is the thing this product is otherwise careful not to hand a
 twelve-year-old.
 
-Every one of the 25 drills has cues written for it, keyed to the same
+Every one of the 32 drills has cues written for it, keyed to the same
 component keys the scorer emits. `quality.weakest` is recorded on the report
 rather than re-derived by the caller, so the fix a child reads is always about
 the thing that actually scored lowest; a note and a fix disagreeing about what
@@ -2999,7 +2999,19 @@ contact with a real driveway:
    though they are not remotely the same week. Capturing sessions per week per
    sport would sharpen it, at the cost of a form a twelve-year-old will not
    fill in — which is the trade the season picker deliberately takes.
-13. **Every sport shares one bodyweight drill catalog.** All sixteen sports
+13. **Lacrosse is the only sport with a real drill routine.** It has nine
+   drills — a full wall ball routine plus ground balls — because it is the
+   sport this was built for. Every other sport has one skill drill or none,
+   and gets the same eighteen general movements. That imbalance is honest
+   rather than accidental: the depth exists where somebody has actually
+   coached the sport.
+14. **The wall ball patterns are declared, not recognised.** The detector
+   reads top-hand height and counts cycles; it cannot see whether a ball went
+   behind a back or whether a split dodge was sold. An athlete picks the
+   pattern the way they pick squats over lunges, and each spec encodes the
+   shape a good rep of that pattern has. A child could log behind-the-back
+   reps while throwing normally, and nothing would catch it.
+15. **Every sport shares one bodyweight drill catalog.** All sixteen sports
    have their own positions and their own emphasis, but that emphasis is drawn
    from the same eighteen general movements — a volleyball middle and a rugby
    prop get different *proportions* of the same exercises, not different
@@ -3008,56 +3020,56 @@ contact with a real driveway:
    ball drills plus lacrosse stick work); the other ten get physical
    preparation and film. A sport with no position model at all still falls
    back to the generic mix, but no shipped sport is in that state.
-14. **The age bands are heuristics, not a clinical instrument.** They are drawn
+16. **The age bands are heuristics, not a clinical instrument.** They are drawn
    from general paediatric sports-medicine guidance and rounded to numbers a
    twelve-year-old can act on. They know nothing about the individual athlete's
    growth stage, injury history, or what else their week already contains, and
    they are not a substitute for a clinician. Treat `OFFDAYS_BUDGET_SCALE`
    as a program-level dial, not a per-athlete prescription.
-15. **Handedness is inferred from wrist height**, which is reliable for standard
+17. **Handedness is inferred from wrist height**, which is reliable for standard
    lacrosse form and less so for unusual grips.
-16. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
+18. **"Before 8am" badges use UTC.** Athlete-local timezones are not stored yet,
    so that badge is wrong outside UTC. Noted in `store.py`.
-17. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
+19. **Single-process SQLite.** Fine for a program or two; a district-wide rollout
    wants Postgres. `store.py` is the only module to change. Schema upgrades run
    automatically on connect (`db.migrate`), probing the actual database rather
    than trusting a version counter.
-18. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
+20. **Auth is bearer tokens with no rotation or expiry.** Adequate for a pilot,
    not for a public launch.
-19. **Revocation soft-fails by default**, though pre-fetched staples make strict
+21. **Revocation soft-fails by default**, though pre-fetched staples make strict
    mode practical — see **Stapling** above. Left soft by default because a
    deployment that has not set up the refresh job would otherwise start
    refusing webhooks; turn on `OFFDAYS_SNS_REVOCATION_STRICT=1` once
    `/api/coach/staples` shows them fresh.
-20. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
+22. **No TLS-level stapling on outbound fetches.** Python's `ssl` cannot read a
    stapled response, and doing it needs pyOpenSSL. It would only cover AWS's
    *TLS* certificate rather than the SNS signing certificate, so it was left
    out rather than added untested.
-21. **No payment processor.** The billing model, entitlements, and invoicing are
+23. **No payment processor.** The billing model, entitlements, and invoicing are
    real; taking money is a `Gateway` implementation away, and nothing here has
    been through a PCI review.
-22. **Offline slots are per-drill.** A drill you have never opened online has no
+24. **Offline slots are per-drill.** A drill you have never opened online has no
    banked slot, so its first-ever session needs a connection. The app says so
    plainly rather than failing silently.
-23. **Web Push needs credentials.** Notifications generate and display in-app
+25. **Web Push needs credentials.** Notifications generate and display in-app
    with nothing configured, but reaching a locked phone needs VAPID keys.
-24. **Form quality is pose-only.** It reads how the body moved, not where the
+26. **Form quality is pose-only.** It reads how the body moved, not where the
    ball went. A wall-ball rep with perfect mechanics and a bad release still
    scores well, and stick position is invisible to it.
-25. **Guardian identity is proven by the invite code alone.** There is no email
+27. **Guardian identity is proven by the invite code alone.** There is no email
     verification, so a code handed to the wrong adult creates a valid account.
     Short expiry, single use, and revocation limit the window; real
     verification is a launch requirement.
-26. **Roster import reads delimited text only.** CSV, TSV, and
+28. **Roster import reads delimited text only.** CSV, TSV, and
     semicolon-separated files work; a native `.xlsx` has to be exported to CSV
     first. The same is true of what a sync fetches, since it is rendered back
     to CSV and fed through the same parser.
-27. **Load coefficients are reasoned estimates, not measured values.** The
+29. **Load coefficients are reasoned estimates, not measured values.** The
     per-drill numbers in `catalog.py` are a defensible ordering rather than
     validated physiology, and the app sees only self-directed work — so the
     workload picture is directionally useful and absolutely not a clinical
     assessment.
-28. **The TeamSnap and SportsEngine adapters have never run against a live
+30. **The TeamSnap and SportsEngine adapters have never run against a live
     account.** There are no credentials for either in this environment, so
     both are written against published API shapes and are unverified — they
     say so in `verified`, in the API payload, and in the coach UI, and tests
@@ -3066,111 +3078,111 @@ contact with a real driveway:
     adapter refreshes an OAuth token either: a credential that expires has to
     be re-entered, and the failure is recorded on the link where that team's
     coach will see it.
-29. **Roster sync never removes anybody.** Departures are counted and named,
+31. **Roster sync never removes anybody.** Departures are counted and named,
     and applying them is left to a person. A program with heavy mid-season
     turnover will accumulate athletes who have actually left, and will have
     to prune them by hand. This is the deliberate side of a real cost.
-30. **The pre-practice card is only as current as the last submission.** It
+32. **The pre-practice card is only as current as the last submission.** It
     reads what athletes have logged, so a squad that trains and submits after
     practice gives their coach a card describing yesterday. There is nothing
     live in it.
-31. **Season phase is program-wide.** A club running two sports in opposite
+33. **Season phase is program-wide.** A club running two sports in opposite
     seasons has to pick one, and the other sport's athletes get the wrong
     scale. Per-team phase is the obvious fix and is not built.
-32. **Technique references are diagrams, not demonstrations.** The generated
+34. **Technique references are diagrams, not demonstrations.** The generated
     trace shows the shape, range and tempo of a rep — it cannot show grip,
     stance, or where to look, and a written cue is a poor substitute for
     watching someone do it. No clips ship, so until a program films its own,
     the reference is a curve and four sentences.
-33. **The parent report is monthly and derived from logged sessions only.**
+35. **The parent report is monthly and derived from logged sessions only.**
     Work done at practice, at another club, or on a bike is invisible to it,
     so a child who trained hard all month in ways this app never saw appears
     quiet. The copy is careful not to scold, but it cannot know what it
     cannot see.
-34. **The Spanish translations are not certified.** They were written for this
+36. **The Spanish translations are not certified.** They were written for this
     codebase, not by a professional translator, and the consent copy is
     legally adjacent — a program relying on it should have a native speaker
     review it before launch. Coverage is also deliberately partial: the parent
     portal, consent flow and shipped recognition messages are translated; the
     athlete capture app, coach dashboard and drill catalog are not, because a
     half-translated surface is worse than an honest boundary.
-35. **A coach's own words are never translated.** Custom recognition text
+37. **A coach's own words are never translated.** Custom recognition text
     reaches a family in whatever language the coach typed it in. There is no
     translation service in this application and adding one would mean sending
     children's message content to a third party, which is a trade this product
     should not make quietly. The payload flags which messages are shipped
     defaults so a client can say so.
-36. **Team goals are only as fair as the integrity layer.** Clearing the
+38. **Team goals are only as fair as the integrity layer.** Clearing the
     personal bar depends on sessions being counted, so an athlete who can fool
     the rep counter can put themselves in the count. The cost is low by
     design — the bar is small, contribution is binary, and nothing is awarded
     to an individual for it.
-37. **Planned absence is trusted, not verified.** Nothing checks that a family
+39. **Planned absence is trusted, not verified.** Nothing checks that a family
     was actually away. A parent could book a month a year and keep a streak
     alive through it; the caps make that visible rather than impossible, and
     the judgement that this is a family's business rather than the app's is
     deliberate.
-38. **The evaluation export cannot stop being misused.** It is designed to
+40. **The evaluation export cannot stop being misused.** It is designed to
     resist the obvious misreadings — no ranking, no volume, no injury history,
     caveats in the file itself — but a coach determined to sort the CSV by
     form score can still do it. What the design buys is that the number they
     sort by is one the athlete controls.
-39. **Injury history reads only completed return-to-play plans.** A child who
+41. **Injury history reads only completed return-to-play plans.** A child who
     was hurt but never reported it, or reported it and never opened a ramp,
     carries no history here. The signal is real when present and absent
     fairly often, which makes it a reason to ask a question rather than
     evidence of anything.
-40. **Nothing here makes the pose counter work for a movement it cannot see.**
+42. **Nothing here makes the pose counter work for a movement it cannot see.**
     The adaptive accommodations make the product usable and fair for an
     athlete the camera misreads — they suppress a score rather than compute a
     fair one, and they open a self-report path rather than a measurement. A
     genuinely inclusive counter would need a different model and probably a
     different sensor, and no setting substitutes for that.
-41. **Self-reported sessions are unverified by construction.** They are gated
+43. **Self-reported sessions are unverified by construction.** They are gated
     on an accommodation an adult sets, marked for ever, earn flat XP and stay
     off the reps board — but an athlete who wanted to inflate their own streak
     could. The trade is deliberate: the alternative is a child whose training
     this app structurally cannot see, punished by a streak for it.
-42. **The Postgres migration is scoped, not done.** No driver is installed
+44. **The Postgres migration is scoped, not done.** No driver is installed
     here and nothing has been run against a server. `dialect.py` measures what
     the work is; it does not do any of it, and the product runs on SQLite
     only.
-43. **The program export is a snapshot, not a sync.** There is no incremental
+45. **The program export is a snapshot, not a sync.** There is no incremental
     feed and no API for another product to pull from continuously. A director
     leaving takes a file; they do not get a migration path that keeps two
     systems in step while they move.
-44. **The assignment-stall notification cannot tell a bad assignment from a
+46. **The assignment-stall notification cannot tell a bad assignment from a
     bad week.** It reports that completion is low and suggests the assignment
     may be the problem, which is usually right and sometimes is not — exam
     week and a flu going round look identical from here.
-45. **A blank form score on the evaluation export is still a weak signal.**
+47. **A blank form score on the evaluation export is still a weak signal.**
     The row is made identical to a camera failure, the sample count is
     withheld, and the file asks a coach not to infer from it — but an athlete
     who trains every week and never has a score is distinguishable from one
     who does, and no amount of copy removes that entirely. The alternative is
     fabricating a number, which would be worse. Programs using this at
     selection should read the preamble aloud.
-46. **The club-free tier is a conversion bet, not a certainty.** Its revenue
+48. **The club-free tier is a conversion bet, not a certainty.** Its revenue
     depends on parent adoption, which for consumer freemium is commonly
     15–25% rather than the 35%+ that would match the seat-metered Club plan.
     A club of 200 at 20% is roughly $1,160 a season. The bet is that zero
     friction to the club buys far more clubs; if it does not, the seat-metered
     plan is still there and is the better per-club number.
-47. **There is still no payment processor.** `ManualGateway` records what
+49. **There is still no payment processor.** `ManualGateway` records what
     happened and charges nothing. Household subscriptions, sponsorship and
     hardship all work end to end against it, so the seam is exercised — but
     no card has ever been charged by this code.
-48. **Hardship is unverified by design.** Any guardian can grant it to
+50. **Hardship is unverified by design.** Any guardian can grant it to
     themselves in one click. That is deliberate: verification would mean
     asking a family to prove poverty to their child's sports club, which is a
     worse outcome than some families taking it who could have paid.
-49. **The roster plan is priced against club dues, not against costs.** $25
+51. **The roster plan is priced against club dues, not against costs.** $25
     an athlete works because a club can add $40 to a four-figure season fee
     without a parent noticing. It has never been tested against a club that
     negotiates, against a rec league whose season fee is $200 rather than
     $1,800, or against a competitor undercutting it. The seat tiers it
     replaces are retired rather than deleted, so reversing this is possible.
-50. **The sponsorship rebate is tracked but not settled.** The ledger accrues
+52. **The sponsorship rebate is tracked but not settled.** The ledger accrues
     and draws down correctly; whether the balance is paid as cash, credited
     against next season, or drawn as software seats is a commercial decision
     nobody has made, and no money moves either way without a processor.

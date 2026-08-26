@@ -176,6 +176,38 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Baseball", "hands soft enough to catch something coming in hard"),
         Transfer("Hockey", "the same two-handed stick control"),
     ),
+    "lax_wall_ball_strong": (
+        Transfer("Baseball", "hands soft enough to catch something coming in hard"),
+        Transfer("Hockey", "the same two-handed stick control"),
+    ),
+    "lax_wall_ball_offhand": (
+        Transfer("Basketball", "a weak hand you can actually finish with"),
+        Transfer("Hockey", "backhand control, which is the same problem"),
+    ),
+    "lax_wall_ball_one_hand": (
+        Transfer("Baseball", "the top-hand grip strength a one-handed grab needs"),
+        Transfer("Tennis", "wrist and forearm control through a short stroke"),
+    ),
+    "lax_wall_ball_cross": (
+        Transfer("Basketball", "changing hands under pressure without looking"),
+        Transfer("Hockey", "moving the puck across your body mid-stride"),
+    ),
+    # Deliberately short. Behind-the-back wall ball is hand control and not
+    # much else, and inventing a third sport for it would be the padding this
+    # module exists to avoid.
+    "lax_wall_ball_btb": (
+        Transfer("Basketball", "knowing where the ball is without watching it"),
+    ),
+    "lax_wall_ball_split": (
+        Transfer("Basketball", "a crossover that actually changes a defender's feet"),
+        Transfer("Soccer", "planting hard and going the other way"),
+        Transfer("Football", "the jab step and cut"),
+    ),
+    "lax_ground_ball": (
+        Transfer("Baseball", "fielding a grounder — the same low body, same funnel"),
+        Transfer("Soccer", "getting low to a loose ball first"),
+        Transfer("Wrestling", "the level change is the same movement"),
+    ),
     "lax_quick_stick": (
         Transfer("Baseball", "turning two — catch and release without a wasted beat"),
         Transfer("Hockey", "one-touch passing"),
