@@ -200,6 +200,7 @@ export class RepCounter {
     this.confidenceFrames = 0;
     this.holdMs = 0;
     this.lastFrameAt = null;
+    this.lastRaw = null;
     this.pendingHand = 'none';
     this.peakValue = null;
     // Per-cycle extremes. The span between them is the rep's range of motion,
@@ -217,6 +218,50 @@ export class RepCounter {
   }
 
   get count() { return this.reps.length; }
+
+  /**
+   * Everything needed to diagnose why this drill is or is not counting.
+   *
+   * A named surface rather than the UI reaching into internals, because a
+   * debug panel that reads private fields becomes the reason those fields
+   * cannot be renamed. Numbers only -- no landmarks, no frames. What makes
+   * this useful is that a rep either crosses two thresholds or it does not,
+   * and seeing the signal against those two lines answers the question in a
+   * glance where a video would need watching frame by frame.
+   */
+  get debug() {
+    const rising = this.counter.rising_completes !== false;
+    const hold = this.spec.metric === 'hold';
+    return {
+      drill: this.spec.key,
+      metric: this.spec.metric,
+      signal: this.spec.signal.kind,
+      units: this.spec.signal.kind === 'joint_angle' ? 'deg' : 'frame heights',
+      raw: this.lastRaw,
+      smoothed: this.smoothed,
+      smoothing: this.smoothing,
+      // The two lines that decide everything. Arm first, then fire.
+      armAt: hold ? null : (rising ? this.counter.down_threshold
+                                   : this.counter.up_threshold),
+      fireAt: hold ? null : (rising ? this.counter.up_threshold
+                                    : this.counter.down_threshold),
+      rising,
+      armed: this.armed,
+      count: this.reps.length,
+      frames: this.confidenceFrames,
+      confidence: this.confidenceFrames
+        ? this.confidenceSum / this.confidenceFrames : 0,
+      lastRep: this.lastRep
+        ? { rom: this.lastRep.rom, cycle_ms: this.lastRep.cycle_ms,
+            hand: this.lastRep.hand }
+        : null,
+      // Excursion of the cycle in progress: if this never spans the gap
+      // between the two thresholds, the drill can never fire and the reason
+      // is the threshold, not the athlete.
+      cycleMin: this.cycleMin,
+      cycleMax: this.cycleMax,
+    };
+  }
 
   get meanConfidence() {
     return this.confidenceFrames ? this.confidenceSum / this.confidenceFrames : 0;
@@ -255,6 +300,10 @@ export class RepCounter {
     let hand = 'none';
     if (typeof raw === 'object') { value = raw.value; hand = raw.hand; }
     if (value === null || Number.isNaN(value)) return null;
+    // Kept for the debug readout: seeing raw against smoothed is how you tell
+    // a jittery landmark from a smoothing constant that has flattened the
+    // excursion below the threshold.
+    this.lastRaw = value;
 
     // Exponential smoothing. Pose landmarks jitter frame to frame; without
     // this every drill double-counts on the noise alone.

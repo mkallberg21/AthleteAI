@@ -72,8 +72,10 @@ def finish(store, athlete, day=None, reps=60):
         athlete["id"], started["session_id"], started["nonce"],
         duration_ms=t + 900, reps=events, mean_confidence=0.9)
     store.conn.execute(
-        "UPDATE sessions SET submitted_at = ? WHERE id = ?",
-        ((day or TODAY).isoformat() + "T18:00:00+00:00", started["session_id"]))
+        "UPDATE sessions SET submitted_at = ?, completed_at = ? WHERE id = ?",
+        ((day or TODAY).isoformat() + "T18:00:00+00:00",
+         (day or TODAY).isoformat() + "T18:00:00+00:00",
+         started["session_id"]))
     store.conn.commit()
 
 

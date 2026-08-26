@@ -540,6 +540,56 @@ class TestPrivacy:
         ):
             assert forbidden not in code, f"review.js can reach the network: {forbidden!r}"
 
+    def test_the_diagnostics_readout_cannot_become_a_back_door(self, client):
+        """The debug panel exists *because* footage must not leave the phone.
+
+        It is the substitute for sending a developer a video, so it would be a
+        particularly bad place to grow a way of sending one. Checked
+        structurally, the same way review.js is: the block must contain no
+        network path and must never read pixels out of the frame.
+        """
+        import re
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parent.parent
+            / "offdays" / "web" / "static" / "capture.html"
+        ).read_text()
+
+        # Located by the section banner rather than a reconstructed one, so a
+        # change to the rule width does not silently skip the whole check.
+        match = re.search(r"^// -+ diagnostics$", source, re.MULTILINE)
+        assert match, "the diagnostics section banner moved; this guard is blind"
+        start = match.start()
+        block = source[start:source.index("async function loadTechnique", start)]
+        code = re.sub(r"/\*[\s\S]*?\*/|//.*", "", block)
+
+        for forbidden in ("fetch(", "XMLHttpRequest", "WebSocket", "sendBeacon",
+                          "navigator.send", "FormData", "/api/", "http://",
+                          "https://"):
+            assert forbidden not in code, \
+                f"the diagnostics panel can reach the network: {forbidden!r}"
+
+        # And it must stay numbers. Anything that lifts pixels out of the
+        # video or canvas would turn a readout into a screenshot pipeline.
+        for forbidden in ("getImageData", "toDataURL", "toBlob", "drawImage",
+                          "captureStream"):
+            assert forbidden not in code, \
+                f"the diagnostics panel reads imagery: {forbidden!r}"
+
+    def test_the_diagnostics_readout_is_off_by_default(self, client):
+        """An athlete should never see it -- partly because it is noise to
+        them, mostly because a child who found it would learn precisely which
+        number to game."""
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parent.parent
+            / "offdays" / "web" / "static" / "capture.html"
+        ).read_text()
+        assert 'id="debug-panel" class="hidden"' in source
+        assert "get('debug') === '1'" in source
+
     def test_the_capture_app_never_posts_video(self, client):
         """The submit payload is counts. A recording must not ride along.
 

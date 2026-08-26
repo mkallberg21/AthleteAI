@@ -203,6 +203,20 @@
       </div>
 
       <div class="small muted" id="hint" style="margin-top:10px"></div>
+
+      <!-- Diagnostics. Hidden unless ?debug=1, because an athlete should
+           never see this and a child who found it would learn exactly which
+           number to game. Numbers only: no frames leave this element, and
+           nothing here touches the network. -->
+      <div id="debug-panel" class="hidden" style="margin-top:10px">
+        <div class="debug-grid" id="debug-stats"></div>
+        <canvas id="debug-trace" width="320" height="88"></canvas>
+        <div class="small muted" id="debug-legend"></div>
+        <div id="debug-ball" class="small muted"></div>
+        <button class="secondary inline" id="debug-copy"
+          style="margin-top:6px">Copy diagnostics</button>
+        <span class="small muted" id="debug-copied"></span>
+      </div>
       <details id="technique-panel" class="hidden" style="margin-top:8px">
         <summary class="small">What a good rep looks like</summary>
         <canvas id="technique-trace" width="320" height="90"
@@ -1405,6 +1419,7 @@ function renderLoop() {
       counter.push(landmarks, t);
     }
     if (recorder) recorder.samplePose(landmarks, t);
+    renderDebug();
 
     if (ballCounter && !ballConfirms) {
       $('reps').textContent = ballCounter.count;
@@ -1807,6 +1822,176 @@ function drawTrace(canvas, trace) {
     if (i === 0) ctx.moveTo(x(t), y(v)); else ctx.lineTo(x(t), y(v));
   });
   ctx.stroke();
+}
+
+// ------------------------------------------------------------- diagnostics
+//
+// Turned on with ?debug=1 and off otherwise. An athlete should never see this
+// -- partly because it is noise to them, mostly because a child who found it
+// would learn precisely which number to game.
+//
+// The trace is the point. A rep either crosses two thresholds or it does not,
+// and drawing the signal against those two lines answers "why is it not
+// counting" in one glance, where a video would need watching frame by frame.
+// It is also why this exists at all: footage of a child training must not
+// leave their phone, so the diagnostic has to be numbers rather than pixels.
+
+const DEBUG_ON = new URLSearchParams(location.search).get('debug') === '1';
+const TRACE_LEN = 240;          // ~8s at 30fps
+const trace = [];
+let debugPaused = false;
+
+function pushTrace(d) {
+  if (!DEBUG_ON || d == null) return;
+  trace.push({ raw: d.raw, smoothed: d.smoothed, armed: d.armed, count: d.count });
+  if (trace.length > TRACE_LEN) trace.shift();
+}
+
+function drawSignalTrace(d) {
+  const canvas = $('debug-trace');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height, pad = 4;
+  ctx.clearRect(0, 0, w, h);
+  if (!trace.length) return;
+
+  // Scale to whatever is on screen *including* both thresholds, so a signal
+  // nowhere near firing still shows how far off it is rather than filling
+  // the box misleadingly.
+  const vals = trace.flatMap((p) => [p.raw, p.smoothed]).filter(Number.isFinite);
+  const marks = [d.armAt, d.fireAt].filter(Number.isFinite);
+  const lo = Math.min(...vals, ...marks);
+  const hi = Math.max(...vals, ...marks);
+  const span = (hi - lo) || 1;
+  const y = (v) => h - pad - ((v - lo) / span) * (h - pad * 2);
+  const x = (i) => pad + (i / Math.max(1, TRACE_LEN - 1)) * (w - pad * 2);
+
+  // The two thresholds, labelled by role rather than by name: "arm" then
+  // "fire" is the order they must be crossed in.
+  const line = (v, colour, label) => {
+    if (!Number.isFinite(v)) return;
+    ctx.strokeStyle = colour;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(pad, y(v)); ctx.lineTo(w - pad, y(v)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = colour;
+    ctx.font = '9px system-ui, sans-serif';
+    ctx.fillText(label, pad + 2, y(v) - 2);
+  };
+  line(d.armAt, '#d6491a', 'arm');
+  line(d.fireAt, '#2e7d32', 'fire');
+
+  // Raw behind, smoothed in front: the gap between them is the smoothing
+  // constant's doing, and a flattened excursion is a threshold problem.
+  const plot = (key, colour, width) => {
+    ctx.strokeStyle = colour; ctx.lineWidth = width;
+    ctx.beginPath();
+    trace.forEach((p, i) => {
+      const v = p[key];
+      if (!Number.isFinite(v)) return;
+      if (i === 0) ctx.moveTo(x(i), y(v)); else ctx.lineTo(x(i), y(v));
+    });
+    ctx.stroke();
+  };
+  plot('raw', 'rgba(127,127,127,.55)', 1);
+  plot('smoothed', 'currentColor', 2);
+
+  // A tick wherever a rep fired, so a miscount is visible as a gap.
+  ctx.fillStyle = '#2e7d32';
+  trace.forEach((p, i) => {
+    if (i && p.count > trace[i - 1].count) ctx.fillRect(x(i) - 1, 0, 2, 6);
+  });
+}
+
+function renderDebug() {
+  if (!DEBUG_ON || !counter || debugPaused) return;
+  const d = counter.debug;
+  pushTrace(d);
+
+  const n = (v, places = 1) =>
+    Number.isFinite(v) ? v.toFixed(places) : '—';
+  const cell = (label, value, cls = '') =>
+    `<div><span>${esc(label)}</span><b class="${cls}">${esc(String(value))}</b></div>`;
+
+  const excursion = Number.isFinite(d.cycleMax) && Number.isFinite(d.cycleMin)
+    ? d.cycleMax - d.cycleMin : NaN;
+  const gap = Number.isFinite(d.armAt) && Number.isFinite(d.fireAt)
+    ? Math.abs(d.fireAt - d.armAt) : NaN;
+
+  $('debug-stats').innerHTML = [
+    cell('raw', n(d.raw)),
+    cell('smoothed', n(d.smoothed)),
+    cell('state', d.armed ? 'ARMED' : 'waiting', d.armed ? 'good' : ''),
+    cell('reps', d.count),
+    cell('excursion', n(excursion)),
+    cell('needs', n(gap)),
+    cell('confidence', `${Math.round((d.confidence || 0) * 100)}%`),
+    cell('frames', d.frames),
+  ].join('');
+
+  $('debug-legend').textContent =
+    `${d.drill} · ${d.signal} · ${d.units} · arm ${n(d.armAt)} → fire ${n(d.fireAt)}`
+    + (d.lastRep ? ` · last rep rom ${n(d.lastRep.rom, 2)} in ${d.lastRep.cycle_ms}ms` : '');
+
+  // Ball line only when the drill actually tracks one.
+  const ball = $('debug-ball');
+  if (ballCounter) {
+    ball.textContent =
+      `ball: track ${Math.round(ballCounter.trackQuality * 100)}%`
+      + ` · ${ballCounter.trusted ? 'trusted' : 'NOT trusted'}`
+      + ` · contacts ${ballCounter.count}`;
+  } else {
+    ball.textContent = '';
+  }
+
+  drawSignalTrace(d);
+}
+
+/** Everything a screenshot would show, as text I can read exactly. */
+function diagnosticsText() {
+  const d = counter ? counter.debug : null;
+  if (!d) return 'no counter running';
+  const lines = [
+    `drill      ${d.drill}  (${d.metric}, ${d.signal}, ${d.units})`,
+    `thresholds arm ${d.armAt} -> fire ${d.fireAt}` +
+      (d.rising ? '  (rising completes)' : '  (falling completes)'),
+    `smoothing  ${d.smoothing}`,
+    `now        raw ${d.raw}  smoothed ${d.smoothed}  ${d.armed ? 'ARMED' : 'waiting'}`,
+    `cycle      min ${d.cycleMin}  max ${d.cycleMax}`,
+    `counted    ${d.count} reps over ${d.frames} frames`,
+    `confidence ${(d.confidence || 0).toFixed(3)}`,
+    d.lastRep
+      ? `last rep   rom ${d.lastRep.rom}  ${d.lastRep.cycle_ms}ms  hand ${d.lastRep.hand}`
+      : 'last rep   none',
+  ];
+  if (ballCounter) {
+    lines.push(
+      `ball       track ${ballCounter.trackQuality.toFixed(3)}` +
+      `  ${ballCounter.trusted ? 'trusted' : 'NOT trusted'}` +
+      `  contacts ${ballCounter.count}`);
+  }
+  // The recent signal, so the shape survives the copy as well as the picture.
+  const recent = trace.slice(-60)
+    .map((p) => Number.isFinite(p.smoothed) ? p.smoothed.toFixed(2) : 'x');
+  lines.push(`signal     ${recent.join(' ')}`);
+  return lines.join('\n');
+}
+
+if (DEBUG_ON) {
+  $('debug-panel').classList.remove('hidden');
+  $('debug-copy').addEventListener('click', async () => {
+    const text = diagnosticsText();
+    try {
+      await navigator.clipboard.writeText(text);
+      $('debug-copied').textContent = 'copied';
+    } catch {
+      // Clipboard is blocked in some contexts. Pausing the trace and showing
+      // the text is a worse experience but never a dead end.
+      debugPaused = true;
+      $('debug-legend').textContent = text;
+      $('debug-copied').textContent = 'select and copy the text above';
+    }
+    setTimeout(() => { $('debug-copied').textContent = ''; }, 4000);
+  });
 }
 
 async function loadTechnique(drillKey) {

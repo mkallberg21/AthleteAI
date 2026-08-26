@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2100 tests
+python -m pytest tests/ -q          # 2102 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 98 tests
+  node --test tests/js/*.test.mjs   # 107 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -2663,6 +2663,51 @@ module even imports the entitlement layer.
 Nothing. Training, safety, consent and everything a coach sees carry on
 untouched; the parent product goes dormant. Nobody is told, least of all a
 coach.
+
+---
+
+## Diagnosing a drill without sending video
+
+The normal way to debug a detector is to send the developer a clip. This
+product cannot do that: footage of a child training never leaves their phone,
+and that is enforced by tests rather than policy. So the diagnostic is
+**numbers instead of pixels**.
+
+Open the capture screen with `?debug=1` and a panel appears under the drill
+hint showing the live signal, both thresholds, and whether the counter armed.
+
+```
+raw 143.2   smoothed 138.7   state ARMED   reps 6
+excursion 61.4   needs 60.0   confidence 94%   frames 812
+gen_squat · joint_angle · deg · arm 100.0 → fire 160.0
+```
+
+The trace underneath is the part that replaces a video. A rep either crosses
+two thresholds or it does not, so the signal is drawn against both lines —
+raw behind in grey, smoothed in front, a tick wherever a rep fired. One glance
+answers *why is it not counting*:
+
+- **Smoothed never reaches the arm line** → the athlete is not going deep
+  enough, or the threshold is wrong for their body.
+- **Raw crosses but smoothed does not** → smoothing has flattened the
+  excursion; the constant is too aggressive for this movement.
+- **Excursion smaller than "needs"** → the drill *cannot* fire as configured.
+  That is a threshold bug, not an athlete problem.
+- **Ticks missing where reps happened** → refractory period or hand
+  attribution.
+
+**Copy diagnostics** puts the same thing on the clipboard as text, including
+the last 60 signal samples, which is exact where a screenshot is approximate.
+
+Two properties are enforced structurally, because this is the substitute for
+sending video and would be a particularly bad place to grow a way of sending
+some. Tests assert the diagnostics block contains **no network path** — no
+`fetch`, no `sendBeacon`, no URL — and **never reads pixels**: no
+`getImageData`, `toDataURL`, `toBlob`, `drawImage` or `captureStream`. Both
+guards were verified to fail when a violation is planted.
+
+It is **off unless asked for**, partly because it is noise to an athlete and
+mostly because a child who found it would learn exactly which number to game.
 
 ---
 

@@ -268,6 +268,25 @@ tbody tr:hover { background: var(--surface-2); }
 #technique-trace { color: var(--accent); display: block; }
 #technique-cues { padding-left: 18px; line-height: 1.5; }
 
+/* Diagnostics. Deliberately plain and monospaced -- it is read as numbers,
+   often from a screenshot, and often by somebody squinting at a phone. */
+#debug-panel {
+  border: 1px dashed var(--border); border-radius: 9px; padding: 9px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.debug-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 8px;
+  margin-bottom: 6px;
+}
+.debug-grid > div { display: flex; flex-direction: column; }
+.debug-grid span { font-size: .62rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em; }
+.debug-grid b { font-size: .84rem; }
+.debug-grid b.good { color: var(--accent); }
+#debug-trace { width: 100%; max-width: 320px; display: block;
+  color: var(--accent); }
+#debug-legend, #debug-ball { font-size: .68rem; word-break: break-word; }
+
 .hand-split { display: flex; gap: 10px; margin-top: 11px; }
 .hand-split > div {
   flex: 1; background: var(--surface); border: 1px solid var(--border);

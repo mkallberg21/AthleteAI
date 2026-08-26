@@ -66,8 +66,10 @@ def train(store, athlete, day, rom=70.0, seed=None):
         athlete["id"], started["session_id"], started["nonce"],
         duration_ms=t + 900, reps=reps, mean_confidence=0.9)
     store.conn.execute(
-        "UPDATE sessions SET submitted_at = ? WHERE id = ?",
-        (day.isoformat() + "T18:00:00+00:00", started["session_id"]))
+        "UPDATE sessions SET submitted_at = ?, completed_at = ? WHERE id = ?",
+        (day.isoformat() + "T18:00:00+00:00",
+         day.isoformat() + "T18:00:00+00:00",
+         started["session_id"]))
     store.conn.commit()
 
 
