@@ -62,6 +62,7 @@ from .billing import BillingError
 from .guardians import GuardianError
 from .roster import RosterError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
+from .drills.base import CUE_CELLS, CUE_UNREADABLE
 from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError, transaction
 
@@ -373,6 +374,14 @@ def start_session(
     return store.start_session(principal.id, body.drill_key)
 
 
+# The zone vocabulary as a type, derived from the drill layer rather than
+# retyped here -- a second hand-written copy would drift, and the whole point
+# of constraining the field is that the client cannot name a cell the scorer
+# does not know. `unknown` is included on purpose: "the camera lost your hands"
+# is a real answer and has to survive validation to be counted separately.
+ZoneName = Literal[tuple(CUE_CELLS) + (CUE_UNREADABLE,)]  # type: ignore[valid-type]
+
+
 class RepPayload(BaseModel):
     t_ms: int = Field(ge=0)
     hand: Literal["left", "right", "none"] = "none"
@@ -387,6 +396,10 @@ class RepPayload(BaseModel):
     # Both bounded like everything else here, since they are client-supplied.
     speed: float | None = Field(default=None, ge=0.0, le=100.0)
     part: str = Field(default="", max_length=32)
+    # Cued drills only: which cell the hands reached. Constrained to the known
+    # vocabulary rather than a free string, so a client cannot invent a zone
+    # the scorer has never heard of and quietly land outside every bucket.
+    zone: ZoneName | None = None
 
 
 class SubmitSessionRequest(BaseModel):

@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2301 tests
+python -m pytest tests/ -q          # 2396 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 111 tests
+  node --test tests/js/*.test.mjs   # 138 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -2212,7 +2212,7 @@ tell them what *not short* looks like, and a score without a fix is a mark out
 of ten — which is the thing this product is otherwise careful not to hand a
 twelve-year-old.
 
-Every one of the 33 drills has cues written for it, keyed to the same
+Every one of the 34 drills has cues written for it, keyed to the same
 component keys the scorer emits. `quality.weakest` is recorded on the report
 rather than re-derived by the caller, so the fix a child reads is always about
 the thing that actually scored lowest; a note and a fix disagreeing about what
@@ -2780,6 +2780,133 @@ would trip a shoulder advisory for work that never touched the shoulder.
 
 ---
 
+## Goalie save positions
+
+Goalie was the last position on the roster still training somebody else's
+practice. Its whole plan was stick work and lateral jumps standing in for a job
+the app could not see, because every drill in the catalogue asked the same
+self-paced question — how many, and how well shaped — and a goalie's actual job
+is a different question entirely: given a spot somebody else picked, how fast
+and how accurately do the hands get there.
+
+`lax_goalie_saves` is the first **cued** drill. The app calls a spot — high,
+hip or low, either side, or five hole — and the athlete drives their hands and
+lead foot to it and resets. Goalie now leads on it at 26% of its plan.
+
+### The app calls the spot, so the app cannot be trusted to mark it
+
+The moment the app chooses the target, two problems appear that no self-paced
+drill has. If the sequence were random per device, two goalies on the same team
+would face different drills and their numbers would not compare. And reaction
+time is measured from the moment the cue appeared — if the client both picks
+that moment and reports the elapsed time, the client is grading its own
+homework.
+
+Both go away if the sequence is a pure function of the **session nonce**, which
+the server issues at session start:
+
+- the browser derives the sequence in order to display it,
+- the server derives the identical sequence in order to mark it,
+- neither sends the sequence to the other, so there is nothing to tamper with,
+- and because cues fire on a fixed cadence, the server knows what time every
+  cue appeared without being told.
+
+A hostile client can still lie about where the hands went — that is true of
+every count in this system and is what the integrity layer is for. What it
+cannot do is invent a friendlier set of targets after the fact. A test submits
+one athlete's reps against a different nonce and asserts the score collapses.
+
+This means `offdays/cues.py` and `static/cues.js` are a deliberate duplicate of
+each other, down to the bit. Both implement FNV-1a and mulberry32 with every
+intermediate masked to 32 bits, and **both test suites check the same
+hand-written golden vectors**. If the two ever drift, the browser shows an
+athlete one spot while the server marks them against another — silently, on
+every rep, with no error raised anywhere. Nothing else would catch it.
+
+Cues are drawn in *bags* — a shuffled copy of the whole vocabulary, then
+another — rather than picked independently, so "every seven cues covers every
+spot once" is a guarantee rather than an expectation. The per-spot breakdown
+this drill exists to produce is worth nothing if some corner never came up.
+
+### A fifth signal kind, and why it had to exist
+
+Every height signal in the catalogue breaks on this drill: a high save drives
+the hands up and a low save drives them down, so no single pair of thresholds
+counts both. What every save has in common is that the hands leave the ready
+position and come back, so `save_reach` measures the leading hand's distance
+from the chest, in torso lengths. That oscillates the same way whichever
+direction the save went, and the direction is recovered separately by
+classifying where the hands were at full extension.
+
+Two details in that classifier are load-bearing:
+
+**Sides are anatomical, not the picture's.** The lateral position is a
+projection onto the shoulder axis rather than a raw x coordinate, so it does
+not matter which way the athlete faces. Turned side-on, the shoulders collapse
+and there is no axis left to project onto — so it returns `unknown` rather than
+calling a stick-side save an off-stick one.
+
+**The zone follows the raw peak, not the smoothed one.** This drill runs the
+lightest smoothing in the catalogue (0.55 against a usual 0.35) because it
+measures *when* rather than only *how much* — a filter that lags four frames
+puts a fifth of the reported reaction time into the filter itself, in the same
+direction every time, which is a bias rather than noise. Even so, the smoothed
+peak arrives after the hands have turned around, and following it filed every
+low save as a hip save. A test drives a low save and asserts it comes back low.
+
+### "Could not see" is never "went to the wrong place"
+
+An unreadable rep and a wrong rep are different facts, one about a phone and
+one about a child, and a scorer that blends them tells a goalie they are bad at
+a corner the app simply could not watch. So `unknown` is a first-class value:
+the browser sends it rather than omitting the field, the scorer counts it
+separately, and a session that is mostly unreadable is **withheld** with a
+message about framing rather than scored.
+
+The sharpest version of this was a bug the tests caught: the zone was seeded at
+the moment the rep armed, which is the *closest* point of the cycle — the ready
+position. A save whose every extended frame was unreadable reported the ready
+position instead, which the server scored as "drifted to the middle": a miss
+invented out of a camera problem.
+
+### What comes back is a pattern, not a mark
+
+Goalie is the position where a blunt score does the most damage — it is the one
+place on the field where every mistake is public and final, and a child who
+already knows that does not need an app agreeing with them. So the report names
+**one** thing: which side lags, which height band lags, or which single spot is
+behind. One, because a goalie handed four fixes works on none of them.
+
+A side is only reported as a side when *more than one spot on it* is genuinely
+behind. One broken corner drags its whole half down far enough to look like a
+half-wide problem, and sending an athlete away to drill three corners when two
+were already fine is worse advice than naming the one.
+
+The language follows the athlete: "stick side" is not a fixed direction but
+whichever side the top hand is on, so the same region is stick-side for one
+goalie and off-stick for another. Where the top hand is not known it falls back
+to plain left and right — worse coaching language, never wrong.
+
+### What it does not do
+
+Three limits ride along with every result, shown to coaches and athletes rather
+than kept in a docstring, because the gap between "quick hands to the right
+spot" and "good goalie" is exactly the gap a number on a screen will be assumed
+to have closed:
+
+- **The app calls the spot out loud**, so this trains the path to the ball, not
+  reading a shooter. A real goalie knows where it is going before it goes
+  there, and no phone drill can ask that of them.
+- **There is no ball and no shooter.** Nothing here is a save percentage and it
+  should never be read next to one.
+- **The camera tracks hands, not the stick head**, which sits about a foot
+  above the top hand. "High" here means the hands got high.
+
+It carries no throwing load — nothing goes overhead, and a goalie's shoulder
+problem is not a throwing problem.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -3264,4 +3391,30 @@ contact with a real driveway:
     the movement, not the wrist rotation that traps the ball, and a face-off
     athlete could score well on it while clamping badly. It is a hand-speed
     drill honestly labelled, not face-off coaching.
+
+55. **The goalie drill calls the shot.** Reading a shooter is most of
+    goaltending and this trains none of it — the app names the spot, so what is
+    measured is the path to a known target. It is a reaction-and-positioning
+    drill, and no number it produces belongs anywhere near a save percentage.
+
+56. **It watches hands, not the stick head.** The head sits roughly a foot
+    above the top hand, so "high" means the hands got high. A goalie can reach
+    the called cell and still not have covered the shot.
+
+57. **Reaction time is measured to the firing line, not to full extension.**
+    The rep fires when reach crosses a threshold below full stretch, which is
+    consistent across reps and so comparable — but it is not the same quantity
+    a stopwatch on the stick head would give, and it is not comparable to
+    published reaction figures.
+
+58. **The cue sequence is tamper-proof; the zone is not.** Deriving targets
+    from the nonce stops a client choosing easier ones, but the client still
+    reports where the hands went and could lie about that — exactly as it could
+    about any other count here. The integrity layer is what covers it, not this
+    design.
+
+59. **Two of the nine cells are never called.** A ball straight at the chest
+    needs the hands to come forward, and forward is what a single camera reads
+    worst, so chest-high and hip-high middle are observable but never targets.
+    A goalie who only ever gets beaten straight on will not learn it here.
 

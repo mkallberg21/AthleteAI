@@ -12,6 +12,7 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 import offdays.api as api_module
+from offdays.drills.base import CUE_CELLS
 from offdays import sports as sports_mod
 from offdays.db import connect
 from offdays.store import Store
@@ -3852,3 +3853,147 @@ class TestJoiningCoachOnboarding:
         # Their own program is empty, and this program's athletes are not
         # theirs to count however they are scoped.
         assert body["scope"]["athletes"] == 0
+
+
+class TestACuedSessionEndToEnd:
+    """The goalie drill, driven through the real endpoints.
+
+    The point of these is the round trip. The unit tests in test_goalie.py mark
+    a rep list the test wrote; these check that a session started at
+    /api/sessions/start comes back marked against the sequence that session's
+    own nonce implies -- which is the only version of this that matters, since
+    the nonce is issued by the server and never travels back as targets.
+    """
+
+    DRILL = "lax_goalie_saves"
+
+    def _spec(self, client):
+        return client.get(f"/api/drills/{self.DRILL}").json()
+
+    def _play(self, client, headers, *, cues=20, wrong=(), unreadable=(), delay=520):
+        from offdays.cues import cue_at, sequence
+
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": self.DRILL}, headers=headers,
+        ).json()
+        spec = self._spec(client)["cues"]
+        called = sequence(started["nonce"], cues, tuple(spec["zones"]))
+
+        reps = []
+        for i, zone in enumerate(called):
+            if i in unreadable:
+                shown = "unknown"
+            elif i in wrong:
+                shown = "high_left" if zone != "high_left" else "low_right"
+            else:
+                shown = zone
+            reps.append({
+                "t_ms": cue_at(i, spec["lead_in_ms"], spec["period_ms"]) + delay,
+                "hand": "right",
+                "confidence": 0.9,
+                "peak": 1.2,
+                "rom": 0.78,
+                "cycle_ms": 480,
+                "zone": shown,
+            })
+        return client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": started["session_id"],
+                "nonce": started["nonce"],
+                "duration_ms": spec["lead_in_ms"] + cues * spec["period_ms"],
+                "reps": reps,
+                "mean_confidence": 0.9,
+            },
+            headers=headers,
+        )
+
+    def test_the_spec_reaches_the_browser_with_its_cues(self, client):
+        spec = self._spec(client)
+        assert spec["cues"]["zones"]
+        assert spec["cues"]["period_ms"] > spec["cues"]["late_ms"]
+
+    def test_a_session_comes_back_marked(self, client, program):
+        res = self._play(client, program["athletes"][0]["headers"])
+        assert res.status_code == 200
+        saves = res.json()["saves"]
+        assert saves["scored"]
+        assert saves["cues"] == 20
+        assert saves["correct"] == 20
+        assert saves["accuracy"] == 1.0
+        assert saves["median_ms"] == 520
+
+    def test_wrong_spots_are_marked_wrong(self, client, program):
+        res = self._play(client, program["athletes"][0]["headers"], wrong={1, 4, 9})
+        saves = res.json()["saves"]
+        assert saves["correct"] == 17
+        assert saves["answered"] == 20
+
+    def test_unreadable_reps_do_not_read_as_wrong_ones(self, client, program):
+        res = self._play(client, program["athletes"][0]["headers"], unreadable={2, 6})
+        saves = res.json()["saves"]
+        assert saves["unreadable"] == 2
+        assert saves["answered"] == 18
+        assert saves["correct"] == 18
+
+    def test_the_limits_travel_with_the_result(self, client, program):
+        saves = self._play(client, program["athletes"][0]["headers"]).json()["saves"]
+        assert len(saves["limits"]) >= 3
+        assert any("save percentage" in limit for limit in saves["limits"])
+
+    def test_a_self_paced_drill_carries_no_saves_block(self, client, program):
+        res = do_session(client, program["athletes"][0]["headers"])
+        assert "saves" not in res.json()
+
+    def test_a_bogus_zone_is_rejected_at_the_edge(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": self.DRILL}, headers=headers,
+        ).json()
+        res = client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": started["session_id"],
+                "nonce": started["nonce"],
+                "duration_ms": 60_000,
+                "reps": [{"t_ms": 5_000, "zone": "top_shelf"}],
+                "mean_confidence": 0.9,
+            },
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    def test_the_zone_is_persisted_for_review(self, client, program):
+        self._play(client, program["athletes"][0]["headers"])
+        zones = [
+            r["zone"] for r in api_module._store.conn.execute(
+                "SELECT zone FROM rep_events WHERE zone IS NOT NULL"
+            )
+        ]
+        assert len(zones) == 20
+        assert all(z in CUE_CELLS for z in zones)
+
+    def test_a_replayed_submission_returns_the_same_marking(self, client, program):
+        from offdays.cues import cue_at, sequence
+
+        headers = program["athletes"][0]["headers"]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": self.DRILL}, headers=headers,
+        ).json()
+        spec = self._spec(client)["cues"]
+        called = sequence(started["nonce"], 20, tuple(spec["zones"]))
+        payload = {
+            "session_id": started["session_id"],
+            "nonce": started["nonce"],
+            "duration_ms": spec["lead_in_ms"] + 20 * spec["period_ms"],
+            "reps": [
+                {"t_ms": cue_at(i, spec["lead_in_ms"], spec["period_ms"]) + 500,
+                 "confidence": 0.9, "rom": 0.78, "zone": z}
+                for i, z in enumerate(called)
+            ],
+            "mean_confidence": 0.9,
+        }
+        first = client.post("/api/sessions/submit", json=payload, headers=headers).json()
+        second = client.post("/api/sessions/submit", json=payload, headers=headers).json()
+        assert second["duplicate"] is True
+        assert second["saves"] == first["saves"]

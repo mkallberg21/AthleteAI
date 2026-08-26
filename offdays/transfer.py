@@ -213,6 +213,12 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
+    "lax_goalie_saves": (
+        Transfer("Hockey", "a goalie's job is the same job — get the body part "
+                           "nearest the puck to it first"),
+        Transfer("Soccer", "keeping, and reacting to a spot rather than a ball"),
+        Transfer("Tennis", "the split step and the first move to a corner"),
+    ),
     "lax_quick_stick": (
         Transfer("Baseball", "turning two — catch and release without a wasted beat"),
         Transfer("Hockey", "one-touch passing"),

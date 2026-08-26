@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from .base import (
+    CueSpec,
     BallSpec,
     Category,
     LoadSpec,
@@ -576,6 +577,124 @@ FACEOFF_CLAMP = DrillSpec(
         load_per_rep=1.0,
         # Nothing goes overhead, so this must not touch throwing volume. It is
         # a crouched, explosive whole-body movement.
+        throws_per_rep=0.0,
+        tissue=Tissue.WHOLE_BODY,
+    ),
+)
+
+
+GOALIE_SAVES = DrillSpec(
+    key="lax_goalie_saves",
+    name="Goalie Save Positions",
+    sport="lacrosse",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "The app calls a spot -- high, hip, low, either side, or five hole -- "
+        "and you drive your hands and your lead foot to it, then reset. It "
+        "scores where your hands went and how long they took to get there. "
+        "There is no ball and no shooter: this trains the path to the spot, "
+        "not reading a shot, and it is not a save percentage."
+    ),
+    signal=SignalSpec(
+        # The one drill in the catalogue where the athlete is sent somewhere
+        # different every rep, which breaks every height signal here: a high
+        # save moves the hands up and a low save moves them down, so no single
+        # threshold pair can count both.
+        #
+        # What every save has in common is that the hands leave the ready
+        # position and come back. Measured as reach -- distance from the chest
+        # -- that is a clean oscillation whichever direction the save went, and
+        # the *direction* is recovered separately by classifying where the
+        # hands were at full extension.
+        kind=SignalKind.SAVE_REACH,
+        # By far the lightest smoothing in the catalogue, and the reason is
+        # that this drill measures *when* rather than only *how much*. Every
+        # other drill can afford a filter that lags a few frames, because a rep
+        # counted 120ms late is still one rep. Here the timestamp is the
+        # measurement, so at 0.35 the filter's own lag would be a fifth of the
+        # reaction being reported -- and it would land on every rep in the same
+        # direction, which makes it a bias rather than noise.
+        #
+        # Reach is a distance across a whole torso length, so it tolerates the
+        # jitter this lets through far better than a single-joint angle would.
+        smoothing=0.55,
+    ),
+    counter=CounterSpec(
+        # Ready position sits around 0.5 torso lengths from the chest with the
+        # elbows bent; a committed save to a corner puts the hands out past
+        # 1.2. The firing line sits below full extension deliberately: it marks
+        # the point the save was committed to, which is both what a shooter
+        # reacts to and what stays comparable between a long reach and a short
+        # one.
+        down_threshold=0.70,
+        up_threshold=0.95,
+        # A save is fast. Below this the hands never really left ready.
+        min_rep_ms=320,
+        # Shorter than the cue period, so a rep can never straddle two cues.
+        max_rep_ms=2_200,
+        rising_completes=True,
+    ),
+    cues=CueSpec(
+        # Every cell except the two the camera cannot honestly separate: a
+        # chest-high or hip-high ball straight at the goalie needs the hands to
+        # come forward rather than sideways, and forward is the one direction a
+        # single phone camera reads worst. Both stay *observable*, so drifting
+        # to the middle instead of driving to a corner is still reported -- it
+        # is simply never asked for.
+        zones=(
+            "high_left", "high_right",
+            "mid_left", "mid_right",
+            "low_left", "low_right", "low_centre",
+        ),
+        lead_in_ms=4_000,
+        period_ms=2_400,
+        show_ms=900,
+        # Roughly what a well-drilled youth goalie manages from ready to
+        # extended. Used to describe, never to grade.
+        quick_ms=700,
+        late_ms=1_600,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.5, daily_rep_cap=200, diminishing_after_reps=80),
+    validation=ValidationSpec(
+        # Cues arrive every 2.4s, so a genuine session cannot exceed roughly
+        # 0.42 reps/s of *answers*. The ceiling allows for resets and fidgets
+        # between cues without letting a machine-gun claim through.
+        max_reps_per_second=1.5,
+        min_reps_per_second=0.05,
+        min_reps=10,
+        # lead-in plus the fourteen cues the breakdown needs.
+        min_duration_ms=40_000,
+    ),
+    tracks_handedness=True,
+    setup_hint=(
+        "Stand in your stance in the goal or against a wall, phone straight in "
+        "front of you at hip height, far enough back that your whole body and "
+        "both hands stay in frame. Face the phone square -- turned sideways it "
+        "cannot tell your left from your right. Wait for the first call."
+    ),
+    quality=QualitySpec(
+        # Ready to full extension and back, measured on the near-raw signal
+        # this drill uses -- so the span is close to the real one rather than
+        # the flattened version a heavier filter would leave.
+        target_rom=0.75,
+        consistency_target=0.16,
+        tempo_min_ms=320,
+        tempo_max_ms=1_600,
+        # Tempo is weighted up because arriving late is the failure mode here,
+        # but not as far as the face-off clamp: a goalie who gets there fast
+        # with the hands half-extended has not made the save.
+        w_consistency=0.30,
+        w_depth=0.30,
+        w_tempo=0.25,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.9,
+        # Explosive and whole-body, and nothing goes overhead -- this must not
+        # touch throwing volume. A goalie's shoulder problem is not a throwing
+        # problem.
         throws_per_rep=0.0,
         tissue=Tissue.WHOLE_BODY,
     ),
@@ -1422,6 +1541,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     WALL_BALL_SPLIT,
     GROUND_BALL,
     FACEOFF_CLAMP,
+    GOALIE_SAVES,
     PUSH_UP,
     SQUAT,
     SIT_UP,

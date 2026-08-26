@@ -51,6 +51,14 @@ class SignalKind(str, Enum):
     # torso length. Used for jumps and general body-height drills.
     BODY_HEIGHT = "body_height"
 
+    # Distance of the leading hand from the chest, in torso lengths. Purpose-
+    # built for cued drills, where the athlete is sent to a different place
+    # every rep: a height signal rises for a high save and falls for a low one,
+    # so no single threshold pair can count both. What every save has in common
+    # is that the hands leave the ready position and come back, and that is an
+    # oscillation in *reach* regardless of which way they went.
+    SAVE_REACH = "save_reach"
+
     # Purpose-built lacrosse wall-ball cycle detector. Tracks the top hand on
     # the stick through cock -> release -> catch. Needs bespoke logic because
     # a single threshold crossing cannot distinguish a throw from a catch.
@@ -332,6 +340,109 @@ class BallSpec:
         }
 
 
+# The nine cells a cued drill can place the hands in: three height bands by
+# three lateral bands. Named neutrally on purpose -- `low_centre` is what the
+# geometry measures, and "five hole" is what a lacrosse coach calls it, so the
+# translation belongs in the screen that renders the label rather than in the
+# spec that defines the region.
+CUE_BANDS = ("high", "mid", "low")
+CUE_SIDES = ("left", "right", "centre")
+CUE_CELLS = tuple(f"{b}_{s}" for b in CUE_BANDS for s in CUE_SIDES)
+
+# Returned when the hands were not readable for a rep. Distinct from a wrong
+# cell: "we could not see" and "you went to the wrong place" are different
+# facts about the athlete and must not be averaged together.
+CUE_UNREADABLE = "unknown"
+
+
+@dataclass(frozen=True)
+class CueSpec:
+    """A drill where the *app* calls the target and times the answer.
+
+    Self-paced drills ask "how many, how well". A cued drill asks a question
+    the athlete cannot ask themselves: given a spot chosen for you, how fast
+    and how accurately do the hands get there. That is the whole of a goalie's
+    job and none of what a rep count measures.
+
+    The sequence is derived from the session nonce (see `offdays.cues`), so
+    both halves of the system know the targets and the cue times without either
+    telling the other.
+    """
+
+    #: Which cells can be called. A subset of CUE_CELLS -- a drill is free to
+    #: leave a cell out of the vocabulary while still being able to observe it,
+    #: which is how "you drifted to the middle" stays reportable.
+    zones: tuple[str, ...]
+
+    #: Quiet time before the first cue, so the athlete can get set after
+    #: pressing record rather than being caught walking back to the goal.
+    lead_in_ms: int = 4_000
+
+    #: Cue cadence. Fixed rather than random: a varying gap would measure
+    #: anticipation as if it were reaction, and would cost the server its
+    #: independent knowledge of when each cue appeared.
+    period_ms: int = 2_400
+
+    #: How long the cue stays lit. Display only.
+    show_ms: int = 900
+
+    #: A response at or under this is quick for the age group. Not a pass mark
+    #: -- it is the boundary used to describe a pattern, never to grade a rep.
+    quick_ms: int = 700
+
+    #: Past this, the movement is no longer a response to the cue and is not
+    #: attributed to it. Must sit below `period_ms` or two cues would compete
+    #: for the same rep.
+    late_ms: int = 1_600
+
+    #: Height of the leading hand above the shoulder line, in torso lengths,
+    #: at or above which the rep counts as a high save. Shoulder height is
+    #: already a high shot in lacrosse, so this sits slightly below zero.
+    high_above: float = -0.20
+
+    #: ...and at or below which it counts as low. Hips sit at -1.0, so this is
+    #: a hand roughly at knee height.
+    low_below: float = -1.20
+
+    #: Lateral offset from the chest, in torso lengths, beyond which the hands
+    #: have genuinely gone to a side rather than staying in front of the body.
+    side_beyond: float = 0.35
+
+    #: Below this many cues there is not enough of a sequence to describe a
+    #: pattern, and a confident-looking per-spot breakdown drawn from three
+    #: reps is worse than saying nothing.
+    min_cues: int = 14
+
+    def __post_init__(self) -> None:
+        if len(self.zones) < 2:
+            raise ValueError("a cued drill needs at least two zones")
+        if len(set(self.zones)) != len(self.zones):
+            raise ValueError("duplicate zone in cue vocabulary")
+        for zone in self.zones:
+            if zone not in CUE_CELLS:
+                raise ValueError(f"unknown cue zone: {zone!r}")
+        if self.late_ms >= self.period_ms:
+            raise ValueError(
+                "late_ms must be below period_ms, or one rep could answer two "
+                f"cues (got {self.late_ms} >= {self.period_ms})"
+            )
+        if self.quick_ms >= self.late_ms:
+            raise ValueError("quick_ms must be below late_ms")
+        if self.low_below >= self.high_above:
+            raise ValueError("low_below must sit under high_above")
+        if self.side_beyond <= 0:
+            raise ValueError("side_beyond must be positive")
+        if self.lead_in_ms < 0 or self.period_ms <= 0 or self.show_ms <= 0:
+            raise ValueError("cue timings must be positive")
+        if self.min_cues < 1:
+            raise ValueError("min_cues must be at least 1")
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["zones"] = list(self.zones)
+        return data
+
+
 @dataclass(frozen=True)
 class DrillSpec:
     key: str
@@ -351,6 +462,10 @@ class DrillSpec:
     # drill is read from the body alone, which is every drill shipped before
     # ball tracking existed.
     ball: BallSpec | None = None
+    # Present only on drills where the app calls the target rather than the
+    # athlete choosing it. Absent means self-paced, which is every drill
+    # shipped before goalie work existed.
+    cues: CueSpec | None = None
 
     # Whether left/right attribution is meaningful. True for wall ball and
     # single-arm lifts; false for squats.
@@ -369,6 +484,8 @@ class DrillSpec:
         data["load"]["tissue"] = self.load.tissue.value
         if self.ball is not None:
             data["ball"] = self.ball.to_dict()
+        if self.cues is not None:
+            data["cues"] = self.cues.to_dict()
         return data
 
     @property
@@ -384,3 +501,8 @@ class DrillSpec:
     @property
     def scores_quality(self) -> bool:
         return self.quality is not None
+
+    @property
+    def is_cued(self) -> bool:
+        """Whether the app calls the targets rather than the athlete choosing."""
+        return self.cues is not None

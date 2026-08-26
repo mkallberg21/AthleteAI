@@ -61,6 +61,8 @@ const SWEEP = {
   gen_mountain_climber: { lo: -0.10, hi: 0.34, kind: 'knee_rel' },
   gen_tuck_jump:     { lo: 0.36,  hi: 1.08,  kind: 'body' },
   gen_dead_bug:      { lo: 92,    hi: 168,  kind: 'hip' },
+  // Ready position out to a committed save and back, in torso lengths.
+  lax_goalie_saves:  { lo: 0.40,  hi: 1.18, kind: 'reach' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept
@@ -105,6 +107,12 @@ function frame(kind, v) {
     pts[IDX.right_hip] = { x: 0.54, y: hipY, z: 0, visibility: 0.95 };
     pts[IDX.left_shoulder] = { x: 0.45, y: hipY - 0.25, z: 0, visibility: 0.95 };
     pts[IDX.right_shoulder] = { x: 0.55, y: hipY - 0.25, z: 0, visibility: 0.95 };
+  } else if (kind === 'reach') {
+    // Both hands the same distance from the chest. The sweep only has to
+    // exercise counting and range; where the hands went is saveZone's job and
+    // is tested in counter.test.mjs.
+    pts[IDX.left_wrist] = { x: 0.49, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
+    pts[IDX.right_wrist] = { x: 0.51, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'ankles') {
     pts[IDX.left_ankle] = { x: 0.46, y: 0.95 - v * TORSO, z: 0, visibility: 0.95 };
     pts[IDX.right_ankle] = { x: 0.54, y: 0.95, z: 0, visibility: 0.95 };

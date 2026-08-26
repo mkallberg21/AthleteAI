@@ -396,7 +396,11 @@ CREATE TABLE IF NOT EXISTS rep_events (
     -- and how long the cycle took. This is what form scoring reads.
     peak        REAL,
     rom         REAL,
-    cycle_ms    INTEGER
+    cycle_ms    INTEGER,
+    -- Cued drills only: which of the nine cells the hands reached. Null on
+    -- every self-paced drill, and 'unknown' when the camera could not tell --
+    -- which is deliberately not the same value as a wrong cell.
+    zone        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_rep_events_session ON rep_events(session_id);
 
@@ -912,6 +916,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "discomfort_reports": [
         ("previous_severity", "TEXT"),
+    ],
+    "rep_events": [
+        ("zone", "TEXT"),
     ],
 }
 

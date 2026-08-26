@@ -16,6 +16,7 @@ from typing import Any
 from .config import CONFIG
 from . import sports
 from . import ball as ball_mod
+from . import goalie
 from . import notifications
 from . import recognition
 from .drills.catalog import ALL_DRILLS
@@ -2387,6 +2388,7 @@ class Store:
                     peak=_opt_float(r.get("peak")),
                     rom=_opt_float(r.get("rom")),
                     cycle_ms=_opt_int(r.get("cycle_ms")),
+                    zone=(str(r["zone"]) if r.get("zone") else None),
                 )
                 for r in reps
             ],
@@ -2436,6 +2438,24 @@ class Store:
             verdict.notes = list(verdict.notes) + ball_review.reasons + ball_review.notes
 
         hand = self._dominant_hand(athlete_id)
+
+        # Cued drills carry a third verdict. Reps and form say how much work
+        # was done and how well shaped it was; neither can reach the question
+        # a goalie session actually asks, which is whether the hands got to
+        # the spot somebody else picked and how long they took.
+        #
+        # The targets are re-derived here from the nonce rather than read off
+        # the payload, so the only thing the client has any say in is where it
+        # claims the hands went.
+        save_report = None
+        if drill.is_cued:
+            save_report = goalie.analyze(
+                drill,
+                [{"t_ms": r.t_ms, "zone": r.zone} for r in claim.reps],
+                nonce=nonce,
+                duration_ms=claim.duration_ms,
+                top_hand=hand,
+            )
 
         # Form quality reads the same rep stream the counting did, so it costs
         # nothing extra to collect and is the half of the signal a rep count
@@ -2498,13 +2518,13 @@ class Store:
             # Per-rep timings are kept only for integrity review and pruned by
             # `prune_rep_events`. They are timings, never imagery.
             c.executemany(
-                "INSERT INTO rep_events(session_id, t_ms, hand, confidence, peak, rom, cycle_ms) "
-                "VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO rep_events(session_id, t_ms, hand, confidence, peak, rom, "
+                "cycle_ms, zone) VALUES (?,?,?,?,?,?,?,?)",
                 [
                     (
                         session_id, r.t_ms,
                         r.hand if r.hand in ("left", "right") else "none",
-                        r.confidence, r.peak, r.rom, r.cycle_ms,
+                        r.confidence, r.peak, r.rom, r.cycle_ms, r.zone,
                     )
                     for r in claim.reps
                 ],
@@ -2536,6 +2556,7 @@ class Store:
             "integrity_score": round(verdict.score, 3),
             "notes": verdict.notes,
             **({"ball": ball_review.to_dict()} if ball_review else {}),
+            **({"saves": save_report.to_dict()} if save_report else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,

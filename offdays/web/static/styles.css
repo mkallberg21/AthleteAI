@@ -99,6 +99,38 @@ label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 6
 .hand-chip.right b { color: var(--right); }
 .hand-chip span { font-size: .65rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 
+/* Cued drills. The grid sits in the same mirrored space as the video, so the
+   athlete's own left hand and the left column are on the same side of the
+   screen -- they are looking at themselves, and a target that swapped sides
+   from their reflection would teach the wrong movement. */
+.cue {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; pointer-events: none;
+}
+.cue-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr); gap: 6px;
+  width: 58%; max-width: 260px; aspect-ratio: 1 / 1.05;
+}
+.cue-cell {
+  border: 2px solid rgba(255,255,255,.16); border-radius: 10px;
+  transition: background .07s linear, border-color .07s linear;
+}
+/* Never called, so shown as scenery rather than as a target that never lights
+   -- otherwise the two dead cells read as spots the athlete keeps missing. */
+.cue-cell.never { border-style: dashed; border-color: rgba(255,255,255,.06); }
+.cue-cell.lit {
+  background: var(--accent); border-color: #fff;
+  box-shadow: 0 0 28px rgba(255,255,255,.35);
+}
+.cue-word {
+  font-size: 1.45rem; font-weight: 800; line-height: 1.15; text-align: center;
+  text-transform: uppercase; letter-spacing: .01em;
+  background: rgba(0,0,0,.72); padding: 9px 16px; border-radius: 11px;
+  max-width: 80%;
+}
+.cue-word.waiting { font-size: 1rem; font-weight: 600; text-transform: none; }
+
 .banner {
   position: absolute; top: 12px; left: 12px; right: 12px;
   background: rgba(0,0,0,.72); border: 1px solid var(--border);

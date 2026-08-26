@@ -225,10 +225,24 @@ test('every ball drill is exercised by this file', () => {
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
 });
 
+// Lacrosse drills that legitimately have no ball, listed rather than inferred:
+// a drill quietly losing its ball must still fail the guard below. Goalie save
+// positions has no shooter and no ball by design -- the app calls a spot and
+// the athlete reacts to it.
+const BALLLESS_LAX = new Set(['lax_goalie_saves']);
+
+test('only the deliberately ball-free lacrosse drills lack a ball', () => {
+  const found = SPECS
+    .filter((d) => d.sport === 'lacrosse' && !d.ball)
+    .map((d) => d.key)
+    .sort();
+  assert.deepEqual(found, [...BALLLESS_LAX].sort());
+});
+
 test('every lacrosse drill shares one ball', () => {
   // A lacrosse ball is a lacrosse ball. If a pattern ever drifts to its own
   // size or colour the detector's size prior silently stops matching it.
-  const lax = SPECS.filter((d) => d.sport === 'lacrosse');
+  const lax = SPECS.filter((d) => d.sport === 'lacrosse' && !BALLLESS_LAX.has(d.key));
   assert.ok(lax.length >= 9, 'expected the full wall ball routine');
   for (const drill of lax) {
     assert.ok(drill.ball, `${drill.key} has no ball`);
@@ -241,7 +255,8 @@ test('every lacrosse drill shares one ball', () => {
 test('no lacrosse drill can be blocked by an unseen ball', () => {
   // The ball is the detector's weakest subject -- smallest and fastest in the
   // catalogue. Requiring it anywhere would punish a child for our blind spot.
-  for (const drill of SPECS.filter((d) => d.sport === 'lacrosse')) {
+  for (const drill of SPECS.filter(
+    (d) => d.sport === 'lacrosse' && !BALLLESS_LAX.has(d.key))) {
     assert.equal(drill.ball.mode, 'confirm', `${drill.key} counts on the ball`);
     assert.equal(drill.ball.required, false, `${drill.key} requires the ball`);
   }
@@ -249,7 +264,8 @@ test('no lacrosse drill can be blocked by an unseen ball', () => {
 
 test('every lacrosse drill corroborates from a real throw', () => {
   // The loop that makes the coverage exemption above honest.
-  for (const drill of SPECS.filter((d) => d.sport === 'lacrosse')) {
+  for (const drill of SPECS.filter(
+    (d) => d.sport === 'lacrosse' && !BALLLESS_LAX.has(d.key))) {
     const counter = new BallRepCounter(drill);
     run(counter, bounce({ floor: 0.45, apex: 1.5, every: 2, frames: 300 }),
         pose({ left_wrist: { x: 0.52, y: 0.45 },

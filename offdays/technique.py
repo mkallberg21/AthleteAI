@@ -396,6 +396,26 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "lax_goalie_saves": (
+        Cue("depth", "Drive your hands all the way to the spot. Reaching "
+                     "halfway and leaning the rest of the way is how a ball "
+                     "goes under your arm.",
+            "a save is made with the hands out, not with the body tilted"),
+        Cue("tempo", "Move on the call, not after it. The first move is the "
+                     "save; everything after it is catching up.",
+            "the ball is already past you by the time you have thought about it"),
+        Cue("consistency", "Come back to the exact same ready position every "
+                           "single time. Every rep should start from the same "
+                           "place.",
+            "a ready position that drifts is why one corner feels slower"),
+        Cue("offhand", "Your off-stick side will be worse. Everyone's is. Do a "
+                       "set going only there.",
+            "shooters find the weak side in about a quarter"),
+        Cue("endurance", "Stop when your stance starts standing up, not when "
+                         "your hands slow down.",
+            "tired legs raise the stance, and a high stance loses the low "
+            "corners first"),
+    ),
     "lax_ground_ball": (
         Cue("depth", "Get low -- bend your knees and drop your hips, do not "
                      "just reach down with your hands.",

@@ -36,6 +36,9 @@ class RepEvent:
     # `part` is what took it, both in normalised frame units.
     speed: float | None = None
     part: str = ""
+    # Cued drills only: which cell the hands reached. None on self-paced
+    # drills, 'unknown' when the camera could not tell.
+    zone: str | None = None
 
 
 @dataclass

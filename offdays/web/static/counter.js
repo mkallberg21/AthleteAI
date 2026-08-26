@@ -99,6 +99,13 @@ export function frameConfidence(landmarks, spec) {
   if (names.size === 0) {
     ['left_shoulder', 'right_shoulder', 'left_hip', 'right_hip'].forEach((n) => names.add(n));
   }
+  // A reach drill names no landmarks in its spec, but the wrists are what it
+  // is actually measuring -- and on a cued drill they also decide the zone, so
+  // a frame that has lost them is worth much less than the shoulder-only
+  // fallback would suggest.
+  if (spec.signal.kind === 'save_reach') {
+    ['left_wrist', 'right_wrist'].forEach((n) => names.add(n));
+  }
   let sum = 0, n = 0;
   for (const name of names) {
     const p = landmarks[INDEX[name]];
@@ -138,11 +145,89 @@ export function computeSignal(landmarks, spec) {
     return (ground - hips.y) / torso;
   }
 
+  if (kind === 'save_reach') {
+    return saveReachSignal(landmarks);
+  }
+
   if (kind === 'wall_ball_cycle') {
     return wallBallSignal(landmarks);
   }
 
   return null;
+}
+
+/**
+ * How far the leading hand is from the chest, in torso lengths.
+ *
+ * Cued drills send the athlete somewhere different every rep, which breaks
+ * every height signal in this file: a high save drives the hands up and a low
+ * save drives them down, so no single pair of thresholds counts both. Reach
+ * does not care which way the hands went -- it rises when they leave the ready
+ * position and falls when they come back, whatever the target was.
+ *
+ * The leading hand is simply the one further from the chest. On a two-handed
+ * save both go together and either answer is right; on a one-handed reach the
+ * extended arm is the one that did the work.
+ */
+export function saveReachSignal(landmarks) {
+  const lw = lm(landmarks, 'left_wrist');
+  const rw = lm(landmarks, 'right_wrist');
+  const shoulders = midpoint(lm(landmarks, 'left_shoulder'), lm(landmarks, 'right_shoulder'));
+  const torso = torsoLength(landmarks);
+  if (!shoulders || !torso || (!lw && !rw)) return null;
+
+  const reach = (w) => (w ? Math.hypot(w.x - shoulders.x, w.y - shoulders.y) / torso : -Infinity);
+  const dl = reach(lw);
+  const dr = reach(rw);
+  return { value: Math.max(dl, dr), hand: dr > dl ? 'right' : 'left' };
+}
+
+/**
+ * Which of the nine cells the hands are in.
+ *
+ * Reach counts the rep; this recovers the direction the rep went, which on a
+ * cued drill is the entire point. Read at the extreme of the movement rather
+ * than at the threshold crossing, so it reports where the hands *arrived*
+ * rather than where they were passing through.
+ *
+ * Sides are anatomical -- the athlete's own left and right -- rather than
+ * left and right of the picture, so it does not matter which way they face.
+ * That is done by projecting onto the shoulder axis instead of using raw x.
+ * Returns 'unknown' rather than a guess whenever the geometry cannot support
+ * an answer: an unreadable rep and a wrong rep are different facts about the
+ * athlete and the scorer keeps them apart.
+ */
+export function saveZone(landmarks, cues) {
+  if (!cues) return null;
+  const ls = lm(landmarks, 'left_shoulder');
+  const rs = lm(landmarks, 'right_shoulder');
+  const lw = lm(landmarks, 'left_wrist');
+  const rw = lm(landmarks, 'right_wrist');
+  const torso = torsoLength(landmarks);
+  if (!ls || !rs || !torso || (!lw && !rw)) return 'unknown';
+
+  const shoulders = midpoint(ls, rs);
+  const reach = (w) => (w ? Math.hypot(w.x - shoulders.x, w.y - shoulders.y) : -Infinity);
+  const w = reach(rw) > reach(lw) ? rw : lw;
+  if (!w) return 'unknown';
+
+  // Height above the shoulder line. Hips sit about one torso below, so a
+  // hand at knee height reads around -1.5.
+  const v = -(w.y - shoulders.y) / torso;
+  const band = v >= cues.high_above ? 'high' : v <= cues.low_below ? 'low' : 'mid';
+
+  // Shoulder axis, pointing toward the athlete's right.
+  const ax = rs.x - ls.x;
+  const ay = rs.y - ls.y;
+  const span = Math.hypot(ax, ay);
+  // Turned side-on, the shoulders collapse onto each other and this projection
+  // stops meaning anything. Better to say the rep was unreadable than to call
+  // a stick-side save an off-stick one.
+  if (span < 0.35 * torso) return 'unknown';
+  const h = ((w.x - shoulders.x) * ax + (w.y - shoulders.y) * ay) / span / torso;
+  const side = h >= cues.side_beyond ? 'right' : h <= -cues.side_beyond ? 'left' : 'centre';
+
+  return `${band}_${side}`;
 }
 
 /**
@@ -202,6 +287,17 @@ export class RepCounter {
     this.lastFrameAt = null;
     this.lastRaw = null;
     this.pendingHand = 'none';
+    // Where the hands were at the furthest point of the cycle, and the raw
+    // reading that furthest point was. Only tracked on cued drills, where the
+    // direction the rep went is the measurement rather than a detail.
+    //
+    // Tracked against the RAW signal on purpose. Smoothing lags by a few
+    // frames, so the smoothed peak arrives after the hands have already turned
+    // around and started back -- following it files a low save as a hip save,
+    // every time, because the hip is where the hands were when the smoothed
+    // value finally caught up.
+    this.pendingZone = null;
+    this.pendingRawPeak = null;
     this.peakValue = null;
     // Per-cycle extremes. The span between them is the rep's range of motion,
     // which is what form quality is measured from -- counting reps throws this
@@ -300,6 +396,10 @@ export class RepCounter {
     let hand = 'none';
     if (typeof raw === 'object') { value = raw.value; hand = raw.hand; }
     if (value === null || Number.isNaN(value)) return null;
+    // Only computed on cued drills. Everywhere else it is dead weight on
+    // every frame, and `saveZone` returns null so nothing downstream fires.
+    const zone = this.spec.cues ? saveZone(landmarks, this.spec.cues) : null;
+
     // Kept for the debug readout: seeing raw against smoothed is how you tell
     // a jittery landmark from a smoothing constant that has flattened the
     // excursion below the threshold.
@@ -331,6 +431,14 @@ export class RepCounter {
         this.cycleMin = s;
         this.cycleMax = s;
         this.pendingHand = hand;
+        this.pendingRawPeak = value;
+        // Deliberately NOT seeded with this frame's zone. Arming happens at
+        // the *closest* point of the cycle -- the ready position -- so its
+        // zone is never a target. Seeding it means a save whose every
+        // extended frame was unreadable reports the ready position instead,
+        // which the server would score as "drifted to the middle": a miss
+        // invented out of a camera problem.
+        this.pendingZone = null;
         this.lastRep = null;
       } else if (this.lastRep) {
         // Still following through on the rep just emitted. Extend its span so
@@ -338,6 +446,14 @@ export class RepCounter {
         this.extendSpan(s);
         this.lastRep.rom = round3(Math.abs(this.cycleMax - this.cycleMin));
         this.lastRep.peak = round3(rising ? this.cycleMax : this.cycleMin);
+        // The rep fires on a threshold crossing, but the hands often keep
+        // going for a frame or two afterwards. That overshoot is where they
+        // actually arrived, so the zone follows it.
+        if (this.pendingRawPeak !== null && zone && zone !== 'unknown'
+            && (rising ? value > this.pendingRawPeak : value < this.pendingRawPeak)) {
+          this.pendingRawPeak = value;
+          this.lastRep.zone = zone;
+        }
       }
       return null;
     }
@@ -350,6 +466,15 @@ export class RepCounter {
     if (rising ? s > this.peakValue : s < this.peakValue) {
       this.peakValue = s;
       if (hand !== 'none') this.pendingHand = hand;
+    }
+
+    // Separate from the peak above, and against the raw value: this is asking
+    // where the hands got to, and the smoothed signal answers that question
+    // several frames late.
+    if (this.pendingRawPeak === null
+        || (rising ? value > this.pendingRawPeak : value < this.pendingRawPeak)) {
+      this.pendingRawPeak = value;
+      if (zone && zone !== 'unknown') this.pendingZone = zone;
     }
 
     // A cycle that has taken too long is a pause, not a rep.
@@ -373,12 +498,20 @@ export class RepCounter {
         peak: this.peakValue === null ? null : round3(this.peakValue),
         rom: rom === null ? null : round3(rom),
         cycle_ms: this.armedAt === null ? null : Math.round(tMs - this.armedAt),
+        // Cued drills only. 'unknown' is sent rather than omitted: the server
+        // needs to tell "we could not see the hands" apart from "the hands
+        // went to the wrong place", and a missing field cannot say which.
+        ...(this.spec.cues ? { zone: this.pendingZone || 'unknown' } : {}),
       };
       this.reps.push(rep);
       this.lastRepAt = tMs;
       this.armed = false;
       this.armedAt = null;
       this.pendingHand = 'none';
+      this.pendingZone = null;
+      // Deliberately not cleared with the zone: the follow-through frames
+      // after this point still belong to this rep and may yet find its real
+      // furthest reach.
       // Deliberately not clearing the span: the follow-through after this
       // point still belongs to this rep.
       this.lastRep = rep;

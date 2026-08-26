@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { RepCounter, computeSignal, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
+import { RepCounter, computeSignal, saveZone, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
 
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
 
@@ -269,4 +269,191 @@ test('a movement too small to cross the thresholds is not a rep', () => {
     }
   }
   assert.strictEqual(counter.count, 0, 'a small twitch must not count as a rep');
+});
+
+/* -------------------------------------------------------------------------
+ * Cued drills: reach counts the rep, the zone recovers where it went.
+ *
+ * These use their own skeletons rather than `baseSkeleton`, whose arms hang by
+ * the hips -- a goalie starts with the hands up in front of the chest, and the
+ * whole measurement is the distance between those two positions.
+ * ---------------------------------------------------------------------- */
+
+/** Goalie ready: both hands up in front of the chest, elbows bent. */
+function readySkeleton() {
+  const pts = baseSkeleton();
+  pts[IDX.left_wrist] = { x: 0.46, y: 0.42, z: 0, visibility: 0.95 };
+  pts[IDX.right_wrist] = { x: 0.54, y: 0.42, z: 0, visibility: 0.95 };
+  return pts;
+}
+
+/** Hands driven out to a point, as they are on a save. */
+function reachingTo(x, y) {
+  const pts = baseSkeleton();
+  pts[IDX.left_wrist] = { x: x - 0.01, y, z: 0, visibility: 0.95 };
+  pts[IDX.right_wrist] = { x: x + 0.01, y, z: 0, visibility: 0.95 };
+  return pts;
+}
+
+// Chosen against the base skeleton's geometry: shoulders at y 0.35, hips at
+// 0.60, so a torso is 0.25 and the shoulder midpoint is (0.50, 0.35).
+const SPOTS = {
+  high_right: [0.76, 0.20],
+  high_left: [0.24, 0.20],
+  mid_right: [0.76, 0.50],
+  mid_left: [0.24, 0.50],
+  low_right: [0.70, 0.68],
+  low_left: [0.30, 0.68],
+  low_centre: [0.50, 0.68],
+};
+
+test('save zone: every named spot classifies as itself', () => {
+  const cues = spec('lax_goalie_saves').cues;
+  for (const [zone, [x, y]] of Object.entries(SPOTS)) {
+    assert.equal(saveZone(reachingTo(x, y), cues), zone, zone);
+  }
+});
+
+test('save zone: hands left in front of the chest read as the middle, not as a corner', () => {
+  const cues = spec('lax_goalie_saves').cues;
+  // The failure this catches is a goalie who never really extends still being
+  // credited with reaching whichever corner was called.
+  assert.equal(saveZone(readySkeleton(), cues), 'mid_centre');
+});
+
+test('save zone: sides are the athlete\'s own, not the picture\'s', () => {
+  const cues = spec('lax_goalie_saves').cues;
+  const pts = reachingTo(...SPOTS.high_right);
+  // Turn the athlete around: their shoulders swap sides of the frame, and a
+  // hand at the same screen position is now their LEFT hand.
+  pts[IDX.left_shoulder] = { x: 0.55, y: 0.35, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.45, y: 0.35, z: 0, visibility: 0.95 };
+  assert.equal(saveZone(pts, cues), 'high_left');
+});
+
+test('save zone: turned side-on it says it cannot tell rather than guessing', () => {
+  const cues = spec('lax_goalie_saves').cues;
+  const pts = reachingTo(...SPOTS.low_left);
+  // Shoulders collapsed onto each other: there is no left-right axis left to
+  // project onto, and a guess here would teach the wrong corner.
+  pts[IDX.left_shoulder] = { x: 0.495, y: 0.35, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.505, y: 0.35, z: 0, visibility: 0.95 };
+  assert.equal(saveZone(pts, cues), 'unknown');
+});
+
+test('save zone: hands out of frame report unknown, not a zone', () => {
+  const cues = spec('lax_goalie_saves').cues;
+  const pts = reachingTo(...SPOTS.high_left);
+  pts[IDX.left_wrist].visibility = 0.1;
+  pts[IDX.right_wrist].visibility = 0.1;
+  assert.equal(saveZone(pts, cues), 'unknown');
+});
+
+test('save zone: a self-paced drill gets no zone at all', () => {
+  assert.equal(saveZone(readySkeleton(), spec('gen_push_up').cues), null);
+});
+
+test('save reach: rises leaving ready and falls coming back, whichever way the hands went', () => {
+  const drill = spec('lax_goalie_saves');
+  const ready = computeSignal(readySkeleton(), drill).value;
+  // The point of measuring reach rather than height: a high save and a low
+  // save both have to read as the same rep, and a height signal cannot do
+  // that because they move in opposite directions.
+  const high = computeSignal(reachingTo(...SPOTS.high_right), drill).value;
+  const low = computeSignal(reachingTo(...SPOTS.low_left), drill).value;
+  assert.ok(ready < drill.counter.down_threshold, `ready ${ready}`);
+  assert.ok(high > drill.counter.up_threshold, `high ${high}`);
+  assert.ok(low > drill.counter.up_threshold, `low ${low}`);
+});
+
+/** Drive one save out to `zone` and back to ready, feeding the counter. */
+function playSave(counter, zone, startMs, { fps = 30 } = {}) {
+  const [tx, ty] = SPOTS[zone];
+  const step = 1000 / fps;
+  let t = startMs;
+  const OUT = 9, BACK = 9;
+  for (let i = 1; i <= OUT; i += 1) {
+    const k = i / OUT;
+    counter.push(reachingTo(0.50 + (tx - 0.50) * k, 0.42 + (ty - 0.42) * k), t);
+    t += step;
+  }
+  for (let i = BACK - 1; i >= 0; i -= 1) {
+    const k = i / BACK;
+    counter.push(reachingTo(0.50 + (tx - 0.50) * k, 0.42 + (ty - 0.42) * k), t);
+    t += step;
+  }
+  for (let i = 0; i < 4; i += 1) { counter.push(readySkeleton(), t); t += step; }
+  return t;
+}
+
+test('cued drill: counts one rep per save and tags it with the spot reached', () => {
+  const drill = spec('lax_goalie_saves');
+  const counter = new RepCounter(drill);
+  const played = ['high_right', 'low_left', 'low_centre', 'mid_left', 'high_left'];
+
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) { counter.push(readySkeleton(), t); t += 33; }
+  for (const zone of played) t = playSave(counter, zone, t);
+
+  assert.equal(counter.count, played.length);
+  assert.deepEqual(counter.reps.map((r) => r.zone), played);
+});
+
+test('cued drill: the zone follows the furthest point, not the threshold crossing', () => {
+  // The rep fires as the hands cross the firing line, which on a low save is
+  // still up around hip height. Freezing the zone there would file every low
+  // save as a hip save.
+  const drill = spec('lax_goalie_saves');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) { counter.push(readySkeleton(), t); t += 33; }
+  playSave(counter, 'low_left', t);
+  assert.equal(counter.count, 1);
+  assert.equal(counter.reps[0].zone, 'low_left');
+});
+
+test('cued drill: a save the camera could not read is marked unknown, never omitted', () => {
+  const drill = spec('lax_goalie_saves');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) { counter.push(readySkeleton(), t); t += 33; }
+
+  // Same movement, but turned side-on the whole way through.
+  const [tx, ty] = SPOTS.high_right;
+  const sideOn = (x, y) => {
+    const pts = reachingTo(x, y);
+    pts[IDX.left_shoulder] = { x: 0.495, y: 0.35, z: 0, visibility: 0.95 };
+    pts[IDX.right_shoulder] = { x: 0.505, y: 0.35, z: 0, visibility: 0.95 };
+    return pts;
+  };
+  for (let i = 1; i <= 9; i += 1) {
+    counter.push(sideOn(0.50 + (tx - 0.50) * (i / 9), 0.42 + (ty - 0.42) * (i / 9)), t);
+    t += 33;
+  }
+  for (let i = 8; i >= 0; i -= 1) {
+    counter.push(sideOn(0.50 + (tx - 0.50) * (i / 9), 0.42 + (ty - 0.42) * (i / 9)), t);
+    t += 33;
+  }
+  assert.equal(counter.count, 1);
+  // The rep happened -- it just cannot be attributed. Omitting the field would
+  // leave the server unable to tell this from a wrong corner.
+  assert.equal(counter.reps[0].zone, 'unknown');
+});
+
+test('self-paced drills carry no zone field at all', () => {
+  const drill = spec('gen_push_up');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 60; i += 1) {
+    const pts = baseSkeleton();
+    // Elbow angle swinging between locked out and well below 90.
+    const down = Math.floor(i / 10) % 2 === 1;
+    pts[IDX.left_elbow] = down
+      ? { x: 0.30, y: 0.48, z: 0, visibility: 0.95 }
+      : { x: 0.42, y: 0.48, z: 0, visibility: 0.95 };
+    pts[IDX.left_wrist] = { x: 0.42, y: 0.58, z: 0, visibility: 0.95 };
+    counter.push(pts, t);
+    t += 60;
+  }
+  for (const r of counter.reps) assert.ok(!('zone' in r));
 });

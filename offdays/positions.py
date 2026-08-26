@@ -195,10 +195,17 @@ LACROSSE: tuple[Position, ...] = (
             # because a goalie's hands do not swap, and prescribing the drill
             # anyway would contradict that. One-handed work stands in for the
             # outlet, and ground balls for the start of every clear.
-            "lax_quick_stick": 0.22, "lax_wall_ball_one_hand": 0.12,
-            "lax_wall_ball": 0.12, "lax_ground_ball": 0.08,
-            "gen_lateral_bound": 0.16, "gen_plank": 0.10,
-            "gen_squat_jump": 0.08, "gen_squat": 0.07, "gen_push_up": 0.05,
+            #
+            # Save positions lead. Until that drill existed this mix was
+            # entirely made of substitutes -- stick work and lateral jumps
+            # standing in for a position whose actual job the app could not
+            # see -- so a goalie was the one athlete here being handed
+            # somebody else's practice.
+            "lax_goalie_saves": 0.26,
+            "lax_quick_stick": 0.16, "lax_wall_ball_one_hand": 0.08,
+            "lax_wall_ball": 0.08, "lax_ground_ball": 0.06,
+            "gen_lateral_bound": 0.13, "gen_plank": 0.08,
+            "gen_squat_jump": 0.06, "gen_squat": 0.05, "gen_push_up": 0.04,
         },
         plural_label="goalies",
         focus="Hands, reactions and a hard first step sideways.",

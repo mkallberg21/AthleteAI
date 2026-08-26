@@ -196,6 +196,12 @@
         <video id="video" playsinline muted autoplay></video>
         <canvas id="overlay"></canvas>
         <div class="banner" id="banner">Loading the pose model&hellip;</div>
+        <!-- Cued drills only: the app calls the spot instead of the athlete
+             choosing one. Hidden and inert for every other drill. -->
+        <div class="cue hidden" id="cue" aria-live="assertive">
+          <div class="cue-grid" id="cue-grid"></div>
+          <div class="cue-word" id="cue-word"></div>
+        </div>
         <div class="hud">
           <div class="repcount"><span id="reps">0</span><small id="rep-label">reps</small></div>
           <div class="hands" id="hands"></div>
@@ -336,6 +342,7 @@ import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
 import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory }
   from './ballvision.js';
 import { RepCounter } from './counter.js';
+import { cueAt, cueCount, label as cueLabel, sequence as cueSequenceFor } from './cues.js';
 import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
   registerServiceWorker, takeSlot, topUp,
@@ -390,6 +397,10 @@ let rafId = null;
 let startedAt = 0;
 let lastVideoTime = -1;
 let activeDrill = null;
+// How far ahead cue targets are generated. Far past any real session, so the
+// list always already contains whatever the athlete gets to before they press
+// Finish. Roughly forty-five minutes at the current cadence.
+const CUE_HORIZON_MS = 45 * 60 * 1000;
 let recorder = null;
 let reviewMarkers = [];
 let reviewRaf = null;
@@ -1290,6 +1301,12 @@ async function openCapture(drill) {
     ? `<div class="hand-chip left"><b id="h-left">0</b><span>Left</span></div>
        <div class="hand-chip right"><b id="h-right">0</b><span>Right</span></div>`
     : '';
+  // Cued drills get the target grid; every other drill must not see it.
+  $('cue').classList.toggle('hidden', !drill.cues);
+  if (drill.cues) buildCueGrid(drill.cues);
+  resetCue();
+  $('cue-word').className = 'cue-word waiting';
+  $('cue-word').textContent = 'Press Start when you are set.';
   $('cap-err').classList.add('hidden');
   $('startstop').disabled = true;
   $('startstop').textContent = 'Start';
@@ -1418,6 +1435,7 @@ function renderLoop() {
     } else {
       counter.push(landmarks, t);
     }
+    if (activeDrill.cues) updateCue(t);
     if (recorder) recorder.samplePose(landmarks, t);
     renderDebug();
 
@@ -1647,6 +1665,130 @@ function drawSkeleton(ctx, lms, w, h) {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Cued drills
+ *
+ * The app calls a spot and the athlete reacts to it. Two things matter here
+ * and neither is obvious:
+ *
+ * 1. The sequence comes from the session nonce, not from a local random
+ *    number. The server derives the identical list to mark the session, so
+ *    the targets never travel over the wire and there is nothing to tamper
+ *    with. `cues.js` and `offdays/cues.py` must stay in step for this to hold.
+ *
+ * 2. Cue times come from the schedule, not from when this code happens to
+ *    paint. A dropped frame or a slow voice must not move the clock the
+ *    reaction is measured against, so nothing below is allowed to decide
+ *    *when* a cue happened -- only to show the one the schedule says is
+ *    current.
+ * ------------------------------------------------------------------------ */
+
+// Rows top to bottom, columns in the athlete's own left-to-right. The video is
+// mirrored, so this is also the screen's left-to-right and the lit cell lands
+// on the same side as the hand that has to go there.
+const CUE_ROWS = ['high', 'mid', 'low'];
+const CUE_COLS = ['left', 'centre', 'right'];
+
+let cueList = [];      // the targets for this session
+let cueShown = -1;     // which index is currently lit
+let cueCells = {};     // zone -> the div that lights up
+
+/** Build the nine cells once, when a cued drill is opened. */
+function buildCueGrid(spec) {
+  const grid = $('cue-grid');
+  grid.innerHTML = '';
+  cueCells = {};
+  for (const row of CUE_ROWS) {
+    for (const col of CUE_COLS) {
+      const zone = `${row}_${col}`;
+      const cell = document.createElement('div');
+      cell.className = 'cue-cell';
+      // Two cells are observable but never called -- a ball straight at the
+      // chest needs the hands to come forward, and forward is what one camera
+      // reads worst. Drawn differently so they do not look like spots the
+      // athlete keeps failing to reach.
+      if (!spec.zones.includes(zone)) cell.classList.add('never');
+      grid.appendChild(cell);
+      cueCells[zone] = cell;
+    }
+  }
+}
+
+/**
+ * Say the spot out loud.
+ *
+ * A goalie who has to read the screen is looking at the wrong thing, so the
+ * voice is what makes this drill work at all -- the grid is the fallback for a
+ * device that has no speech. Deliberately not awaited and never allowed to
+ * throw: timing comes from the schedule, so a silent phone loses the audio cue
+ * and nothing else.
+ */
+function callOut(text) {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    const said = new SpeechSynthesisUtterance(text);
+    said.rate = 1.3;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(said);
+  } catch { /* the grid still shows it */ }
+}
+
+/** Show whichever cue the schedule says is current. Called once per frame. */
+function updateCue(t) {
+  const spec = activeDrill.cues;
+  if (!spec) return;
+  const word = $('cue-word');
+
+  if (t < spec.lead_in_ms) {
+    const left = Math.ceil((spec.lead_in_ms - t) / 1000);
+    word.className = 'cue-word waiting';
+    word.textContent = `Get set — first call in ${left}`;
+    return;
+  }
+
+  const index = Math.floor((t - spec.lead_in_ms) / spec.period_ms);
+  if (index >= cueList.length) return;
+
+  if (index !== cueShown) {
+    if (cueShown >= 0 && cueCells[cueList[cueShown]]) {
+      cueCells[cueList[cueShown]].classList.remove('lit');
+    }
+    cueShown = index;
+    const zone = cueList[index];
+    const said = cueLabel(zone, cueTopHand());
+    if (cueCells[zone]) cueCells[zone].classList.add('lit');
+    word.className = 'cue-word';
+    word.textContent = said;
+    callOut(said);
+    return;
+  }
+
+  // The cell goes dark partway through so the athlete resets to ready rather
+  // than parking a hand on the last spot until the next call.
+  const since = t - cueAt(index, spec.lead_in_ms, spec.period_ms);
+  if (since > spec.show_ms && cueCells[cueList[index]]) {
+    cueCells[cueList[index]].classList.remove('lit');
+  }
+}
+
+/**
+ * Which hand is on top of the stick, so the cue can say "stick-side" instead
+ * of "left". Falls back to plain left and right when it is not known, which is
+ * worse coaching language but is never wrong -- and calling the wrong side
+ * "stick-side" would be worse than not using the word at all.
+ */
+function cueTopHand() {
+  const hand = profile && profile.dominant_hand;
+  return hand === 'left' || hand === 'right' ? hand : null;
+}
+
+function resetCue() {
+  cueList = [];
+  cueShown = -1;
+  for (const cell of Object.values(cueCells)) cell.classList.remove('lit');
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { /* fine */ }
+}
+
 async function startSession() {
   // A banked slot first: it works with no signal, and spending one online is
   // harmless because the pool tops itself back up.
@@ -1670,6 +1812,19 @@ async function startSession() {
   counter.reset();
   startedAt = performance.now();
 
+  if (activeDrill.cues) {
+    resetCue();
+    // Generated well past any realistic session, because the athlete decides
+    // when to stop and the sequence has to already contain whatever they get
+    // to. Cheap, and safe: the list is a stable prefix of itself, so the
+    // server's shorter version lines up index for index with this one.
+    cueList = cueSequenceFor(
+      session.nonce,
+      cueCount(CUE_HORIZON_MS, activeDrill.cues.lead_in_ms, activeDrill.cues.period_ms),
+      activeDrill.cues.zones,
+    );
+  }
+
   // Recorded to memory so the athlete can watch it back. Never uploaded, and
   // released the moment they leave the review screen.
   if (canRecord() && stream) {
@@ -1685,6 +1840,9 @@ async function startSession() {
 
 async function finishSession() {
   running = false;
+  // Before anything slow: a voice still calling spots at a goalie who has
+  // stopped is both confusing and a little bit rude.
+  resetCue();
   const duration = performance.now() - startedAt;
   $('startstop').disabled = true;
   $('startstop').textContent = 'Saving…';
