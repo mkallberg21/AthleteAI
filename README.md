@@ -88,7 +88,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2186 tests
+python -m pytest tests/ -q          # 2301 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 111 tests
@@ -107,7 +107,7 @@ offdays/
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
-    catalog.py      The 32 shipped drills
+    catalog.py      The 33 shipped drills
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
@@ -128,6 +128,7 @@ offdays/
   injury_history.py Prior injury, and the one line it is allowed to move
   evaluation.py     The tryout artifact: participation and improvement, no volume
   i18n.py           Spanish on the consent, parent and recognition surfaces
+  curriculum.py     The lacrosse IQ film syllabus, minus the videos
   adaptive.py       Athletes the camera was not built for, and what changes
   portability.py    The whole program as documented CSVs — the lock-in answer
   dialect.py        What a Postgres migration would actually cost, measured
@@ -2211,7 +2212,7 @@ tell them what *not short* looks like, and a score without a fix is a mark out
 of ten — which is the thing this product is otherwise careful not to hand a
 twelve-year-old.
 
-Every one of the 32 drills has cues written for it, keyed to the same
+Every one of the 33 drills has cues written for it, keyed to the same
 component keys the scorer emits. `quality.weakest` is recorded on the report
 rather than re-derived by the caller, so the fix a child reads is always about
 the thing that actually scored lowest; a note and a fix disagreeing about what
@@ -2711,6 +2712,74 @@ mostly because a child who found it would learn exactly which number to game.
 
 ---
 
+## The lacrosse IQ curriculum
+
+The film module shipped empty for the life of this product. The machinery to
+teach the half of the game learned by watching — reading a slide, seeing a cut
+two passes early, knowing where help is coming from — existed, and nothing had
+been loaded into it.
+
+`curriculum.py` is twenty topics of lacrosse IQ: what to teach, at what age, to
+which positions, how long the cut should be, a note on what footage to look
+for, and a comprehension question with the reason its answer is right. Every
+position is covered, including goalie and face-off.
+
+**It deliberately ships no video links.** Picking real clips means watching
+them, and a catalogue of plausible-looking YouTube ids that turn out dead,
+wrong, or somebody's unrelated highlight reel would be far worse than an empty
+shelf — it would look full. A coach supplies the id per topic; that is a few
+minutes each against an evening of writing the questions. Loading is
+idempotent, so five links today and the rest next week adds five clips rather
+than duplicating the syllabus, and a topic with no video simply does not
+become a clip.
+
+### Length is a hard cap, not a suggestion
+
+`film.py` filters out any clip longer than its age band's ceiling, so a clip
+over it is silently never shown. That constrains the syllabus more than it
+first appears:
+
+| Band | Ceiling | What fits |
+|---|---|---|
+| Under 11 | 75 s | Short fundamentals only |
+| 11–12 | 100 s | Short fundamentals only |
+| 13–14 | 140 s | Up to 2:20 |
+| 15–16 | 170 s | Up to 2:50 |
+| 17–18 | 200 s | Up to 3:20 |
+| 19+ | 240 s | Up to 4:00 |
+
+So a four-minute clip is visible only to adults. The syllabus therefore sits at
+two to three minutes for 13+ and 15+, where the athletes actually are, with a
+short fundamentals set cut under 75 seconds so under-11s get something rather
+than an empty module. A test asserts every topic's target length is inside the
+ceiling for its own minimum age, and another asserts nothing has drifted to
+19-and-over.
+
+---
+
+## The face-off clamp
+
+Face-off was a position with no position-specific work — a FOGO's whole craft
+happens in the first half second of a whistle, and the plan was wall ball and
+push-ups.
+
+`lax_faceoff_clamp` is the first drill that addresses it: from the down stance,
+clamp, rip, come up to ready, reset. It is the only drill in the catalogue
+where **tempo outweighs range**, because a face-off is decided on speed rather
+than on doing a movement fully, and the face-off position now leads on it at
+24% of its plan.
+
+**What it measures is the hand snap, not the clamp.** The clamp is a wrist
+rotation around a stick the camera does not know exists; what pose can see is
+the vertical travel of the hands from the ground back to ready. So the drill
+scores how fast and how repeatably the hands move, and the description, the
+cues and this paragraph all say so rather than letting a face-off athlete
+assume the app is grading whether they won the ball. It also carries no
+throwing load — nothing goes overhead, and counting it as throwing volume
+would trip a shoulder advisory for work that never touched the shoulder.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -3186,4 +3255,13 @@ contact with a real driveway:
     and draws down correctly; whether the balance is paid as cash, credited
     against next season, or drawn as software seats is a commercial decision
     nobody has made, and no money moves either way without a processor.
+53. **The film curriculum has no videos in it.** Twenty topics are written and
+    every one needs a coach to supply a link before an athlete sees anything.
+    That is the honest state: choosing clips requires watching them, and this
+    environment cannot. Until links are added the film module is still empty
+    in practice, however complete the syllabus is.
+54. **The clamp drill cannot see a clamp.** It measures the hand speed around
+    the movement, not the wrist rotation that traps the ball, and a face-off
+    athlete could score well on it while clamping badly. It is a hand-speed
+    drill honestly labelled, not face-off coaching.
 

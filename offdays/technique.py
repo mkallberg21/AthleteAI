@@ -378,6 +378,24 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when your plant goes soft.",
             "soft plants are how ankles and knees get hurt"),
     ),
+    "lax_faceoff_clamp": (
+        Cue("depth", "Get all the way down into your stance every rep. Hips "
+                     "low, back flat, hands at the ground.",
+            "a high stance loses before the whistle goes"),
+        Cue("tempo", "Fast. This is the one drill where speed beats a pretty "
+                     "rep -- clamp, rip, up, reset.",
+            "a face-off is decided in about half a second"),
+        Cue("consistency", "Every rep the same. A clamp that varies is a "
+                           "clamp that loses half the time.",
+            "the same motion under pressure is the whole skill"),
+        Cue("offhand", "Do a set clamping the other way. You will use your "
+                       "strong side in a game, but the other one is your "
+                       "insurance when a referee sets you up badly.",
+            "a one-way face-off man gets scouted in a half"),
+        Cue("endurance", "Stop when your stance starts creeping up, not when "
+                         "your hands slow down.",
+            "the stance goes first and takes everything else with it"),
+    ),
     "lax_ground_ball": (
         Cue("depth", "Get low -- bend your knees and drop your hips, do not "
                      "just reach down with your hands.",

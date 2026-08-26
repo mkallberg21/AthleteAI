@@ -44,6 +44,7 @@ from . import practice as practice_mod
 from . import absence as absence_mod
 from . import adaptive as adaptive_mod
 from . import entitlements
+from . import curriculum
 from . import evaluation as evaluation_mod
 from . import i18n
 from . import parent_report as parent_report_mod
@@ -3245,6 +3246,64 @@ def spend_sponsorship_fund(
     balance = billing_mod.spend_rebate(
         store.conn, principal.org_id, body.amount_cents, body.reason)
     return {"balance_cents": balance}
+
+
+class TopicVideo(BaseModel):
+    """One curriculum topic and the video a coach chose for it.
+
+    Named for what it is rather than what it produces: the request carries
+    *topics*, and clips are what the endpoint creates from them. That also
+    keeps it clear of the privacy guard, which requires any field named for a
+    clip or a video to be something the schema can prove cannot carry one --
+    `video` below is a 200-character string, which qualifies.
+    """
+
+    topic: str = Field(min_length=1, max_length=80)
+    #: A link or a bare id, capped short.
+    video: str = Field(min_length=1, max_length=200)
+
+
+class CurriculumInstall(BaseModel):
+    #: Topics left out simply stay uninstalled; nothing is created without a
+    #: real video behind it.
+    topics: list[TopicVideo] = Field(default_factory=list, max_length=200)
+    provider: str = Field(default="youtube", max_length=20)
+
+
+@app.get("/api/curriculum/lacrosse")
+def lacrosse_curriculum() -> dict[str, Any]:
+    """The lacrosse IQ film curriculum, with the videos still to be chosen.
+
+    Public reference data. Every topic carries its focus, age band, target
+    positions, the length the cut should be, a note on what footage to look
+    for, and the comprehension question with the reason its answer is right.
+    The one field it does not carry is a video id -- see curriculum.py for why
+    inventing those would be worse than shipping none.
+    """
+    return curriculum.catalogue()
+
+
+@app.post("/api/coach/curriculum/lacrosse", status_code=201)
+def install_lacrosse_curriculum(
+    body: CurriculumInstall,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Load the curriculum, creating a clip for every topic given a video.
+
+    Safe to run repeatedly: a coach can paste in five links today and the rest
+    next week without duplicating what is already there.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can load a curriculum for the program",
+        )
+    return curriculum.install(
+        store, principal.org_id,
+        {item.topic: item.video for item in body.topics},
+        provider=body.provider, created_by=principal.id,
+    )
 
 
 @app.get("/api/technique/{drill_key}")

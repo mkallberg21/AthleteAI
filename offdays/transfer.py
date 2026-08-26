@@ -203,6 +203,11 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "planting hard and going the other way"),
         Transfer("Football", "the jab step and cut"),
     ),
+    "lax_faceoff_clamp": (
+        Transfer("Wrestling", "the same low stance and the same fight for "
+                              "position from it"),
+        Transfer("Football", "a lineman's first step off the snap"),
+    ),
     "lax_ground_ball": (
         Transfer("Baseball", "fielding a grounder — the same low body, same funnel"),
         Transfer("Soccer", "getting low to a loose ball first"),

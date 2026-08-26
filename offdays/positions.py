@@ -173,15 +173,15 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("fogo", "faceoff", "face off", "face-off", "faceoff specialist",
                  "fo", "fogos", "draw", "draw specialist", "draw control"),
         emphasis={
-            # The clamp itself is not something pose can see, but everything
-            # after it is: a face-off is won at the whistle and finished on a
-            # ground ball, and one-handed work is the closest this catalogue
-            # gets to the grip strength the clamp needs.
-            "lax_ground_ball": 0.22, "lax_quick_stick": 0.14,
-            "lax_wall_ball_one_hand": 0.10, "lax_wall_ball": 0.08,
-            "lax_wall_ball_offhand": 0.06,
-            "gen_squat_jump": 0.10, "gen_plank": 0.08, "gen_pull_up": 0.08,
-            "gen_push_up": 0.06, "gen_burpee": 0.05, "gen_lateral_bound": 0.03,
+            # The clamp rotation itself is still invisible to pose, but the
+            # hand speed around it is not -- so this position now leads on the
+            # movement it is actually named for, with ground balls behind it
+            # because a won clamp still has to be picked up.
+            "lax_faceoff_clamp": 0.24, "lax_ground_ball": 0.18,
+            "lax_quick_stick": 0.10, "lax_wall_ball_one_hand": 0.08,
+            "lax_wall_ball": 0.06, "lax_wall_ball_offhand": 0.04,
+            "gen_squat_jump": 0.09, "gen_plank": 0.07, "gen_pull_up": 0.06,
+            "gen_push_up": 0.04, "gen_burpee": 0.02, "gen_lateral_bound": 0.02,
         },
         plural_label="face-off specialists",
         focus="One explosive move, repeated. Grip, core and a fast first step.",

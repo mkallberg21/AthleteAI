@@ -508,6 +508,79 @@ GROUND_BALL = DrillSpec(
 )
 
 
+FACEOFF_CLAMP = DrillSpec(
+    key="lax_faceoff_clamp",
+    name="Face-Off Clamp",
+    sport="lacrosse",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "From the down stance: clamp, rip the ball back, come up to ready, "
+        "reset. Repeated for speed rather than volume -- a face-off is won in "
+        "the first half second and lost in the next two."
+    ),
+    signal=SignalSpec(
+        # Top wrist against the hip on the same side. In the stance the hands
+        # are near the ground, well below the hip; the rip and recovery brings
+        # them back up. That vertical travel is the part of a clamp pose can
+        # actually see.
+        #
+        # What it CANNOT see is the clamp itself, which is a wrist rotation
+        # around a stick the camera does not know exists. This drill measures
+        # how fast and how repeatably the hands move, not whether the ball was
+        # trapped -- and the description, the cues and the README all say so
+        # rather than letting a FOGO assume otherwise.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="right_wrist",
+        reference="right_hip",
+        # Light smoothing: this is a fast movement and smoothing it hard would
+        # flatten exactly the snap being measured.
+        smoothing=0.20,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.32,
+        up_threshold=-0.08,
+        # Explosive by nature. A clamp slower than this is a rehearsal, not a
+        # rep, but the floor still has to allow a genuinely quick one.
+        min_rep_ms=260,
+        max_rep_ms=3_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=250, diminishing_after_reps=100),
+    validation=ValidationSpec(
+        max_reps_per_second=3.5, min_reps_per_second=0.15,
+        min_reps=10, min_duration_ms=20_000,
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL_FAST,
+    setup_hint=(
+        "Down in your stance with a ball. Phone side-on and low so it can see "
+        "your hands. Clamp, rip, up, reset."
+    ),
+    quality=QualitySpec(
+        target_rom=0.24,
+        # Tighter than most drills: a clamp that varies is a clamp that loses.
+        consistency_target=0.12,
+        tempo_min_ms=260,
+        tempo_max_ms=1_200,
+        # The only drill in the catalogue where tempo outweighs range. Everything
+        # else here is about doing a movement fully; this one is about doing it
+        # before the other kid does.
+        w_consistency=0.35,
+        w_depth=0.20,
+        w_tempo=0.35,
+        w_endurance=0.10,
+        min_reps=12,
+    ),
+    load=LoadSpec(
+        load_per_rep=1.0,
+        # Nothing goes overhead, so this must not touch throwing volume. It is
+        # a crouched, explosive whole-body movement.
+        throws_per_rep=0.0,
+        tissue=Tissue.WHOLE_BODY,
+    ),
+)
+
 # --------------------------------------------------------------------------
 # Strength
 # --------------------------------------------------------------------------
@@ -1348,6 +1421,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     WALL_BALL_BTB,
     WALL_BALL_SPLIT,
     GROUND_BALL,
+    FACEOFF_CLAMP,
     PUSH_UP,
     SQUAT,
     SIT_UP,
