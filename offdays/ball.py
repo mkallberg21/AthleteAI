@@ -158,6 +158,8 @@ def review(
             if spread < 0.03:
                 result.flag("The contacts are too evenly spaced to be real.")
 
+    _review_alternation(spec, reps, result)
+
     if spec.ball.attribute_side:
         left = sum(1 for r in reps if r.get("hand") == "left")
         right = sum(1 for r in reps if r.get("hand") == "right")
@@ -169,6 +171,60 @@ def review(
                     "The left/right split is too exact to have happened.",
                 )
     return result
+
+
+#: Below this many attributed contacts the hand pattern is noise. A crossover
+#: session of six bounces says nothing about whether the athlete crossed over.
+ALTERNATION_MIN_CONTACTS = 12
+
+#: A crossover drill is not required to be perfect -- a fumbled rep or a hand
+#: the camera misread should not fail the session. It is required to look like
+#: somebody changing hands rather than somebody dribbling on one.
+ALTERNATION_FLOOR = 0.60
+
+#: ...and the mirror of it: a one-handed drill may lose the odd contact to
+#: misattribution without becoming a two-handed one.
+SAME_HAND_FLOOR = 0.80
+
+
+def _review_alternation(
+    spec: DrillSpec, reps: list[dict[str, Any]], result: BallReview,
+) -> None:
+    """Check the hands did what the drill asked of them.
+
+    The point of this check is what it lets the catalogue do honestly. A
+    crossover pays more than a plain dribble, and that is only defensible
+    because this function can tell the difference -- unlike the wall-ball
+    patterns, where the fancier name paid more for a movement the camera could
+    not distinguish at all.
+
+    Worded as a note rather than a refusal when the pattern is simply absent:
+    an athlete who meant to cross over and mostly dribbled on their strong hand
+    has done real work and should be told what happened, not have the session
+    thrown away.
+    """
+    rule = spec.ball.alternation
+    if rule == "any":
+        return
+    hands = [r.get("hand") for r in reps if r.get("hand") in ("left", "right")]
+    if len(hands) < ALTERNATION_MIN_CONTACTS:
+        return
+
+    swaps = sum(1 for a, b in zip(hands, hands[1:]) if a != b)
+    share = swaps / (len(hands) - 1)
+
+    if rule == "alternating" and share < ALTERNATION_FLOOR:
+        result.note(
+            f"The ball changed hands on {share:.0%} of contacts. This drill is "
+            "the change itself -- if it stayed on your strong hand, it counted "
+            "as dribbling rather than as crossovers."
+        )
+    elif rule == "same_hand" and (1 - share) < SAME_HAND_FLOOR:
+        result.note(
+            f"The ball changed hands on {share:.0%} of contacts. This one is "
+            "meant to stay on the one hand, which is the whole reason it is "
+            "worth doing."
+        )
 
 
 def summarise(reps: list[dict[str, Any]]) -> dict[str, Any]:

@@ -213,6 +213,35 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
+    "bkb_crossover": (
+        Transfer("Soccer", "the same push-and-go, with a foot instead of a hand"),
+        Transfer("Lacrosse", "a split dodge is this move holding a stick"),
+        Transfer("Football", "the jab step that makes a defender commit"),
+    ),
+    "bkb_between_legs": (
+        Transfer("Soccer", "close control with your feet in a crowd"),
+        Transfer("Lacrosse", "protecting the stick through traffic"),
+    ),
+    "bkb_pound_weak": (
+        Transfer("Lacrosse", "off-hand wall ball — the same hard half of the work"),
+        Transfer("Soccer", "your weak foot, which defenders find in about a half"),
+        Transfer("Hockey", "handling on your backhand"),
+    ),
+    "bkb_pound_low": (
+        Transfer("Soccer", "keeping the ball under you at speed"),
+        Transfer("Hockey", "quick hands in tight"),
+    ),
+    "bkb_wall_pass": (
+        Transfer("Lacrosse", "wall ball — same loop, same reason it works"),
+        Transfer("Volleyball", "clean hands on a ball coming back fast"),
+        Transfer("Football", "catching with your hands and not your chest"),
+    ),
+    "bkb_stance": (
+        Transfer("Tennis", "the ready position you return serve from"),
+        Transfer("Volleyball", "a libero's platform is built from this"),
+        Transfer("Wrestling", "the same low base, and the same burning legs"),
+        Transfer("Soccer", "staying down and side-on as a defender"),
+    ),
     "lax_goalie_saves": (
         Transfer("Hockey", "a goalie's job is the same job — get the body part "
                            "nearest the puck to it first"),

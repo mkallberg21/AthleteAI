@@ -1398,6 +1398,36 @@ SOC_JUGGLE = DrillSpec(
     tracks_handedness=True,
 )
 
+# --------------------------------------------------------------------------
+# Basketball
+#
+# The ball is the detector's easiest subject in the whole catalogue -- 23cm and
+# orange against a driveway -- which is why this sport can afford `count` mode
+# where lacrosse could not. The bounce is the rep.
+#
+# Every variant below differs from a plain dribble in something the app can
+# actually check: the hands alternate, or they do not, or the tempo has a floor
+# a slow dribble cannot clear. That is the lesson from the wall-ball family
+# applied before the mistake rather than after it -- the one pattern here that
+# is genuinely indistinguishable is marked `pattern_verified=False` and paid the
+# plain rate.
+# --------------------------------------------------------------------------
+
+BASKETBALL = BallSpec(
+    required=True,
+    # The floor, not the hand: the bounce is the crisp, unambiguous event, and
+    # the hand is read from whichever wrist is nearest at the time.
+    contact="ground",
+    parts=("left_wrist", "right_wrist"),
+    min_gap_ms=150,
+    min_speed=0.30,
+    attribute_side=True,
+    detector="vision",
+    colour="basketball",
+    diameter_cm=23.0,
+)
+
+
 BKB_DRIBBLE = DrillSpec(
     key="bkb_dribble",
     name="Dribbling",
@@ -1409,19 +1439,7 @@ BKB_DRIBBLE = DrillSpec(
     counter=CounterSpec(
         down_threshold=0.0, up_threshold=1.0, min_rep_ms=140, max_rep_ms=4_000,
     ),
-    ball=BallSpec(
-        required=True,
-        # The floor, not the hand: the bounce is the crisp, unambiguous event,
-        # and the hand is read from whichever wrist is nearest at the time.
-        contact="ground",
-        parts=("left_wrist", "right_wrist"),
-        min_gap_ms=150,
-        min_speed=0.30,
-        attribute_side=True,
-        detector="vision",
-        colour="basketball",
-        diameter_cm=23.0,
-    ),
+    ball=BASKETBALL,
     scoring=ScoringSpec(xp_per_rep=0.4, daily_rep_cap=900, diminishing_after_reps=300),
     validation=ValidationSpec(max_reps_per_second=5.0, min_reps=10),
     setup_hint="Prop the phone up so it can see your hands and the floor. Any angle.",
@@ -1429,6 +1447,206 @@ BKB_DRIBBLE = DrillSpec(
     load=LoadSpec(load_per_rep=0.15, load_per_minute=1.4, tissue=Tissue.WHOLE_BODY),
     tracks_handedness=True,
 )
+
+
+BKB_CROSSOVER = DrillSpec(
+    key="bkb_crossover",
+    name="Crossover",
+    sport="basketball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Push the ball hard from one hand to the other, low and in front of "
+        "you, over and over. The app checks the ball actually keeps changing "
+        "hands -- if it stays on your strong hand it counts as dribbling, and "
+        "says so."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=170, max_rep_ms=4_000,
+    ),
+    # The one thing hand attribution can genuinely establish, so this is the
+    # one variant that has earned the right to pay more than a plain dribble.
+    ball=replace(BASKETBALL, alternation="alternating", min_gap_ms=170),
+    scoring=ScoringSpec(xp_per_rep=0.7, daily_rep_cap=600, diminishing_after_reps=250),
+    validation=ValidationSpec(max_reps_per_second=4.0, min_reps=12),
+    setup_hint=(
+        "Phone where it can see the floor in front of your feet. Stay low and "
+        "keep the ball below your knees -- a high crossover is a stolen ball."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.2, load_per_minute=1.6, tissue=Tissue.WHOLE_BODY),
+    tracks_handedness=True,
+)
+
+BKB_BETWEEN_LEGS = DrillSpec(
+    key="bkb_between_legs",
+    name="Between the Legs",
+    sport="basketball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Same change of hands, through your legs instead of in front. The app "
+        "counts the bounces and sees the hands swap, but it cannot see whether "
+        "the ball went through your legs -- so this earns the same as a "
+        "crossover."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=200, max_rep_ms=4_000,
+    ),
+    ball=replace(BASKETBALL, alternation="alternating", min_gap_ms=200),
+    # Deliberately identical to the crossover. The hands do a checkable thing;
+    # the legs do not, and the wall-ball family is what happens when a
+    # catalogue pays for the half it cannot see.
+    pattern_verified=False,
+    scoring=ScoringSpec(xp_per_rep=0.7, daily_rep_cap=500, diminishing_after_reps=200),
+    validation=ValidationSpec(max_reps_per_second=3.5, min_reps=12),
+    setup_hint=(
+        "Phone low and square to you. Step into it -- the ball goes through as "
+        "your foot comes forward, not while you are standing still."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.25, load_per_minute=1.7, tissue=Tissue.WHOLE_BODY),
+    tracks_handedness=True,
+)
+
+BKB_POUND_WEAK = DrillSpec(
+    key="bkb_pound_weak",
+    name="Weak-Hand Pound",
+    sport="basketball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Hard, low dribbles on your weak hand only, for as long as you can "
+        "stand it. The app reads which hand is on the ball, so this is one of "
+        "the few things here it can genuinely confirm -- and weak-hand reps "
+        "are paid at a premium wherever you do them."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=130, max_rep_ms=3_000,
+    ),
+    ball=replace(BASKETBALL, alternation="same_hand", min_gap_ms=130),
+    scoring=ScoringSpec(xp_per_rep=0.7, daily_rep_cap=500, diminishing_after_reps=200),
+    validation=ValidationSpec(
+        max_reps_per_second=5.5,
+        # A pound dribble is hard and fast by definition. This floor is what
+        # separates it from standing there patting the ball.
+        min_reps_per_second=0.8,
+        min_reps=15,
+    ),
+    setup_hint=(
+        "Weak hand only. Knees bent, ball below your knee, and pound it -- if "
+        "it is coming back above your waist you are patting it, not pounding."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.2, load_per_minute=1.8, tissue=Tissue.WHOLE_BODY),
+    tracks_handedness=True,
+)
+
+BKB_POUND_LOW = DrillSpec(
+    key="bkb_pound_low",
+    name="Low Pound",
+    sport="basketball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Both hands, ball below the knee, as hard and as fast as you can keep "
+        "it. This one has a speed floor rather than a ceiling: a slow dribble "
+        "does not clear it, which is how the app knows it was a pound."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=120, max_rep_ms=2_500,
+    ),
+    ball=replace(BASKETBALL, min_gap_ms=120),
+    scoring=ScoringSpec(xp_per_rep=0.6, daily_rep_cap=700, diminishing_after_reps=300),
+    validation=ValidationSpec(
+        max_reps_per_second=6.0,
+        # The floor is the whole verification. Nothing else here distinguishes
+        # a low pound from an ordinary dribble, and a rate this high is not
+        # something a standing dribble reaches.
+        min_reps_per_second=1.2,
+        min_reps=20,
+    ),
+    setup_hint=(
+        "Phone low so it can see the ball at knee height. Wide base, chest up, "
+        "and drive it into the floor."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.2, load_per_minute=2.0, tissue=Tissue.WHOLE_BODY),
+    tracks_handedness=True,
+)
+
+BKB_WALL_PASS = DrillSpec(
+    key="bkb_wall_pass",
+    name="Wall Passes",
+    sport="basketball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Two-hand chest pass into a wall and catch it clean. The only drill "
+        "here the app can tell apart from dribbling without ambiguity: the "
+        "ball comes off your hands rather than off the floor."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=350, max_rep_ms=5_000,
+    ),
+    # Contact off the body rather than the ground, which is a different event
+    # entirely and needs no inference to separate.
+    ball=replace(
+        BASKETBALL, contact="body", min_gap_ms=350, min_speed=0.45,
+        attribute_side=False,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.9, daily_rep_cap=400, diminishing_after_reps=180),
+    validation=ValidationSpec(max_reps_per_second=2.5, min_reps=10),
+    setup_hint=(
+        "Stand about two metres off a solid wall, phone side-on. Step into "
+        "each pass. Do not use a garage door somebody parks a car behind."
+    ),
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=0.4, load_per_minute=1.2,
+        # Chest passes are a push, not an overhead throw, so this does not
+        # touch the throwing axis a shoulder advisory reads.
+        throws_per_rep=0.0, tissue=Tissue.UPPER_BODY,
+    ),
+    tracks_handedness=False,
+)
+
+BKB_STANCE = DrillSpec(
+    key="bkb_stance",
+    name="Defensive Stance",
+    sport="basketball",
+    category=Category.CONDITIONING,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Sit in a real defensive stance and stay there. The clock only runs "
+        "while your hips are actually down -- stand up and it stops, which is "
+        "the entire point of the drill."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
+    # A hold drill scores time inside a band rather than counting a cycle.
+    # Above 0.78 the athlete has stood up; below 0.52 they have sat down on
+    # their heels, which is a different exercise and not this one.
+    counter=CounterSpec(
+        down_threshold=0.52, up_threshold=0.78, min_rep_ms=400, max_rep_ms=60_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=26.0, daily_rep_cap=1_000),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps=0, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone side-on at about knee height so it can see how low you really "
+        "are. Feet wide, chest up, hands out. No leaning on anything."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=3.4, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
 
 VB_SET = DrillSpec(
     key="vb_set",
@@ -1531,6 +1749,12 @@ TEN_WALL_RALLY = DrillSpec(
 ALL_DRILLS: tuple[DrillSpec, ...] = (
     SOC_JUGGLE,
     BKB_DRIBBLE,
+    BKB_CROSSOVER,
+    BKB_BETWEEN_LEGS,
+    BKB_POUND_WEAK,
+    BKB_POUND_LOW,
+    BKB_WALL_PASS,
+    BKB_STANCE,
     VB_SET,
     BB_WALL_THROW,
     TEN_WALL_RALLY,

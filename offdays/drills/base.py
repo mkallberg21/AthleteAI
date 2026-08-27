@@ -298,6 +298,22 @@ class BallSpec:
     #: Share of frames that must have a real detection behind them. Below
     #: this the session is held for review rather than counted.
     min_track_quality: float = 0.35
+    #: What the hands are required to do across contacts.
+    #:
+    #: 'any'         -- no requirement. A plain dribble is a plain dribble.
+    #: 'alternating' -- the ball has to keep changing hands, which is what
+    #:                  makes a crossover a crossover.
+    #: 'same_hand'   -- the ball has to stay on one hand, which is what makes
+    #:                  a weak-hand pound worth doing.
+    #:
+    #: This exists so basketball does not repeat the wall-ball mistake. Paying
+    #: more for a fancier pattern is only honest when the app can check the
+    #: pattern, and hand attribution is the one thing here it genuinely sees --
+    #: so the drills that ask something checkable of the hands can earn more,
+    #: and the ones that do not are marked `pattern_verified=False` and paid the
+    #: plain rate.
+    alternation: str = "any"
+
     #: Which detector finds it.
     #:
     #: 'model'  -- the general object detector's "sports ball" class, which
@@ -315,6 +331,15 @@ class BallSpec:
     #: than a guess, which is the single strongest filter the vision detector
     #: has and the one a general model cannot use at all.
     diameter_cm: float = 6.35
+
+    def __post_init__(self) -> None:
+        if self.alternation not in ("any", "alternating", "same_hand"):
+            raise ValueError(f"unknown alternation rule: {self.alternation!r}")
+        if self.alternation != "any" and not self.attribute_side:
+            raise ValueError(
+                "an alternation rule needs attribute_side, or there are no "
+                "hands to check it against"
+            )
 
     @property
     def counts(self) -> bool:
@@ -337,6 +362,7 @@ class BallSpec:
             "detector": self.detector,
             "colour": self.colour,
             "diameter_cm": self.diameter_cm,
+            "alternation": self.alternation,
         }
 
 

@@ -3306,21 +3306,26 @@ class CurriculumInstall(BaseModel):
     provider: str = Field(default="youtube", max_length=20)
 
 
-@app.get("/api/curriculum/lacrosse")
-def lacrosse_curriculum() -> dict[str, Any]:
-    """The lacrosse IQ film curriculum, with the videos still to be chosen.
+@app.get("/api/curriculum/{sport}")
+def sport_curriculum(sport: str) -> dict[str, Any]:
+    """A sport's IQ film curriculum, with the videos still to be chosen.
 
     Public reference data. Every topic carries its focus, age band, target
     positions, the length the cut should be, a note on what footage to look
     for, and the comprehension question with the reason its answer is right.
     The one field it does not carry is a video id -- see curriculum.py for why
     inventing those would be worse than shipping none.
+
+    A sport with no syllabus returns an empty list and a note saying so, rather
+    than a 404: "nothing written yet" is a real answer to this question, and a
+    coach asking it deserves to be told rather than to see an error.
     """
-    return curriculum.catalogue()
+    return curriculum.catalogue(sport)
 
 
-@app.post("/api/coach/curriculum/lacrosse", status_code=201)
-def install_lacrosse_curriculum(
+@app.post("/api/coach/curriculum/{sport}", status_code=201)
+def install_sport_curriculum(
+    sport: str,
     body: CurriculumInstall,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
@@ -3335,10 +3340,14 @@ def install_lacrosse_curriculum(
             status_code=403,
             detail="only a director can load a curriculum for the program",
         )
+    if not curriculum.topics_for(sport):
+        raise HTTPException(
+            status_code=404, detail=f"there is no curriculum for {sport} yet",
+        )
     return curriculum.install(
         store, principal.org_id,
         {item.topic: item.video for item in body.topics},
-        provider=body.provider, created_by=principal.id,
+        sport=sport, provider=body.provider, created_by=principal.id,
     )
 
 

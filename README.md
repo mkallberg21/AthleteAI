@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2468 tests
+python -m pytest tests/ -q          # 2588 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 143 tests
+  node --test tests/js/*.test.mjs   # 148 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3186,6 +3186,94 @@ shipping a comparison that means nothing.
 Strong-hand-only duplicates what an athlete does by default, and behind-the-back
 is a trick before it is a skill. They are listed by name in the test rather than
 inferred, so a genuinely stranded drill still fails.
+
+---
+
+## Basketball, built to lacrosse depth
+
+The audit said the ten empty sports needed building rather than auditing, and
+that one sport taken all the way beats a token drill in fifteen. Basketball
+went first: the drill already existed, dribbling is the most universal solo
+skill in youth sport, and both hands genuinely matter — so the parity machinery
+already in place has something real to measure.
+
+### Seven drills, and every one of them earns its rate
+
+The wall-ball family is what happens when a catalogue pays for a name the app
+cannot verify. Basketball was built *after* that lesson, so each variant either
+differs in something checkable or is marked unverifiable and paid the plain
+rate.
+
+| Drill | What separates it | Verified |
+|---|---|---|
+| Dribbling | the baseline | — |
+| **Crossover** | the ball must keep changing hands | ✅ hand attribution |
+| **Weak-Hand Pound** | the ball must stay on one hand, and which | ✅ hand attribution |
+| **Low Pound** | a rate *floor* a slow dribble cannot clear | ✅ tempo |
+| **Wall Passes** | contact off the body, not the floor | ✅ contact type |
+| Between the Legs | the hands do what a crossover does | ❌ pays the plain rate |
+| **Defensive Stance** | a hold, scored in seconds | ✅ different metric |
+
+`BallSpec` gained an `alternation` rule — `any`, `alternating`, or `same_hand` —
+enforced server-side in `ball.review()`. It is what lets a crossover honestly
+pay more than a dribble, and it is validated at construction: a rule without
+`attribute_side` raises, because there would be no hands to check it against.
+
+Failing the pattern is a **note, never a refusal**. An athlete who meant to
+cross over and mostly dribbled on their strong hand has done real work and
+should be told what happened, not have the session thrown away.
+
+`bkb_between_legs` is the interesting one. Its hands alternate exactly as a
+crossover's do; the legs are the difference and the camera has no view of them.
+It ships marked `pattern_verified = False` at the same rate as the crossover —
+the discipline applied *before* the mistake rather than after it.
+
+### Plans that lead on basketball
+
+| | own-sport share | leads on |
+|---|---|---|
+| Guard | **69%** | Dribbling 14% · Crossover 14% · Weak-Hand Pound 11% |
+| Wing | **56%** | Dribbling 12% · Crossover 9% · Weak-Hand Pound 9% |
+| Post | **31%** | Squats 12% · Squat Jumps 12% · Weak-Hand Pound 9% |
+
+Guard and Wing sit inside lacrosse's 44–72% band. The post is deliberately
+lower: strength stays the priority, so the ball work there is the two drills
+that survive contact. Every plan includes the weak-hand pound, because it is
+the one drill here whose pattern the app can genuinely confirm and the hand
+nobody practises is the hand a defender plays.
+
+### Fourteen film topics, and a curriculum module that is no longer one sport
+
+`curriculum.py` held a lacrosse syllabus and a `catalogue()` that returned
+`"sport": "lacrosse"` as a literal. It now holds a `BY_SPORT` registry, and the
+endpoints are `/api/curriculum/{sport}` and `/api/coach/curriculum/{sport}` —
+so a third sport is a data change and nothing else. There is no branch anywhere
+that names a sport.
+
+A sport with no syllabus returns an **empty list and a note saying so**, rather
+than a 404. "Nothing written yet" is a real answer to that question and a coach
+asking it deserves to be told rather than shown an error.
+
+The basketball syllabus runs 3 fundamentals (65–70s, all ages), 6 core topics
+(115–130s, 13+) and 5 advanced (150–165s, 15+), every target length already
+inside the ceiling for its own age band. Where lacrosse IQ is mostly about a
+slide and who is hot, basketball IQ is mostly about spacing and what the second
+defender does. Same rule as lacrosse on video ids: there are none, and a test
+asserts no topic smuggles one in.
+
+### What basketball still does not have
+
+- **No videos**, same as lacrosse. Fourteen topics, an empty shelf.
+- **Shooting is absent**, and that is the big one. The motion is detectable;
+  whether the ball went in is not, and a shooting drill that cannot see the
+  result would be measuring form while staying silent on the only thing a
+  twelve-year-old cares about.
+- **No lateral movement drill.** Defensive slides are the position's actual
+  footwork and there is no lateral signal in the library — every signal here is
+  vertical or angular. The stance hold covers the legs; it does not cover the
+  sliding.
+- **Between the legs is unverifiable**, and behind-the-back handling is not
+  attempted for the same reason.
 
 ---
 

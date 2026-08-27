@@ -606,16 +606,36 @@ TOPICS: tuple[Topic, ...] = FUNDAMENTALS + CORE + ADVANCED
 BY_KEY = {t.key: t for t in TOPICS}
 
 
-def catalogue() -> dict[str, Any]:
+#: Sports with a syllabus. Looked up rather than branched on, so a third sport
+#: is a data change here and nothing else.
+BY_SPORT: dict[str, tuple[Topic, ...]] = {}
+
+
+def topics_for(sport: str) -> tuple[Topic, ...]:
+    """The syllabus for a sport, or empty if it has none yet.
+
+    Empty rather than an error on purpose: most sports have no curriculum, and
+    a coach asking about one should be told there is nothing yet rather than
+    shown a stack trace.
+    """
+    return BY_SPORT.get(sport, ())
+
+
+def catalogue(sport: str = "lacrosse") -> dict[str, Any]:
     """The whole curriculum, for a coach deciding what to film or find."""
+    topics = topics_for(sport)
     return {
-        "sport": "lacrosse",
-        "topics": [t.to_dict() for t in TOPICS],
-        "count": len(TOPICS),
+        "sport": sport,
+        "topics": [t.to_dict() for t in topics],
+        "count": len(topics),
         "note": (
             "Every topic here is ready except its video. Clip length caps are "
             "enforced per age band, so target_s is already inside the ceiling "
             "for each topic's minimum age."
+        ) if topics else (
+            f"There is no film curriculum for {sport} yet. The module is "
+            "built and the age caps apply -- what is missing is somebody who "
+            "coaches the sport writing the topics."
         ),
         # Carried on the response a coach reads immediately before going to
         # find footage, which is the only moment this advice can still change
@@ -625,7 +645,7 @@ def catalogue() -> dict[str, Any]:
             "Not highlight reels. A montage of finishes teaches nothing while "
             "looking exactly like film study -- it fills the shelf, it earns "
             "the same XP, and the athlete comes away having watched somebody "
-            "else be good at lacrosse. Clips whose titles read as highlight "
+            f"else be good at {sport}. Clips whose titles read as highlight "
             "reels are refused."
         ),
     }
@@ -636,6 +656,7 @@ def install(
     org_id: int,
     video_ids: dict[str, str],
     *,
+    sport: str = "lacrosse",
     provider: str = "youtube",
     created_by: int | None = None,
 ) -> dict[str, Any]:
@@ -658,7 +679,7 @@ def install(
     }
 
     made, awaiting, failed, already = [], [], [], []
-    for topic in TOPICS:
+    for topic in topics_for(sport):
         raw = (video_ids.get(topic.key) or "").strip()
         if not raw:
             awaiting.append(topic.key)
@@ -696,3 +717,377 @@ def install(
         "failed": failed,
         "topics_total": len(TOPICS),
     }
+
+
+# ---------------------------------------------------------------------------
+# Basketball
+#
+# Same rules as the lacrosse syllabus above: no video ids, every target length
+# inside the ceiling for its own minimum age, and a comprehension question with
+# the reason its answer is right. What differs is where the decisions live --
+# lacrosse IQ is mostly about a slide and who is hot; basketball IQ is mostly
+# about spacing and what the second defender does.
+# ---------------------------------------------------------------------------
+
+GUARDS = ("guard",)
+PERIMETER = ("guard", "wing")
+BIGS = ("post",)
+ALL_BKB = ("guard", "wing", "post")
+
+BKB_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="bkb_iq_spacing",
+        title="Stand further apart than feels right",
+        focus="Spacing",
+        positions=ALL_BKB, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Any half-court possession. Cut one where the offence is spread "
+            "and one where two players have drifted to the same side, back to "
+            "back. Youth footage is better here -- the mistake is more obvious."
+        ),
+        ask=Ask(
+            prompt="Two teammates end up on the same side of the floor. What happens?",
+            options=(
+                "One defender can guard both of them",
+                "They can pass to each other more easily",
+                "It drags the defence out of position",
+            ),
+            answer=0,
+            because=(
+                "Standing close together lets one defender cover two players. "
+                "Spreading out means every defender has their own job."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_hands_ready",
+        title="Hands ready before the pass comes",
+        focus="Catching",
+        positions=ALL_BKB, min_age=0, max_age=200, target_s=65,
+        find=(
+            "A possession with two or three passes. Look for one player "
+            "already showing their hands and one who reaches late. The "
+            "difference in what happens next is the clip."
+        ),
+        ask=Ask(
+            prompt="Why show your hands before the ball is thrown?",
+            options=(
+                "So the passer knows you want it and can hit you on time",
+                "So the defender cannot see the pass coming",
+                "It makes the catch look better",
+            ),
+            answer=0,
+            because=(
+                "A passer throws to a target. No target, no pass -- and a late "
+                "reach turns a good pass into a fumble."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_box_out",
+        title="Find a body before you find the ball",
+        focus="Rebounding",
+        positions=ALL_BKB, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Two rebounds side by side: one where a player turns and makes "
+            "contact first, one where everybody watches the shot. The second "
+            "is easy to find in any youth game."
+        ),
+        ask=Ask(
+            prompt="A shot goes up. What is the first thing you do?",
+            options=(
+                "Turn and put your body on the player you are guarding",
+                "Jump straight away so you are highest",
+                "Watch where the ball is going to bounce",
+            ),
+            answer=0,
+            because=(
+                "Whoever gets a body on someone first decides who can jump. "
+                "Watching the ball is how the other team gets the rebound."
+            ),
+        ),
+    ),
+)
+
+BKB_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="bkb_iq_help_side",
+        title="Where the second defender comes from",
+        focus="Team defence",
+        positions=ALL_BKB, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A drive from the wing where a help defender steps in. Cut it wide "
+            "enough to see the helper *before* they move -- the interesting "
+            "part is where they were standing."
+        ),
+        ask=Ask(
+            prompt="You are guarding someone on the weak side. Where do you stand?",
+            options=(
+                "Off your player, where you can see them and the ball",
+                "Right next to your player so they cannot get open",
+                "Under the basket where the rebound will come",
+            ),
+            answer=0,
+            because=(
+                "Help defence is about being able to see both. Standing on your "
+                "player means you never see the drive coming, and by the time "
+                "you do it is a layup."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_screen_read",
+        title="Reading a ball screen",
+        focus="Two-man game",
+        positions=PERIMETER, min_age=13, max_age=200, target_s=130,
+        find=(
+            "One possession with a high ball screen. Cut three versions if you "
+            "can find them: the defender goes over, goes under, and switches. "
+            "The read is different every time."
+        ),
+        ask=Ask(
+            prompt="Your defender goes under the screen. What should you do?",
+            options=(
+                "Shoot, because they have given you the space",
+                "Drive hard to the rim anyway",
+                "Pass it and reset the offence",
+            ),
+            answer=0,
+            because=(
+                "Going under is a defender saying they will live with the shot. "
+                "If you never take it, they will do it every time and you have "
+                "lost the screen."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_pass_early",
+        title="The pass one beat early",
+        focus="Passing",
+        positions=ALL_BKB, min_age=13, max_age=200, target_s=115,
+        find=(
+            "A possession where a cutter is open and the pass arrives late. "
+            "Pause on the frame where the window was actually open -- that is "
+            "the whole lesson."
+        ),
+        ask=Ask(
+            prompt="A teammate cuts open. When do you throw it?",
+            options=(
+                "As they start to get open, so it arrives as they get there",
+                "Once they are clearly open and you can see it",
+                "After you have faked to move the defender",
+            ),
+            answer=0,
+            because=(
+                "The window closes while you are deciding. A pass thrown when "
+                "you can see they are open is a pass the help defender can see too."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_close_out",
+        title="Closing out without flying past",
+        focus="On-ball defence",
+        positions=ALL_BKB, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A defender running at a shooter. Find one who breaks down under "
+            "control and one who runs straight past. Both happen every game."
+        ),
+        ask=Ask(
+            prompt="You run at a shooter. What do you do in the last two steps?",
+            options=(
+                "Short choppy steps with a hand up, under control",
+                "Keep sprinting and jump at the shot",
+                "Stop early and give them the shot",
+            ),
+            answer=0,
+            because=(
+                "A closeout that arrives out of control is a drive waiting to "
+                "happen. The hand bothers the shot; the feet stop the drive."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_transition",
+        title="Running the floor in the right lane",
+        focus="Transition",
+        positions=ALL_BKB, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A fast break with three players filling three lanes, and a second "
+            "one where everybody runs to the ball. The second is much easier to "
+            "find."
+        ),
+        ask=Ask(
+            prompt="Your team gets a rebound and goes. Where do you run?",
+            options=(
+                "Wide, to your own lane, and all the way to the rim",
+                "To the ball, to give the rebounder an option",
+                "Behind the play as the safety",
+            ),
+            answer=0,
+            because=(
+                "Three players in three lanes stretches two defenders past "
+                "breaking point. Everybody running to the ball turns a break "
+                "into a crowd."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_post_seal",
+        title="Sealing before the ball moves",
+        focus="Post play",
+        positions=BIGS, min_age=13, max_age=200, target_s=115,
+        find=(
+            "A post player establishing position as the ball is swung, not "
+            "after. The timing is the lesson, so cut it from before the pass."
+        ),
+        ask=Ask(
+            prompt="When do you fight for post position?",
+            options=(
+                "While the ball is still being passed around the perimeter",
+                "Once the ball reaches the player who will feed you",
+                "After you see the defender relax",
+            ),
+            answer=0,
+            because=(
+                "Position won after the ball arrives is position won too late. "
+                "The seal has to already be there when the passer looks."
+            ),
+        ),
+    ),
+)
+
+BKB_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="bkb_iq_tag_the_roller",
+        title="Tagging the roller",
+        focus="Team defence",
+        positions=ALL_BKB, min_age=15, max_age=200, target_s=160,
+        find=(
+            "A pick and roll where the low defender steps across to touch the "
+            "roller before recovering. Cut it wide -- the whole point is what "
+            "the third and fourth defenders do."
+        ),
+        ask=Ask(
+            prompt="A screener rolls to the rim. Whose job is it to stop them?",
+            options=(
+                "The nearest weak-side defender, who tags then recovers",
+                "The defender who was guarding the screener",
+                "Whoever is closest to the basket",
+            ),
+            answer=0,
+            because=(
+                "The screener's defender is usually behind the play. Stopping "
+                "the roll is a weak-side job, and it is a tag and recover, not "
+                "a switch."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_short_roll",
+        title="The short roll and the four-on-three",
+        focus="Two-man game",
+        positions=ALL_BKB, min_age=15, max_age=200, target_s=165,
+        find=(
+            "A trapped ball handler passing to the screener in the middle of "
+            "the floor. The clip is what the screener does next, not the pass."
+        ),
+        ask=Ask(
+            prompt="You catch it in the middle with two defenders on the ball. What now?",
+            options=(
+                "Look up -- you are attacking four against three",
+                "Drive straight to the rim before they recover",
+                "Pass it straight back out to reset",
+            ),
+            answer=0,
+            because=(
+                "Two defenders on the ball means three defenders on four "
+                "players. Driving into that is the one way to waste it."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_gap_help",
+        title="One pass away, two feet in the gap",
+        focus="Team defence",
+        positions=ALL_BKB, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A defender sitting in the driving lane while their player has the "
+            "ball one pass away. Look for the moment they recover on the catch."
+        ),
+        ask=Ask(
+            prompt="Your player is one pass away from the ball. Where are your feet?",
+            options=(
+                "In the gap, close enough to recover when they catch it",
+                "Denying the pass with a hand in the lane",
+                "Level with your player so they cannot go backdoor",
+            ),
+            answer=0,
+            because=(
+                "Full denial one pass away gets beaten backdoor and leaves no "
+                "help. Sitting in the gap stops the drive and still lets you "
+                "close out."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_shot_selection",
+        title="A good shot, and a shot you can make",
+        focus="Decision-making",
+        positions=ALL_BKB, min_age=15, max_age=200, target_s=160,
+        find=(
+            "Two shots from similar spots -- one early in the clock with a "
+            "defender closing, one after a pass with feet set. Same distance, "
+            "different shots."
+        ),
+        ask=Ask(
+            prompt="What makes a shot a good shot?",
+            options=(
+                "Feet set, in your range, and nobody is more open",
+                "It is a shot you have made before",
+                "It is early in the shot clock so there is time to rebound",
+            ),
+            answer=0,
+            because=(
+                "Being able to make a shot is not the same as it being the "
+                "right one. The question is always whether a teammate has a "
+                "better one."
+            ),
+        ),
+    ),
+    Topic(
+        key="bkb_iq_late_clock",
+        title="Late clock, and what changes",
+        focus="Decision-making",
+        positions=ALL_BKB, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A possession that reaches the last eight seconds of the clock. "
+            "The clip is how the shape of the offence changes, not the shot."
+        ),
+        ask=Ask(
+            prompt="Eight seconds left on the shot clock and nothing is open. What now?",
+            options=(
+                "Get to a shot you can make, and get bodies to the glass",
+                "Swing it around the perimeter until something opens",
+                "Drive it and try to draw a foul",
+            ),
+            answer=0,
+            because=(
+                "Late clock, a contested shot with three players rebounding "
+                "beats a turnover or a heave. The offensive rebound is the "
+                "second chance."
+            ),
+        ),
+    ),
+)
+
+BKB_TOPICS: tuple[Topic, ...] = BKB_FUNDAMENTALS + BKB_CORE + BKB_ADVANCED
+
+
+# Registered at the end, once both syllabuses exist. A sport is a key here and
+# nothing else -- there is no branch anywhere that names one.
+BY_SPORT.update({
+    "lacrosse": TOPICS,
+    "basketball": BKB_TOPICS,
+})
+BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

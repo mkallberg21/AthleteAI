@@ -185,6 +185,9 @@ class TestNoDrillOutEarnsOneItCannotBeToldApartFrom:
         assert unverified == {
             "lax_wall_ball_one_hand", "lax_wall_ball_cross",
             "lax_wall_ball_btb", "lax_wall_ball_split", "gen_lunge",
+            # The hands alternate exactly as they do on a crossover; the legs
+            # are what differ, and the camera has no view of that.
+            "bkb_between_legs",
         }, unverified
 
     def test_the_off_hand_premium_survives_and_is_measured(self):

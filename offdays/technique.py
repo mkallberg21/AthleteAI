@@ -396,6 +396,93 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "bkb_crossover": (
+        Cue("depth", "Push it across below your knees. A crossover at your "
+                     "waist is a ball somebody else is about to have.",
+            "the lower it is, the less time a defender has to reach it"),
+        Cue("tempo", "Hard and quick. A slow crossover just tells them which "
+                     "way you are going.",
+            "the point is changing direction before they can react"),
+        Cue("consistency", "Same low stance every rep. If you stand up between "
+                           "crossovers you have already lost the advantage.",
+            "standing up is how a good move becomes a turnover"),
+        Cue("offhand", "Do a set where the weak hand is the one receiving. "
+                       "That is the half of the move nobody practises.",
+            "a one-way crossover gets scouted in a quarter"),
+        Cue("endurance", "Stop when your stance creeps up, not when your hands "
+                         "get tired.",
+            "the legs go first and take the handle with them"),
+    ),
+    "bkb_between_legs": (
+        Cue("depth", "Step into it. The ball goes through as your foot comes "
+                     "forward, not while you are standing still.",
+            "standing still makes it a trick instead of a move"),
+        Cue("tempo", "One motion. If you have to look down and set it up, it "
+                     "is too slow to use in a game.",
+            "anything you have to set up, a defender has time to take"),
+        Cue("consistency", "Both directions, evenly. Most players only ever go "
+                           "one way through their legs.",
+            "the one you never practise is the one you need under pressure"),
+        Cue("offhand", "Lead with the weak hand for a full set.",
+            "your weak side is where the ball gets taken"),
+        Cue("endurance", "Stop before it gets sloppy. A loose one between the "
+                         "legs is a ball off your own shin.",
+            "tired hands are how this move ends up in the other team's hands"),
+    ),
+    "bkb_pound_weak": (
+        Cue("depth", "Below your knee, every rep. If it is coming back to your "
+                     "waist you are patting it, not pounding it.",
+            "a high dribble on your weak hand is a steal waiting to happen"),
+        Cue("tempo", "Hard. This should be loud, and it should be tiring "
+                     "before you expect it to be.",
+            "the strength is the point, not the count"),
+        Cue("consistency", "Eyes up the whole time. If you have to look at it, "
+                           "the hand is not ready yet.",
+            "the whole reason to build this hand is so you can look elsewhere"),
+        Cue("offhand", "This drill is already the off-hand. Doing it on your "
+                       "strong hand is a different, easier drill.",
+            "the hard half is the only half that changes anything"),
+        Cue("endurance", "Stop when the ball starts getting away from you, not "
+                         "when your forearm burns.",
+            "control going is the signal; a burning arm is just the work"),
+    ),
+    "bkb_pound_low": (
+        Cue("depth", "Knee height or lower, both hands. Wide base, chest up.",
+            "low is what makes it hard, and hard is what makes it worth doing"),
+        Cue("tempo", "Fast enough that you could not talk through it. This "
+                     "drill has a speed floor and a slow dribble will not "
+                     "count at all.",
+            "a slow pound is just a dribble with a different name"),
+        Cue("consistency", "Same height on both hands. Most players pound the "
+                           "strong hand and pat the other one.",
+            "the gap between your two hands is what a defender plays"),
+        Cue("offhand", "Alternate sets rather than alternating dribbles, so "
+                       "the weak hand gets a real turn.",
+            "swapping every rep lets the good hand carry the drill"),
+        Cue("endurance", "Stop when your chest drops toward the ball.",
+            "standing over the ball is how you lose sight of everything else"),
+    ),
+    "bkb_wall_pass": (
+        Cue("depth", "Step into every pass. Arms alone is a weak pass and a "
+                     "sore elbow.",
+            "the power comes from the step, not the hands"),
+        Cue("tempo", "Catch and release. If you have to gather it, the pass "
+                     "was too soft.",
+            "in a game the window closes while you are gathering"),
+        Cue("consistency", "Same spot on the wall every time. A pass that "
+                           "wanders is a pass a teammate has to reach for.",
+            "reaching for a pass is how a possession ends"),
+        Cue("endurance", "Stop when you start catching with your chest.",
+            "catching with the body is what tired hands do"),
+    ),
+    "bkb_stance": (
+        Cue("position", "Hips below your knees, not bent forward at the waist. "
+                        "The clock only runs while you are actually down.",
+            "bending at the waist looks low and moves like standing up"),
+        Cue("endurance", "Stop when your hips rise, not when your legs burn. "
+                         "The burn is the drill working.",
+            "the moment your hips come up you are training standing, not guarding"),
+    ),
     "lax_goalie_saves": (
         Cue("depth", "Both hands, all the way to the spot. A one-armed stab "
                      "does not count -- the app measures your hands together.",

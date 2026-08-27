@@ -290,23 +290,37 @@ def _pos(key, label, sport, group, aliases, emphasis, focus, plural=""):
     )
 
 
+# Basketball plans lead on basketball, the way lacrosse does. Weak-hand pound
+# carries real weight in all three: it is the one drill here whose pattern the
+# app can genuinely confirm, and the hand nobody practises is the hand a
+# defender plays. The defensive stance is the only conditioning work that is
+# actually the sport rather than a substitute for it.
 BASKETBALL: tuple[Position, ...] = (
     _pos("guard", "Guard", "basketball", "perimeter",
          ("guard", "point guard", "pg", "shooting guard", "sg", "combo guard", "g", "1", "2"),
-         mix(bkb_dribble=7, gen_lateral_bound=5, gen_high_knees=3, gen_squat_jump=3, gen_lunge=3,
-             gen_wall_sit=2, gen_plank=2, gen_mountain_climber=2, gen_squat=2),
+         mix(bkb_dribble=5, bkb_crossover=5, bkb_pound_weak=4, bkb_pound_low=3,
+             bkb_between_legs=2, bkb_stance=3, bkb_wall_pass=2,
+             gen_lateral_bound=3, gen_high_knees=2, gen_squat_jump=2, gen_lunge=2,
+             gen_plank=1, gen_squat=1),
          "Change direction, then change it again. Low, quick and never upright.",
          "guards"),
     _pos("wing", "Wing", "basketball", "perimeter",
          ("wing", "forward", "small forward", "sf", "3", "swing"),
-         mix(bkb_dribble=5, gen_lateral_bound=4, gen_squat_jump=4, gen_lunge=3, gen_push_up=2,
-             gen_high_knees=2, gen_plank=2, gen_tuck_jump=2, gen_squat=2),
+         mix(bkb_dribble=4, bkb_crossover=3, bkb_pound_weak=3, bkb_wall_pass=3,
+             bkb_stance=3, bkb_pound_low=2,
+             gen_lateral_bound=3, gen_squat_jump=3, gen_lunge=2, gen_push_up=2,
+             gen_tuck_jump=2, gen_high_knees=1, gen_squat=1),
          "Guard anyone, rebound anyway. Jumping and lateral work together.",
          "wings"),
     _pos("post", "Post", "basketball", "frontcourt",
          ("post", "center", "centre", "c", "power forward", "pf", "4", "5", "big"),
-         mix(bkb_dribble=2, gen_squat=4, gen_squat_jump=4, gen_tuck_jump=3, gen_push_up=3,
-             gen_lunge=3, gen_side_plank=2, gen_glute_bridge=2, gen_lateral_bound=1),
+         # A post still needs a handle -- the modern game asks them to face up
+         # and put it on the floor -- but strength stays the priority, so the
+         # ball work here is the two drills that survive contact.
+         mix(bkb_pound_weak=3, bkb_wall_pass=3, bkb_dribble=2, bkb_stance=2,
+             gen_squat=4, gen_squat_jump=4, gen_tuck_jump=3, gen_push_up=3,
+             gen_lunge=3, gen_side_plank=2, gen_glute_bridge=2,
+             gen_lateral_bound=1),
          "Hold your ground, then go up twice. Strength before anything else.",
          "posts"),
 )

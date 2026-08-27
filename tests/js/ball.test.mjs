@@ -217,10 +217,14 @@ test('every ball drill is exercised by this file', () => {
   // The lacrosse family is covered as a family below rather than one name at
   // a time: they all share LACROSSE_BALL, so listing each key here would grow
   // a rubber-stamp list while the loop is what actually exercises them.
+  //
+  // Basketball is covered the same way for the same reason: every one of its
+  // ball drills shares BASKETBALL, and the loop below drives all of them.
   const covered = new Set(['soc_juggle', 'bkb_dribble', 'vb_set',
                            'bb_wall_throw', 'ten_wall_rally']);
   const missing = SPECS
-    .filter((d) => d.ball && !covered.has(d.key) && d.sport !== 'lacrosse')
+    .filter((d) => d.ball && !covered.has(d.key)
+                && d.sport !== 'lacrosse' && d.sport !== 'basketball')
     .map((d) => d.key);
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
 });
@@ -422,4 +426,63 @@ test('setting the aspect reaches the tracker and the contact detector', () => {
   counter.setAspect(0);
   counter.setAspect(NaN);
   assert.equal(counter.tracker.aspect, 16 / 9);
+});
+
+
+/* -------------------------------------------------------------------------
+ * Basketball
+ *
+ * Every ball drill in the sport shares one BASKETBALL spec, so these are
+ * driven as a family -- the honest version of the coverage exemption above.
+ * ---------------------------------------------------------------------- */
+
+const BKB = () => SPECS.filter((d) => d.sport === 'basketball' && d.ball);
+
+test('every basketball drill counts a real bounce sequence', () => {
+  for (const drill of BKB()) {
+    const counter = new BallRepCounter(drill);
+    // Same geometry the single-drill dribble test above uses: a floor bounce
+    // with the hands above it, which is what separates a dribble from a juggle.
+    run(counter, bounce({ floor: 0.95, apex: 1.2, frames: 400 }),
+        pose({ left_wrist: { x: 0.48, y: 0.55 },
+               right_wrist: { x: 0.56, y: 0.55 } }));
+    const seen = counter.count || counter.confirmation().ball_contacts;
+    assert.ok(seen > 0, `${drill.key} saw nothing in a clean dribble sequence`);
+  }
+});
+
+test('every basketball drill uses the same ball', () => {
+  // A drifted size silently stops the detector's strongest filter matching,
+  // and nothing else in either suite would notice.
+  for (const drill of BKB()) {
+    assert.equal(drill.ball.diameter_cm, 23, `${drill.key} ball size drifted`);
+    assert.equal(drill.ball.colour, 'basketball', `${drill.key} colour drifted`);
+    assert.equal(drill.ball.detector, 'vision', `${drill.key} uses the general model`);
+  }
+});
+
+test('the ball spec carries its alternation rule to the browser', () => {
+  // The client needs it to tell an athlete what the drill is asking of their
+  // hands; the server enforces it. Both read the same field.
+  const rules = new Map(BKB().map((d) => [d.key, d.ball.alternation]));
+  assert.equal(rules.get('bkb_crossover'), 'alternating');
+  assert.equal(rules.get('bkb_pound_weak'), 'same_hand');
+  assert.equal(rules.get('bkb_dribble'), 'any');
+});
+
+test('a drill asking something of the hands also attributes them', () => {
+  for (const drill of BKB()) {
+    if (drill.ball.alternation !== 'any') {
+      assert.ok(drill.ball.attribute_side,
+        `${drill.key} has an alternation rule and no hands to check it against`);
+    }
+  }
+});
+
+test('the fast basketball patterns gate contacts tighter than the slow ones', () => {
+  // A pound arrives faster than a standing dribble; a gate longer than the rep
+  // it polices throws away every second bounce.
+  const gap = (key) => spec(key).ball.min_gap_ms;
+  assert.ok(gap('bkb_pound_low') < gap('bkb_dribble'));
+  assert.ok(gap('bkb_wall_pass') > gap('bkb_dribble'));
 });
