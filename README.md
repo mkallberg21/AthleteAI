@@ -22,7 +22,7 @@ that on. Off by default, deleted on withdrawal, gone after 30 days. See
 **Sixteen sports.** A program picks its sport at signup and the app fits itself
 around it: Lacrosse, Basketball, Soccer, Volleyball, Baseball, Softball, Cheer,
 Dance, Swimming, Track & Field, Football, Gymnastics, Tennis, Cross Country,
-Ice Hockey and Rugby. Each ships with its own positions — 61 in total — and each
+Ice Hockey and Rugby. Each ships with its own positions — 62 in total — and each
 position with its own suggested mix of work and a line saying what that mix is
 for. A volleyball middle blocker and a rugby prop get genuinely different plans.
 
@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3132 tests
+python -m pytest tests/ -q          # 3254 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 199 tests
+  node --test tests/js/*.test.mjs   # 214 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1292,24 +1292,35 @@ sessions.
 
 ### The drill catalog, and what is deliberately missing
 
-Twenty drills: two lacrosse stick drills and eighteen bodyweight movements that
-work for any sport — squats, lunges, glute bridges, push-ups, pull-ups, planks,
-side planks, hollow holds, wall sits, dead bugs, mountain climbers, burpees,
-squat jumps, tuck jumps, lateral bounds, high knees, jumping jacks, sit-ups.
+Seventy-two drills: eighteen bodyweight movements that work for any sport —
+squats, lunges, glute bridges, push-ups, pull-ups, planks, side planks, hollow
+holds, wall sits, dead bugs, mountain climbers, burpees, squat jumps, tuck
+jumps, lateral bounds, high knees, jumping jacks, sit-ups — and skill work for
+the seven sports built out so far: lacrosse (11), basketball (9), soccer,
+volleyball and tennis (7 each), hockey (6), and baseball and softball (7
+between them, sharing everything except the mound).
 
-**There are no dribbling, juggling, serving or shooting drills, on purpose.**
-Those need the *ball* tracked, not the body, and a drill that miscounts is worse
-than one that does not exist. Everything shipped has an unambiguous pose signal
-and is driven by the calibration harness — which caught a real error while this
-was being written: mountain climbers were declared with a `target_rom` of 0.33
-when a textbook rep measures 0.42, which would have handed out full depth for a
-half rep.
+**A drill only pays for what the camera can confirm.** Every skill drill has an
+unambiguous pose signal, and where several drills share one signal their
+thresholds have to separate them physically — a catalogue-wide guard fails the
+build if doing drill X necessarily satisfies drill Y's thresholds while Y pays
+more. It has fired across sports three times, most recently when a bat swing's
+reach band swallowed a goalie's save.
 
-Sport-specific *skill* work is coached through film clips and assignments
-instead, which is where a coach's eye belongs anyway.
+Everything is driven by the calibration harness, which has caught several real
+errors: mountain climbers declared at a `target_rom` of 0.33 when a textbook rep
+measures 0.42, a softball windmill's range guessed at 1.30 against a real arc
+nearer 1.60, and squat jumps smoothed so heavily they counted one rep in
+twenty-four. The harness used to skip any drill with no calibration sweep,
+silently, so a newly added drill was unguarded and looked green; it now fails
+instead. It also used to drive every drill at one rep a second regardless of the
+drill's own refractory window, which meant the slow drills were driven faster
+than they are allowed to count — two of them turned out to have had their
+`target_rom` fitted to that distorted signal.
 
-The harness also used to skip any drill with no calibration sweep, silently — so
-a newly added drill was unguarded and looked green. It now fails instead.
+The nine sports not yet built get positions, benchmarks, load monitoring and the
+bodyweight catalogue, and are honest about having no skill drills rather than
+being handed another sport's with the labels changed.
 
 ### Position benchmarks
 
@@ -1318,7 +1329,7 @@ first two are the ones usually skipped.
 
 **Sixteen sports ship with positions.** Lacrosse, Basketball, Soccer,
 Volleyball, Baseball, Softball, Cheer, Dance, Swimming, Track & Field, Football,
-Gymnastics, Tennis, Cross Country, Ice Hockey and Rugby — 61 positions, each
+Gymnastics, Tennis, Cross Country, Ice Hockey and Rugby — 62 positions, each
 with its own drill mix and its own one-line focus. A program picks its sport at
 signup and the app fits itself around it.
 

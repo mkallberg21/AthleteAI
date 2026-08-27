@@ -828,3 +828,130 @@ test('drills that are not shooting carry no flare field', () => {
   assert.ok(counter.count > 0);
   for (const rep of counter.reps) assert.ok(!('flare' in rep));
 });
+
+
+// ---------------------------------------------------------------------------
+// Hand sweep -- the horizontal hand measurement hockey runs on.
+// ---------------------------------------------------------------------------
+
+/** Both hands together, `offset` torso lengths to the athlete's right. */
+function handsAt(offset) {
+  const pts = baseSkeleton();
+  const x = 0.5 + offset * TORSO;
+  pts[IDX.left_wrist] = { x: x - 0.008, y: 0.45, z: 0, visibility: 0.95 };
+  pts[IDX.right_wrist] = { x: x + 0.008, y: 0.45, z: 0, visibility: 0.95 };
+  return pts;
+}
+
+test('hand sweep: measures which side of the chest the hands are on', () => {
+  const drill = spec('hoc_stickhandle');
+  for (const want of [-0.5, -0.18, 0, 0.18, 0.5]) {
+    const got = computeSignal(handsAt(want), drill);
+    assert.ok(Math.abs(got - want) < 0.02, `${want} read as ${got}`);
+  }
+});
+
+test('hand sweep: the sides are the athlete\'s own, not the picture\'s', () => {
+  const drill = spec('hoc_stickhandle');
+  const pts = handsAt(0.4);
+  // Turn them around. The hands are in the same place on screen but now on
+  // the athlete's other side, and a raw x would never notice.
+  pts[IDX.left_shoulder] = { x: 0.55, y: 0.35, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.45, y: 0.35, z: 0, visibility: 0.95 };
+  assert.ok(computeSignal(pts, drill) < 0);
+});
+
+test('hand sweep: side-on it says nothing rather than guessing a side', () => {
+  const drill = spec('hoc_stickhandle');
+  const pts = handsAt(0.4);
+  // With the shoulders collapsed, a forehand sweep and a backhand one project
+  // onto the same tiny span -- and the drill would count somebody waving the
+  // stick in one place.
+  pts[IDX.left_shoulder] = { x: 0.495, y: 0.35, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.505, y: 0.35, z: 0, visibility: 0.95 };
+  assert.equal(computeSignal(pts, drill), null);
+});
+
+test('hand sweep: one hand out of frame is no signal at all', () => {
+  const drill = spec('hoc_stickhandle');
+  const pts = handsAt(0.4);
+  pts[IDX.left_wrist].visibility = 0.1;
+  assert.equal(computeSignal(pts, drill), null);
+});
+
+test('hand sweep: a one-handed reach measures roughly half a two-handed one', () => {
+  const drill = spec('hoc_stickhandle');
+  const both = computeSignal(handsAt(0.5), drill);
+  const one = handsAt(0.5);
+  // Left hand stays at the chest, right hand goes. This is the flail every
+  // stick coach spends the season removing, and the midpoint halves it
+  // arithmetically rather than by detecting it.
+  one[IDX.left_wrist] = { x: 0.5, y: 0.45, z: 0, visibility: 0.95 };
+  const got = computeSignal(one, drill);
+  assert.ok(got < both * 0.6, `one-handed ${got} against two-handed ${both}`);
+});
+
+/** One handle: hands from `lo` across to `hi` and back. */
+function playSweep(counter, startMs, { lo = -0.26, hi = 0.26, frames = 10 } = {}) {
+  let t = startMs;
+  const step = 1000 / 30;
+  const mid = (lo + hi) / 2, amp = (hi - lo) / 2;
+  for (let f = 0; f < frames; f += 1) {
+    counter.push(handsAt(mid - amp * Math.cos((2 * Math.PI * f) / frames)), t);
+    t += step;
+  }
+  return t;
+}
+
+test('stickhandling: counts one rep per trip across the body', () => {
+  const counter = new RepCounter(spec('hoc_stickhandle'));
+  let t = 0;
+  for (let i = 0; i < 8; i += 1) t = playSweep(counter, t);
+  assert.equal(counter.count, 8);
+});
+
+test('stickhandling: a handle that stays on one side never counts', () => {
+  // The structural half of the drill. A rep arms on one side of the chest and
+  // fires on the other, so a sweep that never crosses is not a small rep --
+  // it is no rep, and nothing has to detect that and argue about it.
+  const counter = new RepCounter(spec('hoc_stickhandle'));
+  let t = 0;
+  for (let i = 0; i < 8; i += 1) t = playSweep(counter, t, { lo: 0.02, hi: 0.55 });
+  assert.equal(counter.count, 0);
+});
+
+test('stickhandling: a tight handle never fires the wide drill', () => {
+  // The whole basis for wide handles paying more than tight ones. If a narrow
+  // sweep could satisfy the wide thresholds, the highest-earning thing in the
+  // catalogue would be picking the wider name and doing the easier movement.
+  const counter = new RepCounter(spec('hoc_wide_handles'));
+  let t = 0;
+  for (let i = 0; i < 8; i += 1) t = playSweep(counter, t, { lo: -0.26, hi: 0.26 });
+  assert.equal(counter.count, 0);
+});
+
+test('hand sweep: reps carry both sides of the sweep in peak and rom', () => {
+  // What `sweep.py` reads. There is no per-rep side field: the far end one way
+  // is `peak` and the far end the other is `peak - rom`, both already on every
+  // rep, which is why a lopsided session needs no new column to report.
+  const counter = new RepCounter(spec('hoc_stickhandle'));
+  let t = 0;
+  for (let i = 0; i < 8; i += 1) t = playSweep(counter, t, { lo: -0.24, hi: 0.62, frames: 14 });
+  assert.ok(counter.count >= 6);
+  for (const rep of counter.reps) {
+    assert.ok(rep.peak > 0.30, `peak ${rep.peak}`);
+    assert.ok(rep.peak - rep.rom < -0.10, `other side ${rep.peak - rep.rom}`);
+  }
+});
+
+test('hand sweep drills carry no handedness, so no off-hand premium', () => {
+  // A rep always fires at the positive extreme, so a hand read there would say
+  // "right" on every rep ever counted -- and handed reps carry a 2.4x off-hand
+  // bonus, which would have made stickhandling the best-paying drill in the
+  // product for doing nothing in particular.
+  const counter = new RepCounter(spec('hoc_stickhandle'));
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) t = playSweep(counter, t);
+  assert.ok(counter.count > 0);
+  for (const rep of counter.reps) assert.equal(rep.hand, 'none');
+});

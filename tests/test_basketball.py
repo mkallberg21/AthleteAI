@@ -259,12 +259,28 @@ class TestTheFilmCurriculum:
 
 
 class TestASportWithNoCurriculumSaysSo:
+    """Most sports still have none, and honest silence is the requirement.
+
+    The sport used here is looked up rather than named, because it used to be
+    named and the name kept coming true -- this broke the day hockey got a
+    syllabus, which is exactly the wrong reason for a test to fail.
+    """
+
+    @staticmethod
+    def _unbuilt() -> str:
+        from offdays.sports import CATALOG
+        for sport in CATALOG:
+            if not curriculum.topics_for(sport.key):
+                return sport.key
+        pytest.skip("every sport has a syllabus now, which is a good problem")
+
     def test_it_returns_empty_rather_than_erroring(self):
-        assert curriculum.topics_for("hockey") == ()
+        assert curriculum.topics_for(self._unbuilt()) == ()
 
     def test_the_note_explains_what_is_missing(self):
-        note = curriculum.catalogue("hockey")["note"]
-        assert "no film curriculum for hockey yet" in note
+        sport = self._unbuilt()
+        note = curriculum.catalogue(sport)["note"]
+        assert f"no film curriculum for {sport} yet" in note
 
 
 class TestTheLateralSignal:

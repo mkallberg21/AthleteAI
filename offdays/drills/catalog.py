@@ -2611,7 +2611,13 @@ BB_FIELDING = DrillSpec(
         "getting down."
     ),
     quality=QualitySpec(
-        target_rom=0.44,
+        # Measured at this drill's own tempo. It read 0.44 when the calibration
+        # harness drove every drill at one rep a second regardless of its
+        # refractory window -- which for a fielding rep is faster than the
+        # movement is, and the smoothing filter clipped the excursion. Driven
+        # inside its own band the same textbook rep measures 0.55, and the low
+        # figure had been quietly marking honest reps as deeper than full.
+        target_rom=0.55,
         consistency_target=0.16,
         tempo_min_ms=900,
         tempo_max_ms=3_500,
@@ -2900,7 +2906,10 @@ TEN_SERVE = DrillSpec(
         "it is just repeating."
     ),
     quality=QualitySpec(
-        target_rom=75.0,
+        # Measured at this drill's own tempo rather than at one rep a second,
+        # which is faster than anybody serves. See bb_fielding above -- the
+        # same harness fix moved both, and for the same reason.
+        target_rom=94.0,
         # A serve has to be repeatable before it is worth making it fast, so
         # consistency carries the most weight.
         consistency_target=0.11,
@@ -3023,6 +3032,350 @@ TEN_RECOVERY = DrillSpec(
 
 
 
+# --------------------------------------------------------------------------
+# Hockey
+#
+# The sport where the thing being trained happens somewhere the phone cannot
+# go. Nobody props a phone on the boards and skates a drill past it, so every
+# drill here is off-ice work -- which is not a compromise, it is what a hockey
+# player's driveway hour actually is: a shooting pad, a stickhandling ball,
+# and legs.
+#
+# **There is no puck spec anywhere in this section, and that is deliberate.**
+# A puck is black, matte and usually on a dark surface. The vision detector
+# works in normalised chroma, and black has no chroma at all -- it is not a
+# colour, it is an absence of light. A black preset would match every shadow,
+# every dark shoe and every gap under a garage door, and a detector that fires
+# on shadows is worse than no detector, because it produces confident wrong
+# numbers instead of honest silence. So these drills count from the body only,
+# and nothing here claims a puck was ever seen.
+#
+# What replaces the ball check is the sweep signal's sign. A rep arms on one
+# side of the body and fires on the other, so the three stick drills below are
+# separated from each other by how far across the body the hands actually
+# travelled -- a narrow handle physically cannot fire the wide one's
+# thresholds -- and each pays more than the one it contains.
+# --------------------------------------------------------------------------
+
+HOC_STICKHANDLE = DrillSpec(
+    key="hoc_stickhandle",
+    name="Stickhandling",
+    sport="hockey",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Ball or puck side to side in front of you, as quick as you can keep "
+        "it clean. One rep is one trip across your body and back. It reads "
+        "your hands, not the puck -- so it counts the handle, and it has no "
+        "idea whether the puck stayed on the blade."
+    ),
+    signal=SignalSpec(
+        # The first horizontal hand measurement in the catalogue. Stickhandling
+        # moves the hands almost purely sideways, so every height and angle
+        # signal here reads it as an athlete standing still -- which is why the
+        # defining skill of the sport had no drill anywhere.
+        kind=SignalKind.HAND_SWEEP,
+        # Light, because this is the fastest oscillation in the catalogue.
+        # Tight handles run past three cycles a second, which is seven or eight
+        # frames a cycle at 30fps, and a heavy filter simply erases them.
+        smoothing=0.60,
+    ),
+    counter=CounterSpec(
+        # Tight handles: the hands stay close to the middle of the chest and
+        # the puck does the travelling. Narrow on purpose -- this is the band
+        # the other two stick drills contain rather than the other way round.
+        down_threshold=-0.18,
+        up_threshold=0.18,
+        min_rep_ms=220,
+        max_rep_ms=2_500,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=1.0,
+        daily_rep_cap=900,
+        diminishing_after_reps=300,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=4.5,
+        # The verification, and the reason this pays a full point. A wide
+        # handle or a shot cannot be repeated at this rate, so a session that
+        # sustains it was the drill it says it was.
+        min_reps_per_second=0.90,
+        min_reps=30,
+        min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you at about chest height, far enough back "
+        "to see both hands the whole way across. It needs to see you from the "
+        "front -- side-on it cannot tell forehand from backhand at all."
+    ),
+    quality=QualitySpec(
+        target_rom=0.48,
+        # Handles are about repeatability before they are about width.
+        consistency_target=0.12,
+        consistency_ceiling=0.36,
+        tempo_min_ms=220,
+        tempo_max_ms=900,
+        w_consistency=0.40,
+        w_depth=0.20,
+        w_tempo=0.20,
+        w_endurance=0.20,
+        min_reps=25,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.12,
+        load_per_minute=1.2,
+        # Nothing here goes overhead. A hockey player's arm risk is not a
+        # thrower's, and putting stick work on the throwing ledger would make
+        # the one number that ledger exists to protect meaningless.
+        throws_per_rep=0.0,
+        tissue=Tissue.UPPER_BODY,
+    ),
+    tracks_handedness=False,
+)
+
+HOC_WIDE_HANDLES = DrillSpec(
+    key="hoc_wide_handles",
+    name="Wide Handles",
+    sport="hockey",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "The same handle, pushed right out to each side -- full extension one "
+        "way, full extension the other. Slower and much wider than tight "
+        "handles, and the app can tell the difference, because a narrow handle "
+        "never reaches these thresholds."
+    ),
+    signal=SignalSpec(kind=SignalKind.HAND_SWEEP, smoothing=0.50),
+    counter=CounterSpec(
+        # Hands out past the shoulder on each side. Contains the tight handle's
+        # band, which is why it has to pay more than one -- see the subsumption
+        # guard in tests/test_drills.py.
+        down_threshold=-0.42,
+        up_threshold=0.42,
+        min_rep_ms=500,
+        max_rep_ms=5_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=400, diminishing_after_reps=180),
+    validation=ValidationSpec(
+        max_reps_per_second=2.0, min_reps_per_second=0.20,
+        min_reps=15, min_duration_ms=25_000,
+    ),
+    setup_hint=(
+        "Same setup as tight handles, but stand back further -- your hands go "
+        "a long way out and the app only counts what it can see."
+    ),
+    quality=QualitySpec(
+        target_rom=1.10,
+        consistency_target=0.16,
+        consistency_ceiling=0.45,
+        tempo_min_ms=500,
+        tempo_max_ms=2_200,
+        # Width is the whole point of this one, so depth carries the weight
+        # that consistency carries in the tight version.
+        w_consistency=0.25,
+        w_depth=0.40,
+        w_tempo=0.15,
+        w_endurance=0.20,
+        min_reps=15,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.30, load_per_minute=1.4,
+        throws_per_rep=0.0, tissue=Tissue.UPPER_BODY,
+    ),
+    tracks_handedness=False,
+)
+
+HOC_SHOT = DrillSpec(
+    key="hoc_shot",
+    name="Wrist Shots",
+    sport="hockey",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Off a pad into a net. It follows your hands sweeping the puck from "
+        "behind your back foot right through to the follow-through, so a full "
+        "shot counts and a flick of the wrists does not. It cannot see the "
+        "puck and does not know where it went -- what it knows is that your "
+        "hands travelled the whole way."
+    ),
+    signal=SignalSpec(kind=SignalKind.HAND_SWEEP, smoothing=0.40),
+    counter=CounterSpec(
+        # The widest band on this signal: loaded behind the back foot, through
+        # the release, out to a high follow-through across the body. Contains
+        # both handle drills, so it pays more than either.
+        down_threshold=-0.62,
+        up_threshold=0.62,
+        min_rep_ms=1_400,
+        max_rep_ms=12_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=150, diminishing_after_reps=80),
+    validation=ValidationSpec(
+        max_reps_per_second=0.8, min_reps_per_second=0.03,
+        min_reps=10, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone in front of you, past the net and off to the side you are "
+        "facing, high enough to see your hands finish. Same spot on the pad "
+        "every shot -- moving around teaches you nothing."
+    ),
+    quality=QualitySpec(
+        target_rom=1.60,
+        consistency_target=0.12,
+        consistency_ceiling=0.40,
+        tempo_min_ms=1_400,
+        tempo_max_ms=6_000,
+        w_consistency=0.40,
+        w_depth=0.30,
+        w_tempo=0.10,
+        w_endurance=0.20,
+        min_reps=10,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.9,
+        # A shot is rotation through the hips and core, not an overhead throw.
+        # Deliberately off the arm's ledger for the same reason a bat swing is.
+        throws_per_rep=0.0,
+        tissue=Tissue.CORE,
+    ),
+    tracks_handedness=False,
+)
+
+HOC_BUTTERFLY = DrillSpec(
+    key="hoc_butterfly",
+    name="Butterfly Recoveries",
+    sport="hockey",
+    category=Category.AGILITY,
+    metric=Metric.REPS,
+    description=(
+        "Down into the butterfly and back up to your skates, over and over. "
+        "It measures how far your hips travel, so dropping to a knee does not "
+        "register as getting down -- and getting back up is half the rep."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
+    counter=CounterSpec(
+        # Hips nearly to the floor and back to standing. The floor of this band
+        # deliberately sits just above a burpee's, so a set of burpees does not
+        # fire it -- a burpee is worth more per rep and the two must not be
+        # interchangeable.
+        down_threshold=0.28,
+        up_threshold=0.92,
+        min_rep_ms=1_000,
+        max_rep_ms=9_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.7, daily_rep_cap=150, diminishing_after_reps=70),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps_per_second=0.04,
+        min_reps=10, min_duration_ms=25_000,
+    ),
+    setup_hint=(
+        "Phone side-on at about knee height, on a soft floor. Pads if you have "
+        "them. This is the drop and the recovery -- the app cannot see whether "
+        "you sealed, only how far you went and how fast you got back."
+    ),
+    quality=QualitySpec(
+        target_rom=0.62,
+        consistency_target=0.14,
+        tempo_min_ms=1_000,
+        tempo_max_ms=4_000,
+        # Getting back up is what a goalie runs out of, so endurance is
+        # weighted harder here than anywhere else in this section.
+        w_consistency=0.20,
+        w_depth=0.30,
+        w_tempo=0.15,
+        w_endurance=0.35,
+        min_reps=10,
+    ),
+    load=LoadSpec(load_per_rep=1.6, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+HOC_SHUFFLE = DrillSpec(
+    key="hoc_shuffle",
+    name="Zone Slides",
+    sport="hockey",
+    category=Category.AGILITY,
+    metric=Metric.REPS,
+    description=(
+        "Slide across the top of the zone without ever turning your hips. One "
+        "rep is one push. It measures how far apart your feet are, so a step "
+        "that goes nowhere does not count -- and it can see when your feet "
+        "cross, which off the ice is the exact moment you stop being able to "
+        "change direction."
+    ),
+    signal=SignalSpec(kind=SignalKind.STANCE_WIDTH, smoothing=0.45),
+    counter=CounterSpec(
+        # Identical to the basketball slide, the soccer shuffle and the tennis
+        # recovery step, because it is identical work: the same feet, the same
+        # width, the same crossing error. Four sports on one measurement, all
+        # paying the same, is the honest outcome rather than a coincidence.
+        down_threshold=1.30,
+        up_threshold=1.80,
+        min_rep_ms=280,
+        max_rep_ms=3_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=140),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0, min_reps_per_second=0.15,
+        min_reps=10, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see both feet. Stay "
+        "low, push off the outside foot, and never let them cross."
+    ),
+    quality=QualitySpec(
+        target_rom=0.70,
+        consistency_target=0.18,
+        tempo_min_ms=280,
+        tempo_max_ms=1_400,
+        w_consistency=0.30,
+        w_depth=0.35,
+        w_tempo=0.20,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=1.1, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+HOC_STANCE = DrillSpec(
+    key="hoc_stance",
+    name="Skater's Stance",
+    sport="hockey",
+    category=Category.CONDITIONING,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Knees bent, chest up, weight on the balls of your feet -- and stay "
+        "there. The clock only runs while your hips are actually down. Stand "
+        "up out of it and it stops, which is the whole drill."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
+    counter=CounterSpec(
+        # Lower than a basketball defensive stance and higher than a catcher's
+        # crouch. A skating stance is a deep knee bend with the chest forward,
+        # not a sit -- below 0.45 the athlete has dropped onto their heels,
+        # which is a squat hold and a different exercise.
+        down_threshold=0.45, up_threshold=0.72, min_rep_ms=400, max_rep_ms=60_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=30.0, daily_rep_cap=1_000),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps=0, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone side-on at about knee height so it can see how low you really "
+        "are. Chest up, back flat, and nothing to lean on."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=3.6, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
     SOC_JUGGLE,
     SOC_JUGGLE_WEAK,
@@ -3061,6 +3414,12 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     TEN_SERVE,
     TEN_SPLIT_STEP,
     TEN_RECOVERY,
+    HOC_STICKHANDLE,
+    HOC_WIDE_HANDLES,
+    HOC_SHOT,
+    HOC_BUTTERFLY,
+    HOC_SHUFFLE,
+    HOC_STANCE,
     GEN_LUNGE,
     GEN_GLUTE_BRIDGE,
     GEN_MOUNTAIN_CLIMBER,

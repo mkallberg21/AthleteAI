@@ -103,7 +103,7 @@ export function frameConfidence(landmarks, spec) {
   // is actually measuring -- and on a cued drill they also decide the zone, so
   // a frame that has lost them is worth much less than the shoulder-only
   // fallback would suggest.
-  if (spec.signal.kind === 'save_reach') {
+  if (spec.signal.kind === 'save_reach' || spec.signal.kind === 'hand_sweep') {
     ['left_wrist', 'right_wrist'].forEach((n) => names.add(n));
   }
   let sum = 0, n = 0;
@@ -155,6 +155,10 @@ export function computeSignal(landmarks, spec) {
 
   if (kind === 'save_reach') {
     return saveReachSignal(landmarks);
+  }
+
+  if (kind === 'hand_sweep') {
+    return handSweepSignal(landmarks);
   }
 
   if (kind === 'wall_ball_cycle') {
@@ -268,6 +272,55 @@ export function stanceWidthSignal(landmarks) {
   const value = ((ra.x - la.x) * ax + (ra.y - la.y) * ay) / span / torso;
   // Which foot is leading, for drills that care which way the athlete slid.
   return { value, hand: value >= 0 ? 'right' : 'left' };
+}
+
+/**
+ * Which side of the body the hands are on -- in torso lengths, signed.
+ *
+ * The horizontal companion to `saveReachSignal`. Reach asks how far the hands
+ * left the chest; this asks which way they went. Everything a hockey stick
+ * does off the ice is that question: stickhandling is the hands crossing the
+ * body and coming back, and a wrist shot is the same crossing done once,
+ * slowly and hard. None of it moves the hands up or down enough for a height
+ * signal to see, which is why the sport had no skill drill anywhere.
+ *
+ * Projected onto the shoulder axis rather than read off the picture's x, so
+ * the numbers are the athlete's own left and right however they are stood, and
+ * null rather than a guess when that axis has collapsed -- side-on, a sweep to
+ * the forehand and a sweep to the backhand project onto the same tiny span and
+ * the drill would count a player waving the stick in one place.
+ *
+ * Taken from the MIDPOINT of the wrists and null unless both are visible.
+ * A stick is held in two hands. The single-wrist version of this paid a
+ * one-handed reach exactly what it paid a real handle, and taking the midpoint
+ * fixes that arithmetically rather than by detecting it: reach out with one
+ * hand and the midpoint travels half as far, which does not clear the
+ * threshold, so the rep simply is not there.
+ *
+ * Returns a bare number rather than a {value, hand} pair on purpose. The sign
+ * IS the side, and a rep fires at the positive extreme every time, so a `hand`
+ * read at that extreme would say "right" for every rep ever counted -- and,
+ * because handed reps carry an off-hand premium, would have paid it on all of
+ * them. Which side came up short is recovered afterwards from `peak` and
+ * `rom`, which are already on every rep.
+ */
+export function handSweepSignal(landmarks) {
+  const ls = lm(landmarks, 'left_shoulder');
+  const rs = lm(landmarks, 'right_shoulder');
+  const lw = lm(landmarks, 'left_wrist');
+  const rw = lm(landmarks, 'right_wrist');
+  const torso = torsoLength(landmarks);
+  if (!ls || !rs || !lw || !rw || !torso) return null;
+
+  // Unit vector along the shoulders, pointing to the athlete's right.
+  const ax = rs.x - ls.x;
+  const ay = rs.y - ls.y;
+  const span = Math.hypot(ax, ay);
+  if (span < 0.35 * torso) return null;
+
+  const hands = midpoint(lw, rw);
+  const chest = midpoint(ls, rs);
+  return ((hands.x - chest.x) * ax + (hands.y - chest.y) * ay) / span / torso;
 }
 
 /**

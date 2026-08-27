@@ -90,6 +90,18 @@ const SWEEP = {
   // The pitching hand below the hip, up over the head and back down. By far
   // the largest vertical excursion of any drill in the catalogue.
   sb_windmill:       { lo: -1.00, hi: 0.90, kind: 'wrist' },
+  // The hands crossing the body and back, in torso lengths either side of the
+  // middle of the chest. Three drills on one signal, deliberately nested: a
+  // tight handle physically cannot reach the wide one's thresholds, and
+  // neither can reach the shot's.
+  hoc_stickhandle:   { lo: -0.26, hi: 0.26, kind: 'sweep' },
+  hoc_wide_handles:  { lo: -0.60, hi: 0.60, kind: 'sweep' },
+  hoc_shot:          { lo: -0.86, hi: 0.86, kind: 'sweep' },
+  // Hips near the floor and back up to standing, in hip height above the feet.
+  hoc_butterfly:     { lo: 0.24,  hi: 0.96, kind: 'body' },
+  // The same stance measurement basketball, soccer and tennis all use, for the
+  // same movement.
+  hoc_shuffle:       { lo: 1.22,  hi: 2.00, kind: 'stance' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept
@@ -152,6 +164,13 @@ function frame(kind, v) {
     // is tested in counter.test.mjs.
     pts[IDX.left_wrist] = { x: 0.49, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
     pts[IDX.right_wrist] = { x: 0.51, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
+  } else if (kind === 'sweep') {
+    // Both hands together, v torso lengths to one side of the chest. Together
+    // is the point: the signal takes their midpoint, so a one-handed reach
+    // travels half as far and does not clear the threshold at all.
+    const x = 0.5 + v * TORSO;
+    pts[IDX.left_wrist] = { x: x - 0.008, y: 0.45, z: 0, visibility: 0.95 };
+    pts[IDX.right_wrist] = { x: x + 0.008, y: 0.45, z: 0, visibility: 0.95 };
   } else if (kind === 'ankles') {
     pts[IDX.left_ankle] = { x: 0.46, y: 0.95 - v * TORSO, z: 0, visibility: 0.95 };
     pts[IDX.right_ankle] = { x: 0.54, y: 0.95, z: 0, visibility: 0.95 };
@@ -177,7 +196,16 @@ for (const drill of SPECS) {
   const counter = new RepCounter(drill);
   const mid = (sweep.lo + sweep.hi) / 2;
   const amp = (sweep.hi - sweep.lo) / 2;
-  const framesPerRep = 30;
+  // One second a rep unless the drill's own refractory window forbids it.
+  // A fixed second drove the slow drills faster than they are allowed to
+  // count -- a wrist shot cannot legally repeat inside 1.4s -- so half their
+  // textbook reps were thrown away by the timing gate and they scraped past
+  // the "at least half counted" floor for a reason that had nothing to do
+  // with calibration. Driving each drill inside its own band means a failure
+  // here means what it says.
+  const framesPerRep = Math.max(
+    30, Math.ceil((drill.counter.min_rep_ms * 1.5) / (1000 / 30)),
+  );
   let t = 0;
   for (let r = 0; r < 24; r += 1) {
     for (let f = 0; f < framesPerRep; f += 1) {

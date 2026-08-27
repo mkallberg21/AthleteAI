@@ -267,6 +267,33 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "jockeying a winger without turning your hips"),
         Transfer("Lacrosse", "a defender's approach and break down"),
     ),
+    "hoc_stickhandle": (
+        Transfer("Lacrosse", "the same hands, holding something heavier"),
+        Transfer("Basketball", "a tight handle in a crowd, on the floor instead"),
+        Transfer("Field Hockey", "very nearly the same skill, lower down"),
+    ),
+    "hoc_wide_handles": (
+        Transfer("Lacrosse", "protecting the stick out away from your body"),
+        Transfer("Basketball", "a wide crossover, and the same reach"),
+    ),
+    "hoc_shot": (
+        Transfer("Baseball", "a swing is this rotation, held level"),
+        Transfer("Golf", "the same weight transfer, the same follow-through"),
+        Transfer("Lacrosse", "shooting through your hips rather than your arms"),
+    ),
+    "hoc_butterfly": (
+        Transfer("Soccer", "a keeper getting up off the floor, over and over"),
+        Transfer("Wrestling", "standing up out of a bad position, quickly"),
+    ),
+    "hoc_shuffle": (
+        Transfer("Basketball", "a defensive slide is this exact movement"),
+        Transfer("Tennis", "recovering to the middle without crossing over"),
+        Transfer("Soccer", "jockeying a winger without turning your hips"),
+    ),
+    "hoc_stance": (
+        Transfer("Basketball", "a defensive stance held far too long"),
+        Transfer("Skiing", "the same knees, the same burning quads"),
+    ),
     "soc_juggle_weak": (
         Transfer("Basketball", "your weak hand, and the same reason for it"),
         Transfer("Lacrosse", "off-hand wall ball -- the hard half of the work"),

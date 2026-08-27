@@ -4077,6 +4077,71 @@ class TestSecondLooksThroughTheApi:
         assert "Not highlight reels" in body["not_this"]
 
 
+class TestAStickSessionEndToEnd:
+    """The backhand report through the real endpoints.
+
+    Worth having end to end rather than only against `sweep.analyze`, because
+    the whole design of this report is that it needs no new rep field: it is
+    recovered from `peak` and `rom`, which every client has always sent. If the
+    wiring ever reads something else, the unit tests would not notice.
+    """
+
+    def _submit(self, client, headers, peak, other, n=20):
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "hoc_stickhandle"},
+            headers=headers,
+        ).json()
+        reps = [
+            {"t_ms": 400 * (i + 1), "confidence": 0.9,
+             "peak": peak, "rom": peak + other, "cycle_ms": 320}
+            for i in range(n)
+        ]
+        return client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": started["session_id"], "nonce": started["nonce"],
+                "duration_ms": 400 * (n + 1), "reps": reps,
+                "mean_confidence": 0.9,
+            },
+            headers=headers,
+        )
+
+    def test_an_even_session_comes_back_even(self, client, program):
+        res = self._submit(client, program["athletes"][0]["headers"], 0.25, 0.24)
+        assert res.status_code == 200
+        block = res.json()["sweep"]
+        assert block["reps"] == 20
+        assert block["balance"] > 0.9
+
+    def test_a_short_side_is_measured_from_peak_and_rom_alone(self, client, program):
+        res = self._submit(client, program["athletes"][0]["headers"], 0.45, 0.20)
+        block = res.json()["sweep"]
+        assert block["balance"] == pytest.approx(0.444, abs=0.01)
+        assert "backhand" in block["note"]
+
+    def test_a_short_side_costs_no_xp(self, client, program):
+        # Counted, never scored -- the same rule as the crossed-feet report.
+        headers = program["athletes"][0]["headers"]
+        even = self._submit(client, headers, 0.25, 0.24).json()
+        lopsided = self._submit(client, headers, 0.45, 0.10).json()
+        assert lopsided["reps_total"] == even["reps_total"]
+        assert lopsided["xp_awarded"] == even["xp_awarded"]
+
+    def test_a_drill_on_another_signal_carries_no_sweep_block(self, client, program):
+        res = do_session(client, program["athletes"][0]["headers"])
+        assert "sweep" not in res.json()
+
+    def test_no_off_hand_premium_is_paid_on_a_stick_session(self, client, program):
+        # A hockey player never switches hands, and a sweep rep fires on the
+        # same side every time. Paying an off-hand bonus here would be paying
+        # 2.4x for the shape of the signal.
+        res = self._submit(client, program["athletes"][0]["headers"], 0.25, 0.24)
+        labels = " ".join(l["label"] for l in res.json()["xp_breakdown"])
+        assert "Off-hand" not in labels
+        assert res.json()["reps_left"] == 0
+        assert res.json()["reps_right"] == 0
+
+
 class TestASlideSessionEndToEnd:
     """The crossed-feet flag through the real endpoints."""
 

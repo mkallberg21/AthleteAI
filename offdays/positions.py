@@ -675,23 +675,51 @@ CROSS_COUNTRY: tuple[Position, ...] = (
          "distance runners"),
 )
 
+# Four positions rather than three, because a centre and a winger want
+# genuinely different driveway hours: a centre handles the puck in traffic all
+# night, a winger shoots. Everything here is off-ice, which is not a compromise
+# -- it is what a hockey player's hour at home has always actually been.
+#
+# `offhand_matters` is False for every one of them, and that is a real
+# statement rather than an oversight. A hockey player holds the stick the same
+# way for their entire life; scoring them on left/right hand balance would
+# measure nothing they are trying to build. Their weak side is the backhand,
+# and `sweep.py` reports it from the width of the sweep instead.
 HOCKEY: tuple[Position, ...] = (
-    _pos("forward", "Forward", "hockey", "skaters",
-         ("forward", "centre", "center", "c", "winger", "wing", "lw", "rw", "f"),
-         mix(gen_lateral_bound=5, gen_wall_sit=3, gen_squat=3, gen_lunge=3,
-             gen_glute_bridge=3, gen_squat_jump=2, gen_side_plank=2, gen_plank=1),
-         "Skating is a sideways push. Build that, and legs that last a shift.",
-         "forwards"),
+    _pos("centre", "Centre", "hockey", "skaters",
+         ("centre", "center", "c", "centreman", "centerman", "1c", "2c"),
+         # The most puck touches of anyone on the ice, and the most of them in
+         # a crowd, so the tight handle carries more weight here than anywhere.
+         mix(hoc_stickhandle=5, hoc_wide_handles=3, hoc_shot=3, hoc_shuffle=2,
+             hoc_stance=2, gen_lateral_bound=4, gen_wall_sit=2, gen_lunge=2,
+             gen_glute_bridge=2, gen_side_plank=2, gen_squat=2),
+         "More puck touches than anyone, most of them in traffic. Hands first.",
+         "centres"),
+    _pos("winger", "Winger", "hockey", "skaters",
+         ("winger", "wing", "lw", "rw", "left wing", "right wing", "w", "forward", "f"),
+         # The shot leads. A winger's job on most shifts ends with one.
+         mix(hoc_shot=5, hoc_stickhandle=3, hoc_wide_handles=3, hoc_stance=2,
+             hoc_shuffle=1, gen_lateral_bound=4, gen_squat_jump=3, gen_squat=2,
+             gen_lunge=2, gen_glute_bridge=2, gen_side_plank=1),
+         "Get open, and be ready to shoot the first time it arrives.",
+         "wingers"),
     _pos("defence", "Defence", "hockey", "skaters",
-         ("defence", "defense", "defenceman", "defenseman", "d", "blue line", "blueliner"),
-         mix(gen_lateral_bound=5, gen_squat=4, gen_wall_sit=3, gen_glute_bridge=3,
-             gen_lunge=3, gen_side_plank=2, gen_push_up=2, gen_plank=1),
-         "Backwards as fast as most people go forwards, and strong in a battle.",
+         ("defence", "defense", "defenceman", "defenseman", "d", "blue line",
+          "blueliner", "dman"),
+         # Slides lead: walking the blue line and holding a gap are both the
+         # same footwork, and crossed feet are the moment either one fails.
+         mix(hoc_shuffle=5, hoc_wide_handles=3, hoc_stance=3, hoc_shot=2,
+             hoc_stickhandle=2, gen_lateral_bound=4, gen_squat=3, gen_lunge=2,
+             gen_glute_bridge=2, gen_side_plank=2, gen_push_up=1),
+         "Gaps and edges. Backwards as fast as most people go forwards.",
          "defencemen"),
     _pos("goaltender", "Goaltender", "hockey", "goalie",
-         ("goaltender", "goalie", "goal", "g", "netminder", "keeper"),
-         mix(gen_lateral_bound=5, gen_lunge=4, gen_wall_sit=3, gen_glute_bridge=3,
-             gen_side_plank=3, gen_dead_bug=2, gen_squat=2, gen_mountain_climber=2),
+         ("goaltender", "goalie", "goal", "g", "netminder", "keeper", "tendy"),
+         # The one plan in this sport that is mostly not stick work, because
+         # the position mostly is not. Hips and groins carry it.
+         mix(hoc_butterfly=6, hoc_shuffle=3, hoc_stance=2, gen_lateral_bound=4,
+             gen_lunge=3, gen_glute_bridge=3, gen_side_plank=3, gen_dead_bug=2,
+             gen_wall_sit=2, gen_mountain_climber=2),
          "Down and up, sideways, on one hip. Groins and hips need real work.",
          "goaltenders"),
 )

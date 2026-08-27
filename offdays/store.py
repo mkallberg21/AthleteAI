@@ -18,6 +18,7 @@ from . import sports
 from . import ball as ball_mod
 from . import footwork
 from . import shooting
+from . import sweep
 from . import goalie
 from . import rewatch
 from . import notifications
@@ -2587,6 +2588,16 @@ class Store:
                  if r.flare is not None or drill.signal.kind is SignalKind.SHOOTING_ARM],
             )
 
+        # A hand-sweep drill carries the one thing a stick sport's off-hand
+        # accounting cannot: a hockey player never switches hands, so their
+        # weak side shows up as a short sweep rather than as fewer reps. It
+        # comes out of `peak` and `rom`, which every rep already carries.
+        sweep_report = None
+        if drill.signal.kind is SignalKind.HAND_SWEEP:
+            sweep_report = sweep.analyze(
+                [{"peak": r.peak, "rom": r.rom} for r in claim.reps],
+            )
+
         # Form quality reads the same rep stream the counting did, so it costs
         # nothing extra to collect and is the half of the signal a rep count
         # throws away.
@@ -2691,6 +2702,7 @@ class Store:
             **({"saves": save_report.to_dict()} if save_report else {}),
             **({"footwork": footwork_report.to_dict()} if footwork_report else {}),
             **({"shooting": shot_report.to_dict()} if shot_report else {}),
+            **({"sweep": sweep_report.to_dict()} if sweep_report else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,

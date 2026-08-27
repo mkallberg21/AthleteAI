@@ -2540,6 +2540,361 @@ BB_ADVANCED: tuple[Topic, ...] = (
 BB_IQ_TOPICS: tuple[Topic, ...] = BB_FUNDAMENTALS + BB_CORE + BB_ADVANCED
 
 
+# ---------------------------------------------------------------------------
+# Hockey
+#
+# Same rules as every syllabus above: no video ids, every target length inside
+# the ceiling for its own minimum age, and a comprehension question with the
+# reason its answer is right.
+#
+# What is distinctive here is that hockey IQ is mostly about **support and
+# gaps** -- where to be relative to the puck and to the man you are
+# responsible for -- and that it is the only sport in this catalogue where two
+# of the topics are about not getting hurt and not hurting anybody else. That
+# is not editorialising. Head contact is this sport's defining risk in the way
+# throwing volume is the diamond's, and a syllabus that taught positioning and
+# said nothing about the boards would be teaching the easy half.
+# ---------------------------------------------------------------------------
+
+HOC_ALL = ("centre", "winger", "defence", "goaltender")
+HOC_SKATERS = ("centre", "winger", "defence")
+HOC_FORWARDS = ("centre", "winger")
+HOC_D = ("defence",)
+HOC_G = ("goaltender",)
+
+HOC_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="hoc_iq_head_up",
+        title="Skate with your head up",
+        focus="Puck handling",
+        positions=HOC_SKATERS, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A player carrying the puck who is clearly looking at the ice, "
+            "next to one staring at their own stick. What happens to each of "
+            "them at the blue line is the whole clip."
+        ),
+        ask=Ask(
+            prompt="Why practise stickhandling without looking at the puck?",
+            options=(
+                "So you can see what is happening while you carry it",
+                "Because it looks better",
+                "So you can skate faster",
+            ),
+            answer=0,
+            because=(
+                "A player looking down cannot see a pass, a hit or a gap. "
+                "Everything useful on the ice is somewhere other than the puck."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_support",
+        title="Give the puck somewhere to go",
+        focus="Support",
+        positions=HOC_SKATERS, min_age=0, max_age=200, target_s=72,
+        find=(
+            "A carrier in the corner with a teammate available above them, and "
+            "the same situation with everybody standing still. Cut wide enough "
+            "to see all five skaters, not the puck."
+        ),
+        ask=Ask(
+            prompt="Your teammate has the puck in the corner. Where should you be?",
+            options=(
+                "Somewhere they can actually pass it to you",
+                "As close to them as possible",
+                "In front of the net waiting",
+            ),
+            answer=0,
+            because=(
+                "A player with the puck and nobody to pass to is a player "
+                "about to lose it. Being open is a job, and it is yours."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_short_shifts",
+        title="Get off on time",
+        focus="Shifts",
+        positions=HOC_SKATERS, min_age=0, max_age=200, target_s=68,
+        find=(
+            "A long shift where the same player is visibly slower at the end "
+            "than at the start. Youth footage makes this extremely easy to "
+            "find, which is the point."
+        ),
+        ask=Ask(
+            prompt="You have been on for a minute and the puck is deep. What now?",
+            options=(
+                "Change -- a tired player is worse than a fresh one",
+                "Stay on, because you are near the puck",
+                "Stay on until you touch it once more",
+            ),
+            answer=0,
+            because=(
+                "Nothing good happens on the second half of a long shift. The "
+                "goals against in youth hockey are mostly scored on tired legs."
+            ),
+        ),
+    ),
+)
+
+HOC_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="hoc_iq_boards_safety",
+        title="Numbers on the boards",
+        focus="Staying safe",
+        positions=HOC_SKATERS, min_age=11, max_age=200, target_s=95,
+        find=(
+            "A player pulling out of a hit because the other one turned, next "
+            "to a check into the boards from behind. Use footage where the "
+            "second one was called -- the whistle is part of the lesson."
+        ),
+        ask=Ask(
+            prompt="You are about to finish a check and the player turns their back. What do you do?",
+            options=(
+                "Pull up. There is no hit there any more",
+                "Finish it, they turned late",
+                "Hit them lower instead",
+            ),
+            answer=0,
+            because=(
+                "A player facing the boards cannot protect themselves at all. "
+                "Every serious injury in this sport starts with somebody "
+                "deciding the hit was still on."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_gap",
+        title="Closing the gap on a rush",
+        focus="Defending",
+        positions=HOC_D, min_age=13, max_age=200, target_s=125,
+        find=(
+            "Two rushes against the same defender: one where they close early "
+            "and one where they back in to the hash marks. Cut from the red "
+            "line so the gap is visible the whole way."
+        ),
+        ask=Ask(
+            prompt="A forward is coming at you with speed. Where do you want to meet them?",
+            options=(
+                "Early, before they get to your blue line",
+                "At the top of the circles, so you have room",
+                "In front of your net, where help is",
+            ),
+            answer=0,
+            because=(
+                "Every metre you give them is a metre of speed they get to "
+                "keep. Backing in turns one attacker into a two-on-one."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_stick_lane",
+        title="Stick in the lane, not at the puck",
+        focus="Defending",
+        positions=HOC_SKATERS, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A defender with their stick flat in the passing lane, and one "
+            "reaching to poke at the puck. The pass that goes through the "
+            "second one is the clip."
+        ),
+        ask=Ask(
+            prompt="You are defending a passer. What should your stick be doing?",
+            options=(
+                "Lying in the lane they want to pass through",
+                "Reaching for the puck to knock it away",
+                "Held up so you can react quicker",
+            ),
+            answer=0,
+            because=(
+                "Reaching moves your feet out of position and misses most of "
+                "the time. A stick in the lane takes the pass away without you "
+                "having to do anything."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_net_front",
+        title="Get to the net and stay there",
+        focus="Attacking",
+        positions=HOC_FORWARDS, min_age=13, max_age=200, target_s=118,
+        find=(
+            "Two shots from the point: one with somebody in front of the "
+            "goalie and one with nobody. Watch the goalie's eyes rather than "
+            "the puck."
+        ),
+        ask=Ask(
+            prompt="A teammate is winding up from the point. What is your job?",
+            options=(
+                "Stand where the goalie cannot see through you, and stay",
+                "Get out of the way so the shot has a lane",
+                "Skate towards the shot to tip it",
+            ),
+            answer=0,
+            because=(
+                "A goalie who sees the puck the whole way stops nearly all of "
+                "them. Most goals from distance are scored by whoever is "
+                "standing in front, not by whoever shot."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_breakout",
+        title="The first pass out of your zone",
+        focus="Breakouts",
+        positions=HOC_SKATERS, min_age=13, max_age=200, target_s=130,
+        find=(
+            "A clean breakout beside one where the defender rings it round the "
+            "boards under no pressure. Cut both from the retrieval, not from "
+            "the pass."
+        ),
+        ask=Ask(
+            prompt="You pick the puck up behind your own net with time. What is the priority?",
+            options=(
+                "Find a teammate, even if it takes an extra second",
+                "Get it out any way you can",
+                "Skate it out yourself",
+            ),
+            answer=0,
+            because=(
+                "A puck rung round the boards is a fifty-fifty you have given "
+                "away in your own end. With time, a pass is not the risky "
+                "option -- it is the safe one."
+            ),
+        ),
+    ),
+)
+
+HOC_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="hoc_iq_delay",
+        title="Slowing down to let help arrive",
+        focus="Attacking",
+        positions=HOC_FORWARDS, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A carrier entering the zone alone who curls back towards the "
+            "boards instead of driving, and the late players arriving behind "
+            "them. Compare with the same entry taken straight into two "
+            "defenders."
+        ),
+        ask=Ask(
+            prompt="You enter the zone with the puck and nobody with you. What is usually best?",
+            options=(
+                "Protect it and delay until your teammates arrive",
+                "Take it to the net yourself",
+                "Put it in deep and go and chase it",
+            ),
+            answer=0,
+            because=(
+                "One attacker against two defenders loses. Three seconds of "
+                "holding it turns that into three against two, and the delay "
+                "costs nothing."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_forecheck",
+        title="First one in, second one in",
+        focus="Forechecking",
+        positions=HOC_FORWARDS, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A forecheck where the first forward takes the body and the second "
+            "arrives for the loose puck, next to one where both go for the "
+            "puck and neither gets it."
+        ),
+        ask=Ask(
+            prompt="You are the second forward in on the forecheck. What are you doing?",
+            options=(
+                "Reading where the puck will pop out and being there",
+                "Going for the same puck as the first player",
+                "Covering the point in case it comes out",
+            ),
+            answer=0,
+            because=(
+                "Two players chasing the same puck is one player wasted. The "
+                "first one makes it loose; the second one is why that matters."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_dzone_low",
+        title="Cover the player, not the puck",
+        focus="Defending",
+        positions=HOC_SKATERS, min_age=15, max_age=200, target_s=148,
+        find=(
+            "A defensive-zone sequence where three players collapse to the "
+            "puck in the corner and the pass goes to the man alone in the "
+            "slot. Cut it wide -- the mistake is off-puck."
+        ),
+        ask=Ask(
+            prompt="The puck is in the corner and your man is alone in the slot. Where do you go?",
+            options=(
+                "Stay with your man",
+                "Help in the corner, it is two on one down there",
+                "Between them, so you can do both",
+            ),
+            answer=0,
+            because=(
+                "Almost every goal is scored from the slot, not the corner. "
+                "Four players around one puck is a goal waiting to happen at "
+                "the other end of the pass."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_goalie_depth",
+        title="How far out to come",
+        focus="Goaltending",
+        positions=HOC_G, min_age=15, max_age=200, target_s=160,
+        find=(
+            "The same goalie on a shot from the top of the circle and on a "
+            "pass across the crease. What their depth does between the two is "
+            "the clip -- freeze frames help more than motion here."
+        ),
+        ask=Ask(
+            prompt="A pass goes from one side of the slot to the other. What should your depth do?",
+            options=(
+                "Come back towards the post so you can get across in time",
+                "Stay out, to keep taking away the angle",
+                "Push further out to meet the new shooter",
+            ),
+            answer=0,
+            because=(
+                "Out at the top of the crease you cover more of the net and "
+                "have further to travel. On a pass across, the travel is the "
+                "thing you have run out of."
+            ),
+        ),
+    ),
+    Topic(
+        key="hoc_iq_head_injury",
+        title="What a head injury looks like from the bench",
+        focus="Staying safe",
+        positions=HOC_ALL, min_age=15, max_age=200, target_s=165,
+        find=(
+            "A player who takes a hit, gets up slowly and goes straight back "
+            "out. Coaching-education footage is better here than game footage, "
+            "and it does not need to be a bad one to make the point."
+        ),
+        ask=Ask(
+            prompt="A teammate takes a hit, gets up slowly and says they are fine. What do you do?",
+            options=(
+                "Tell an adult anyway",
+                "Believe them -- they know how they feel",
+                "Watch them for a shift and see",
+            ),
+            answer=0,
+            because=(
+                "Somebody with a head injury is using the injured part to "
+                "decide whether they are injured. Being wrong about this once "
+                "costs a season, and telling somebody costs nothing."
+            ),
+        ),
+    ),
+)
+
+HOC_TOPICS: tuple[Topic, ...] = HOC_FUNDAMENTALS + HOC_CORE + HOC_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
@@ -2551,5 +2906,6 @@ BY_SPORT.update({
     # rather than a different way of thinking about the sport.
     "baseball": BB_IQ_TOPICS,
     "softball": BB_IQ_TOPICS,
+    "hockey": HOC_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

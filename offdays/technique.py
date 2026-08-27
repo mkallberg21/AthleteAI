@@ -576,6 +576,83 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when you start standing up out of your stance.",
             "an upright player has already given up the next two shots"),
     ),
+    "hoc_stickhandle": (
+        Cue("depth", "Get the puck out past your hands and back. Rolling it "
+                     "under your nose is not stickhandling, it is fidgeting.",
+            "the app measures how far across your body your hands travel"),
+        Cue("tempo", "Quick and even. A handle with a pause in it is a handle "
+                     "a defender steps into.",
+            "the rhythm is what makes it hard to read"),
+        Cue("consistency", "Head up. Look at the wall, not at the puck, and "
+                           "keep every trip across the same size.",
+            "you will never look down on the ice, so do not practise it"),
+        Cue("endurance", "Stop when your hands start dragging behind the puck.",
+            "tired hands practise the sloppy version"),
+    ),
+    "hoc_wide_handles": (
+        Cue("depth", "All the way out, both sides. Your bottom arm should be "
+                     "nearly straight at the far end of each one.",
+            "this drill is the width -- a narrow one is just tight handles"),
+        Cue("tempo", "Slower than tight handles. Reach, control it, come back.",
+            "rushing the reach is how the puck ends up behind you"),
+        Cue("consistency", "Same distance each way. Most players are much "
+                           "wider on their forehand and have never noticed.",
+            "the app measures both sides and will tell you the gap"),
+        Cue("endurance", "When the reaches start getting shorter, that is the "
+                         "end of the set.",
+            "short reaches at the end teach your hands the short version"),
+    ),
+    "hoc_shot": (
+        Cue("depth", "Start the puck behind your back foot and finish with "
+                     "your hands past your front hip. The whole sweep.",
+            "the puck picks up its speed over the distance it is dragged"),
+        Cue("tempo", "One shot at a time. Pull the next puck over, set your "
+                     "feet, then shoot -- do not machine-gun them.",
+            "ten proper shots beat forty rushed ones"),
+        Cue("consistency", "Same spot on the pad, same feet, every time. Move "
+                           "the puck around and you are practising forty "
+                           "different shots badly.",
+            "a repeatable shot is what becomes an accurate one"),
+        Cue("endurance", "Stop when your follow-through starts dropping.",
+            "the arms give out before the legs, and the shot goes with them"),
+    ),
+    "hoc_butterfly": (
+        Cue("depth", "Hips all the way down, not a knee drop. If one leg gets "
+                     "there first you are falling, not dropping.",
+            "the app measures how far your hips travel, and so does the puck"),
+        Cue("tempo", "Down under control, up as fast as you can. The recovery "
+                     "is the half of this that wins games.",
+            "the second shot comes while you are still getting up"),
+        Cue("consistency", "Chest up the whole way. The moment you fold "
+                           "forward you cannot see the puck or push off.",
+            "a goalie folded over is a goalie who has stopped goaltending"),
+        Cue("endurance", "Stop when getting up starts taking two pushes.",
+            "this is the exact thing that runs out in the third period"),
+    ),
+    "hoc_shuffle": (
+        Cue("depth", "Push off the outside foot and actually cover ground. A "
+                     "slide that goes nowhere closes nothing off.",
+            "the app measures how far apart your feet get, and so does a winger"),
+        Cue("tempo", "Slide, reset, slide. Do not hop -- both feet in the air "
+                     "means you cannot change direction.",
+            "the moment you are airborne you are committed"),
+        Cue("consistency", "Never let your feet cross. The app can see it "
+                           "happen and will tell you how many times.",
+            "crossed feet is the exact moment a winger goes past you"),
+        Cue("offhand", "Both directions evenly. Almost everybody is worse "
+                       "going one way and has never checked.",
+            "a forward finds the side you cannot slide to inside one shift"),
+        Cue("endurance", "Stop when you start standing up out of your stance.",
+            "an upright defender has already lost the gap"),
+    ),
+    "hoc_stance": (
+        Cue("position", "Knees over your toes, chest up, back flat. If you can "
+                        "see your own knees, you are bent at the waist.",
+            "the waist bend is what stops you pushing off"),
+        Cue("endurance", "Stop when your hips start creeping up, not when your "
+                         "legs give out.",
+            "the last thirty seconds standing up are teaching the wrong shape"),
+    ),
     "soc_juggle_weak": (
         Cue("depth", "Small touches, knee height. A weak foot that has to "
                      "stretch for every ball never gets comfortable.",

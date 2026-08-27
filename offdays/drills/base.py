@@ -84,6 +84,28 @@ class SignalKind(str, Enum):
     # oscillation in *reach* regardless of which way they went.
     SAVE_REACH = "save_reach"
 
+    # Signed lateral offset of the hands from the middle of the chest,
+    # projected onto the shoulder axis, in torso lengths. Positive is towards
+    # the athlete's own right.
+    #
+    # The horizontal companion to `save_reach`: reach asks how far the hands
+    # went from the body, sweep asks which *side* of it they went to. Hockey is
+    # the sport that needs it, because everything a stick does off the ice --
+    # stickhandling, a wrist shot, a saucer pass -- is the hands crossing the
+    # body from one side to the other, and no vertical or angular measurement
+    # sees any of it.
+    #
+    # Read from the MIDPOINT of the two wrists and null unless both are
+    # visible, for the same reason `save_reach` is: a stick is held in two
+    # hands, and a signal taken from the further wrist would pay one-handed
+    # flailing at full rate.
+    #
+    # The sign does structural work rather than decorative work. A rep arms on
+    # one side of the body and fires on the other, so a sweep that never leaves
+    # the forehand side does not count at all -- the drill cannot be satisfied
+    # one-handed, and nothing has to detect that and argue about it.
+    HAND_SWEEP = "hand_sweep"
+
     # Purpose-built lacrosse wall-ball cycle detector. Tracks the top hand on
     # the stick through cock -> release -> catch. Needs bespoke logic because
     # a single threshold crossing cannot distinguish a throw from a catch.
