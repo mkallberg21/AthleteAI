@@ -1379,6 +1379,169 @@ GEN_SIDE_PLANK = DrillSpec(
 # What does not transfer is heading, and that is a decision rather than a gap.
 # See the note on the parts list below.
 # --------------------------------------------------------------------------
+# The three qualities the general catalogue had no way to train
+#
+# These are `gen_` drills rather than sport drills, and they were found by
+# building the judged sports -- gymnastics, cheer and dance -- whose plans were
+# made entirely of the eighteen movements above. Nothing was wrong with those
+# plans. What was wrong was the shelf they were picked from: eighteen movements
+# that between them never once measured an ankle, never went overhead, and
+# never asked an athlete to hang.
+#
+# All three sit in the general catalogue because none of them belong to a
+# sport. A calf raise is the launching mechanism for every jump in this
+# product.
+# --------------------------------------------------------------------------
+
+GEN_CALF_RAISE = DrillSpec(
+    key="gen_calf_raise",
+    name="Calf Raises",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.REPS,
+    description=(
+        "Up onto the balls of your feet, all the way, and down under control. "
+        "It watches your heel against your toes, so coming up half way does "
+        "not count -- which is what almost everybody does when they stop "
+        "paying attention."
+    ),
+    signal=SignalSpec(
+        # The heel against the toe of the same foot. The first measurement in
+        # this catalogue that looks below the knee: eighteen general movements
+        # and every sport drill went past the ankle without ever measuring it,
+        # in a product whose most common landing is on one.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_heel",
+        reference="left_foot_index",
+        # Light. The excursion is small to begin with and a heavy filter eats
+        # it, which is exactly how the squat-jump bug happened.
+        smoothing=0.55,
+    ),
+    counter=CounterSpec(
+        # Flat on the floor the heel sits a fraction above the toe landmark;
+        # at the top of a real raise it is most of a hand's width higher.
+        down_threshold=0.03,
+        up_threshold=0.13,
+        min_rep_ms=600,
+        max_rep_ms=6_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=0.45,
+        daily_rep_cap=600,
+        diminishing_after_reps=200,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=2.0, min_reps_per_second=0.10,
+        min_reps=15, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone low and close, side-on to one foot -- ankle height, a couple of "
+        "feet away. This is the smallest movement in the app and the only one "
+        "where framing decides whether it can be counted at all. Fingertips on "
+        "a wall for balance is fine."
+    ),
+    quality=QualitySpec(
+        target_rom=0.13,
+        consistency_target=0.02,
+        consistency_ceiling=0.06,
+        tempo_min_ms=600,
+        tempo_max_ms=3_000,
+        # Depth carries this one. Half a calf raise trains the half of the
+        # range nobody was short of.
+        w_consistency=0.20,
+        w_depth=0.45,
+        w_tempo=0.10,
+        w_endurance=0.25,
+        min_reps=15,
+    ),
+    load=LoadSpec(load_per_rep=0.15, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+GEN_HANDSTAND_HOLD = DrillSpec(
+    key="gen_handstand_hold",
+    name="Wall Handstand",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Feet up the wall, arms locked, and stay there. The clock only runs "
+        "while you are actually upside down, so walking your feet back down "
+        "the wall stops it."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
+    counter=CounterSpec(
+        # The only negative band in the catalogue, and the reason this drill
+        # needed no new signal: hip height is measured against the feet, so
+        # putting the feet above the hips simply makes it negative. Nothing
+        # else here ever goes below zero, so an inverted hold is unmistakable
+        # rather than merely different.
+        down_threshold=-2.40,
+        up_threshold=-0.90,
+        min_rep_ms=400,
+        max_rep_ms=60_000,
+    ),
+    # The highest rate per minute anywhere, because it is the shortest hold
+    # anywhere. Thirty honest seconds is a good set.
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=55.0, daily_rep_cap=1_000),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps=0, min_duration_ms=10_000,
+    ),
+    setup_hint=(
+        "Phone side-on, far enough back to see your feet and your hands at "
+        "once. Clear the space behind you, hands about shoulder width, and "
+        "come down the way you went up rather than falling out of it."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=6.5, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=False,
+)
+
+GEN_DEAD_HANG = DrillSpec(
+    key="gen_dead_hang",
+    name="Dead Hang",
+    sport="general",
+    category=Category.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Hang from a bar with your arms straight and stay there. The clock "
+        "runs while you are hanging -- pull yourself up and it stops, because "
+        "that is a different exercise and this one is about the grip."
+    ),
+    signal=SignalSpec(
+        # The same head-against-hands measurement a pull-up counts on, held
+        # still instead of cycled. The bands do not overlap: a pull-up finishes
+        # where this drill has already stopped counting.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="nose",
+        reference="left_wrist",
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        # The top of this band is exactly where a pull-up arms. Set a shade
+        # higher it overlapped the bottom of a pull-up, so the first fraction
+        # of every rep of a different, harder exercise quietly banked hang
+        # time as well.
+        down_threshold=-0.55, up_threshold=-0.30, min_rep_ms=400, max_rep_ms=60_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=40.0, daily_rep_cap=1_000),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps=0, min_duration_ms=10_000,
+    ),
+    setup_hint=(
+        "Phone side-on so it can see your head and your hands. Anything you "
+        "can hang from that will hold you -- a bar, a beam, a set of monkey "
+        "bars. Shoulders active rather than sagging."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=5.0, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=False,
+)
+
+
+# --------------------------------------------------------------------------
 
 SOCCER = BallSpec(
     required=True,
@@ -3428,6 +3591,9 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     GEN_WALL_SIT,
     GEN_HOLLOW_HOLD,
     GEN_SIDE_PLANK,
+    GEN_CALF_RAISE,
+    GEN_HANDSTAND_HOLD,
+    GEN_DEAD_HANG,
     WALL_BALL,
     QUICK_STICK,
     WALL_BALL_STRONG,

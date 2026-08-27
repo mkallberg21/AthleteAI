@@ -469,57 +469,79 @@ SOFTBALL: tuple[Position, ...] = tuple(
     for k, label, aliases, emphasis, focus, plural in BASEBALL_POSITIONS
 )
 
+# The three judged sports below share one property no other sport here has:
+# what they are scored on is how the movement LOOKS. This product deliberately
+# has no opinion about that, and these plans are the shape of that decision --
+# they are conditioning programmes. Nothing in 0FFDAYS scores a tumbling pass,
+# a stunt or a combination, because a number on a child's line about how their
+# body looked is the most dangerous thing this product could produce. What it
+# will happily count is whether they got stronger, and that is what these are.
 CHEER: tuple[Position, ...] = (
     _pos("base", "Base", "cheer", "bases",
          ("base", "main base", "side base", "bases"),
-         mix(gen_squat=5, gen_wall_sit=3, gen_lunge=3, gen_push_up=3,
-             gen_side_plank=3, gen_glute_bridge=2, gen_plank=2, gen_dead_bug=1),
-         "Someone else's safety is your legs and your grip. Strength first.",
+         # Somebody else is standing on these hands, so the overhead position
+         # is the job rather than a nice extra.
+         mix(gen_squat=5, gen_handstand_hold=4, gen_dead_hang=3, gen_wall_sit=3,
+             gen_lunge=3, gen_push_up=3, gen_side_plank=3, gen_calf_raise=2,
+             gen_glute_bridge=2, gen_plank=2),
+         "Someone else's safety is your legs, your shoulders and your grip.",
          "bases"),
     _pos("flyer", "Flyer", "cheer", "flyers",
          ("flyer", "flier", "top girl", "top"),
-         mix(gen_hollow_hold=5, gen_side_plank=4, gen_dead_bug=3, gen_plank=3,
-             gen_lunge=2, gen_glute_bridge=2, gen_wall_sit=2, gen_tuck_jump=1),
-         "Stay tight and still. Everything is core control and balance.",
+         mix(gen_hollow_hold=5, gen_side_plank=4, gen_calf_raise=3, gen_dead_bug=3,
+             gen_plank=3, gen_lunge=2, gen_glute_bridge=2, gen_wall_sit=2,
+             gen_tuck_jump=1),
+         "Stay tight and still. Core control, and ankles that do not wobble.",
          "flyers"),
     _pos("backspot", "Backspot", "cheer", "bases",
          ("backspot", "back spot", "back", "spotter"),
-         mix(gen_squat=4, gen_glute_bridge=3, gen_side_plank=3, gen_push_up=3,
-             gen_plank=3, gen_lunge=3, gen_dead_bug=2, gen_wall_sit=2),
-         "You catch what goes wrong. Strong back, strong middle, quick feet.",
+         mix(gen_squat=4, gen_dead_hang=3, gen_glute_bridge=3, gen_side_plank=3,
+             gen_push_up=3, gen_plank=3, gen_lunge=3, gen_calf_raise=2,
+             gen_dead_bug=2, gen_wall_sit=2),
+         "You catch what goes wrong. Strong back, strong middle, strong hands.",
          "backspots"),
     _pos("tumbler", "Tumbler", "cheer", "tumbling",
          ("tumbler", "tumbling", "tumble"),
-         mix(gen_hollow_hold=4, gen_tuck_jump=4, gen_squat_jump=3, gen_push_up=3,
-             gen_dead_bug=2, gen_lunge=2, gen_glute_bridge=2, gen_side_plank=2),
-         "Pop off the floor, then hold a shape in the air.",
+         mix(gen_hollow_hold=4, gen_tuck_jump=4, gen_handstand_hold=3,
+             gen_squat_jump=3, gen_calf_raise=3, gen_push_up=3, gen_dead_bug=2,
+             gen_lunge=2, gen_glute_bridge=2, gen_side_plank=2),
+         "Pop off the floor, hold a shape in the air, land on ankles that hold.",
          "tumblers"),
 )
 
 DANCE: tuple[Position, ...] = (
     _pos("ballet", "Ballet", "dance", "technique",
-         ("ballet", "classical", "pointe"),
-         mix(gen_lunge=4, gen_hollow_hold=3, gen_glute_bridge=3, gen_dead_bug=3,
-             gen_side_plank=3, gen_wall_sit=2, gen_plank=2, gen_squat=2),
-         "Control and single-leg strength. Effortless is built, not born.",
+         ("ballet", "classical", "pointe", "ballerina"),
+         # The calf raise leads, and in this sport that is not a supporting
+         # exercise -- it is the movement, and the ankle is where dancers get
+         # hurt more than anywhere else.
+         mix(gen_calf_raise=6, gen_lunge=4, gen_hollow_hold=3, gen_glute_bridge=3,
+             gen_dead_bug=3, gen_side_plank=3, gen_wall_sit=2, gen_plank=2,
+             gen_squat=2),
+         "Single-leg control, and ankles strong enough to hold it all night.",
          "ballet dancers"),
     _pos("contemporary", "Contemporary", "dance", "technique",
          ("contemporary", "modern", "lyrical", "jazz"),
-         mix(gen_lunge=4, gen_glute_bridge=3, gen_hollow_hold=3, gen_side_plank=3,
-             gen_squat_jump=2, gen_dead_bug=2, gen_push_up=2, gen_plank=2),
+         mix(gen_lunge=4, gen_calf_raise=4, gen_glute_bridge=3, gen_hollow_hold=3,
+             gen_side_plank=3, gen_squat_jump=2, gen_dead_bug=2, gen_push_up=2,
+             gen_plank=2, gen_handstand_hold=1),
          "Getting to the floor and back up without it costing you anything.",
          "contemporary dancers"),
     _pos("hip_hop", "Hip Hop", "dance", "power",
-         ("hip hop", "hiphop", "street", "breaking", "b boy", "b girl"),
-         mix(gen_squat_jump=4, gen_push_up=4, gen_mountain_climber=3, gen_plank=3,
-             gen_burpee=2, gen_lunge=2, gen_hollow_hold=2, gen_side_plank=2),
-         "Power off the floor and weight through your hands.",
+         ("hip hop", "hiphop", "street", "breaking", "b-boy", "b-girl"),
+         # The one dance style that spends real time on its hands, so the
+         # inverted hold and the hang both earn a place here.
+         mix(gen_squat_jump=4, gen_push_up=4, gen_handstand_hold=3,
+             gen_mountain_climber=3, gen_plank=3, gen_dead_hang=2, gen_burpee=2,
+             gen_calf_raise=2, gen_lunge=2, gen_hollow_hold=2, gen_side_plank=1),
+         "Power off the floor, and weight through your hands without a wobble.",
          "hip hop dancers"),
     _pos("pom", "Pom & Team", "dance", "power",
-         ("pom", "poms", "dance team", "kick", "drill team"),
-         mix(gen_tuck_jump=4, gen_lunge=3, gen_hollow_hold=3, gen_squat_jump=3,
-             gen_glute_bridge=3, gen_dead_bug=2, gen_side_plank=2, gen_squat=1),
-         "Sharp, high, and identical to the seven people next to you.",
+         ("pom", "poms", "dance team", "kickline", "drill team"),
+         mix(gen_tuck_jump=4, gen_calf_raise=4, gen_lunge=3, gen_hollow_hold=3,
+             gen_squat_jump=3, gen_glute_bridge=3, gen_dead_bug=2,
+             gen_side_plank=2, gen_squat=1),
+         "Sharp, high, and still sharp in the fourth minute.",
          "pom dancers"),
 )
 
@@ -615,28 +637,35 @@ FOOTBALL: tuple[Position, ...] = (
 
 GYMNASTICS: tuple[Position, ...] = (
     _pos("all_around", "All Around", "gymnastics", "all",
-         ("all around", "all-around", "aa", "all rounder"),
-         mix(gen_hollow_hold=4, gen_pull_up=4, gen_push_up=3, gen_tuck_jump=3,
+         ("all around", "all-around", "aa", "gymnast", "level 4", "level 5",
+          "level 6", "level 7", "level 8"),
+         mix(gen_pull_up=5, gen_hollow_hold=5, gen_handstand_hold=4,
+             gen_push_up=3, gen_tuck_jump=3, gen_calf_raise=3, gen_dead_hang=2,
              gen_side_plank=2, gen_dead_bug=2, gen_lunge=2, gen_squat_jump=2),
          "Everything at once. Hollow shape, pulling strength, and a pop off the floor.",
          "all-arounders"),
     _pos("bars", "Bars & Rings", "gymnastics", "upper",
          ("bars", "uneven bars", "ub", "high bar", "rings", "parallel bars", "pommel"),
-         mix(gen_pull_up=6, gen_hollow_hold=4, gen_push_up=3, gen_dead_bug=2,
+         # Grip was the missing piece here. Everything on this apparatus ends
+         # when the hands do, and nothing in the catalogue measured that.
+         mix(gen_pull_up=6, gen_dead_hang=5, gen_hollow_hold=4,
+             gen_handstand_hold=4, gen_push_up=3, gen_dead_bug=2,
              gen_side_plank=2, gen_plank=2, gen_glute_bridge=1),
          "Your whole body hangs off your hands, and stays in one shape while it does.",
          "bars gymnasts"),
     _pos("floor_vault", "Floor & Vault", "gymnastics", "power",
          ("floor", "vault", "tumbling", "fx", "vt"),
-         mix(gen_tuck_jump=5, gen_squat_jump=4, gen_hollow_hold=3, gen_lunge=3,
-             gen_push_up=2, gen_glute_bridge=2, gen_dead_bug=2, gen_side_plank=1),
-         "Speed into power, then a shape held tight in the air.",
+         mix(gen_tuck_jump=5, gen_squat_jump=4, gen_calf_raise=4,
+             gen_hollow_hold=3, gen_handstand_hold=3, gen_lunge=3, gen_push_up=2,
+             gen_glute_bridge=2, gen_dead_bug=2, gen_side_plank=1),
+         "Speed into power, a shape held tight in the air, and a landing that holds.",
          "floor gymnasts"),
     _pos("beam", "Beam", "gymnastics", "balance",
          ("beam", "balance beam", "bb"),
-         mix(gen_lunge=4, gen_hollow_hold=4, gen_dead_bug=3, gen_side_plank=3,
-             gen_glute_bridge=3, gen_plank=2, gen_tuck_jump=2, gen_wall_sit=1),
-         "Single-leg control and a middle that does not wobble.",
+         mix(gen_calf_raise=5, gen_lunge=4, gen_hollow_hold=4, gen_dead_bug=3,
+             gen_side_plank=3, gen_glute_bridge=3, gen_handstand_hold=2,
+             gen_plank=2, gen_tuck_jump=2, gen_wall_sit=1),
+         "Single-leg control, a middle that does not wobble, and feet that grip.",
          "beam gymnasts"),
 )
 

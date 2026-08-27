@@ -955,3 +955,111 @@ test('hand sweep drills carry no handedness, so no off-hand premium', () => {
   assert.ok(counter.count > 0);
   for (const rep of counter.reps) assert.equal(rep.hand, 'none');
 });
+
+
+// ---------------------------------------------------------------------------
+// The three physical qualities the general catalogue could not train.
+//
+// Two of them are holds, which the calibration harness skips because a swept
+// sine says nothing about a drill that scores time in a band. These are their
+// equivalent guard: the clock has to run in the position and stop out of it.
+// ---------------------------------------------------------------------------
+
+function upright(hipY, ankleY) {
+  const pts = baseSkeleton();
+  pts[IDX.left_shoulder] = { x: 0.47, y: hipY - 0.25, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.53, y: hipY - 0.25, z: 0, visibility: 0.95 };
+  pts[IDX.left_hip] = { x: 0.48, y: hipY, z: 0, visibility: 0.95 };
+  pts[IDX.right_hip] = { x: 0.52, y: hipY, z: 0, visibility: 0.95 };
+  pts[IDX.left_ankle] = { x: 0.49, y: ankleY, z: 0, visibility: 0.95 };
+  pts[IDX.right_ankle] = { x: 0.51, y: ankleY, z: 0, visibility: 0.95 };
+  return pts;
+}
+
+/** Hands on the floor, feet at the top of the frame. */
+function handstand() {
+  const pts = upright(0.50, 0.10);
+  pts[IDX.left_shoulder] = { x: 0.47, y: 0.74, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.53, y: 0.74, z: 0, visibility: 0.95 };
+  return pts;
+}
+
+test('handstand: being upside down is what makes the signal negative', () => {
+  const drill = spec('gen_handstand_hold');
+  const v = computeSignal(handstand(), drill);
+  assert.ok(v < 0, `handstand read ${v}`);
+  assert.ok(v >= drill.counter.down_threshold && v <= drill.counter.up_threshold,
+    `handstand read ${v}, outside [${drill.counter.down_threshold}, ${drill.counter.up_threshold}]`);
+});
+
+test('handstand: a pike is nowhere near the band', () => {
+  // The hips are high and the hands are down, which looks like a handstand to
+  // anybody describing it in words. The feet are still on the floor, so the
+  // measurement is positive and the clock never starts.
+  const drill = spec('gen_handstand_hold');
+  const pts = baseSkeleton();
+  pts[IDX.left_shoulder] = { x: 0.35, y: 0.60, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.37, y: 0.60, z: 0, visibility: 0.95 };
+  pts[IDX.left_hip] = { x: 0.55, y: 0.40, z: 0, visibility: 0.95 };
+  pts[IDX.right_hip] = { x: 0.57, y: 0.40, z: 0, visibility: 0.95 };
+  pts[IDX.left_ankle] = { x: 0.72, y: 0.92, z: 0, visibility: 0.95 };
+  pts[IDX.right_ankle] = { x: 0.74, y: 0.92, z: 0, visibility: 0.95 };
+  assert.ok(computeSignal(pts, drill) > drill.counter.up_threshold);
+});
+
+test('handstand: the clock runs upside down and stops the right way up', () => {
+  const counter = new RepCounter(spec('gen_handstand_hold'));
+  let t = 0;
+  for (let i = 0; i < 60; i += 1) { counter.push(handstand(), t); t += 33; }
+  const inverted = counter.holdMs;
+  assert.ok(inverted > 1500, `only ${inverted}ms counted`);
+  for (let i = 0; i < 60; i += 1) { counter.push(upright(0.60, 0.95), t); t += 33; }
+  assert.equal(counter.holdMs, inverted, 'standing up kept the clock running');
+});
+
+/** Hanging from a bar, nose `drop` torso lengths below the hands. */
+function hanging(noseY) {
+  const pts = baseSkeleton();
+  pts[IDX.left_shoulder] = { x: 0.47, y: 0.45, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.53, y: 0.45, z: 0, visibility: 0.95 };
+  pts[IDX.left_hip] = { x: 0.48, y: 0.70, z: 0, visibility: 0.95 };
+  pts[IDX.right_hip] = { x: 0.52, y: 0.70, z: 0, visibility: 0.95 };
+  pts[IDX.left_wrist] = { x: 0.46, y: 0.28, z: 0, visibility: 0.95 };
+  pts[IDX.right_wrist] = { x: 0.54, y: 0.28, z: 0, visibility: 0.95 };
+  pts[IDX.nose] = { x: 0.50, y: noseY, z: 0, visibility: 0.95 };
+  return pts;
+}
+
+test('dead hang: the clock runs hanging and stops as soon as you pull', () => {
+  // The point of the band. A dead hang and a pull-up are the same measurement,
+  // and this drill is about the grip -- so pulling yourself up is not a better
+  // version of it, it is a different exercise and the clock says so.
+  const counter = new RepCounter(spec('gen_dead_hang'));
+  let t = 0;
+  for (let i = 0; i < 60; i += 1) { counter.push(hanging(0.37), t); t += 33; }
+  const hung = counter.holdMs;
+  assert.ok(hung > 1500, `only ${hung}ms counted`);
+  for (let i = 0; i < 60; i += 1) { counter.push(hanging(0.265), t); t += 33; }
+  assert.equal(counter.holdMs, hung, 'pulling up kept the clock running');
+});
+
+test('calf raises: a half raise does not count', () => {
+  const drill = spec('gen_calf_raise');
+  const counter = new RepCounter(drill);
+  const frame = (lift) => {
+    const pts = baseSkeleton();
+    pts[IDX.left_foot_index] = { x: 0.50, y: 0.96, z: 0, visibility: 0.95 };
+    pts[IDX.left_heel] = { x: 0.42, y: 0.96 - lift * TORSO, z: 0, visibility: 0.95 };
+    return pts;
+  };
+  let t = 0;
+  // Rising to 0.07 -- past halfway, and the thing almost everybody actually
+  // does once they stop paying attention.
+  for (let r = 0; r < 8; r += 1) {
+    for (let f = 0; f < 30; f += 1) {
+      counter.push(frame(0.035 - 0.035 * Math.cos((2 * Math.PI * f) / 30)), t);
+      t += 1000 / 30;
+    }
+  }
+  assert.equal(counter.count, 0);
+});

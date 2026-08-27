@@ -2895,6 +2895,398 @@ HOC_ADVANCED: tuple[Topic, ...] = (
 HOC_TOPICS: tuple[Topic, ...] = HOC_FUNDAMENTALS + HOC_CORE + HOC_ADVANCED
 
 
+# ---------------------------------------------------------------------------
+# Gymnastics, cheer and dance
+#
+# One syllabus registered under three sports, for the same reason baseball and
+# softball share one: the decisions are the same decisions. What these three
+# have in common is not an apparatus, it is that **they are judged on how the
+# movement looks** -- and that produces a specific set of risks the other
+# thirteen sports in this catalogue do not have in the same way.
+#
+# So this syllabus is deliberately not about technique. 0FFDAYS has no opinion
+# on a tumbling pass, a stunt or a combination, and putting a number on how a
+# child's body looked is the most dangerous thing this product could do. What
+# these topics teach is **training sense**: why the conditioning is the part
+# that makes the skill possible, what pain is worth telling somebody about,
+# and how to keep training when the sport is scored on appearance.
+#
+# The health topics follow the same rule the wellness module follows: nothing
+# names a condition, nothing reads as a diagnosis, and every answer is either
+# something to do or something to notice. The thing to do is almost always
+# "tell an adult", because at this age that is genuinely the whole skill.
+# ---------------------------------------------------------------------------
+
+JUDGED_ALL = (
+    "all_around", "bars", "floor_vault", "beam",
+    "base", "flyer", "backspot", "tumbler",
+    "ballet", "contemporary", "hip_hop", "pom",
+)
+TUMBLING = ("all_around", "bars", "floor_vault", "beam", "tumbler", "backspot", "base")
+STUNTING = ("base", "flyer", "backspot")
+
+JDG_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="jdg_iq_strong_first",
+        title="The conditioning is not the boring bit",
+        focus="Training sense",
+        positions=JUDGED_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A coach's conditioning session next to the skill session it feeds "
+            "-- ideally the same athletes on the same day. Look for footage "
+            "where somebody explains what a particular exercise is for."
+        ),
+        ask=Ask(
+            prompt="Why spend an hour on strength instead of practising the skill?",
+            options=(
+                "Because the skill needs strength you do not have yet",
+                "Because coaches like conditioning",
+                "Because it is safer than practising",
+            ),
+            answer=0,
+            because=(
+                "Almost every skill somebody cannot do is a skill they are not "
+                "yet strong enough for. Repeating it does not make you "
+                "stronger; the boring hour does."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_tell_somebody",
+        title="Sore is not the same as hurt",
+        focus="Staying safe",
+        positions=JUDGED_ALL, min_age=0, max_age=200, target_s=72,
+        find=(
+            "Coaching-education footage on the difference between muscle "
+            "soreness and joint pain. This does not need to be dramatic "
+            "footage and is better if it is not."
+        ),
+        ask=Ask(
+            prompt="Something hurts in the same spot every session. What do you do?",
+            options=(
+                "Tell an adult, even though you can still train on it",
+                "Warm up for longer and see if it settles",
+                "Wait until it stops you training, then say something",
+            ),
+            answer=0,
+            because=(
+                "The same spot every time is the one worth mentioning. Waiting "
+                "until it stops you is waiting until the easy fix has gone."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_never_alone",
+        title="New skills need somebody watching",
+        focus="Staying safe",
+        positions=TUMBLING, min_age=0, max_age=200, target_s=68,
+        find=(
+            "A skill being learned with a coach spotting, next to somebody "
+            "trying one alone on a garden trampoline. Youth footage of the "
+            "second is unfortunately not hard to find."
+        ),
+        ask=Ask(
+            prompt="You have nearly got a new skill and nobody is at the gym. Do you try it?",
+            options=(
+                "No. A new skill is the one thing that needs somebody there",
+                "Yes, if you are on something soft",
+                "Yes, if you have done it before with a spot",
+            ),
+            answer=0,
+            because=(
+                "The skills people get hurt on are the ones they almost have. "
+                "Nearly is exactly the point at which somebody needs to be "
+                "watching."
+            ),
+        ),
+    ),
+)
+
+JDG_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="jdg_iq_ankles",
+        title="It usually ends at the ankle",
+        focus="Staying safe",
+        positions=JUDGED_ALL, min_age=13, max_age=200, target_s=125,
+        find=(
+            "Landings in slow motion, from the floor upwards. The clip is what "
+            "the ankle and the calf are doing on contact, not what the rest of "
+            "the body is doing."
+        ),
+        ask=Ask(
+            prompt="Why is calf and ankle work worth as much of your hour as anything else?",
+            options=(
+                "It is the last thing to touch the floor on every landing",
+                "It makes your legs look better",
+                "It is easy to do at home",
+            ),
+            answer=0,
+            because=(
+                "Every jump leaves from the ankle and every landing arrives "
+                "there. It is the most-used joint in these three sports and the "
+                "one most often trained by accident."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_bail",
+        title="How to come out of one that is going wrong",
+        focus="Staying safe",
+        positions=TUMBLING, min_age=13, max_age=200, target_s=130,
+        find=(
+            "A coach teaching a bail-out -- how to land safely on a skill that "
+            "has already gone wrong. Training footage, not competition."
+        ),
+        ask=Ask(
+            prompt="A skill is going wrong halfway through. What is the goal now?",
+            options=(
+                "Land any way that is safe, even if it looks terrible",
+                "Try to finish it so you do not learn a bad habit",
+                "Stop moving",
+            ),
+            answer=0,
+            because=(
+                "Half-committing is how people land on their head or their "
+                "wrists. A bail-out that looks awful and costs nothing is a "
+                "skill in itself, and it is worth practising."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_tired_reps",
+        title="The last twenty minutes",
+        focus="Training sense",
+        positions=JUDGED_ALL, min_age=13, max_age=200, target_s=120,
+        find=(
+            "The same athlete doing the same skill at the start of a session "
+            "and at the end of a long one. The difference is the clip."
+        ),
+        ask=Ask(
+            prompt="You are tired and the last few attempts have got worse. What now?",
+            options=(
+                "Stop that skill. Tired reps teach the tired version",
+                "Push through -- that is where the improvement is",
+                "Do a few more slowly",
+            ),
+            answer=0,
+            because=(
+                "Your body learns whatever you repeat, including the sloppy "
+                "one. The last twenty minutes of a long session is where most "
+                "bad habits and a lot of injuries come from."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_growth",
+        title="Why a skill you had last month has gone",
+        focus="Training sense",
+        positions=JUDGED_ALL, min_age=13, max_age=200, target_s=128,
+        find=(
+            "Coaching-education footage about training through a growth spurt. "
+            "Anything that shows a coach adjusting expectations rather than "
+            "an athlete being told to try harder."
+        ),
+        ask=Ask(
+            prompt="You have grown and a skill you used to have now feels wrong. Why?",
+            options=(
+                "Your levers changed, so the timing has to be relearned",
+                "You have got lazy",
+                "You have lost your talent for it",
+            ),
+            answer=0,
+            because=(
+                "A longer body turns at a different speed. The skill is not "
+                "gone, the timing is out -- and being told that is the "
+                "difference between a hard month and quitting."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_fuel",
+        title="You cannot train hard on not enough food",
+        focus="Staying safe",
+        positions=JUDGED_ALL, min_age=13, max_age=200, target_s=135,
+        find=(
+            "Sports-dietitian or governing-body education footage aimed at "
+            "young athletes about eating enough to train. Choose something "
+            "that talks about fuel and performance, not about weight."
+        ),
+        ask=Ask(
+            prompt="What happens to training when an athlete is not eating enough?",
+            options=(
+                "They get weaker, break more easily and heal slower",
+                "They get lighter and everything gets easier",
+                "Nothing, as long as they feel fine",
+            ),
+            answer=0,
+            because=(
+                "Hard training on too little fuel takes it out of muscle and "
+                "bone. It shows up as strength that stops improving and "
+                "injuries that keep coming back, long before it feels like "
+                "anything is wrong."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_spot",
+        title="What a good spot is, and when to say no",
+        focus="Staying safe",
+        positions=STUNTING, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A stunt going up with a proper backspot, and one where the "
+            "spotter is out of position or looking elsewhere. Watch the "
+            "spotter, not the flyer."
+        ),
+        ask=Ask(
+            prompt="You are asked to put up a stunt and the spot does not feel right. What do you do?",
+            options=(
+                "Say so and do not go up",
+                "Go up, but come down quickly",
+                "Go up -- everybody else is ready",
+            ),
+            answer=0,
+            because=(
+                "Somebody is trusting you with the fall. The only person who "
+                "can stop an unsafe stunt is whoever notices first, and there "
+                "is no version of this where being the one who spoke is wrong."
+            ),
+        ),
+    ),
+)
+
+JDG_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="jdg_iq_scored_on_looks",
+        title="The routine is scored. You are not.",
+        focus="Training sense",
+        positions=JUDGED_ALL, min_age=15, max_age=200, target_s=160,
+        find=(
+            "A judge or a senior coach explaining what a score is actually "
+            "made of -- the elements, the deductions, the execution. The point "
+            "is how specific and how technical it is."
+        ),
+        ask=Ask(
+            prompt="A score in this sport is a judgement about what?",
+            options=(
+                "The elements you performed and how you executed them",
+                "How you look",
+                "How hard you have worked this season",
+            ),
+            answer=0,
+            because=(
+                "A score is a list of elements and deductions. The lever you "
+                "actually control is being strong enough to hit them, which is "
+                "the only thing this app measures and the only thing it has an "
+                "opinion about."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_comments",
+        title="When a comment is about your body",
+        focus="Staying safe",
+        positions=JUDGED_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "Safeguarding or governing-body education footage on what is and "
+            "is not acceptable for an adult in the sport to say to a young "
+            "athlete. Official material is better here than anything else."
+        ),
+        ask=Ask(
+            prompt="An adult in your sport makes a comment about your body or your weight. What do you do?",
+            options=(
+                "Tell another adult you trust, even if it seemed like a joke",
+                "Ignore it -- it is part of the sport",
+                "Change what you are doing so it stops",
+            ),
+            answer=0,
+            because=(
+                "You do not have to decide whether it was meant badly, and you "
+                "should not have to. Telling somebody is the whole action, and "
+                "it is theirs to sort out from there."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_back",
+        title="Back pain that keeps coming back",
+        focus="Staying safe",
+        positions=JUDGED_ALL, min_age=15, max_age=200, target_s=155,
+        find=(
+            "Coaching-education footage on back pain in young athletes who "
+            "bend backwards a lot. Look for material that says plainly when to "
+            "stop and see somebody."
+        ),
+        ask=Ask(
+            prompt="Your lower back has ached after every session for two weeks. What is the move?",
+            options=(
+                "Tell an adult and get it looked at properly",
+                "Stretch it more before and after",
+                "Strengthen your core and it will settle",
+            ),
+            answer=0,
+            because=(
+                "Back pain in a young athlete that keeps returning is one to "
+                "have looked at rather than to train around. Stretching "
+                "something that hurts every session is how two weeks becomes a "
+                "season."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_wrists",
+        title="Wrists take everything you do",
+        focus="Staying safe",
+        positions=TUMBLING, min_age=15, max_age=200, target_s=145,
+        find=(
+            "Slow-motion of a hand contact in tumbling or vaulting. The clip "
+            "is how much load goes through the wrist and how briefly."
+        ),
+        ask=Ask(
+            prompt="Your wrists hurt when you put weight on them. What does that change?",
+            options=(
+                "Say something and swap to work that does not load them",
+                "Tape them and carry on",
+                "Do fewer repetitions of the same thing",
+            ),
+            answer=0,
+            because=(
+                "In these sports the wrist is a weight-bearing joint that was "
+                "never designed to be one. There is always conditioning that "
+                "does not go through your hands, and taping over it is how you "
+                "find that out the slow way."
+            ),
+        ),
+    ),
+    Topic(
+        key="jdg_iq_one_sport",
+        title="Twelve months of the same thing",
+        focus="Training sense",
+        positions=JUDGED_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "Coaching-education footage on year-round single-sport training in "
+            "young athletes. Look for material that talks about what a break "
+            "is for rather than simply warning about it."
+        ),
+        ask=Ask(
+            prompt="Why does the app ask what else you play and when your season ends?",
+            options=(
+                "Because doing one thing all year loads the same tissue all year",
+                "To compare you with other athletes",
+                "To fill in your profile",
+            ),
+            answer=0,
+            because=(
+                "It is the same joints, in the same directions, with no off "
+                "season. The answer changes how much solo work this app will "
+                "suggest, which is the only reason it asks."
+            ),
+        ),
+    ),
+)
+
+JDG_TOPICS: tuple[Topic, ...] = JDG_FUNDAMENTALS + JDG_CORE + JDG_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
@@ -2907,5 +3299,11 @@ BY_SPORT.update({
     "baseball": BB_IQ_TOPICS,
     "softball": BB_IQ_TOPICS,
     "hockey": HOC_TOPICS,
+    # One syllabus under three keys. These sports share the property that
+    # matters here -- they are judged on how the movement looks -- and the
+    # training sense and the hazards that come with it are the same.
+    "gymnastics": JDG_TOPICS,
+    "cheer": JDG_TOPICS,
+    "dance": JDG_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

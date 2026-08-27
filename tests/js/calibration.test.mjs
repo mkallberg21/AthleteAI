@@ -102,6 +102,9 @@ const SWEEP = {
   // The same stance measurement basketball, soccer and tennis all use, for the
   // same movement.
   hoc_shuffle:       { lo: 1.22,  hi: 2.00, kind: 'stance' },
+  // Heel against the toe of the same foot. By some distance the smallest
+  // excursion in the catalogue, which is exactly why it needs the guard.
+  gen_calf_raise:    { lo: 0.00,  hi: 0.16, kind: 'heel' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept
@@ -164,6 +167,12 @@ function frame(kind, v) {
     // is tested in counter.test.mjs.
     pts[IDX.left_wrist] = { x: 0.49, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
     pts[IDX.right_wrist] = { x: 0.51, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
+  } else if (kind === 'heel') {
+    // Toe pinned to the floor, heel rising off it. The whole movement is a
+    // couple of centimetres of real life, so the fixture is deliberately at
+    // the same scale rather than an exaggerated one.
+    pts[IDX.left_foot_index] = { x: 0.50, y: 0.96, z: 0, visibility: 0.95 };
+    pts[IDX.left_heel] = { x: 0.42, y: 0.96 - v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'sweep') {
     // Both hands together, v torso lengths to one side of the chest. Together
     // is the point: the signal takes their midpoint, so a one-handed reach

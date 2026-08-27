@@ -576,6 +576,37 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when you start standing up out of your stance.",
             "an upright player has already given up the next two shots"),
     ),
+    "gen_calf_raise": (
+        Cue("depth", "All the way up onto the balls of your feet, then all the "
+                     "way down until your heels touch. The top inch is the "
+                     "whole exercise.",
+            "half a calf raise trains the half you were never short of"),
+        Cue("tempo", "Two seconds up, two seconds down. If you are bouncing, "
+                     "the tendon is doing it instead of the muscle.",
+            "the bounce is free, and free does not make you stronger"),
+        Cue("consistency", "Same height every rep. Pick a mark on the wall at "
+                           "eye level and rise to it each time.",
+            "reps that all end somewhere different are hard to improve on"),
+        Cue("endurance", "Stop when you can no longer get all the way up, not "
+                         "when your calves burn.",
+            "the short ones at the end are practising a short range"),
+    ),
+    "gen_handstand_hold": (
+        Cue("position", "Arms locked straight, ears between your shoulders, "
+                        "and squeeze your legs together. Push the floor away.",
+            "bent arms is where a handstand becomes a fall"),
+        Cue("endurance", "Come down while you still choose to. If your arms "
+                         "are shaking, that set is over.",
+            "the last five seconds of a bad handstand are how wrists get hurt"),
+    ),
+    "gen_dead_hang": (
+        Cue("position", "Arms straight, shoulders pulled down away from your "
+                        "ears rather than shrugged up around them.",
+            "hanging from the shoulder joint is what makes it a strength drill"),
+        Cue("endurance", "Come off the bar when your grip goes, not after it "
+                         "goes. Two shorter hangs beat one that ends in a drop.",
+            "the fall at the end is the only dangerous part of this"),
+    ),
     "hoc_stickhandle": (
         Cue("depth", "Get the puck out past your hands and back. Rolling it "
                      "under your nose is not stickhandling, it is fidgeting.",

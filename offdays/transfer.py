@@ -267,6 +267,21 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "jockeying a winger without turning your hips"),
         Transfer("Lacrosse", "a defender's approach and break down"),
     ),
+    "gen_calf_raise": (
+        Transfer("Volleyball", "every block and every approach leaves from here"),
+        Transfer("Basketball", "the last thing that touches the floor on a jump"),
+        Transfer("Track", "sprinting is a series of these, done very fast"),
+    ),
+    "gen_handstand_hold": (
+        Transfer("Cheer", "a base holds this shape with somebody standing on it"),
+        Transfer("Swimming", "overhead position and the shoulders that hold it"),
+        Transfer("Wrestling", "carrying your own weight through your arms"),
+    ),
+    "gen_dead_hang": (
+        Transfer("Rock Climbing", "the same grip, and the same thing that fails first"),
+        Transfer("Lacrosse", "hands that do not open up in a battle for the ball"),
+        Transfer("Baseball", "grip strength is the quiet half of bat speed"),
+    ),
     "hoc_stickhandle": (
         Transfer("Lacrosse", "the same hands, holding something heavier"),
         Transfer("Basketball", "a tight handle in a crowd, on the floor instead"),

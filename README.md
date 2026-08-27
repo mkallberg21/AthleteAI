@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3254 tests
+python -m pytest tests/ -q          # 3329 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 214 tests
+  node --test tests/js/*.test.mjs   # 220 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1292,11 +1292,11 @@ sessions.
 
 ### The drill catalog, and what is deliberately missing
 
-Seventy-two drills: eighteen bodyweight movements that work for any sport —
+Seventy-five drills: twenty-one bodyweight movements that work for any sport —
 squats, lunges, glute bridges, push-ups, pull-ups, planks, side planks, hollow
 holds, wall sits, dead bugs, mountain climbers, burpees, squat jumps, tuck
-jumps, lateral bounds, high knees, jumping jacks, sit-ups — and skill work for
-the seven sports built out so far: lacrosse (11), basketball (9), soccer,
+jumps, lateral bounds, high knees, jumping jacks, sit-ups, calf raises, wall
+handstands, dead hangs — and skill work for the seven sports built out so far: lacrosse (11), basketball (9), soccer,
 volleyball and tennis (7 each), hockey (6), and baseball and softball (7
 between them, sharing everything except the mound).
 
@@ -1318,7 +1318,17 @@ drill's own refractory window, which meant the slow drills were driven faster
 than they are allowed to count — two of them turned out to have had their
 `target_rom` fitted to that distorted signal.
 
-The nine sports not yet built get positions, benchmarks, load monitoring and the
+**Gymnastics, cheer and dance get conditioning and nothing else, deliberately.**
+They are judged on how the movement looks, and a number on a child's line about
+how their body looked is the most dangerous thing this product could produce. So
+nothing scores a tumbling pass, a stunt or a combination — but their position
+plans, their film syllabus and the three newest drills are all built for them,
+because getting stronger is measurable and is most of what a solo hour in those
+sports should be. The last three general drills came out of that build: the
+catalogue had eighteen bodyweight movements that between them never measured an
+ankle, never went overhead and never asked anybody to hang.
+
+The remaining sports get positions, benchmarks, load monitoring and the
 bodyweight catalogue, and are honest about having no skill drills rather than
 being handed another sport's with the labels changed.
 
