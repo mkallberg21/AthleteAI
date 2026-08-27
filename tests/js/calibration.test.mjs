@@ -65,6 +65,8 @@ const SWEEP = {
   lax_goalie_saves:  { lo: 0.40,  hi: 1.18, kind: 'reach' },
   // Defensive stance out to a full slide step and back, measured at the feet.
   bkb_slide:         { lo: 1.22,  hi: 2.00, kind: 'stance' },
+  // Shooting pocket to release, in degrees of elbow extension.
+  bkb_form_shot:     { lo: 80,    hi: 168,  kind: 'shootarm' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept
@@ -109,6 +111,12 @@ function frame(kind, v) {
     pts[IDX.right_hip] = { x: 0.54, y: hipY, z: 0, visibility: 0.95 };
     pts[IDX.left_shoulder] = { x: 0.45, y: hipY - 0.25, z: 0, visibility: 0.95 };
     pts[IDX.right_shoulder] = { x: 0.55, y: hipY - 0.25, z: 0, visibility: 0.95 };
+  } else if (kind === 'shootarm') {
+    // The right arm raised, so `shootingSide` picks it: the signal chooses the
+    // shooting arm from the frame rather than from the spec.
+    setAngle(pts, 'right_shoulder', 'right_elbow', 'right_wrist',
+             { x: 0.55, y: 0.35 }, { x: 0.58, y: 0.24 }, v, 0.15);
+    pts[IDX.left_wrist] = { x: 0.42, y: 0.55, z: 0, visibility: 0.95 };
   } else if (kind === 'stance') {
     // Feet apart by v torso lengths, centred under the athlete. The sweep only
     // has to exercise counting and range; the sign -- which is what catches a

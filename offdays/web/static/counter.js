@@ -145,6 +145,10 @@ export function computeSignal(landmarks, spec) {
     return (ground - hips.y) / torso;
   }
 
+  if (kind === 'shooting_arm') {
+    return shootingArmSignal(landmarks);
+  }
+
   if (kind === 'stance_width') {
     return stanceWidthSignal(landmarks);
   }
@@ -158,6 +162,73 @@ export function computeSignal(landmarks, spec) {
   }
 
   return null;
+}
+
+/** Which arm is shooting this frame: the one whose wrist is higher. */
+function shootingSide(landmarks) {
+  const lw = lm(landmarks, 'left_wrist');
+  const rw = lm(landmarks, 'right_wrist');
+  if (!lw && !rw) return null;
+  // Smaller y is higher on screen.
+  if (!lw) return 'right';
+  if (!rw) return 'left';
+  return rw.y < lw.y ? 'right' : 'left';
+}
+
+/**
+ * Elbow angle of whichever arm is actually shooting.
+ *
+ * A plain joint_angle names one side in the spec and only swaps when that side
+ * leaves the frame, so a left-handed shooter with both arms visible would be
+ * measured on the arm that is not shooting. Handedness cannot live in the spec
+ * either -- one record is shared by every athlete. Picking the arm from the
+ * frame, by whichever wrist is higher, is the only version of this that works
+ * for a lefty, and it records which hand shot as a side effect.
+ */
+export function shootingArmSignal(landmarks) {
+  const side = shootingSide(landmarks);
+  if (!side) return null;
+  const pts = [
+    lm(landmarks, `${side}_shoulder`),
+    lm(landmarks, `${side}_elbow`),
+    lm(landmarks, `${side}_wrist`),
+  ];
+  if (!pts.every(Boolean)) return null;
+  const angle = jointAngle(pts[0], pts[1], pts[2]);
+  return angle === null ? null : { value: angle, hand: side };
+}
+
+/**
+ * How far the shooting elbow sits out to the side of the wrist, in torso
+ * lengths.
+ *
+ * "Elbow under the ball" is the first thing any shooting coach says, and this
+ * is what it means geometrically: at release the elbow should be beneath the
+ * wrist rather than flared out. Measured along the shoulder axis so it does not
+ * matter which way the athlete faces, and as a magnitude because a flare is a
+ * flare whichever side it goes.
+ *
+ * Null when the athlete is side-on -- from there the elbow is behind the wrist
+ * rather than beside it, and the projection would report a perfect shot for
+ * any shot at all.
+ */
+export function elbowFlare(landmarks) {
+  const side = shootingSide(landmarks);
+  if (!side) return null;
+  const ls = lm(landmarks, 'left_shoulder');
+  const rs = lm(landmarks, 'right_shoulder');
+  const elbow = lm(landmarks, `${side}_elbow`);
+  const wrist = lm(landmarks, `${side}_wrist`);
+  const torso = torsoLength(landmarks);
+  if (!ls || !rs || !elbow || !wrist || !torso) return null;
+
+  const ax = rs.x - ls.x;
+  const ay = rs.y - ls.y;
+  const span = Math.hypot(ax, ay);
+  if (span < 0.35 * torso) return null;
+
+  const offset = ((elbow.x - wrist.x) * ax + (elbow.y - wrist.y) * ay) / span / torso;
+  return Math.abs(offset);
 }
 
 /**
@@ -362,6 +433,11 @@ export class RepCounter {
     // value going negative -- and it is the one thing a defensive coach
     // actually wants to know.
     this.pendingCrossed = false;
+    // Shooting drills only: how far the elbow sat out from the wrist at the
+    // moment of release. Captured at the extreme rather than at the threshold
+    // crossing, because release is the top of the extension and the threshold
+    // is somewhere on the way there.
+    this.pendingFlare = null;
     this.peakValue = null;
     // Per-cycle extremes. The span between them is the rep's range of motion,
     // which is what form quality is measured from -- counting reps throws this
@@ -463,6 +539,8 @@ export class RepCounter {
     // Only computed on cued drills. Everywhere else it is dead weight on
     // every frame, and `saveZone` returns null so nothing downstream fires.
     const zone = this.spec.cues ? saveZone(landmarks, this.spec.cues) : null;
+    const flare = this.spec.signal.kind === 'shooting_arm'
+      ? elbowFlare(landmarks) : null;
 
     // Kept for the debug readout: seeing raw against smoothed is how you tell
     // a jittery landmark from a smoothing constant that has flattened the
@@ -529,6 +607,7 @@ export class RepCounter {
         // moment the next step arms belonged to the step that just finished,
         // and has already been recorded against it.
         this.pendingCrossed = false;
+        this.pendingFlare = null;
         this.lastRep = null;
       } else if (this.lastRep) {
         // Still following through on the rep just emitted. Extend its span so
@@ -556,6 +635,8 @@ export class RepCounter {
     if (rising ? s > this.peakValue : s < this.peakValue) {
       this.peakValue = s;
       if (hand !== 'none') this.pendingHand = hand;
+      // Release is the top of the extension, which is exactly this extreme.
+      if (flare !== null) this.pendingFlare = flare;
     }
 
     // Separate from the peak above, and against the raw value: this is asking
@@ -597,6 +678,12 @@ export class RepCounter {
         // rep and would be invisible in a min/max.
         ...(this.spec.signal.kind === 'stance_width'
             ? { crossed: this.pendingCrossed } : {}),
+        // Shooting drills only. Null rather than absent when the athlete was
+        // side-on: "we could not see the elbow" and "the elbow was under the
+        // ball" are different facts and must not collapse into one.
+        ...(this.spec.signal.kind === 'shooting_arm'
+            ? { flare: this.pendingFlare === null
+                       ? null : round3(this.pendingFlare) } : {}),
       };
       this.reps.push(rep);
       this.lastRepAt = tMs;
@@ -605,6 +692,7 @@ export class RepCounter {
       this.pendingHand = 'none';
       this.pendingZone = null;
       this.pendingCrossed = false;
+      this.pendingFlare = null;
       // Deliberately not cleared with the zone: the follow-through frames
       // after this point still belong to this rep and may yet find its real
       // furthest reach.

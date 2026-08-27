@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { RepCounter, computeSignal, saveZone, stanceWidthSignal, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
+import { RepCounter, computeSignal, elbowFlare, saveZone, stanceWidthSignal, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
 
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
 
@@ -677,4 +677,154 @@ test('drills that are not stance-width carry no crossed field', () => {
   t = playSave(counter, 'high_right', t);
   assert.ok(counter.count > 0);
   for (const rep of counter.reps) assert.ok(!('crossed' in rep));
+});
+
+
+/* -------------------------------------------------------------------------
+ * Form shooting.
+ *
+ * The drill that was called too hard twice, and the reason was never the
+ * motion -- it is that the app cannot see whether the ball went in. So it does
+ * not try. It reads the elbow, which is what every shooting coach says first
+ * and the one part of a shot pose genuinely sees.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * A shooter with the elbow at a chosen interior angle.
+ *
+ * The wrist is placed by rotating the forearm off the upper arm, so the angle
+ * is the thing being set rather than something that falls out of two guessed
+ * positions. `elbowOut` then pushes the elbow sideways from under the wrist,
+ * which is the flare this drill exists to catch.
+ */
+function shooter({ side = 'right', angle = 170, elbowOut = 0.0 } = {}) {
+  const pts = baseSkeleton();
+  const sign = side === 'right' ? 1 : -1;
+  const shoulder = { x: side === 'right' ? 0.55 : 0.45, y: 0.35 };
+  const LIMB = 0.125;
+
+  // Upper arm out and slightly up from the shoulder, with the flare applied
+  // sideways so the elbow leaves the line between shoulder and wrist.
+  const elbow = {
+    x: shoulder.x + sign * (0.02 + elbowOut),
+    y: shoulder.y - 0.06,
+  };
+
+  // Forearm: rotate the elbow-to-shoulder vector by the interior angle.
+  const ux = shoulder.x - elbow.x;
+  const uy = shoulder.y - elbow.y;
+  const mag = Math.hypot(ux, uy) || 1;
+  const rad = (angle * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad) * sign;
+  const wrist = {
+    x: elbow.x + ((ux * cos - uy * sin) / mag) * LIMB,
+    y: elbow.y + ((ux * sin + uy * cos) / mag) * LIMB,
+  };
+
+  const put = (name, p) => { pts[IDX[name]] = { x: p.x, y: p.y, z: 0, visibility: 0.95 }; };
+  put(`${side}_elbow`, elbow);
+  put(`${side}_wrist`, wrist);
+  // The other hand stays down and out of the way, so the higher wrist -- and
+  // therefore the shooting arm -- is unambiguous.
+  const other = side === 'right' ? 'left' : 'right';
+  put(`${other}_wrist`, { x: other === 'right' ? 0.62 : 0.38, y: 0.60 });
+  return pts;
+}
+
+test('form shooting: the shooting arm is picked from the frame, not the spec', () => {
+  // The whole reason this is not a plain joint_angle. A left-handed shooter
+  // with both arms visible would otherwise be measured on the arm that is not
+  // shooting, and handedness cannot live in a spec every athlete shares.
+  const drill = spec('bkb_form_shot');
+  assert.equal(computeSignal(shooter({ side: 'right' }), drill).hand, 'right');
+  assert.equal(computeSignal(shooter({ side: 'left' }), drill).hand, 'left');
+});
+
+test('form shooting: a lefty and a righty read the same angle', () => {
+  const drill = spec('bkb_form_shot');
+  const r = computeSignal(shooter({ side: 'right' }), drill).value;
+  const l = computeSignal(shooter({ side: 'left' }), drill).value;
+  assert.ok(Math.abs(r - l) < 1, `${r} vs ${l}`);
+});
+
+test('elbow flare: an elbow under the ball reads near zero', () => {
+  assert.ok(elbowFlare(shooter({ elbowOut: 0.0 })) < 0.2);
+});
+
+test('elbow flare: a flared elbow reads high, whichever side it is', () => {
+  for (const side of ['right', 'left']) {
+    const flared = elbowFlare(shooter({ side, elbowOut: 0.09 }));
+    assert.ok(flared > 0.3, `${side} flare read ${flared}`);
+  }
+});
+
+test('elbow flare: side-on it says nothing rather than a perfect elbow', () => {
+  // From the side an elbow is behind the wrist rather than beside it, and the
+  // projection would report a perfect shot for any shot at all.
+  const pts = shooter({ elbowOut: 0.09 });
+  pts[IDX.left_shoulder] = { x: 0.495, y: 0.35, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.505, y: 0.35, z: 0, visibility: 0.95 };
+  assert.equal(elbowFlare(pts), null);
+});
+
+/** One shot: dip into the pocket, extend through release, recover. */
+function playShot(counter, startMs, { elbowOut = 0.0, side = 'right' } = {}) {
+  let t = startMs;
+  const step = 1000 / 30;
+  const DIP = 70, RELEASE = 172;
+  for (let i = 0; i < 5; i += 1) {
+    counter.push(shooter({ side, angle: DIP, elbowOut }), t); t += step;
+  }
+  for (let i = 1; i <= 9; i += 1) {
+    const a = DIP + (RELEASE - DIP) * (i / 9);
+    counter.push(shooter({ side, angle: a, elbowOut }), t); t += step;
+  }
+  for (let i = 0; i < 5; i += 1) {
+    counter.push(shooter({ side, angle: RELEASE, elbowOut }), t); t += step;
+  }
+  return t;
+}
+
+test('form shooting: counts one rep per shot', () => {
+  const drill = spec('bkb_form_shot');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) t = playShot(counter, t);
+  assert.equal(counter.count, 6);
+});
+
+test('form shooting: every rep carries the elbow at release', () => {
+  const drill = spec('bkb_form_shot');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 4; i += 1) t = playShot(counter, t, { elbowOut: 0.09 });
+  assert.equal(counter.count, 4);
+  for (const rep of counter.reps) {
+    assert.ok(typeof rep.flare === 'number', JSON.stringify(rep));
+    assert.ok(rep.flare > 0.3, `flare ${rep.flare}`);
+  }
+});
+
+test('form shooting: a clean elbow and a flared one are told apart', () => {
+  const drill = spec('bkb_form_shot');
+  const clean = new RepCounter(drill);
+  const flared = new RepCounter(drill);
+  let a = 0, b = 0;
+  for (let i = 0; i < 4; i += 1) {
+    a = playShot(clean, a, { elbowOut: 0.0 });
+    b = playShot(flared, b, { elbowOut: 0.09 });
+  }
+  const median = (c) => c.reps.map((r) => r.flare).sort((x, y) => x - y)[1];
+  assert.ok(median(clean) < median(flared) - 0.2,
+    `${median(clean)} vs ${median(flared)}`);
+});
+
+test('drills that are not shooting carry no flare field', () => {
+  const drill = spec('bkb_slide');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 5; i += 1) { counter.push(stanceOf(1.25), t); t += 33; }
+  t = playSlide(counter, t);
+  assert.ok(counter.count > 0);
+  for (const rep of counter.reps) assert.ok(!('flare' in rep));
 });

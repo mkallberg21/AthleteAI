@@ -41,6 +41,9 @@ class RepEvent:
     zone: str | None = None
     # Stance-width drills only: whether the feet crossed during this rep.
     crossed: bool | None = None
+    # Shooting drills only: elbow offset from the wrist at release, in torso
+    # lengths. None when the release was unreadable.
+    flare: float | None = None
 
 
 @dataclass

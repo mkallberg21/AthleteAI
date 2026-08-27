@@ -17,6 +17,7 @@ from .config import CONFIG
 from . import sports
 from . import ball as ball_mod
 from . import footwork
+from . import shooting
 from . import goalie
 from . import rewatch
 from . import notifications
@@ -2498,6 +2499,7 @@ class Store:
                     zone=(str(r["zone"]) if r.get("zone") else None),
                     crossed=(None if r.get("crossed") is None
                              else bool(r["crossed"])),
+                    flare=_opt_float(r.get("flare")),
                 )
                 for r in reps
             ],
@@ -2575,6 +2577,16 @@ class Store:
                 [{"crossed": r.crossed} for r in claim.reps],
             )
 
+        # A shooting drill carries the one coaching point pose can genuinely
+        # see. It knows nothing about whether anything went in, which is said
+        # on the result itself rather than left to be assumed.
+        shot_report = None
+        if drill.signal.kind is SignalKind.SHOOTING_ARM:
+            shot_report = shooting.analyze(
+                [{"flare": r.flare} for r in claim.reps
+                 if r.flare is not None or drill.signal.kind is SignalKind.SHOOTING_ARM],
+            )
+
         # Form quality reads the same rep stream the counting did, so it costs
         # nothing extra to collect and is the half of the signal a rep count
         # throws away.
@@ -2637,13 +2649,14 @@ class Store:
             # `prune_rep_events`. They are timings, never imagery.
             c.executemany(
                 "INSERT INTO rep_events(session_id, t_ms, hand, confidence, peak, rom, "
-                "cycle_ms, zone, crossed) VALUES (?,?,?,?,?,?,?,?,?)",
+                "cycle_ms, zone, crossed, flare) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 [
                     (
                         session_id, r.t_ms,
                         r.hand if r.hand in ("left", "right") else "none",
                         r.confidence, r.peak, r.rom, r.cycle_ms, r.zone,
                         None if r.crossed is None else int(r.crossed),
+                        r.flare,
                     )
                     for r in claim.reps
                 ],
@@ -2677,6 +2690,7 @@ class Store:
             **({"ball": ball_review.to_dict()} if ball_review else {}),
             **({"saves": save_report.to_dict()} if save_report else {}),
             **({"footwork": footwork_report.to_dict()} if footwork_report else {}),
+            **({"shooting": shot_report.to_dict()} if shot_report else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,

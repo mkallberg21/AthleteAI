@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2620 tests
+python -m pytest tests/ -q          # 2655 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 159 tests
+  node --test tests/js/*.test.mjs   # 169 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3353,6 +3353,74 @@ with a wide, committed push scores the same as one covering ground. Distance
 travelled would need a signal with memory — a baseline that follows the athlete
 across the frame — and every signal here is deliberately memoryless so that
 `computeSignal` stays a pure function of one frame.
+
+---
+
+## The shooting drill
+
+Called too hard twice, and the reason was never the motion. A shot is a clean
+elbow cycle and pose reads it easily. The problem is that **the app cannot see
+whether the ball went in** — there is no hoop in a driveway drill, and a phone
+propped against a water bottle would not find one if there were.
+
+So it does not try. `bkb_form_shot` scores nothing about accuracy, reports no
+makes, and says so in the description, the setup hint and the `LIMITS` carried
+on every result. What it measures instead is the thing every shooting coach says
+first and pose genuinely sees: **whether the elbow stayed under the ball.**
+
+### A third signal kind, and a lefty is the reason
+
+`shooting_arm` is the elbow angle of whichever arm is actually shooting, picked
+per frame as the one whose wrist is higher.
+
+A plain `joint_angle` names one side in the spec, and the mirror fallback only
+swaps when the named side leaves the frame — so a **left-handed shooter with
+both arms visible would have been measured on the arm that is not shooting.**
+Handedness cannot live in the spec either, because one record is shared by every
+athlete. Picking the arm from the frame is the only version of this that works
+for a lefty, and it records which hand shot as a side effect.
+
+### Elbow flare, captured at release
+
+"Elbow under the ball" has a geometric meaning: at release the elbow should sit
+beneath the wrist rather than flared out to the side. `elbowFlare()` measures
+that offset along the shoulder axis, in torso lengths, as a magnitude — a flare
+is a flare whichever side it goes.
+
+It is captured at the **extreme of the extension**, which is release, the same
+way the goalie zone and the crossed-foot flag are captured. And it is null when
+the athlete is side-on: from there the elbow is *behind* the wrist rather than
+beside it, and the projection would report a perfect shot for any shot at all.
+
+Null rather than absent, because "we could not see the elbow" and "the elbow was
+under the ball" are different facts and must not collapse into one. A test
+asserts unreadable releases never dilute the median.
+
+### Counted, never scored
+
+Same rule as the goalie report and the footwork one. The flare is a number and
+one sentence; it subtracts nothing. A child rebuilding a shot will flare for
+weeks, and an app that quietly paid them less would teach them to stop using the
+app rather than to fix the elbow.
+
+A bug worth recording: the first version checked *"is the median under the
+ball"* first, and told a shooter with two flared shots in twenty that everything
+was fine — which is exactly the rep they need to hear about. The clean message
+now requires zero flared releases, not just a good median.
+
+### What it cannot do
+
+- **No hoop, no makes, no percentage.** Nothing it produces belongs next to a
+  shooting percentage.
+- **It watches the elbow, not the ball's flight.** A shot can have a perfect
+  elbow and still be short, flat or wide.
+- **Side-on it says nothing** rather than flattering the session.
+
+The ball is in **confirm** mode and not required — it establishes there was a
+ball and nothing more, the same rule every lacrosse drill follows. And a shot is
+an overhead *push*, not a throw: `throws_per_rep` is zero, because on the
+throwing axis an evening of form shooting would read as an evening of throwing
+and trip a shoulder advisory for work that never went near one.
 
 ---
 

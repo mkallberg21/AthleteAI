@@ -51,6 +51,17 @@ class SignalKind(str, Enum):
     # torso length. Used for jumps and general body-height drills.
     BODY_HEIGHT = "body_height"
 
+    # Interior elbow angle of whichever arm is actually shooting, picked per
+    # frame as the one whose wrist is higher.
+    #
+    # A plain `joint_angle` names one side in the spec, and the mirror fallback
+    # only swaps when the named side is out of frame -- so a left-handed shooter
+    # with both arms visible would be measured on the arm that is not shooting.
+    # Handedness cannot live in the spec either, because the spec is one record
+    # shared by every athlete. Picking the arm from the frame is the only
+    # version of this that works for a lefty.
+    SHOOTING_ARM = "shooting_arm"
+
     # Signed distance from the left ankle to the right ankle, projected onto
     # the shoulder axis, in torso lengths. The first horizontal measurement in
     # the library -- everything else here is vertical or angular, which is why

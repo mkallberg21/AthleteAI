@@ -396,6 +396,26 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "bkb_form_shot": (
+        Cue("depth", "Dip into the pocket and come all the way up through the "
+                     "ball. A shot that starts at your chest has no legs in "
+                     "it.",
+            "the power comes from the dip, and short shots come from skipping it"),
+        Cue("tempo", "One motion, same speed every time. Do not rush it "
+                     "because it is close.",
+            "a shot you rush up close is the shot you rush in a game"),
+        Cue("consistency", "Elbow under the ball, every single rep. The app "
+                           "watches this one and will tell you when it drifts "
+                           "out.",
+            "an elbow that flares sends the ball sideways, and you cannot feel "
+            "it happening"),
+        Cue("offhand", "Guide hand off the ball entirely. If it is helping, "
+                       "you are not learning what your shooting hand does.",
+            "a guide hand that pushes is why a shot goes left or right"),
+        Cue("endurance", "Stop when the follow-through stops holding, not when "
+                         "your arm is tired.",
+            "a shoulder that gets tired starts pushing the elbow out sideways"),
+    ),
     "bkb_slide": (
         Cue("depth", "Push off the back foot and cover ground. A step that "
                      "does not widen your stance is a step that went nowhere.",

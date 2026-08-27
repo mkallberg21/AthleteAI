@@ -1617,6 +1617,85 @@ BKB_WALL_PASS = DrillSpec(
 )
 
 
+
+BKB_FORM_SHOT = DrillSpec(
+    key="bkb_form_shot",
+    name="Form Shooting",
+    sport="basketball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "One hand, close to a wall or straight up to yourself. Dip, rise, "
+        "release, hold the follow-through. It counts your shots and watches "
+        "one thing: whether your elbow stayed under the ball. It has no idea "
+        "whether anything went in -- there is no hoop in this drill and the "
+        "app cannot see one."
+    ),
+    signal=SignalSpec(
+        # Picks the shooting arm per frame rather than naming a side, because a
+        # left-handed shooter with both arms visible would otherwise be measured
+        # on the arm that is not shooting -- and handedness cannot live in a
+        # spec that every athlete shares.
+        kind=SignalKind.SHOOTING_ARM,
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        # Elbow flexed into the dip, then extended through release. A shooting
+        # pocket sits near 60 degrees; a released arm is nearly straight.
+        down_threshold=95.0,
+        up_threshold=155.0,
+        min_rep_ms=600,
+        max_rep_ms=6_000,
+        rising_completes=True,
+    ),
+    # Confirm, never count. The pose finds the shot; the ball's job is only to
+    # establish there was one, and a missed detection is a note rather than a
+    # refusal -- the same rule every lacrosse drill follows.
+    ball=replace(
+        BASKETBALL, mode="confirm", required=False, contact="body",
+        min_gap_ms=600, min_speed=0.35, attribute_side=False,
+        min_track_quality=0.30,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=250, diminishing_after_reps=120),
+    validation=ValidationSpec(
+        max_reps_per_second=1.5, min_reps_per_second=0.05,
+        min_reps=10, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you at chest height, close enough to see "
+        "your shooting elbow clearly. Turned sideways it cannot tell an elbow "
+        "under the ball from one flared out. One hand only -- the guide hand "
+        "comes off."
+    ),
+    quality=QualitySpec(
+        # Dip to release, in degrees of elbow extension.
+        target_rom=85.0,
+        # The tightest consistency target in the catalogue, and deliberately so:
+        # form shooting is not about range or effort, it is about doing the
+        # identical thing every time.
+        consistency_target=0.10,
+        consistency_ceiling=0.35,
+        tempo_min_ms=600,
+        tempo_max_ms=2_500,
+        w_consistency=0.45,
+        w_depth=0.25,
+        w_tempo=0.15,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.5,
+        # A shot is an overhead push, not a throw. It does not belong on the
+        # axis a pitch count reads, and putting it there would make an evening
+        # of form shooting look like an evening of throwing.
+        throws_per_rep=0.0,
+        tissue=Tissue.UPPER_BODY,
+    ),
+    # Records which hand shot, which is how a left-handed shooter shows up as
+    # left rather than as an anomaly.
+    tracks_handedness=True,
+)
+
 BKB_SLIDE = DrillSpec(
     key="bkb_slide",
     name="Defensive Slides",
@@ -1822,6 +1901,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     BKB_WALL_PASS,
     BKB_STANCE,
     BKB_SLIDE,
+    BKB_FORM_SHOT,
     VB_SET,
     BB_WALL_THROW,
     TEN_WALL_RALLY,

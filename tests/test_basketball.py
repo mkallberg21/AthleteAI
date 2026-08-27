@@ -18,6 +18,7 @@ import pytest
 
 from offdays import ball as ball_mod
 from offdays import footwork
+from offdays import shooting
 from offdays import curriculum, film, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
 from offdays.drills.base import Metric
@@ -345,3 +346,125 @@ class TestCrossedFeetAreCountedNotPunished:
         report = footwork.analyze([{"t_ms": 1}, {"t_ms": 2}])
         assert report.steps == 0
         assert report.note == ""
+
+
+class TestFormShooting:
+    """The drill called too hard twice, and why it is buildable after all.
+
+    The reason was never the motion -- a shot is a clean elbow cycle and pose
+    reads it easily. It is that the app cannot see whether the ball went in.
+    So this drill does not try: it scores nothing about accuracy, and measures
+    the one thing every shooting coach says first and pose genuinely sees.
+    """
+
+    DRILL = "bkb_form_shot"
+
+    def test_it_picks_the_shooting_arm_rather_than_naming_a_side(self):
+        from offdays.drills.base import SignalKind
+        # A plain joint_angle names one side and only swaps when that side
+        # leaves frame, so a lefty with both arms visible would be measured on
+        # the wrong arm. Handedness cannot live in a spec every athlete shares.
+        assert get_drill(self.DRILL).signal.kind is SignalKind.SHOOTING_ARM
+
+    def test_it_records_which_hand_shot(self):
+        assert get_drill(self.DRILL).tracks_handedness
+
+    def test_a_shot_is_not_a_throw(self):
+        # An overhead push, not a throw. On the throwing axis an evening of
+        # form shooting would read as an evening of throwing and trip a
+        # shoulder advisory for work that never went near one.
+        assert get_drill(self.DRILL).load.throws_per_rep == 0.0
+
+    def test_the_ball_confirms_and_never_counts(self):
+        ball = get_drill(self.DRILL).ball
+        assert ball.confirms
+        assert not ball.required
+
+    def test_consistency_is_weighted_hardest(self):
+        # Form shooting is not about range or effort. It is about doing the
+        # identical thing every time, so the score has to say that.
+        q = get_drill(self.DRILL).quality
+        assert q.w_consistency > max(q.w_depth, q.w_tempo, q.w_endurance)
+
+    def test_every_basketball_plan_includes_it(self):
+        for pos in [p for p in ALL_POSITIONS if p.sport == "basketball"]:
+            assert pos.emphasis.get(self.DRILL, 0) > 0, pos.key
+
+
+class TestItRefusesToClaimAccuracy:
+    def _report(self, flares):
+        return shooting.analyze([{"flare": f} for f in flares])
+
+    def test_the_limits_ride_along_with_every_result(self):
+        assert self._report([0.1] * 20).to_dict()["limits"] == list(shooting.LIMITS)
+
+    def test_they_survive_a_withheld_session(self):
+        # The moment a coach is most likely to fill in the gaps themselves.
+        assert self._report([None] * 20).to_dict()["limits"] == list(shooting.LIMITS)
+
+    def test_it_says_there_is_no_hoop(self):
+        assert any("no hoop" in limit for limit in shooting.LIMITS)
+
+    def test_it_disclaims_being_a_shooting_percentage(self):
+        assert any("shooting percentage" in limit for limit in shooting.LIMITS)
+
+    def test_it_admits_a_good_elbow_can_still_miss(self):
+        assert any("still be short" in limit for limit in shooting.LIMITS)
+
+    def test_nothing_in_the_report_is_an_accuracy_number(self):
+        blob = self._report([0.1] * 20).to_dict()
+        assert "makes" not in blob
+        assert "percentage" not in str(blob).lower().replace("shooting percentage", "")
+
+    def test_the_description_repeats_it_where_athletes_read_it(self):
+        text = get_drill("bkb_form_shot").description.lower()
+        assert "no hoop" in text
+        assert "whether anything went in" in text
+
+
+class TestTheElbowReport:
+    def _report(self, flares):
+        return shooting.analyze([{"flare": f} for f in flares])
+
+    def test_a_clean_set_is_told_so(self):
+        report = self._report([0.12] * 20)
+        assert report.scored
+        assert report.flared == 0
+        assert "stayed under the ball" in report.note
+
+    def test_a_good_median_never_hides_bad_reps(self):
+        # The first version checked the median first and told a shooter with
+        # two flared shots in twenty that everything was fine -- which is
+        # exactly the rep they need to hear about.
+        report = self._report([0.40] * 2 + [0.13] * 18)
+        assert report.flared == 2
+        assert "2 of 20" in report.note
+
+    def test_flaring_often_enough_is_named_as_how_they_are_shooting(self):
+        report = self._report([0.40] * 8 + [0.20] * 12)
+        assert "how you are shooting" in report.note
+
+    def test_a_side_on_session_is_withheld_rather_than_scored(self):
+        report = self._report([None] * 14 + [0.2] * 6)
+        assert not report.scored
+        assert "side-on" in report.note or "square" in report.note
+
+    def test_unreadable_is_never_counted_as_a_good_elbow(self):
+        # "We could not see it" and "it was under the ball" are different
+        # facts, and averaging them would flatter every side-on session.
+        report = self._report([None] * 4 + [0.45] * 16)
+        assert report.readable == 16
+        assert report.median_flare == pytest.approx(0.45)
+
+    def test_too_few_releases_says_nothing_either_way(self):
+        report = self._report([0.2] * 5)
+        assert not report.scored
+        assert "not enough" in report.note.lower()
+
+    def test_it_never_subtracts_anything(self):
+        report = self._report([0.45] * 20)
+        for word in ("penalty", "deduct", "docked", "lost", "invalid"):
+            assert word not in report.note.lower()
+
+    def test_the_note_is_addressed_to_the_athlete(self):
+        assert "your" in self._report([0.45] * 20).note.lower()

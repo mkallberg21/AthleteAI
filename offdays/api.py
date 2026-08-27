@@ -404,6 +404,11 @@ class RepPayload(BaseModel):
     # one technique fault in this product the camera establishes rather than
     # infers, because the signal is signed.
     crossed: bool | None = None
+    # Shooting drills only: how far the elbow sat out from the wrist at
+    # release, in torso lengths. Bounded like every other client-supplied
+    # number here. Explicit null when the athlete was side-on, which is a
+    # different fact from a good elbow and must not collapse into one.
+    flare: float | None = Field(default=None, ge=0.0, le=10.0)
 
 
 class SubmitSessionRequest(BaseModel):

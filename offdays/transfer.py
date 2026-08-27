@@ -213,6 +213,11 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
+    "bkb_form_shot": (
+        Transfer("Volleyball", "the same overhead push, with two hands"),
+        Transfer("Lacrosse", "a repeatable release, built the same slow way"),
+        Transfer("Tennis", "the serve motion rewards the identical patience"),
+    ),
     "bkb_slide": (
         Transfer("Tennis", "recovering across the baseline between shots"),
         Transfer("Soccer", "jockeying a winger without turning your hips"),
