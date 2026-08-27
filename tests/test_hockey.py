@@ -11,8 +11,8 @@ below.
 **The sweep signal.** Everything a stick does off the ice is the hands crossing
 the body: stickhandling is that crossing repeated fast, a wrist shot is it done
 once, slowly and hard. None of it moves the hands far enough up or down for a
-height signal to see, which is why the defining skill of a top-five youth sport
-had no drill anywhere in the catalogue.
+height signal to see, which is why the defining skill of the sport had no
+drill anywhere in the catalogue.
 
 **No puck.** A puck is black, and black has no chroma -- it is not a colour, it
 is an absence of light. A black preset in the ball detector would match every
