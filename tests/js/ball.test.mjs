@@ -227,7 +227,7 @@ test('every ball drill is exercised by this file', () => {
                            'bb_wall_throw', 'ten_wall_rally']);
   const missing = SPECS
     .filter((d) => d.ball && !covered.has(d.key)
-                && !['lacrosse', 'basketball', 'volleyball'].includes(d.sport))
+                && !['lacrosse', 'basketball', 'volleyball', 'soccer'].includes(d.sport))
     .map((d) => d.key);
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
 });
@@ -587,4 +587,68 @@ test('the hands gate reaches the browser on every volleyball drill', () => {
   assert.equal(gates.get('vb_set'), 'above_shoulders');
   assert.equal(gates.get('vb_pass'), 'below_shoulders');
   assert.equal(gates.get('vb_serve'), 'above_shoulders');
+});
+
+
+/* -------------------------------------------------------------------------
+ * Soccer
+ *
+ * The first sport here played with the feet. `attribute_side` reads a foot the
+ * same way it reads a hand, so the alternation rules written for basketball
+ * carry over unchanged -- and contact location does the rest.
+ * ---------------------------------------------------------------------- */
+
+const SOC = () => SPECS.filter((d) => d.sport === 'soccer' && d.ball);
+
+test('every soccer drill counts a real touch', () => {
+  for (const drill of SOC()) {
+    const counter = new BallRepCounter(drill);
+    // Off the foot rather than the floor, which is what a juggle is.
+    const parts = {};
+    for (const name of drill.ball.parts) parts[name] = { x: 0.52, y: 0.88 };
+    run(counter, bounce({ floor: 0.88, apex: 1.5, every: 2, frames: 360 }),
+        pose(parts));
+    assert.ok(counter.count > 0, `${drill.key} saw nothing off a clean touch`);
+  }
+});
+
+test('every soccer drill uses the same ball', () => {
+  for (const drill of SOC()) {
+    assert.equal(drill.ball.diameter_cm, 20.5, `${drill.key} ball size drifted`);
+    assert.equal(drill.ball.detector, 'vision', `${drill.key} uses the general model`);
+  }
+});
+
+test('no soccer drill counts a touch off the head', () => {
+  // The head was in the juggling parts list, so a child heading a ball in a
+  // garden was counted and paid for it, with no age floor anywhere. A header
+  // now simply does not register.
+  for (const drill of SOC()) {
+    assert.ok(!drill.ball.parts.includes('nose'),
+      `${drill.key} still counts head contacts`);
+  }
+});
+
+test('thigh juggling ignores a touch off the foot', () => {
+  // Contact location is the whole discrimination: an ankle is nowhere near a
+  // knee, so a ball off the laces is not a contact for this drill at all.
+  const counter = new BallRepCounter(spec('soc_thigh'));
+  run(counter, bounce({ floor: 0.88, apex: 1.5, every: 2, frames: 360 }),
+      pose({ left_ankle: { x: 0.52, y: 0.88 },
+             right_ankle: { x: 0.56, y: 0.88 },
+             left_knee: { x: 0.52, y: 0.55 },
+             right_knee: { x: 0.56, y: 0.55 } }));
+  assert.equal(counter.count, 0);
+});
+
+test('the alternation rules read a foot the same way they read a hand', () => {
+  const rules = new Map(SOC().map((d) => [d.key, d.ball.alternation]));
+  assert.equal(rules.get('soc_juggle_weak'), 'same_hand');
+  assert.equal(rules.get('soc_juggle_alt'), 'alternating');
+  assert.equal(rules.get('soc_juggle'), 'any');
+});
+
+test('wall passing gates on strike speed, not on the foot', () => {
+  const pass = spec('soc_wall_pass');
+  assert.ok(pass.ball.min_speed > spec('soc_juggle').ball.min_speed * 2);
 });

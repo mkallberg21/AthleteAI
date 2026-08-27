@@ -213,6 +213,32 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
+    "soc_juggle_weak": (
+        Transfer("Basketball", "your weak hand, and the same reason for it"),
+        Transfer("Lacrosse", "off-hand wall ball -- the hard half of the work"),
+    ),
+    "soc_juggle_alt": (
+        Transfer("Basketball", "a crossover has to work both ways too"),
+        Transfer("Lacrosse", "switching hands under pressure"),
+    ),
+    "soc_thigh": (
+        Transfer("Volleyball", "cushioning a ball rather than hitting it"),
+        Transfer("Basketball", "soft hands on a hard pass"),
+    ),
+    "soc_wall_pass": (
+        Transfer("Lacrosse", "wall ball -- the same loop, the same reason it works"),
+        Transfer("Basketball", "wall passes, catch and release"),
+        Transfer("Volleyball", "a first touch that sets up the second"),
+    ),
+    "soc_toe_taps": (
+        Transfer("Basketball", "quick feet on a closeout"),
+        Transfer("Tennis", "the small adjusting steps before a shot"),
+    ),
+    "soc_shuffle": (
+        Transfer("Basketball", "a defensive slide is this exact movement"),
+        Transfer("Tennis", "recovering across the baseline"),
+        Transfer("Lacrosse", "a defender's approach and break down"),
+    ),
     "vb_pass": (
         Transfer("Basketball", "getting your feet there instead of reaching"),
         Transfer("Tennis", "a low, still base under a ball coming fast"),

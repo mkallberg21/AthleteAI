@@ -74,6 +74,9 @@ const SWEEP = {
   vb_approach:       { lo: 0.32,  hi: 1.20, kind: 'body' },
   // Hands at the shoulders to pressed over, in torso lengths above them.
   vb_block_jump:     { lo: 0.14,  hi: 0.70, kind: 'wrist' },
+  // Defending stance out to a full shuffle step -- the same measurement the
+  // basketball slide uses, because it is the same movement.
+  soc_shuffle:       { lo: 1.22,  hi: 2.00, kind: 'stance' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept

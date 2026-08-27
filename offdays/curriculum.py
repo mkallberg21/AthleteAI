@@ -1447,9 +1447,371 @@ VB_ADVANCED: tuple[Topic, ...] = (
 VB_TOPICS: tuple[Topic, ...] = VB_FUNDAMENTALS + VB_CORE + VB_ADVANCED
 
 
+
+
+# ---------------------------------------------------------------------------
+# Soccer
+#
+# Same rules again. What differs is that soccer IQ is mostly about *what happens
+# before you get the ball* -- the scan over the shoulder, the body shape you
+# receive in, the run that drags a defender somewhere useful. Almost none of the
+# thinking in this sport happens while you have possession.
+# ---------------------------------------------------------------------------
+
+SOC_ALL = ("goalkeeper", "defender", "midfielder", "forward")
+SOC_OUT = ("defender", "midfielder", "forward")
+SOC_ATT = ("midfielder", "forward")
+
+SOC_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="soc_iq_look_before",
+        title="Look over your shoulder before it arrives",
+        focus="Scanning",
+        positions=SOC_OUT, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A midfielder checking their shoulder twice before receiving, next "
+            "to one who does not. The clip is the head turn, so cut from before "
+            "the pass is played."
+        ),
+        ask=Ask(
+            prompt="When should you look around for space?",
+            options=(
+                "Before the ball reaches you, while it is still travelling",
+                "As you take your first touch",
+                "Once you have the ball under control",
+            ),
+            answer=0,
+            because=(
+                "Looking after you receive means deciding while a defender is "
+                "already on you. The players who always seem to have time are "
+                "the ones who looked before it arrived."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_open_body",
+        title="Receive side-on, not facing your own goal",
+        focus="First touch",
+        positions=SOC_OUT, min_age=0, max_age=200, target_s=65,
+        find=(
+            "Two receptions from the same match: one player half-turned and "
+            "able to see the whole pitch, one square and facing backwards."
+        ),
+        ask=Ask(
+            prompt="A pass is coming to you from behind. How do you stand?",
+            options=(
+                "Side-on, so you can see forwards and backwards",
+                "Square to the passer, so the touch is easier",
+                "Facing your own goal, so nobody can tackle you",
+            ),
+            answer=0,
+            because=(
+                "Square means your only option is backwards. Half-turned, the "
+                "same pass gives you the whole pitch."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_spread_out",
+        title="Stop running to the ball",
+        focus="Spacing",
+        positions=SOC_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Any youth game. Cut a passage where six players converge on the "
+            "ball, and one where a team keeps its shape. The first is easy to "
+            "find."
+        ),
+        ask=Ask(
+            prompt="Your teammate has the ball. Where should you be?",
+            options=(
+                "Spread out, in space they can pass into",
+                "Close to them, so the pass is short and safe",
+                "Between them and the goal, ready for a rebound",
+            ),
+            answer=0,
+            because=(
+                "Everybody around the ball means one defender covers three "
+                "players and there is nowhere to pass. Spreading out is what "
+                "makes a pass exist."
+            ),
+        ),
+    ),
+)
+
+SOC_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="soc_iq_first_touch_away",
+        title="First touch away from pressure",
+        focus="First touch",
+        positions=SOC_OUT, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A receiving player taking their first touch into space rather "
+            "than under their own feet, with a defender arriving. Cut it wide "
+            "enough to see where the defender is coming from."
+        ),
+        ask=Ask(
+            prompt="A defender is closing you down as the ball arrives. Where does your first touch go?",
+            options=(
+                "Into the space away from them",
+                "Straight down under your feet so you can control it",
+                "Back the way it came, first time",
+            ),
+            answer=0,
+            because=(
+                "A touch under your feet leaves you exactly where the defender "
+                "expected. The first touch is where you decide the next two "
+                "seconds."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_pressing_trigger",
+        title="When to press and when to hold",
+        focus="Defending",
+        positions=SOC_OUT, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A team pressing on a bad touch, and another chasing a settled "
+            "centre back. The trigger is the clip -- what happened just before "
+            "they went."
+        ),
+        ask=Ask(
+            prompt="When is the right moment to press?",
+            options=(
+                "On a bad touch, a backwards pass, or a player facing their own goal",
+                "As soon as the other team gets the ball",
+                "Whenever you are closest to the ball",
+            ),
+            answer=0,
+            because=(
+                "Pressing a player who is comfortable just moves your team out "
+                "of shape. Pressing a bad touch is when they cannot punish it."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_jockey",
+        title="Jockeying instead of diving in",
+        focus="Defending",
+        positions=SOC_OUT, min_age=13, max_age=200, target_s=115,
+        find=(
+            "A one-on-one where the defender stays side-on and shows the "
+            "attacker outside, next to one who lunges and is beaten. Both "
+            "happen every game."
+        ),
+        ask=Ask(
+            prompt="You are last defender, one-on-one. What do you do?",
+            options=(
+                "Stay side-on, slow them down, and show them away from goal",
+                "Tackle as soon as you can reach the ball",
+                "Back off and wait for help to arrive",
+            ),
+            answer=0,
+            because=(
+                "A tackle you miss takes you out of the game entirely. Delaying "
+                "gives your teammates time to get back."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_third_man",
+        title="The third-man run",
+        focus="Team offence",
+        positions=SOC_ATT, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A pass in to a player who lays it off, and a third player running "
+            "onto it. Cut it wide -- the runner is the clip and they start off "
+            "screen."
+        ),
+        ask=Ask(
+            prompt="Why is the third player often the one who gets free?",
+            options=(
+                "The defenders are watching the first two, so nobody tracks them",
+                "They have more time to build up speed",
+                "They are usually the fastest player",
+            ),
+            answer=0,
+            because=(
+                "Defenders follow the ball. The player two passes away is the "
+                "one nobody is looking at."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_switch",
+        title="Switching the play",
+        focus="Team offence",
+        positions=SOC_OUT, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A side crowded on one flank and a long ball to the other. The "
+            "clip is the far winger standing alone before the switch."
+        ),
+        ask=Ask(
+            prompt="Your team is stuck on one side of the pitch. What is the answer?",
+            options=(
+                "Switch it to the other side, where the defence is not",
+                "Keep passing until a gap appears on this side",
+                "Play it long towards the striker",
+            ),
+            answer=0,
+            because=(
+                "A defence that has shifted across cannot shift back as fast as "
+                "the ball travels. The space is always on the far side."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_run_the_channel",
+        title="Running the channel, not the centre back",
+        focus="Attacking",
+        positions=SOC_ATT, min_age=13, max_age=200, target_s=110,
+        find=(
+            "A striker running into the gap between a full back and a centre "
+            "back, next to one running straight at a defender's chest."
+        ),
+        ask=Ask(
+            prompt="Where should a striker run in behind?",
+            options=(
+                "Into the gap between two defenders, so neither one owns them",
+                "Straight at the centre back to hold them off",
+                "Wide, away from everyone",
+            ),
+            answer=0,
+            because=(
+                "A run at one defender is a run they can handle alone. Between "
+                "two, each waits for the other and the gap opens."
+            ),
+        ),
+    ),
+)
+
+SOC_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="soc_iq_cover_balance",
+        title="Press, cover and balance",
+        focus="Team defence",
+        positions=SOC_OUT, min_age=15, max_age=200, target_s=160,
+        find=(
+            "A back four with one pressing, one covering behind and the far "
+            "side tucked in. Cut it wide enough to see all four at once."
+        ),
+        ask=Ask(
+            prompt="Your teammate presses the ball. What is your job?",
+            options=(
+                "Cover behind them, so a beaten press is not a chance",
+                "Press the nearest opponent as well",
+                "Drop back to the goal line",
+            ),
+            answer=0,
+            because=(
+                "One presser and nobody covering is a defence that loses "
+                "everything the moment the press is beaten. The cover is what "
+                "makes pressing safe to do."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_offside_line",
+        title="Holding a line together",
+        focus="Team defence",
+        positions=SOC_OUT, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A back line stepping up as one, and one where a single defender "
+            "stays deep and plays everybody on. Both are clear in wide footage."
+        ),
+        ask=Ask(
+            prompt="Your back line steps up. What happens if one player does not?",
+            options=(
+                "They play the whole attack onside on their own",
+                "The attacker has more space to run into",
+                "The goalkeeper has to come further out",
+            ),
+            answer=0,
+            because=(
+                "Offside is measured from the last defender. One player deep "
+                "makes the other three irrelevant."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_build_from_back",
+        title="Building out under a press",
+        focus="Team offence",
+        positions=SOC_ALL, min_age=15, max_age=200, target_s=165,
+        find=(
+            "A goalkeeper and back line playing through a press rather than "
+            "over it. The clip is where the free player is, which is usually "
+            "not who gets the ball first."
+        ),
+        ask=Ask(
+            prompt="The other team presses your goalkeeper. Where is the free player?",
+            options=(
+                "Wherever they left somebody unmarked to press with -- usually the far side",
+                "Up front, because everybody has come forward",
+                "There is not one, so it should go long",
+            ),
+            answer=0,
+            because=(
+                "A press has to leave somebody. Finding them is the whole point "
+                "of playing out rather than kicking it away."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_counter_shape",
+        title="The first three seconds after losing it",
+        focus="Transition",
+        positions=SOC_OUT, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A turnover and what the team does immediately. Find one that "
+            "presses instantly and one that jogs back into shape."
+        ),
+        ask=Ask(
+            prompt="You lose the ball in their half. What is the first thing to do?",
+            options=(
+                "Press immediately, before they can turn and pick a pass",
+                "Sprint back to your own half and get organised",
+                "Stay where you are and wait for the ball to come back",
+            ),
+            answer=0,
+            because=(
+                "A player who has just won it is facing the wrong way and not "
+                "yet settled. Those few seconds are the easiest time to win it "
+                "back all game."
+            ),
+        ),
+    ),
+    Topic(
+        key="soc_iq_when_not_to_dribble",
+        title="When the pass is better than the dribble",
+        focus="Decision-making",
+        positions=SOC_ATT, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A player taking on two defenders with a teammate free, and one "
+            "who plays the simple pass into a better position."
+        ),
+        ask=Ask(
+            prompt="You are one-on-two with a teammate free beside you. What now?",
+            options=(
+                "Pass -- two defenders on you means one is off them",
+                "Take them on, because you are past one already",
+                "Shield the ball and wait for support",
+            ),
+            answer=0,
+            because=(
+                "Two defenders on the ball is the definition of somebody else "
+                "being free. Dribbling into that is the one way to waste it."
+            ),
+        ),
+    ),
+)
+
+SOC_TOPICS: tuple[Topic, ...] = SOC_FUNDAMENTALS + SOC_CORE + SOC_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
     "volleyball": VB_TOPICS,
+    "soccer": SOC_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

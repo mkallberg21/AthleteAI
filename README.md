@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2776 tests
+python -m pytest tests/ -q          # 2892 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 177 tests
+  node --test tests/js/*.test.mjs   # 184 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3510,6 +3510,91 @@ error is a positioning error.
 
 Three sports now have a syllabus. Adding the third was a data change and
 nothing else.
+
+---
+
+## Soccer, built to lacrosse depth
+
+One drill and four plans of conditioning becomes **seven drills, four plans that
+lead on soccer, and a fourteen-topic film syllabus.**
+
+The first sport here played with the feet, and most of the machinery transferred
+unchanged. `attribute_side` reads *which foot* took the ball exactly as it reads
+which hand — so the alternation rules written for basketball make a weak-foot
+drill and an alternating drill genuinely verifiable, with no new code at all.
+
+### The thing that stopped the build for a while: heading
+
+`soc_juggle` had `nose` in its contact parts. **A child heading a ball in a
+garden was being counted and paid for it** — with no age floor anywhere in the
+catalogue, and no separate volume tracked.
+
+Youth football bans heading below about eleven and limits it for years after, on
+concussion grounds. This product's entire argument for the throwing axis is that
+*repetitive volume nobody counts* is what hurts children. Counting headers as
+juggles and rewarding them was the same mistake with the stakes raised.
+
+The head is out of the parts list. A header now simply **does not register** —
+the touch is not punished and nothing is said about it, it just earns nothing,
+which is the most a juggling drill should have to say about heading.
+
+**And there is no heading drill.** That is a decision, not a gap. Building one
+would mean an app encouraging a twelve-year-old towards heading volume, which is
+precisely what the load model exists to argue against. Two tests hold the line:
+no soccer drill counts a head touch, and no drill or film topic is about
+heading.
+
+I considered adding a `min_age` gate to `DrillSpec` to make an age-restricted
+heading drill possible. I decided against building the drill, which left the
+field with no use — so it is not there either. Unused machinery added for a
+feature I talked myself out of would have been worse than the gap.
+
+### Seven drills, every one verified
+
+| Drill | What separates it |
+|---|---|
+| Juggling | the baseline |
+| **Weak-Foot Juggling** | one foot, and the app knows which |
+| **Alternating Juggling** | the ball must keep changing feet |
+| **Thigh Juggling** | only the knees are listed — a foot touch is not a contact |
+| **Wall Passing** | a strike-speed floor a juggling touch cannot clear |
+| **Toe Taps** | a rate floor — nobody taps that fast by accident |
+| **Defending Shuffle** | stance width, the lateral signal |
+
+Nothing in soccer is marked unverifiable, and a test asserts it. Every drill
+differs in something checkable: which foot, whether the feet alternate, where
+the contact was, how hard it was struck, or how fast it repeats.
+
+### The shuffle pays exactly what the basketball slide pays
+
+It is the same movement measured the same way, and the app cannot tell a
+defender jockeying a winger from a guard sliding. Identical bands, identical
+rate — paying differently would be paying for the sport's name. The
+subsumption guard would have caught it if I had tried.
+
+### Plans
+
+| | own-sport | leads on |
+|---|---|---|
+| Goalkeeper | 43% | Wall Passing 18% · Lateral Bounds 14% · Juggling 11% |
+| Defender | 55% | Defending Shuffle 17% · Wall Passing 14% · Juggling 10% |
+| Midfielder | 67% | Wall Passing 15% · Alternating Juggling 12% · Juggling 9% |
+| Forward | 59% | Toe Taps 12% · Alternating Juggling 12% · Juggling 9% |
+
+The keeper gets no defending shuffle — they are the one position that does not
+jockey a winger — but they do get real footwork, because distribution is half a
+modern keeper's job and a plan of nothing but jumps would be the old mistake in
+a new place. Every outfield plan carries weak-foot work.
+
+### Fourteen film topics
+
+Lacrosse IQ is about a slide, basketball about spacing, volleyball about where
+the six of you stand. **Soccer IQ is mostly about what happens *before* you get
+the ball** — the scan over the shoulder, the body shape you receive in, the run
+that drags a defender somewhere useful. Almost none of the thinking in this
+sport happens while you have possession.
+
+Four sports now have a syllabus.
 
 ---
 

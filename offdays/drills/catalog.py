@@ -1368,6 +1368,31 @@ GEN_SIDE_PLANK = DrillSpec(
 # is, which is why the contact classifier checks landmarks before the floor.
 # ---------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# Soccer
+#
+# The first sport here played with the feet, and the machinery transfers almost
+# unchanged: `attribute_side` reads which foot took the ball exactly as it reads
+# which hand, so the alternation rules built for basketball make a weak-foot
+# drill and an alternating drill genuinely verifiable.
+#
+# What does not transfer is heading, and that is a decision rather than a gap.
+# See the note on the parts list below.
+# --------------------------------------------------------------------------
+
+SOCCER = BallSpec(
+    required=True,
+    contact="body",
+    parts=("left_ankle", "right_ankle", "left_knee", "right_knee"),
+    min_gap_ms=200,
+    min_speed=0.22,
+    attribute_side=True,
+    detector="vision",
+    colour="white",
+    diameter_cm=20.5,
+)
+
+
 SOC_JUGGLE = DrillSpec(
     key="soc_juggle",
     name="Juggling",
@@ -1382,7 +1407,19 @@ SOC_JUGGLE = DrillSpec(
     ball=BallSpec(
         required=True,
         contact="body",
-        parts=("left_ankle", "right_ankle", "left_knee", "right_knee", "nose"),
+        # Feet and thighs, and deliberately not the head.
+        #
+        # The head was in this list, which meant a child heading the ball in a
+        # garden was counted and paid for it, with no age floor and no separate
+        # volume anywhere. Youth football bans heading below about eleven and
+        # limits it for years after, on concussion grounds -- and this app's
+        # whole argument for the throwing axis is that repetitive volume nobody
+        # counts is the thing that hurts children.
+        #
+        # A header now simply does not register. The touch is not punished and
+        # nothing is said about it; it just earns nothing, which is the most
+        # this drill should have to say about heading.
+        parts=("left_ankle", "right_ankle", "left_knee", "right_knee"),
         min_gap_ms=200,
         min_speed=0.22,
         attribute_side=True,
@@ -1397,6 +1434,212 @@ SOC_JUGGLE = DrillSpec(
     load=LoadSpec(load_per_rep=0.3, load_per_minute=1.6, tissue=Tissue.LOWER_BODY),
     tracks_handedness=True,
 )
+
+SOC_JUGGLE_WEAK = DrillSpec(
+    key="soc_juggle_weak",
+    name="Weak-Foot Juggling",
+    sport="soccer",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Weak foot only, for as long as you can keep it up. The app reads "
+        "which foot took every touch, so this is one of the few things here it "
+        "can genuinely confirm -- and weak-side touches are paid at a premium "
+        "wherever you do them."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=220, max_rep_ms=6_000,
+    ),
+    # The same rule the weak-hand pound uses, reading a foot instead of a hand.
+    ball=replace(SOCCER, alternation="same_hand", min_gap_ms=220),
+    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=400, diminishing_after_reps=150),
+    validation=ValidationSpec(max_reps_per_second=3.0, min_reps=8),
+    setup_hint=(
+        "Weak foot only -- if the other one touches it, start the count again. "
+        "Phone low enough to see your feet and the ball."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.3, load_per_minute=1.6, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+SOC_JUGGLE_ALT = DrillSpec(
+    key="soc_juggle_alt",
+    name="Alternating Juggling",
+    sport="soccer",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Left, right, left, right, without letting it drop. The app checks the "
+        "ball really is changing feet -- if it settles onto your strong side it "
+        "counts as ordinary juggling, and says so."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=240, max_rep_ms=6_000,
+    ),
+    ball=replace(SOCCER, alternation="alternating", min_gap_ms=240),
+    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=400, diminishing_after_reps=150),
+    validation=ValidationSpec(max_reps_per_second=2.8, min_reps=12),
+    setup_hint=(
+        "Every other touch on the other foot. Small touches, knee height, and "
+        "stay on the balls of your feet."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.3, load_per_minute=1.6, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+SOC_THIGH = DrillSpec(
+    key="soc_thigh",
+    name="Thigh Juggling",
+    sport="soccer",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Off the thigh, not the foot. Only thigh touches register -- a ball "
+        "played off your laces is too far from your knee for this drill to see "
+        "it, so it counts nothing."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=350, max_rep_ms=6_000,
+    ),
+    # Contact location is the whole discrimination, the same principle the
+    # volleyball hands gate uses: a foot touch is nowhere near the knee, so it
+    # simply is not a contact as far as this drill is concerned.
+    ball=replace(
+        SOCCER, parts=("left_knee", "right_knee"), min_gap_ms=350, min_speed=0.18,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=300, diminishing_after_reps=120),
+    validation=ValidationSpec(max_reps_per_second=2.0, min_reps=8),
+    setup_hint=(
+        "Thigh flat and level, knee up to about waist height. Phone side-on so "
+        "it can see your thigh meet the ball."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.35, load_per_minute=1.5, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+SOC_WALL_PASS = DrillSpec(
+    key="soc_wall_pass",
+    name="Wall Passing",
+    sport="soccer",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Pass firmly into a wall and control the return, over and over. This "
+        "one has a strike-speed floor rather than a ceiling -- a soft touch "
+        "does not clear it, which is how the app knows it was a pass and not a "
+        "juggle."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=500, max_rep_ms=8_000,
+    ),
+    # The speed floor is the verification. Nothing else separates a pass from a
+    # juggling touch -- both are the ball coming off a foot -- and a struck pass
+    # leaves the boot far faster than a touch that is only keeping it up.
+    ball=replace(
+        SOCCER, parts=("left_ankle", "right_ankle"),
+        min_gap_ms=500, min_speed=0.60,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=300, diminishing_after_reps=140),
+    validation=ValidationSpec(max_reps_per_second=1.6, min_reps=10, min_duration_ms=20_000),
+    setup_hint=(
+        "Find a wall nobody parks a car behind. Two or three metres back, phone "
+        "side-on. Strike it properly -- a pass you would actually make in a game."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.5, load_per_minute=1.4, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+SOC_TOE_TAPS = DrillSpec(
+    key="soc_toe_taps",
+    name="Toe Taps",
+    sport="soccer",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "Ball still on the ground, tapping the top of it foot to foot as fast "
+        "as you can hold it together. There is a speed floor here: a slow tap "
+        "is standing on a ball, and it does not count."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=110, max_rep_ms=2_000,
+    ),
+    ball=replace(
+        SOCCER, parts=("left_ankle", "right_ankle"),
+        alternation="alternating", min_gap_ms=110, min_speed=0.10,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.4, daily_rep_cap=900, diminishing_after_reps=350),
+    validation=ValidationSpec(
+        max_reps_per_second=7.0,
+        # The floor is what separates this from standing over a ball. Nobody
+        # taps this fast by accident.
+        min_reps_per_second=2.0,
+        min_reps=30, min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Ball still, phone low and in front. Stay on your toes and keep your "
+        "chest up -- if you are looking down at it, slow down."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.08, load_per_minute=2.2, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+SOC_SHUFFLE = DrillSpec(
+    key="soc_shuffle",
+    name="Defending Shuffle",
+    sport="soccer",
+    category=Category.AGILITY,
+    metric=Metric.REPS,
+    description=(
+        "Side-on defending stance, shuffling across without crossing your feet. "
+        "One rep is one push. It measures how far apart your feet get, and it "
+        "can see when they cross -- which is the moment a winger goes past you."
+    ),
+    signal=SignalSpec(kind=SignalKind.STANCE_WIDTH, smoothing=0.45),
+    counter=CounterSpec(
+        # Deliberately identical to the basketball slide. It is the same
+        # movement measured the same way, and the app cannot tell a defender
+        # jockeying a winger from a guard sliding -- so it must not pay
+        # differently for the sport's name.
+        down_threshold=1.30,
+        up_threshold=1.80,
+        min_rep_ms=280,
+        max_rep_ms=3_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=140),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0, min_reps_per_second=0.15,
+        min_reps=10, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see both feet. Stay "
+        "side-on, do not cross your feet, and do not dive in."
+    ),
+    quality=QualitySpec(
+        target_rom=0.70,
+        consistency_target=0.18,
+        tempo_min_ms=280,
+        tempo_max_ms=1_400,
+        w_consistency=0.30,
+        w_depth=0.35,
+        w_tempo=0.20,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=1.1, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
 
 # --------------------------------------------------------------------------
 # Basketball
@@ -2189,6 +2432,12 @@ TEN_WALL_RALLY = DrillSpec(
 
 ALL_DRILLS: tuple[DrillSpec, ...] = (
     SOC_JUGGLE,
+    SOC_JUGGLE_WEAK,
+    SOC_JUGGLE_ALT,
+    SOC_THIGH,
+    SOC_WALL_PASS,
+    SOC_TOE_TAPS,
+    SOC_SHUFFLE,
     BKB_DRIBBLE,
     BKB_CROSSOVER,
     BKB_BETWEEN_LEGS,

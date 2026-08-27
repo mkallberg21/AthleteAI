@@ -396,6 +396,102 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "soc_juggle_weak": (
+        Cue("depth", "Small touches, knee height. A weak foot that has to "
+                     "stretch for every ball never gets comfortable.",
+            "control comes from the ball staying close, not from reaching"),
+        Cue("tempo", "Slow. This is not a drill you rush -- the count is not "
+                     "the point.",
+            "rushing your weak foot just practises the panic"),
+        Cue("consistency", "Same part of the foot every time, laces flat.",
+            "a weak foot that varies is a weak foot that never becomes reliable"),
+        Cue("offhand", "This drill IS the weak foot. Doing it on your strong "
+                       "one is a different, easier drill.",
+            "the hard half is the only half that changes anything"),
+        Cue("endurance", "Stop when the ball starts running away from you, not "
+                         "when your leg is tired.",
+            "control going is the signal; a tired leg is just the work"),
+    ),
+    "soc_juggle_alt": (
+        Cue("depth", "Knee height, both feet. If it is going above your head "
+                     "you are buying time instead of controlling it.",
+            "high juggling hides a weak touch"),
+        Cue("tempo", "Even rhythm. Left, right, left, right -- the same beat "
+                     "the whole way.",
+            "the rhythm is what makes it a skill rather than a scramble"),
+        Cue("consistency", "Every other touch on the other foot, with no "
+                           "cheating back to the good one.",
+            "the app checks this, and so does a defender"),
+        Cue("offhand", "Half of this drill is already your weak foot, which is "
+                       "why it is worth more than plain juggling.",
+            "alternating is the cheapest way to get weak-foot touches in"),
+        Cue("endurance", "Stop when you start double-touching on one side.",
+            "a double touch is the weak foot quietly opting out"),
+    ),
+    "soc_thigh": (
+        Cue("depth", "Thigh flat and level, knee up near waist height. A "
+                     "sloping thigh sends the ball away from you.",
+            "the thigh is a platform, and a tilted platform is a lost ball"),
+        Cue("tempo", "Let it sit on the thigh for a beat. This is a control "
+                     "drill, not a speed one.",
+            "cushioning is the skill; popping it straight back is not"),
+        Cue("consistency", "Same height every touch. If it is climbing, you "
+                           "are hitting rather than cushioning.",
+            "a rising ball means a stiff leg"),
+        Cue("offhand", "Both thighs, evenly. Most players have one that has "
+                       "never touched a ball.",
+            "your weak side gets found the moment you are under pressure"),
+        Cue("endurance", "Stop when your knee stops coming all the way up.",
+            "a low knee turns a cushion into a bounce"),
+    ),
+    "soc_wall_pass": (
+        Cue("depth", "Strike through the middle of the ball with your instep. "
+                     "A toe-poke gets there but goes nowhere useful.",
+            "the app has a speed floor, and so does a real pass"),
+        Cue("tempo", "Control, then pass. Two touches, not one panicked one.",
+            "the first touch is what makes the second one easy"),
+        Cue("consistency", "Same spot on the wall every time. A pass that "
+                           "wanders is a teammate who has to stretch.",
+            "a stretched teammate is a lost ball"),
+        Cue("offhand", "Alternate feet by the set, not by the pass, so the "
+                       "weak one gets a real turn.",
+            "swapping every rep lets the good foot carry the drill"),
+        Cue("endurance", "Stop when your first touch starts getting away.",
+            "a heavy touch late in a set is exactly what happens late in a game"),
+    ),
+    "soc_toe_taps": (
+        Cue("depth", "Just the top of the ball. You are tapping it, not "
+                     "standing on it.",
+            "weight on the ball is how ankles get rolled"),
+        Cue("tempo", "As fast as you can hold it together. There is a speed "
+                     "floor here and a slow tap does not count at all.",
+            "the speed is the entire drill"),
+        Cue("consistency", "Chest up and eyes forward. If you have to watch "
+                           "your feet, slow down until you do not.",
+            "a player looking at the ball cannot see the pass"),
+        Cue("offhand", "Even both ways. Most players tap harder on one side "
+                       "without noticing.",
+            "the uneven side is the one that fails under pressure"),
+        Cue("endurance", "Stop when you start losing the rhythm, not when your "
+                         "calves burn.",
+            "the rhythm going is the signal that the skill has stopped"),
+    ),
+    "soc_shuffle": (
+        Cue("depth", "Push off the back foot and actually cover ground. A "
+                     "shuffle that stays still lets a winger go outside you.",
+            "the app measures how far your feet get apart, and so does a winger"),
+        Cue("tempo", "Stay side-on and patient. Diving in is what a good "
+                     "attacker is waiting for.",
+            "the tackle you rush is the one that gets beaten"),
+        Cue("consistency", "Never cross your feet. The app can see it happen "
+                           "and will tell you how many times.",
+            "crossed feet is the exact moment a winger goes past you"),
+        Cue("offhand", "Both directions evenly. Almost everybody is worse "
+                       "shuffling to their weaker side.",
+            "a winger finds the side you cannot defend inside twenty minutes"),
+        Cue("endurance", "Stop when you start standing up out of your stance.",
+            "an upright defender is a defender who has already been beaten"),
+    ),
     "vb_pass": (
         Cue("depth", "Get your platform under the ball by moving your feet, "
                      "not by swinging your arms up at it.",
