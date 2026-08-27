@@ -104,13 +104,19 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("attack", "attackman", "attackmen", "attacker", "att", "a",
                  "offense", "offence", "forward"),
         emphasis={
+            # Ground balls sit at the same 16% for every position on the
+            # field. They are the one part of lacrosse that belongs to
+            # nobody in particular, and a plan that gave an attacker a
+            # third of a defender's share was quietly teaching that
+            # picking the ball up is somebody else's job.
             # Dodging is the job, so the split-dodge pattern earns real weight
             # here and nowhere else on the field gets as much of it.
-            "lax_wall_ball": 0.16, "lax_wall_ball_offhand": 0.14,
-            "lax_wall_ball_split": 0.12, "lax_quick_stick": 0.12,
-            "lax_wall_ball_one_hand": 0.08, "lax_ground_ball": 0.06,
-            "gen_lateral_bound": 0.10, "gen_squat": 0.08,
-            "gen_squat_jump": 0.06, "gen_plank": 0.04, "gen_push_up": 0.04,
+            "lax_ground_ball": 0.16, "lax_wall_ball": 0.13,
+            "lax_wall_ball_offhand": 0.13, "lax_wall_ball_split": 0.11,
+            "lax_quick_stick": 0.11, "gen_lateral_bound": 0.09,
+            "lax_wall_ball_one_hand": 0.07, "gen_squat": 0.07,
+            "gen_squat_jump": 0.05, "gen_plank": 0.04,
+            "gen_push_up": 0.04,
         },
         plural_label="attackers",
         focus="Hands and tight-space quickness. Most of your time is stick work.",
@@ -120,14 +126,17 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("midfield", "midfielder", "midfielders", "middie", "middy",
                  "mid", "mids", "m", "mf", "midi"),
         emphasis={
-            # The broadest stick diet on the field, because a midfielder does
-            # a bit of everyone else's job.
-            "lax_wall_ball": 0.14, "lax_wall_ball_offhand": 0.12,
-            "lax_wall_ball_split": 0.10, "lax_wall_ball_cross": 0.08,
-            "lax_ground_ball": 0.08, "lax_quick_stick": 0.06,
-            "gen_high_knees": 0.10, "gen_squat_jump": 0.08,
-            "gen_lateral_bound": 0.07, "gen_squat": 0.07, "gen_burpee": 0.05,
-            "gen_plank": 0.03, "gen_push_up": 0.02,
+            # Ground balls sit at the same 16% for every position on the
+            # field. They are the one part of lacrosse that belongs to
+            # nobody in particular, and a plan that gave an attacker a
+            # third of a defender's share was quietly teaching that
+            # picking the ball up is somebody else's job.
+            "lax_ground_ball": 0.16, "lax_wall_ball": 0.14,
+            "lax_wall_ball_offhand": 0.11, "lax_wall_ball_split": 0.09,
+            "gen_high_knees": 0.09, "lax_wall_ball_cross": 0.07,
+            "gen_squat_jump": 0.07, "gen_lateral_bound": 0.06,
+            "gen_squat": 0.06, "lax_quick_stick": 0.05,
+            "gen_burpee": 0.05, "gen_plank": 0.03, "gen_push_up": 0.02,
         },
         plural_label="midfielders",
         focus="You cover more ground than anyone. Stick work plus an engine.",
@@ -138,14 +147,16 @@ LACROSSE: tuple[Position, ...] = (
                  "defencemen", "defensemen", "d", "def", "close d",
                  "close defense", "close defence", "pole", "dpole", "d pole"),
         emphasis={
-            # Ground balls lead: a defender who wins them ends possessions,
-            # and the off-hand set is here because defenders are the players
-            # most often allowed to neglect it.
-            "lax_ground_ball": 0.16, "lax_wall_ball": 0.12,
-            "lax_wall_ball_offhand": 0.12, "lax_wall_ball_one_hand": 0.06,
-            "gen_lateral_bound": 0.16, "gen_squat": 0.12,
-            "gen_high_knees": 0.08, "gen_push_up": 0.06, "gen_plank": 0.06,
-            "gen_pull_up": 0.06,
+            # Ground balls sit at the same 16% for every position on the
+            # field. They are the one part of lacrosse that belongs to
+            # nobody in particular, and a plan that gave an attacker a
+            # third of a defender's share was quietly teaching that
+            # picking the ball up is somebody else's job.
+            "gen_lateral_bound": 0.16, "lax_ground_ball": 0.16,
+            "lax_wall_ball": 0.12, "lax_wall_ball_offhand": 0.12,
+            "gen_squat": 0.12, "gen_high_knees": 0.08,
+            "lax_wall_ball_one_hand": 0.06, "gen_push_up": 0.06,
+            "gen_plank": 0.06, "gen_pull_up": 0.06,
         },
         plural_label="defenders",
         focus="Footwork and strength first, but a defender still needs hands.",
@@ -157,12 +168,15 @@ LACROSSE: tuple[Position, ...] = (
                  "d mid", "dmid", "d midfield", "defensive midfield",
                  "defensive midfielder"),
         emphasis={
-            # This position's own focus line has always said "ground balls and
-            # legs". Until now there was no ground ball drill to put behind it.
-            "lax_ground_ball": 0.20, "lax_wall_ball": 0.12,
-            "lax_wall_ball_offhand": 0.10, "lax_wall_ball_one_hand": 0.05,
-            "gen_lateral_bound": 0.13, "gen_high_knees": 0.10,
-            "gen_squat": 0.10, "gen_burpee": 0.08, "gen_squat_jump": 0.07,
+            # Ground balls sit at the same 16% for every position on the
+            # field. They are the one part of lacrosse that belongs to
+            # nobody in particular, and a plan that gave an attacker a
+            # third of a defender's share was quietly teaching that
+            # picking the ball up is somebody else's job.
+            "gen_lateral_bound": 0.16, "lax_ground_ball": 0.16,
+            "lax_wall_ball": 0.13, "lax_wall_ball_offhand": 0.10,
+            "gen_high_knees": 0.10, "gen_squat": 0.10, "gen_burpee": 0.08,
+            "gen_squat_jump": 0.07, "lax_wall_ball_one_hand": 0.05,
             "gen_plank": 0.03, "gen_push_up": 0.02,
         },
         plural_label="long-stick midfielders",
@@ -173,15 +187,17 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("fogo", "faceoff", "face off", "face-off", "faceoff specialist",
                  "fo", "fogos", "draw", "draw specialist", "draw control"),
         emphasis={
-            # The clamp rotation itself is still invisible to pose, but the
-            # hand speed around it is not -- so this position now leads on the
-            # movement it is actually named for, with ground balls behind it
-            # because a won clamp still has to be picked up.
-            "lax_faceoff_clamp": 0.24, "lax_ground_ball": 0.18,
-            "lax_quick_stick": 0.10, "lax_wall_ball_one_hand": 0.08,
-            "lax_wall_ball": 0.06, "lax_wall_ball_offhand": 0.04,
-            "gen_squat_jump": 0.09, "gen_plank": 0.07, "gen_pull_up": 0.06,
-            "gen_push_up": 0.04, "gen_burpee": 0.02, "gen_lateral_bound": 0.02,
+            # Ground balls sit at the same 16% for every position on the
+            # field. They are the one part of lacrosse that belongs to
+            # nobody in particular, and a plan that gave an attacker a
+            # third of a defender's share was quietly teaching that
+            # picking the ball up is somebody else's job.
+            "lax_faceoff_clamp": 0.26, "lax_ground_ball": 0.16,
+            "lax_quick_stick": 0.10, "gen_squat_jump": 0.09,
+            "lax_wall_ball_one_hand": 0.08, "gen_plank": 0.07,
+            "lax_wall_ball": 0.06, "gen_pull_up": 0.06,
+            "lax_wall_ball_offhand": 0.04, "gen_push_up": 0.04,
+            "gen_burpee": 0.02, "gen_lateral_bound": 0.02,
         },
         plural_label="face-off specialists",
         focus="One explosive move, repeated. Grip, core and a fast first step.",
@@ -191,25 +207,32 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("goalie", "goalies", "goal", "goalkeeper", "goaltender",
                  "keeper", "gk", "g", "netminder", "net"),
         emphasis={
-            # No off-hand set here: this position carries offhand_matters=False
-            # because a goalie's hands do not swap, and prescribing the drill
-            # anyway would contradict that. One-handed work stands in for the
-            # outlet, and ground balls for the start of every clear.
-            #
+            # Ground balls sit at the same 16% for every position on the
+            # field. They are the one part of lacrosse that belongs to
+            # nobody in particular, and a plan that gave an attacker a
+            # third of a defender's share was quietly teaching that
+            # picking the ball up is somebody else's job.
             # Save positions lead. Until that drill existed this mix was
             # entirely made of substitutes -- stick work and lateral jumps
             # standing in for a position whose actual job the app could not
             # see -- so a goalie was the one athlete here being handed
             # somebody else's practice.
-            "lax_goalie_saves": 0.26,
-            "lax_quick_stick": 0.16, "lax_wall_ball_one_hand": 0.08,
-            "lax_wall_ball": 0.08, "lax_ground_ball": 0.06,
-            "gen_lateral_bound": 0.13, "gen_plank": 0.08,
-            "gen_squat_jump": 0.06, "gen_squat": 0.05, "gen_push_up": 0.04,
+            #
+            # Off-hand work is prescribed here like everywhere else. The old
+            # reasoning was that a goalie's hands do not swap on the stick,
+            # which is true of the grip and false of the job: a save is made
+            # with both hands, the outlet that follows it is a real throw,
+            # and a keeper who can only clear to one side is a keeper the
+            # ride aims at.
+            "lax_goalie_saves": 0.23, "lax_ground_ball": 0.16,
+            "lax_quick_stick": 0.13, "gen_lateral_bound": 0.11,
+            "lax_wall_ball_offhand": 0.08, "lax_wall_ball": 0.07,
+            "gen_plank": 0.07, "lax_wall_ball_one_hand": 0.05,
+            "gen_squat_jump": 0.05, "gen_squat": 0.03,
+            "gen_push_up": 0.02,
         },
         plural_label="goalies",
-        focus="Hands, reactions and a hard first step sideways.",
-        offhand_matters=False,
+        focus="Both hands, reactions and a hard first step sideways.",
     ),
 )
 

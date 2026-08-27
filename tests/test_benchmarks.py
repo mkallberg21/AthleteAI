@@ -15,6 +15,8 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from offdays import benchmarks as B
+from offdays import positions as P
+from offdays.drills.catalog import DRILLS_BY_KEY
 from offdays.db import connect
 from offdays.store import Store
 
@@ -487,12 +489,20 @@ class TestThePeerPoolWidensUntilItMeansSomething:
 
 class TestPositionDecidesWhatIsWorthComparing:
 
-    def test_a_goalie_is_not_ranked_on_weak_hand_balance(self, store, program):
-        """Their stick work is two-handed save mechanics. Ranking it would
-        make them chase a number that measures nothing they are building."""
+    def test_a_goalie_is_ranked_on_weak_hand_balance_like_everyone_else(
+        self, store, program
+    ):
+        """The old carve-out read the grip and missed the job.
+
+        A goalie's hands do not swap on the stick, which is why this used to be
+        withheld. But the save is made with both hands, the outlet that follows
+        it is a real throw, and a keeper who can only clear to one side is the
+        one a ride aims at -- so the comparison measures something they are in
+        fact trying to build.
+        """
         ids = squad(store, program, {"Goalie": 9})
         metrics = {c["metric"] for c in B.report(store.conn, ids["Goalie0"], TODAY)["comparisons"]}
-        assert "offhand" not in metrics
+        assert "offhand" in metrics
         assert "quality" in metrics
 
     def test_a_field_player_is(self, store, program):
@@ -512,7 +522,15 @@ class TestTheMixWorksWithNoPeersAtAll:
         assert mix["ready"]
         assert mix["position"]["key"] == "goalie"
         assert mix["suggestions"], "one goalie, no peers, still actionable"
-        assert "quick stick" in " ".join(mix["suggestions"]).lower()
+        # Named against the goalie's own plan rather than one drill, so
+        # retuning that plan changes the advice without breaking the test.
+        # The point is that a goalie living on wall ball is pointed at the
+        # things their position actually leads on.
+        said = " ".join(mix["suggestions"]).lower()
+        goalie = next(p for p in P.ALL_POSITIONS if p.key == "goalie")
+        leaders = sorted(goalie.emphasis, key=goalie.emphasis.get, reverse=True)[:3]
+        names = [DRILLS_BY_KEY[k].name.lower() for k in leaders]
+        assert any(n in said for n in names), (said, names)
 
     def test_every_suggestion_is_a_swap_and_never_an_addition(self, store, program):
         """'Also do lateral bounds' quietly undoes the weekly budget."""

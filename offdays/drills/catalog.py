@@ -600,11 +600,7 @@ GOALIE_SAVES = DrillSpec(
     category=Category.SPEED,
     metric=Metric.REPS,
     description=(
-        "The app calls a spot -- high, hip, low, either side, or five hole -- "
-        "and you drive your hands and your lead foot to it, then reset. It "
-        "scores where your hands went and how long they took to get there. "
-        "There is no ball and no shooter: this trains the path to the spot, "
-        "not reading a shot, and it is not a save percentage."
+        'The app calls a spot -- high, hip, low, either side, or five hole -- and you drive BOTH hands and your lead foot to it, then reset. Reaching with one arm does not count: the app measures your hands together, so a one-armed stab moves the measurement half as far and never registers as a save. There is no ball and no shooter -- this trains the path to the spot, not reading a shot, and it is not a save percentage.'
     ),
     signal=SignalSpec(
         # The one drill in the catalogue where the athlete is sent somewhere
@@ -681,7 +677,8 @@ GOALIE_SAVES = DrillSpec(
         "Stand in your stance in the goal or against a wall, phone straight in "
         "front of you at hip height, far enough back that your whole body and "
         "both hands stay in frame. Face the phone square -- turned sideways it "
-        "cannot tell your left from your right. Wait for the first call."
+        "cannot tell your left from your right. Two hands on the stick the "
+        "whole time. Wait for the first call."
     ),
     quality=QualitySpec(
         # Ready to full extension and back, measured on the near-raw signal

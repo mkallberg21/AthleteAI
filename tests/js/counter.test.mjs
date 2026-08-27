@@ -287,6 +287,14 @@ function readySkeleton() {
   return pts;
 }
 
+/** One arm thrown at a point while the other stays at the chest. */
+function oneArmedAt(x, y) {
+  const pts = baseSkeleton();
+  pts[IDX.right_wrist] = { x, y, z: 0, visibility: 0.95 };
+  pts[IDX.left_wrist] = { x: 0.50, y: 0.42, z: 0, visibility: 0.95 };
+  return pts;
+}
+
 /** Hands driven out to a point, as they are on a save. */
 function reachingTo(x, y) {
   const pts = baseSkeleton();
@@ -456,4 +464,75 @@ test('self-paced drills carry no zone field at all', () => {
     t += 60;
   }
   for (const r of counter.reps) assert.ok(!('zone' in r));
+});
+
+
+/* -------------------------------------------------------------------------
+ * Two hands, or it is not a save.
+ *
+ * Throwing one arm at the ball is the habit every goalie coach spends a
+ * season removing. The first version of this signal took whichever wrist was
+ * further out, so a one-armed flail scored exactly like a proper save -- at
+ * full marks. Reach is now measured from the midpoint of the two wrists,
+ * which makes the requirement arithmetic rather than a rule that has to
+ * detect and argue about intent.
+ * ---------------------------------------------------------------------- */
+
+test('save reach: a one-armed stab measures roughly half a real save', () => {
+  const drill = spec('lax_goalie_saves');
+  const [x, y] = SPOTS.high_right;
+  const both = computeSignal(reachingTo(x, y), drill).value;
+  const one = computeSignal(oneArmedAt(x, y), drill).value;
+  assert.ok(one < both / 1.9, `one-armed ${one} vs two-handed ${both}`);
+  // And specifically: it never reaches the line that fires a rep.
+  assert.ok(one < drill.counter.up_threshold, `one-armed ${one} would still fire`);
+});
+
+test('save reach: a missing hand is no signal at all, not a smaller one', () => {
+  const drill = spec('lax_goalie_saves');
+  const pts = reachingTo(...SPOTS.low_left);
+  pts[IDX.left_wrist].visibility = 0.1;
+  assert.equal(computeSignal(pts, drill), null);
+});
+
+test('cued drill: one-armed saves do not count', () => {
+  const drill = spec('lax_goalie_saves');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) { counter.push(readySkeleton(), t); t += 33; }
+
+  const [tx, ty] = SPOTS.high_right;
+  for (let rep = 0; rep < 6; rep += 1) {
+    for (let i = 1; i <= 9; i += 1) {
+      const k = i / 9;
+      counter.push(oneArmedAt(0.50 + (tx - 0.50) * k, 0.42 + (ty - 0.42) * k), t);
+      t += 33;
+    }
+    for (let i = 8; i >= 0; i -= 1) {
+      const k = i / 9;
+      counter.push(oneArmedAt(0.50 + (tx - 0.50) * k, 0.42 + (ty - 0.42) * k), t);
+      t += 33;
+    }
+    for (let i = 0; i < 4; i += 1) { counter.push(readySkeleton(), t); t += 33; }
+  }
+  assert.equal(counter.count, 0);
+});
+
+test('cued drill: the same six saves count when both hands go', () => {
+  // The other half of the test above -- without it, a signal that counted
+  // nothing at all would pass.
+  const drill = spec('lax_goalie_saves');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) { counter.push(readySkeleton(), t); t += 33; }
+  for (let rep = 0; rep < 6; rep += 1) t = playSave(counter, 'high_right', t);
+  assert.equal(counter.count, 6);
+});
+
+test('save reach: the leading hand is still reported for off-hand credit', () => {
+  const drill = spec('lax_goalie_saves');
+  const left = computeSignal(reachingTo(...SPOTS.high_left), drill);
+  const right = computeSignal(reachingTo(...SPOTS.high_right), drill);
+  assert.equal(left.hand, 'left');
+  assert.equal(right.hand, 'right');
 });

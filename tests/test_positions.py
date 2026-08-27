@@ -9,6 +9,7 @@ roster spellings rather than canonical keys.
 import pytest
 
 from offdays import positions as P
+from offdays.positions import ALL_POSITIONS
 from offdays.drills.catalog import DRILLS_BY_KEY
 
 
@@ -256,3 +257,64 @@ class TestTheMixHelper:
     def test_it_refuses_an_empty_position(self):
         with pytest.raises(ValueError):
             P.mix()
+
+
+class TestGroundBallsBelongToEveryone:
+    """Ground balls are the one part of lacrosse that belongs to nobody.
+
+    The plans used to range from 6% for an attacker to 20% for a long pole,
+    which quietly taught the attacker that picking the ball up is somebody
+    else's job. They are level now, and this is the test that keeps them level
+    when the next position gets retuned.
+    """
+
+    GROUND_BALLS = "lax_ground_ball"
+
+    def _lacrosse(self):
+        return [p for p in ALL_POSITIONS if p.sport == "lacrosse"]
+
+    def test_every_position_gets_the_same_share(self):
+        shares = {p.key: p.emphasis.get(self.GROUND_BALLS) for p in self._lacrosse()}
+        assert None not in shares.values(), f"a position has no ground balls: {shares}"
+        assert len(set(shares.values())) == 1, shares
+
+    def test_the_share_is_a_real_allocation(self):
+        # Levelling at 2% would satisfy the test above and mean nothing.
+        for pos in self._lacrosse():
+            assert pos.emphasis[self.GROUND_BALLS] >= 0.10, pos.key
+
+    def test_it_is_never_the_thing_a_position_is_told_to_do_least(self):
+        for pos in self._lacrosse():
+            lowest = min(pos.emphasis.values())
+            assert pos.emphasis[self.GROUND_BALLS] > lowest, pos.key
+
+    def test_every_plan_still_sums_to_one(self):
+        for pos in ALL_POSITIONS:
+            assert abs(sum(pos.emphasis.values()) - 1.0) < 1e-9, pos.key
+
+
+class TestTheGoalieTrainsBothHands:
+    def _goalie(self):
+        return next(p for p in ALL_POSITIONS if p.key == "goalie")
+
+    def test_the_off_hand_comparison_is_no_longer_withheld(self):
+        # True of the grip, false of the job: the save is two-handed, and the
+        # outlet that follows it is a real throw.
+        assert self._goalie().offhand_matters
+
+    def test_the_plan_actually_prescribes_off_hand_work(self):
+        # Turning the flag on without giving them the work would compare a
+        # goalie on something nothing in their plan builds.
+        assert self._goalie().emphasis.get("lax_wall_ball_offhand", 0) > 0
+
+    def test_every_lacrosse_position_now_trains_both_hands(self):
+        for pos in ALL_POSITIONS:
+            if pos.sport != "lacrosse":
+                continue
+            assert pos.offhand_matters, pos.key
+            assert pos.emphasis.get("lax_wall_ball_offhand", 0) > 0, pos.key
+
+    def test_other_sports_keep_their_own_carve_outs(self):
+        # The flag is not obsolete -- basketball positions still use it, and
+        # this change was about lacrosse rather than about deleting the idea.
+        assert any(not p.offhand_matters for p in ALL_POSITIONS)

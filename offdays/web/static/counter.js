@@ -157,7 +157,7 @@ export function computeSignal(landmarks, spec) {
 }
 
 /**
- * How far the leading hand is from the chest, in torso lengths.
+ * How far the hands, together, are from the chest -- in torso lengths.
  *
  * Cued drills send the athlete somewhere different every rep, which breaks
  * every height signal in this file: a high save drives the hands up and a low
@@ -165,21 +165,37 @@ export function computeSignal(landmarks, spec) {
  * does not care which way the hands went -- it rises when they leave the ready
  * position and falls when they come back, whatever the target was.
  *
- * The leading hand is simply the one further from the chest. On a two-handed
- * save both go together and either answer is right; on a one-handed reach the
- * extended arm is the one that did the work.
+ * Measured from the MIDPOINT of the two wrists, and null unless both are
+ * visible. That is the whole two-handed requirement, and it is deliberately
+ * expressed as a measurement rather than as a rule that rejects reps.
+ *
+ * A goalie makes saves with both hands on the stick. Throwing one arm at the
+ * ball is the habit every goalie coach spends the season removing, and the
+ * first version of this signal took whichever wrist was further out -- so it
+ * paid a one-armed flail exactly the same as a proper save, and paid it at
+ * full marks.
+ *
+ * Using the midpoint fixes that arithmetically: reach out with one hand and
+ * the midpoint travels half as far, which does not clear the firing threshold,
+ * so the rep simply does not count. Nothing has to detect "that was
+ * one-handed" and argue about it.
  */
 export function saveReachSignal(landmarks) {
   const lw = lm(landmarks, 'left_wrist');
   const rw = lm(landmarks, 'right_wrist');
   const shoulders = midpoint(lm(landmarks, 'left_shoulder'), lm(landmarks, 'right_shoulder'));
   const torso = torsoLength(landmarks);
-  if (!shoulders || !torso || (!lw && !rw)) return null;
+  // Both hands, or nothing. One wrist out of frame is not a save this drill
+  // is willing to score.
+  if (!shoulders || !torso || !lw || !rw) return null;
 
-  const reach = (w) => (w ? Math.hypot(w.x - shoulders.x, w.y - shoulders.y) / torso : -Infinity);
-  const dl = reach(lw);
-  const dr = reach(rw);
-  return { value: Math.max(dl, dr), hand: dr > dl ? 'right' : 'left' };
+  const hands = midpoint(lw, rw);
+  const value = Math.hypot(hands.x - shoulders.x, hands.y - shoulders.y) / torso;
+
+  // Which hand led is still worth recording -- it is the top hand on the
+  // stick, and it is what the off-hand accounting reads.
+  const reach = (w) => Math.hypot(w.x - shoulders.x, w.y - shoulders.y);
+  return { value, hand: reach(rw) > reach(lw) ? 'right' : 'left' };
 }
 
 /**

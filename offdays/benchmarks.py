@@ -615,10 +615,14 @@ def compare_to_peers(
     if quality:
         add("quality", "Form score", quality,
             "How well you move, compared with others your age.")
-    # Weak-hand parity is a goal for field players and not for a goalie,
-    # whose stick work is two-handed save mechanics. Ranking a goalie on
-    # left/right balance would score them on something they are not trying
-    # to build, and worse, would make them chase it.
+    # Weak-hand parity is compared for every lacrosse position, goalies
+    # included. The old carve-out reasoned that a goalie's stick work is
+    # two-handed save mechanics -- true of the grip, and false of the job. The
+    # save is two-handed, the outlet that follows it is a real throw, and a
+    # keeper who can only clear to one side is the one a ride aims at.
+    #
+    # The flag survives for sports where the comparison genuinely measures
+    # nothing, which is why basketball positions still carry it.
     if offhand and (position is None or position.offhand_matters):
         add("offhand", "Weak-hand share", offhand,
             "The hard half of the work, and the one worth being ahead on.", scale=100)

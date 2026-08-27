@@ -397,10 +397,9 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "the stance goes first and takes everything else with it"),
     ),
     "lax_goalie_saves": (
-        Cue("depth", "Drive your hands all the way to the spot. Reaching "
-                     "halfway and leaning the rest of the way is how a ball "
-                     "goes under your arm.",
-            "a save is made with the hands out, not with the body tilted"),
+        Cue("depth", "Both hands, all the way to the spot. A one-armed stab "
+                     "does not count -- the app measures your hands together.",
+            "a save is made with two hands out, not with one arm and a lean"),
         Cue("tempo", "Move on the call, not after it. The first move is the "
                      "save; everything after it is catching up.",
             "the ball is already past you by the time you have thought about it"),

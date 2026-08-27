@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2448 tests
+python -m pytest tests/ -q          # 2456 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 138 tests
+  node --test tests/js/*.test.mjs   # 143 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3033,6 +3033,62 @@ now earns 1.0 × 1.5 = 1.5. The premium is now fully earned rather than partly
 resting on an unverifiable base, but it *is* smaller. Raising
 `offhand_bonus_multiplier` is the honest lever if the old level was right —
 that change pays every measured off-hand rep more, wherever it happens.
+
+---
+
+## Ground balls belong to everyone, and the goalie trains both hands
+
+Two changes to the position plans, both of which removed an assumption the code
+was quietly teaching.
+
+### Ground balls were ranked, and should not have been
+
+The plans gave an attacker **6%** of their solo time to ground balls and a long
+pole **20%**. Nothing decided that; it fell out of tuning each position
+separately, and the result taught an attacker that picking the ball up is
+somebody else's job. Ground balls are the one part of lacrosse that belongs to
+nobody in particular.
+
+Every lacrosse position now gives them the same **16%**, with the rest of each
+plan scaled to fit and every mix still summing to 1.00. Sixteen rather than the
+average of the old spread, because at 16% the defender's plan needed no change
+at all — it was already there.
+
+Three tests hold it: the shares are equal, the share is a real allocation
+rather than a token 2%, and ground balls are never the thing a position is told
+to do *least*.
+
+### The goalie carve-out read the grip and missed the job
+
+Goalie was the one position carrying `offhand_matters = False`, so off-hand work
+was never prescribed and weak-hand balance was never compared. The reasoning was
+that a goalie's hands do not swap on the stick.
+
+That is true of the grip and false of the job. The save is made with both hands,
+the outlet that follows it is a real throw, and a keeper who can only clear to
+one side is the one a ride aims at. Goalies now get off-hand wall ball in their
+plan and the off-hand comparison like everyone else — and the flag survives for
+sports where it genuinely measures nothing, which is why basketball still
+carries it.
+
+A test asserted the old behaviour by name. It has been flipped rather than
+deleted, and it now says why.
+
+### And the save drill enforces two hands
+
+The reach signal took whichever wrist was further from the chest — so throwing
+one arm at the ball, the habit every goalie coach spends a season removing,
+scored exactly like a proper save, at full marks.
+
+Reach is now measured from the **midpoint of the two wrists**, and is null
+unless both are visible. That makes the requirement arithmetic rather than a
+rule that has to detect intent and argue about it: reach out with one hand and
+the midpoint travels half as far, which does not clear the firing threshold, so
+the rep simply does not count.
+
+Measured against the test skeleton: a two-handed save to the high corner reads
+**1.20**, the same movement one-armed reads **0.54**, and the firing line is at
+0.95. Six one-armed stabs count zero; six two-handed saves count six.
 
 ---
 
