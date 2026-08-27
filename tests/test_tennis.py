@@ -214,7 +214,11 @@ class TestTheFilmCurriculum:
         assert any(t.positions == ("doubles",) for t in self.TOPICS)
 
     def test_keys_stay_unique_across_every_sport(self):
-        keys = [t.key for ts in curriculum.BY_SPORT.values() for t in ts]
+        # Baseball and softball share one syllabus by design, so iterating the
+        # registry yields it twice. Counting distinct syllabuses is what this
+        # test always meant.
+        seen = {id(ts): ts for ts in curriculum.BY_SPORT.values()}
+        keys = [t.key for ts in seen.values() for t in ts]
         assert len(keys) == len(set(keys))
 
     def test_five_sports_now_have_one(self):

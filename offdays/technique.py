@@ -396,6 +396,92 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "bb_long_toss": (
+        Cue("depth", "Crow hop into every one and finish over your front leg. "
+                     "A flat-footed long toss is just a hard throw.",
+            "the legs are where a safe throw comes from"),
+        Cue("tempo", "Slow between throws. This is the one drill here where "
+                     "you should be resting more than working.",
+            "recovery between throws is what keeps the arm safe"),
+        Cue("consistency", "Same distance for the whole set. Backing up as you "
+                           "warm up is a different drill and a harder one.",
+            "creeping distance is how a session gets away from you"),
+        Cue("offhand", "Throw with your usual arm. This is not a drill for "
+                       "building the other one.",
+            "bilateral throwing is a way to hurt two elbows instead of one"),
+        Cue("endurance", "Stop when the ball starts sailing, not when your arm "
+                         "aches. By the ache it is already too late.",
+            "loss of control is the first sign of a tired arm, and the only "
+            "early one"),
+    ),
+    "bb_quick_hands": (
+        Cue("depth", "Short arm action. If you are taking it back past your "
+                     "ear this is a throwing drill, not a transfer one.",
+            "a long arm action is exactly what this drill exists to shorten"),
+        Cue("tempo", "Feet moving the whole time. The hands are quick because "
+                     "the feet got there first.",
+            "quick hands with slow feet is a throw from a bad position"),
+        Cue("consistency", "Same transfer point every rep -- glove to hand in "
+                           "front of your chest, not down by your hip.",
+            "a low transfer adds a tenth of a second you do not have"),
+        Cue("offhand", "Usual arm only. Volume matters more than variety here.",
+            "these still count on the day's arm total"),
+        Cue("endurance", "Stop when the transfers start getting sloppy.",
+            "sloppy hands are tired hands, and tired hands drop balls"),
+    ),
+    "bb_tee_swing": (
+        Cue("depth", "Full swing, all the way through and around. A checked "
+                     "swing off a tee teaches a checked swing.",
+            "the tee exists so you can do it properly, every time"),
+        Cue("tempo", "Take your time between swings. Twenty good ones beat "
+                     "sixty rushed ones and you will feel the difference.",
+            "rushed reps groove the thing you were trying to fix"),
+        Cue("consistency", "Same tee height, same stance, same swing. Change "
+                           "one thing at a time or you learn nothing.",
+            "moving the tee around is how a session becomes exercise"),
+        Cue("endurance", "Stop when your swing starts getting long.",
+            "a long swing late in a set is a tired core, not a technical fault"),
+    ),
+    "bb_fielding": (
+        Cue("depth", "Get your hips down, not your shoulders. If your back is "
+                     "rounding you are bending instead of fielding.",
+            "bending at the waist puts your eyes in the wrong place"),
+        Cue("tempo", "Down and up under control. This is footwork, not a "
+                     "conditioning drill.",
+            "rushing it grooves a bad first step"),
+        Cue("consistency", "Hands out in front where you can see them, every "
+                           "rep.",
+            "hands under your body is how a ball goes between your legs"),
+        Cue("endurance", "Stop when you stop getting all the way down.",
+            "a high fielding position is where bad hops come from"),
+    ),
+    "bb_catcher_stance": (
+        Cue("position", "Hips low, chest up, and heels down if your ankles "
+                        "will let you. The clock only runs while you are "
+                        "actually down.",
+            "a high crouch is a crouch that cannot block anything"),
+        Cue("endurance", "Stop when your hips start rising, not when your legs "
+                         "burn. The burn is the drill working.",
+            "the hips come up first and take the whole position with them"),
+    ),
+    "sb_windmill": (
+        Cue("depth", "All the way round. A half circle is a different pitch "
+                     "and it will not count.",
+            "the circle is where the speed comes from"),
+        Cue("tempo", "Same stride and same rhythm every pitch. Speed comes "
+                     "from the circle being repeatable, not from forcing it.",
+            "forcing a windmill is how a shoulder and a lower back get hurt"),
+        Cue("consistency", "Same release point every time. If you are missing "
+                           "high and low, that is the release, not your aim.",
+            "release point is the whole of control in this motion"),
+        Cue("offhand", "Your pitching arm only. Nothing here is a reason to "
+                       "build the other one.",
+            "a pitching arm is not something to build twice"),
+        Cue("endurance", "Stop well before your arm aches. These count on the "
+                         "day's total for a reason -- a windmill pitcher throws "
+                         "more than anybody else on the field.",
+            "the volume nobody counts is the volume that hurts people"),
+    ),
     "ten_alternate": (
         Cue("depth", "Turn your shoulders early. If you are reaching for the "
                      "ball you have already lost the wing change.",

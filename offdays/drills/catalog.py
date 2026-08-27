@@ -2361,6 +2361,57 @@ VB_SET_WALL = DrillSpec(
 )
 
 
+# --------------------------------------------------------------------------
+# Baseball and softball
+#
+# The sport where the load model matters most and where it had the least to say.
+# Youth throwing volume is the single most-studied injury risk in this catalogue
+# and the model only had a week-on-week spike check -- blind to the athlete who
+# throws a lot every week and always has, which is the pattern that actually
+# hurts arms. `load.throw_ceiling` is the answer, and every throwing drill below
+# feeds it.
+#
+# The two sports share almost everything and diverge at exactly one place: a
+# softball pitcher throws underhand in a full arm circle, which is a different
+# motion with a different injury profile, and gets its own drill.
+# --------------------------------------------------------------------------
+
+#: Sports whose plans legitimately draw on another sport's drills.
+#:
+#: A softball player throws, fields and hits with the same motions a baseball
+#: player does, so five of the six diamond drills are keyed `bb_` and shared
+#: rather than duplicated under a second prefix. Only the windmill is softball's
+#: alone, because it is the one motion the two sports genuinely do not share.
+#:
+#: Declared rather than inferred from key prefixes, so a guard asking "does this
+#: position prescribe any of its own sport's work" gets a true answer instead of
+#: one that depends on how a drill happens to be named.
+SHARES_DRILLS_WITH: dict[str, str] = {"softball": "baseball"}
+
+
+def drill_sports(sport: str) -> frozenset[str]:
+    """Every sport whose drills count as this sport's own work."""
+    shared = SHARES_DRILLS_WITH.get(sport)
+    return frozenset({sport} if shared is None else {sport, shared})
+
+
+BASEBALL_BALL = BallSpec(
+    required=True,
+    contact="body",
+    parts=("left_wrist", "right_wrist"),
+    min_gap_ms=500,
+    min_speed=0.35,
+    attribute_side=True,
+    detector="vision",
+    colour="white",
+    # A baseball. Softball's is larger, but every drill sharing this spec is
+    # one both sports do with a baseball-sized ball -- the windmill, which is
+    # the genuinely softball-specific motion, is counted from the arm and needs
+    # no ball at all.
+    diameter_cm=7.4,
+)
+
+
 BB_WALL_THROW = DrillSpec(
     key="bb_wall_throw",
     name="Wall Throws",
@@ -2372,17 +2423,7 @@ BB_WALL_THROW = DrillSpec(
     counter=CounterSpec(
         down_threshold=0.0, up_threshold=1.0, min_rep_ms=500, max_rep_ms=8_000,
     ),
-    ball=BallSpec(
-        required=True,
-        contact="body",
-        parts=("left_wrist", "right_wrist"),
-        min_gap_ms=500,
-        min_speed=0.35,
-        attribute_side=True,
-        detector="vision",
-        colour="white",
-        diameter_cm=7.4,
-    ),
+    ball=BASEBALL_BALL,
     scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=400, diminishing_after_reps=150),
     validation=ValidationSpec(max_reps_per_second=1.6, min_reps=6),
     setup_hint="Prop the phone up so it can see you and the wall. Any angle.",
@@ -2396,6 +2437,287 @@ BB_WALL_THROW = DrillSpec(
     ),
     tracks_handedness=True,
 )
+
+BB_LONG_TOSS = DrillSpec(
+    key="bb_long_toss",
+    name="Long Toss",
+    sport="baseball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Back up and throw it properly, with a crow hop and a full arm. Fewer "
+        "throws, harder ones. Every rep counts as a throw against the day's "
+        "arm total, which is the number worth watching in this sport."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=2_500, max_rep_ms=20_000,
+    ),
+    # A long toss leaves the hand far faster than a catch-play throw, and the
+    # gap between them is much longer. Both are checkable, which is what lets
+    # this pay more than a wall throw.
+    ball=replace(BASEBALL_BALL, min_gap_ms=2_500, min_speed=0.70),
+    scoring=ScoringSpec(xp_per_rep=2.0, daily_rep_cap=80, diminishing_after_reps=40),
+    validation=ValidationSpec(
+        max_reps_per_second=0.4, min_reps=8, min_duration_ms=60_000,
+    ),
+    setup_hint=(
+        "Somewhere with room and a partner or a net. Phone side-on. Crow hop "
+        "into every one -- if you are throwing flat-footed, come in closer."
+    ),
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=1.6,
+        # Each of these is a harder throw than a wall throw, and the arm knows
+        # it. Counting them one-for-one would understate the day.
+        throws_per_rep=1.5, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+BB_QUICK_HANDS = DrillSpec(
+    key="bb_quick_hands",
+    name="Quick Hands",
+    sport="baseball",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "Short, quick transfers into the wall from close range -- glove to "
+        "hand to release. There is a speed floor here: a long toss cannot be "
+        "done this fast, which is how the app knows these were transfers."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=700, max_rep_ms=5_000,
+    ),
+    ball=replace(BASEBALL_BALL, min_gap_ms=700, min_speed=0.40),
+    scoring=ScoringSpec(xp_per_rep=0.9, daily_rep_cap=250, diminishing_after_reps=120),
+    validation=ValidationSpec(
+        max_reps_per_second=1.6,
+        # The verification. A proper throw cannot be repeated at this rate.
+        min_reps_per_second=0.45,
+        min_reps=20, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Close to the wall, phone side-on. Short arm action -- this is about "
+        "the transfer, not the throw. Feet moving the whole time."
+    ),
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=0.5,
+        # Short and submaximal, but still overhead and still repeated, so it
+        # belongs on the arm's ledger at a reduced rate rather than at none.
+        throws_per_rep=0.4, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+BB_TEE_SWING = DrillSpec(
+    key="bb_tee_swing",
+    name="Tee Swings",
+    sport="baseball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Off a tee, same swing every time. It reads your hands travelling out "
+        "from your body and back, so a full swing counts and a half-hearted "
+        "one does not. It has no idea where the ball went."
+    ),
+    signal=SignalSpec(
+        # The same signal the goalie save uses, which is not as odd as it
+        # sounds: it measures how far the hands, TOGETHER, are from the chest.
+        # A bat is held in two hands, so a swing is exactly that -- loaded back
+        # near the shoulder, extended through the zone, and round.
+        kind=SignalKind.SAVE_REACH,
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        # A batter's load is hands back at the rear shoulder, which is further
+        # from the chest than a goalie's ready position -- not closer, which is
+        # what 0.55 assumed. The subsumption guard caught it: at 0.55 this band
+        # swallowed the goalie save's whole range, so a bat swing fired that
+        # drill's thresholds and the app could not tell the two apart on reach
+        # alone. Corrected upward to what a load actually is, which also puts
+        # the two bands genuinely clear of one another.
+        down_threshold=0.72,
+        up_threshold=1.25,
+        min_rep_ms=1_500,
+        max_rep_ms=15_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=200, diminishing_after_reps=100),
+    validation=ValidationSpec(
+        max_reps_per_second=0.7, min_reps_per_second=0.02,
+        min_reps=10, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see your hands "
+        "through the whole swing. Same tee height every rep -- moving it "
+        "around teaches you nothing."
+    ),
+    quality=QualitySpec(
+        target_rom=0.65,
+        # A swing has to be repeatable before it is worth making it violent.
+        consistency_target=0.12,
+        consistency_ceiling=0.38,
+        tempo_min_ms=1_500,
+        tempo_max_ms=6_000,
+        w_consistency=0.40,
+        w_depth=0.30,
+        w_tempo=0.10,
+        w_endurance=0.20,
+        min_reps=10,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.8,
+        # A swing is rotation, not an overhead throw. Putting it on the arm's
+        # ledger would make an afternoon of hitting read as an afternoon of
+        # throwing and hide the number that matters.
+        throws_per_rep=0.0, tissue=Tissue.CORE,
+    ),
+    tracks_handedness=False,
+)
+
+BB_FIELDING = DrillSpec(
+    key="bb_fielding",
+    name="Fielding Reps",
+    sport="baseball",
+    category=Category.AGILITY,
+    metric=Metric.REPS,
+    description=(
+        "Down into fielding position and back up, over and over -- the "
+        "footwork with no ball needed. It counts how far your hips travel, so "
+        "bending at the waist does not register as getting down."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
+    counter=CounterSpec(
+        # Lower than a squat jump's band and nowhere near a burpee's floor: a
+        # fielding position is deep but the athlete never leaves the ground,
+        # so the top of the cycle is standing rather than airborne.
+        down_threshold=0.42,
+        up_threshold=0.88,
+        min_rep_ms=900,
+        max_rep_ms=8_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=250, diminishing_after_reps=120),
+    validation=ValidationSpec(
+        max_reps_per_second=1.2, min_reps_per_second=0.05,
+        min_reps=12, min_duration_ms=25_000,
+    ),
+    setup_hint=(
+        "Phone side-on at hip height. Get your hips down and your hands out in "
+        "front -- if your back is rounding, you are bending instead of "
+        "getting down."
+    ),
+    quality=QualitySpec(
+        target_rom=0.44,
+        consistency_target=0.16,
+        tempo_min_ms=900,
+        tempo_max_ms=3_500,
+        w_consistency=0.25,
+        w_depth=0.40,
+        w_tempo=0.10,
+        w_endurance=0.25,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=0.9, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+SB_WINDMILL = DrillSpec(
+    key="sb_windmill",
+    name="Windmill Pitching",
+    sport="softball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "The full underhand circle, with or without a ball. It follows your "
+        "pitching hand all the way round, so a half circle does not count. "
+        "Every rep goes on the day's arm total -- this is the highest-volume "
+        "motion in the sport and the one nobody counts."
+    ),
+    signal=SignalSpec(
+        # The pitching hand relative to the shoulder line. A windmill takes it
+        # from below the hip, up over the head and back down, which is by far
+        # the largest vertical excursion of any drill here -- and what makes it
+        # unmistakable rather than merely different.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="right_wrist",
+        reference="right_shoulder",
+        smoothing=0.25,
+    ),
+    counter=CounterSpec(
+        # From well below the shoulder at release to well above it at the top.
+        down_threshold=-0.75,
+        up_threshold=0.55,
+        min_rep_ms=900,
+        max_rep_ms=8_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.8, daily_rep_cap=120, diminishing_after_reps=60),
+    validation=ValidationSpec(
+        max_reps_per_second=1.2, min_reps_per_second=0.04,
+        min_reps=10, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone side-on so it can see the whole circle -- square to you it "
+        "cannot tell a full circle from a half one. Same stride every pitch."
+    ),
+    quality=QualitySpec(
+        # Hand at the hip on release to fully overhead at the top: about a
+        # torso below the shoulder to nearly a torso above it. 1.30 was a
+        # guess that undershot the real arc, and the sweep caught it.
+        target_rom=1.60,
+        consistency_target=0.10,
+        consistency_ceiling=0.34,
+        tempo_min_ms=900,
+        tempo_max_ms=3_500,
+        w_consistency=0.40,
+        w_depth=0.30,
+        w_tempo=0.15,
+        w_endurance=0.15,
+        min_reps=10,
+    ),
+    load=LoadSpec(
+        load_per_rep=1.4,
+        # Underhand rather than overhead, and the shoulder loads differently --
+        # but it is still a repeated maximal throw from a growing arm, and the
+        # one thing a windmill pitcher does more than anything else. It goes on
+        # the same ledger, because the ledger exists to count exactly this.
+        throws_per_rep=1.0, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+BB_CATCHER_STANCE = DrillSpec(
+    key="bb_catcher_stance",
+    name="Catcher's Stance",
+    sport="baseball",
+    category=Category.CONDITIONING,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Down in the crouch and stay there. The clock only runs while your "
+        "hips are actually low -- stand up and it stops, which is the whole "
+        "point of a drill for a position that spends two hours down."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
+    counter=CounterSpec(
+        down_threshold=0.30, up_threshold=0.62, min_rep_ms=400, max_rep_ms=60_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=28.0, daily_rep_cap=1_000),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps=0, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone side-on at about knee height so it can see how low you really "
+        "are. Heels down if you can, chest up, and do not lean on anything."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=3.2, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
 
 # --------------------------------------------------------------------------
 # Tennis
@@ -2726,6 +3048,12 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     VB_APPROACH,
     VB_BLOCK_JUMP,
     BB_WALL_THROW,
+    BB_LONG_TOSS,
+    BB_QUICK_HANDS,
+    BB_TEE_SWING,
+    BB_FIELDING,
+    BB_CATCHER_STANCE,
+    SB_WINDMILL,
     TEN_WALL_RALLY,
     TEN_ALTERNATE,
     TEN_ONE_WING,

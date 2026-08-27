@@ -2173,11 +2173,383 @@ TEN_ADVANCED: tuple[Topic, ...] = (
 TEN_TOPICS: tuple[Topic, ...] = TEN_FUNDAMENTALS + TEN_CORE + TEN_ADVANCED
 
 
+
+
+# ---------------------------------------------------------------------------
+# Baseball and softball
+#
+# One syllabus, registered under both sports. Almost every decision in these two
+# games is identical -- where to be before the pitch, what to do on a ball not
+# hit to you, when the runner goes -- and the two that are not (the windmill,
+# and the shorter basepaths) are drill and rule differences rather than
+# thinking differences.
+#
+# What is distinctive here is that this sport's IQ is mostly about *the pitch
+# before the pitch*: knowing the count, the outs and where you are going with
+# the ball before it is hit anywhere near you.
+# ---------------------------------------------------------------------------
+
+DIAMOND = ("pitcher", "catcher", "infield", "outfield")
+DEFENCE = ("catcher", "infield", "outfield")
+
+BB_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="bb_iq_know_before",
+        title="Know what you are doing before it is hit",
+        focus="Situations",
+        positions=DIAMOND, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A fielder who clearly already knows where the throw is going, "
+            "next to one who catches it and then looks up. Youth footage makes "
+            "the second one very easy to find."
+        ),
+        ask=Ask(
+            prompt="Before every pitch, what should you already have decided?",
+            options=(
+                "Where you are throwing if the ball comes to you",
+                "Which way you will dive",
+                "Whether the batter is any good",
+            ),
+            answer=0,
+            because=(
+                "There is about a second between fielding a ball and needing to "
+                "throw it. Anyone deciding in that second is already late."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_back_up",
+        title="Backing up the throw",
+        focus="Situations",
+        positions=DEFENCE, min_age=0, max_age=200, target_s=65,
+        find=(
+            "An overthrow at a base with somebody behind it, and one with "
+            "nobody. What the runners do next is the whole clip."
+        ),
+        ask=Ask(
+            prompt="The ball is thrown to first and you are nowhere near it. Where do you go?",
+            options=(
+                "Behind the base, in case the throw gets away",
+                "Stay at your position in case the ball comes back",
+                "Towards the ball, to help",
+            ),
+            answer=0,
+            because=(
+                "Every overthrow that nobody backed up is an extra base. It is "
+                "the least glamorous run in the sport and the one that saves "
+                "the most."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_two_hands",
+        title="Getting in front of it",
+        focus="Fielding",
+        positions=DEFENCE, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A grounder fielded with the body squared behind the glove, and one "
+            "reached at sideways. Look for what happens on the bad hop in each."
+        ),
+        ask=Ask(
+            prompt="A ground ball is coming straight at you. What do you do with your body?",
+            options=(
+                "Get it in front of the ball, so a bad hop still hits you",
+                "Reach out with the glove so you can get to it sooner",
+                "Stay tall so you can see the hop better",
+            ),
+            answer=0,
+            because=(
+                "The glove misses bad hops. A chest does not, and a ball that "
+                "hits your chest is still in front of you."
+            ),
+        ),
+    ),
+)
+
+BB_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="bb_iq_count_leverage",
+        title="What the count is telling you",
+        focus="Hitting",
+        positions=DIAMOND, min_age=13, max_age=200, target_s=125,
+        find=(
+            "The same batter at 2-0 and at 0-2. The clip is the pitch selection "
+            "and the swing decision, not the result."
+        ),
+        ask=Ask(
+            prompt="You are ahead in the count 2-0. What changes?",
+            options=(
+                "You can wait for a pitch in your zone rather than protect",
+                "You should swing at the next pitch before it gets to 2-1",
+                "Nothing -- hit the ball hard whatever the count",
+            ),
+            answer=0,
+            because=(
+                "Ahead in the count, the pitcher has to come to you. Being "
+                "choosy is the entire advantage, and swinging at a bad one "
+                "gives it straight back."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_cut_off",
+        title="Hitting the cut-off",
+        focus="Situations",
+        positions=DEFENCE, min_age=13, max_age=200, target_s=120,
+        find=(
+            "An outfielder throwing through the cut-off man to the plate while "
+            "the batter takes second, next to one who hits the relay."
+        ),
+        ask=Ask(
+            prompt="You field a ball in the outfield with a runner rounding third. Where do you throw?",
+            options=(
+                "To the cut-off man, who can still make a play on the batter",
+                "All the way home on the fly",
+                "To the base ahead of the lead runner",
+            ),
+            answer=0,
+            because=(
+                "A throw over everybody's head is one play at best and usually "
+                "none. Hitting the cut-off keeps two outs available instead of "
+                "one long throw."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_outs_matter",
+        title="The number of outs changes everything",
+        focus="Situations",
+        positions=DIAMOND, min_age=13, max_age=200, target_s=115,
+        find=(
+            "A fly ball caught with one out and a runner on third, and the same "
+            "situation with two. What every player does differs completely."
+        ),
+        ask=Ask(
+            prompt="Runner on third, fly ball to the outfield. Why does the number of outs matter?",
+            options=(
+                "With fewer than two outs the runner can tag and score",
+                "With two outs the outfielder has more time",
+                "It changes where the infield stands",
+            ),
+            answer=0,
+            because=(
+                "Every player on the field is doing something different "
+                "depending on the outs. Not knowing them is the most common "
+                "mental error in the sport."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_secondary_lead",
+        title="The secondary lead",
+        focus="Baserunning",
+        positions=DIAMOND, min_age=13, max_age=200, target_s=110,
+        find=(
+            "A runner shuffling off as the pitch is delivered, next to one "
+            "standing still until the ball is hit."
+        ),
+        ask=Ask(
+            prompt="You are on first. What should you be doing as the pitch is thrown?",
+            options=(
+                "Shuffling off into a secondary lead, moving as it crosses",
+                "Standing still so you can react either way",
+                "Getting back towards the base in case of a pick-off",
+            ),
+            answer=0,
+            because=(
+                "Two shuffles is most of a stolen base and all of the "
+                "difference on a ball in the gap. Standing still means starting "
+                "from zero."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_pitch_recognition",
+        title="Deciding early and being right",
+        focus="Hitting",
+        positions=DIAMOND, min_age=13, max_age=200, target_s=125,
+        find=(
+            "Slow footage of a batter tracking a breaking ball out of the hand. "
+            "The decision point, not the swing, is the clip."
+        ),
+        ask=Ask(
+            prompt="When do you have to decide whether to swing?",
+            options=(
+                "About halfway to the plate, well before you can see it break",
+                "As it crosses the front of the plate",
+                "As soon as it leaves the hand",
+            ),
+            answer=0,
+            because=(
+                "There is not enough time to see the whole flight and then "
+                "decide. Good hitters commit early on where it started and "
+                "adjust, which is why a pitch that starts in the zone and "
+                "leaves it works."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_pitcher_fielder",
+        title="A pitcher is a fielder too",
+        focus="Situations",
+        positions=("pitcher",), min_age=13, max_age=200, target_s=110,
+        find=(
+            "A pitcher covering first on a ground ball to the right side, next "
+            "to one still standing on the mound watching it."
+        ),
+        ask=Ask(
+            prompt="A ground ball goes to the first baseman's right. What is the pitcher's job?",
+            options=(
+                "Break for first immediately to take the throw",
+                "Back up second base",
+                "Stay on the mound and let them handle it",
+            ),
+            answer=0,
+            because=(
+                "The first baseman cannot field it and cover the bag. A pitcher "
+                "who does not move turns a routine out into an infield hit."
+            ),
+        ),
+    ),
+)
+
+BB_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="bb_iq_infield_depth",
+        title="Where the infield stands, and why",
+        focus="Team defence",
+        positions=DEFENCE, min_age=15, max_age=200, target_s=155,
+        find=(
+            "The infield playing in with a runner on third, and back in a "
+            "double-play situation. Wide footage of both, from before the pitch."
+        ),
+        ask=Ask(
+            prompt="Runner on third, one out, close game. Why does the infield come in?",
+            options=(
+                "To cut the run off at the plate, accepting less range",
+                "To turn a double play more easily",
+                "Because the batter is likely to bunt",
+            ),
+            answer=0,
+            because=(
+                "Playing in trades range for a play at the plate. It is a bet "
+                "on the run mattering more than the base, and it is only right "
+                "some of the time."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_sequencing",
+        title="Sequencing, not just stuff",
+        focus="Pitching",
+        positions=("pitcher", "catcher"), min_age=15, max_age=200, target_s=160,
+        find=(
+            "An at-bat where the pitcher sets up a strikeout with an earlier "
+            "pitch. The clip is the whole at-bat, not the last pitch."
+        ),
+        ask=Ask(
+            prompt="What makes a good put-away pitch work?",
+            options=(
+                "The pitches before it, which set up what the hitter expects",
+                "How much it moves",
+                "How hard it is thrown",
+            ),
+            answer=0,
+            because=(
+                "A hitter swings at what they expect. The pitch that gets them "
+                "out is usually decided two pitches earlier."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_relay",
+        title="The relay nobody practises",
+        focus="Team defence",
+        positions=DEFENCE, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A ball in the gap and the full relay -- outfielder to middle "
+            "infielder to base. Cut wide enough to see all three plus the "
+            "trailer."
+        ),
+        ask=Ask(
+            prompt="A ball rolls to the wall. What makes the relay work?",
+            options=(
+                "The relay man lining up between the ball and the base, calling loudly",
+                "The outfielder throwing as hard as possible",
+                "Everybody converging on the ball",
+            ),
+            answer=0,
+            because=(
+                "The outfielder is throwing to a voice and a position, not to a "
+                "person they can see. The relay man has to be in line before "
+                "the ball is picked up."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_first_third",
+        title="First and third, and the decision nobody makes in time",
+        focus="Situations",
+        positions=DEFENCE, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A first-and-third situation with a runner going. The clip is what "
+            "the catcher and middle infielders do, not the steal."
+        ),
+        ask=Ask(
+            prompt="Runners on first and third, the runner on first takes off. What decides the play?",
+            options=(
+                "Whether the runner on third is far enough off to be caught",
+                "How fast the runner going to second is",
+                "Whether there are two outs",
+            ),
+            answer=0,
+            because=(
+                "The throw to second is the bait. The whole play turns on what "
+                "the runner at third does while the ball is in the air, and "
+                "somebody has to be watching them."
+            ),
+        ),
+    ),
+    Topic(
+        key="bb_iq_arm_care",
+        title="Knowing when your arm has had enough",
+        focus="Staying healthy",
+        positions=DIAMOND, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A pitcher whose mechanics change late in an outing -- arm slot "
+            "dropping, front side flying open. Compare the first inning with "
+            "the fifth."
+        ),
+        ask=Ask(
+            prompt="What is the first sign that an arm has had enough?",
+            options=(
+                "Command going, and the mechanics changing to compensate",
+                "The arm starting to ache",
+                "Velocity dropping off",
+            ),
+            answer=0,
+            because=(
+                "Pain is a late signal. Losing the strike zone and reaching for "
+                "the ball come first, and they are the ones to stop on -- for "
+                "yourself as much as for whoever is counting."
+            ),
+        ),
+    ),
+)
+
+BB_IQ_TOPICS: tuple[Topic, ...] = BB_FUNDAMENTALS + BB_CORE + BB_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
     "volleyball": VB_TOPICS,
     "soccer": SOC_TOPICS,
     "tennis": TEN_TOPICS,
+    # One syllabus under two keys. Almost every decision in these games is the
+    # same one, and the differences that exist are rules and a pitching motion
+    # rather than a different way of thinking about the sport.
+    "baseball": BB_IQ_TOPICS,
+    "softball": BB_IQ_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

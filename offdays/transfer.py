@@ -213,6 +213,33 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
+    "bb_long_toss": (
+        Transfer("Lacrosse", "an overhand shot on the run"),
+        Transfer("Football", "a quarterback's deep ball, same chain"),
+        Transfer("Tennis", "the serve is this motion with a racket in it"),
+    ),
+    "bb_quick_hands": (
+        Transfer("Basketball", "catch and release with no wasted motion"),
+        Transfer("Volleyball", "clean hands on a ball arriving fast"),
+    ),
+    "bb_tee_swing": (
+        Transfer("Golf", "the same rotation, held lower"),
+        Transfer("Hockey", "a slap shot is this swing on ice"),
+        Transfer("Lacrosse", "shooting through your hips rather than your arms"),
+    ),
+    "bb_fielding": (
+        Transfer("Lacrosse", "ground balls -- the same low body, same funnel"),
+        Transfer("Tennis", "getting down to a low ball and staying balanced"),
+        Transfer("Soccer", "a defender's low, side-on base"),
+    ),
+    "bb_catcher_stance": (
+        Transfer("Wrestling", "the same low base, and the same burning legs"),
+        Transfer("Basketball", "a defensive stance held far too long"),
+    ),
+    "sb_windmill": (
+        Transfer("Volleyball", "a serve loads the shoulder the same way"),
+        Transfer("Track", "the throwing events reward the same repeatability"),
+    ),
     "ten_alternate": (
         Transfer("Basketball", "changing hands under pressure"),
         Transfer("Lacrosse", "switching hands on the move"),

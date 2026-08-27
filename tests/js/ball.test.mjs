@@ -228,7 +228,7 @@ test('every ball drill is exercised by this file', () => {
   const missing = SPECS
     .filter((d) => d.ball && !covered.has(d.key)
                 && !['lacrosse', 'basketball', 'volleyball', 'soccer',
-                     'tennis'].includes(d.sport))
+                     'tennis', 'baseball'].includes(d.sport))
     .map((d) => d.key);
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
 });
@@ -701,4 +701,45 @@ test('the serve confirms rather than counting', () => {
   // was one -- the same rule every lacrosse drill follows.
   assert.equal(spec('ten_serve').ball.mode, 'confirm');
   assert.equal(spec('ten_serve').ball.required, false);
+});
+
+
+/* -------------------------------------------------------------------------
+ * Baseball and softball
+ *
+ * Every ball drill shares BASEBALL_BALL, so they are driven as a family. The
+ * windmill is not here because it needs no ball at all -- it is counted from
+ * the pitching arm, which is what makes it work with or without one.
+ * ---------------------------------------------------------------------- */
+
+const DIAMOND = () => SPECS.filter((d) => d.sport === 'baseball' && d.ball);
+
+test('every baseball ball drill counts a thrown ball', () => {
+  for (const drill of DIAMOND()) {
+    const counter = new BallRepCounter(drill);
+    run(counter, bounce({ floor: 0.62, apex: 1.8, every: 2, frames: 500 }),
+        pose({ left_wrist: { x: 0.46, y: 0.62 },
+               right_wrist: { x: 0.58, y: 0.62 } }));
+    assert.ok(counter.count > 0, `${drill.key} saw nothing off a thrown ball`);
+  }
+});
+
+test('every baseball drill uses the same ball', () => {
+  for (const drill of DIAMOND()) {
+    assert.equal(drill.ball.diameter_cm, 7.4, `${drill.key} ball size drifted`);
+    assert.equal(drill.ball.detector, 'vision', `${drill.key} uses the general model`);
+  }
+});
+
+test('a long toss gates far wider than a quick transfer', () => {
+  // The two are separated by nothing else, so the gap between them has to be
+  // large enough that neither can be mistaken for the other.
+  assert.ok(spec('bb_long_toss').ball.min_gap_ms
+            > spec('bb_quick_hands').ball.min_gap_ms * 3);
+  assert.ok(spec('bb_long_toss').ball.min_speed
+            > spec('bb_quick_hands').ball.min_speed);
+});
+
+test('the windmill needs no ball, which is why it works without one', () => {
+  assert.equal(spec('sb_windmill').ball, null);
 });

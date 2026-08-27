@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3010 tests
+python -m pytest tests/ -q          # 3132 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 192 tests
+  node --test tests/js/*.test.mjs   # 199 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3679,6 +3679,125 @@ team sport syllabus needs: **what your own body language is telling the other
 end**, and how to think about a scoreline when nobody else can help.
 
 Five sports now have a syllabus.
+
+---
+
+## Baseball and softball, built to lacrosse depth
+
+Two sports and eight position plans from one build, because they share almost
+everything. **One drill becomes seven**, plus a fourteen-topic syllabus
+registered under both keys.
+
+This is the sport where the load model matters most and where it had the least
+to say — so the centrepiece is not a drill.
+
+### The throwing model had no ceiling
+
+`load.py` carried one throwing check: a **50% week-on-week spike** above a
+150-throw baseline. That is a *relative* measure, and it is blind to exactly the
+athlete it should catch — the one who throws a lot every week and always has.
+A relative measure calls that normal.
+
+There is now an absolute, **age-scaled daily ceiling**:
+
+| age | ceiling |
+|---|---|
+| ≤ 8 | 60 |
+| ≤ 10 | 90 |
+| ≤ 12 | 105 |
+| ≤ 14 | 120 |
+| ≤ 16 | 135 |
+| 17+ | 150 |
+
+Two things about those numbers matter more than the numbers.
+
+**They are shaped by published pitch-count guidance, not equal to it.** That
+guidance counts *pitches in a game* — maximal effort from a mound, counted by an
+adult with a clicker — and is as low as it is for that reason. A wall throw in a
+driveway is not a pitch. So these sit deliberately above it: what is borrowed is
+the shape of the thing (that a ceiling exists, and scales with age), not any
+specific figure, and nothing here should be quoted as though it were the
+published guidance.
+
+**The app can only count throws it saw.** A pitcher who threw eighty in a game
+on Saturday and then does fifty in the garden is at a hundred and thirty, and
+this knows about fifty. That caveat rides on the advisory itself — *"and only
+counting throws the app saw, not games or practice"* — because a number that
+looks complete and is not is worse than no number.
+
+An unknown age gets **no ceiling rather than a guess**: too low and it nags a
+seventeen-year-old, too high and it says nothing to the eleven-year-old it
+exists for.
+
+### What goes on the arm's ledger
+
+| Drill | throws/rep |
+|---|---|
+| Long Toss | **1.5** — a harder throw than a wall throw, and the arm knows it |
+| Wall Throws | 1.0 |
+| Windmill Pitching | 1.0 |
+| Quick Hands | **0.4** — short and submaximal, but still overhead and repeated |
+| Tee Swings, Fielding, Catcher's Stance | **0** |
+
+Putting a swing on the arm's ledger would make an afternoon of hitting read as
+an afternoon of throwing and hide the number that matters. A test enforces both
+halves.
+
+### Softball stops sharing at the mound
+
+Softball inherited baseball's plans entirely, which meant **a softball pitcher
+was prescribed a baseball pitcher's plan.** A windmill is a full underhand arm
+circle — a different motion, a different injury profile, and the single
+highest-volume action anyone on a softball field performs.
+
+`sb_windmill` is its own drill, on its own signal (the pitching hand from below
+the hip to fully overhead — by far the largest vertical excursion in the
+catalogue), and softball's pitcher now gets its own plan. A test asserts the two
+sports differ at **exactly one position** and no other.
+
+### The pitcher's plan is deliberately the least sport-specific
+
+Baseball's pitcher sits at **27% own-sport**, the lowest of any position in any
+sport built so far. That is correct rather than a shortfall: a pitcher's solo
+hours should be legs, hips and core, because the throwing is what the rest of
+their week is already full of. A test asserts the pitcher is the *minimum*, and
+another caps throwing work at 30% of any plan in either sport.
+
+### Two things the guards caught
+
+The subsumption guard fired **cross-sport again**: `bb_tee_swing` at
+[0.55, 1.25] swallowed `lax_goalie_saves` at [0.70, 0.95], so a bat swing fired
+the goalie drill's thresholds. The band was wrong physically — a batter's load
+puts the hands *further* from the chest than a goalie's ready position, not
+closer. Corrected to 0.72, which is both accurate and clear of the goalie band.
+
+The calibration sweep caught the windmill's `target_rom` at 1.30. A real arc
+runs from about a torso below the shoulder to nearly a torso above it, so 1.30
+undershot it and only 1 of 24 textbook reps counted. It is 1.60 now.
+
+### And one piece of bookkeeping the guards forced into the open
+
+Sharing drills across two sports broke two guards, and both were right to break.
+
+The **uniqueness check** on film-topic keys iterated the registry and saw the
+shared syllabus twice, so every key looked duplicated. It now counts distinct
+syllabuses, which is what it always meant.
+
+The **own-sport check** read key prefixes, so a softball catcher's plan — more
+than half of it the sport — registered as pure conditioning, because five of the
+six diamond drills are keyed `bb_`. Rather than duplicate five drills under a
+second prefix, the sharing is now *declared*:
+
+```python
+SHARES_DRILLS_WITH = {"softball": "baseball"}
+```
+
+One entry, and a test asserts it stays one unless another pair of sports
+genuinely performs the same movements. Guards that ask "does this position
+prescribe its own sport's work" now get a true answer instead of one that
+depends on how a drill happens to be named.
+
+Seven sports have a film syllabus.
 
 ---
 

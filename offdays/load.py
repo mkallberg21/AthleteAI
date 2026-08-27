@@ -83,6 +83,46 @@ class Advisory:
         }
 
 
+#: Daily throwing ceilings by age, in throws this app has actually seen.
+#:
+#: Shaped by published youth pitch-count guidance, and *shaped by* is the load-
+#: bearing phrase. Those numbers are pitches in a game, counted by an adult with
+#: a clicker, and they are as low as they are because a pitch is maximal effort
+#: from a mound. A wall throw in a driveway is not a pitch.
+#:
+#: So these sit above the pitch guidance rather than at it. What is borrowed is
+#: the shape of the thing -- that a ceiling exists at all, and that it scales
+#: with age -- rather than any specific number, and nothing here should be
+#: quoted as though it were the published guidance.
+#:
+#: The honest caveat rides on every advisory this produces: the app can only
+#: count throws it saw. A pitcher who threw eighty in a game on Saturday and
+#: then does fifty in the garden is at a hundred and thirty, and this knows
+#: about fifty of them.
+THROW_CEILING_BY_AGE: tuple[tuple[int, int], ...] = (
+    (8, 60), (10, 90), (12, 105), (14, 120), (16, 135), (18, 150),
+)
+
+#: Above this share of the ceiling, say something before it is reached rather
+#: than after.
+THROW_CEILING_WARN = 0.80
+
+
+def throw_ceiling(age: int | None) -> int | None:
+    """The day's throwing ceiling for an athlete of this age.
+
+    None when the age is unknown. A guessed ceiling would be worse than none:
+    too low and it nags a seventeen-year-old, too high and it says nothing to
+    the eleven-year-old it exists for.
+    """
+    if age is None:
+        return None
+    for limit, ceiling in THROW_CEILING_BY_AGE:
+        if age <= limit:
+            return ceiling
+    return THROW_CEILING_BY_AGE[-1][1]
+
+
 @dataclass
 class DayLoad:
     day: date
@@ -107,6 +147,11 @@ class LoadState:
 
     weekly_throws: int = 0
     throw_change: float | None = None
+    #: Throws the app saw today, and the ceiling for this athlete's age.
+    #: The ceiling is None when the age is unknown, which is common enough
+    #: that nothing downstream may assume it.
+    throws_today: int = 0
+    throw_ceiling: int | None = None
 
     consecutive_days: int = 0
     days_since_training: int | None = None
@@ -137,6 +182,8 @@ class LoadState:
             "tightened": self.tightened,
             "history_note": self.history_note,
             "weekly_throws": self.weekly_throws,
+            "throws_today": self.throws_today,
+            "throw_ceiling": self.throw_ceiling,
             "throw_change": round(self.throw_change, 2) if self.throw_change is not None else None,
             "consecutive_days": self.consecutive_days,
             "days_since_training": self.days_since_training,
@@ -225,6 +272,9 @@ def analyze(
     state.chronic = sum(d.load for d in window) / (chronic_span / cfg.acute_days)
 
     state.weekly_throws = sum(d.throws for d in acute_window)
+    state.throws_today = sum(
+        d.throws for d in acute_window if d.day == max(x.day for x in acute_window)
+    ) if acute_window else 0
 
     # --- Ratio, only where there is enough history to mean anything ---
     if state.history_days >= cfg.min_history_days and state.chronic > 0:
@@ -290,6 +340,7 @@ def analyze(
         if previous >= cfg.throw_trend_min_baseline:
             state.throw_change = (state.weekly_throws - previous) / previous
 
+    state.throw_ceiling = throw_ceiling(age)
     _add_advisories(state, cfg, age, acute_window)
     return state
 
@@ -385,6 +436,37 @@ def _add_advisories(
                 "Rest days are when adaptation actually happens.",
             )
         )
+
+    # An absolute ceiling, not just a week-on-week change. The spike check below
+    # is blind to an athlete who throws a lot every week and always has -- which
+    # is exactly the pattern that hurts a young arm, and exactly the pattern a
+    # relative measure calls normal.
+    if state.throw_ceiling and state.throws_today:
+        share = state.throws_today / state.throw_ceiling
+        seen = (
+            f"{state.throws_today} of about {state.throw_ceiling} for this age "
+            "-- and only counting throws the app saw, not games or practice."
+        )
+        if share >= 1.0:
+            state.advisories.append(
+                Advisory(
+                    "warning",
+                    "throw_ceiling",
+                    "That is a full day's throwing for a growing arm. Whatever "
+                    "else is planned today, this part is done.",
+                    seen,
+                )
+            )
+        elif share >= THROW_CEILING_WARN:
+            state.advisories.append(
+                Advisory(
+                    "caution",
+                    "throw_ceiling_near",
+                    "Close to a full day's throwing. Worth stopping here rather "
+                    "than finding out tomorrow.",
+                    seen,
+                )
+            )
 
     if state.throw_change is not None and state.throw_change >= cfg.throw_spike_change:
         state.advisories.append(

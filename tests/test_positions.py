@@ -387,15 +387,35 @@ class TestEverySportsOwnDrillIsReachable:
             assert own, f"{sport} positions prescribe none of their own drills"
 
     def test_a_plan_is_never_pure_general_fitness_when_the_sport_has_a_drill(self):
-        with_drills = {d.sport for d in ALL_DRILLS if d.sport != "general"}
+        # "Its own sport's work" has to mean the shared pool, not the key
+        # prefix. A softball player throws, fields and hits with the same
+        # motions a baseball player does, so five of the six diamond drills are
+        # keyed `bb_` and shared rather than duplicated -- and a guard reading
+        # prefixes would call a softball catcher's plan pure conditioning when
+        # more than half of it is the sport.
+        from offdays.drills import drill_sports
+
+        with_drills = set()
+        for pos in ALL_POSITIONS:
+            pool = drill_sports(pos.sport)
+            if any(d.sport in pool for d in ALL_DRILLS if d.sport != "general"):
+                with_drills.add(pos.sport)
+
         for pos in ALL_POSITIONS:
             if pos.sport not in with_drills:
                 continue
+            pool = drill_sports(pos.sport)
             share = sum(
                 v for k, v in pos.emphasis.items()
-                if DRILLS_BY_KEY[k].sport == pos.sport
+                if DRILLS_BY_KEY[k].sport in pool
             )
             assert share > 0, f"{pos.key} prescribes no {pos.sport} at all"
+
+    def test_the_shared_pool_is_declared_rather_than_guessed(self):
+        # One entry, and it should stay that way unless another pair of sports
+        # genuinely does the same movements.
+        from offdays.drills import SHARES_DRILLS_WITH
+        assert SHARES_DRILLS_WITH == {"softball": "baseball"}
 
     def test_a_pitchers_plan_stays_light_on_throwing(self):
         # Wall throws cost a full throw per rep against a growing shoulder.

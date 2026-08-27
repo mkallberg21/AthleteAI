@@ -83,6 +83,13 @@ const SWEEP = {
   ten_serve:         { lo: 72,    hi: 172,  kind: 'shootarm' },
   // A small hop from an already-low stance, in hip height above the floor.
   ten_split_step:    { lo: 0.84,  hi: 1.06, kind: 'body' },
+  // Loaded hands back at the shoulder, out through the zone and around.
+  bb_tee_swing:      { lo: 0.66,  hi: 1.32, kind: 'reach' },
+  // Standing down into a fielding position and back up, in hip height.
+  bb_fielding:       { lo: 0.36,  hi: 0.94, kind: 'body' },
+  // The pitching hand below the hip, up over the head and back down. By far
+  // the largest vertical excursion of any drill in the catalogue.
+  sb_windmill:       { lo: -1.00, hi: 0.90, kind: 'wrist' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept

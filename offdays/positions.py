@@ -415,25 +415,29 @@ BASEBALL_POSITIONS = (
     # volume to a twelve-year-old pitcher's week is the exact thing the load
     # model exists to prevent.
     ("pitcher", "Pitcher", ("pitcher", "p", "rhp", "lhp", "starter", "reliever"),
-     mix(bb_wall_throw=1, gen_glute_bridge=4, gen_side_plank=4, gen_lunge=3, gen_dead_bug=3,
-         gen_squat=2, gen_plank=2, gen_push_up=1, gen_lateral_bound=1),
+     mix(bb_long_toss=2, bb_wall_throw=1, bb_fielding=2, bb_tee_swing=2,
+         gen_glute_bridge=4, gen_side_plank=4, gen_lunge=3, gen_dead_bug=3,
+         gen_squat=2, gen_plank=2, gen_push_up=1),
      "Everything you throw comes up from the ground through your middle.",
      "pitchers"),
     ("catcher", "Catcher", ("catcher", "c", "backstop"),
-     mix(bb_wall_throw=4, gen_wall_sit=5, gen_squat=4, gen_lunge=3, gen_lateral_bound=3,
-         gen_glute_bridge=2, gen_side_plank=2, gen_push_up=2, gen_plank=1),
+     mix(bb_catcher_stance=5, bb_quick_hands=4, bb_wall_throw=2, bb_tee_swing=3,
+         bb_fielding=2, gen_wall_sit=3, gen_squat=3, gen_lunge=2,
+         gen_glute_bridge=2, gen_side_plank=2, gen_push_up=1),
      "You are in a squat for two hours. Build legs that can take it.",
      "catchers"),
     ("infield", "Infield", ("infield", "infielder", "shortstop", "ss", "second base",
                             "2b", "third base", "3b", "first base", "1b", "middle infield"),
-     mix(bb_wall_throw=4, gen_lateral_bound=5, gen_wall_sit=3, gen_lunge=3, gen_side_plank=3,
-         gen_squat=2, gen_mountain_climber=2, gen_glute_bridge=2, gen_plank=1),
+     mix(bb_fielding=5, bb_quick_hands=4, bb_tee_swing=3, bb_wall_throw=2,
+         gen_lateral_bound=4, gen_wall_sit=2, gen_lunge=2, gen_side_plank=2,
+         gen_squat=2, gen_glute_bridge=1, gen_plank=1),
      "First step sideways, low hands, and a throw from anywhere.",
      "infielders"),
     ("outfield", "Outfield", ("outfield", "outfielder", "center field", "cf",
                               "left field", "lf", "right field", "rf"),
-     mix(bb_wall_throw=3, gen_high_knees=4, gen_glute_bridge=4, gen_lunge=3, gen_squat_jump=3,
-         gen_lateral_bound=3, gen_side_plank=2, gen_squat=1, gen_plank=1),
+     mix(bb_long_toss=4, bb_tee_swing=3, bb_fielding=3, bb_wall_throw=2,
+         gen_high_knees=4, gen_glute_bridge=3, gen_squat_jump=3, gen_lunge=2,
+         gen_lateral_bound=2, gen_side_plank=1, gen_squat=1),
      "Long sprints from standing, then throw hard at the end of one.",
      "outfielders"),
 )
@@ -444,9 +448,24 @@ BASEBALL: tuple[Position, ...] = tuple(
     for k, label, aliases, emphasis, focus, plural in BASEBALL_POSITIONS
 )
 
+#: Softball shares baseball's plans everywhere except the mound.
+#:
+#: A windmill pitch is a full underhand arm circle -- a different motion from an
+#: overhand throw, loading a different part of the shoulder, and the single
+#: highest-volume action anyone on a softball field performs. Handing a softball
+#: pitcher a baseball pitcher's plan was the same mistake as handing a goalie a
+#: midfielder's, and it hid the one number in this sport most worth counting.
+SOFTBALL_PITCHER = mix(
+    sb_windmill=5, bb_fielding=2, bb_tee_swing=2, bb_wall_throw=1,
+    gen_glute_bridge=4, gen_side_plank=4, gen_lunge=3, gen_dead_bug=3,
+    gen_squat=2, gen_plank=2,
+)
+
 SOFTBALL: tuple[Position, ...] = tuple(
     _pos(k, label, "softball", "field" if k in ("infield", "outfield") else k,
-         aliases, emphasis, focus, plural)
+         aliases,
+         SOFTBALL_PITCHER if k == "pitcher" else emphasis,
+         focus, plural)
     for k, label, aliases, emphasis, focus, plural in BASEBALL_POSITIONS
 )
 
