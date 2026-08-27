@@ -145,6 +145,10 @@ export function computeSignal(landmarks, spec) {
     return (ground - hips.y) / torso;
   }
 
+  if (kind === 'stance_width') {
+    return stanceWidthSignal(landmarks);
+  }
+
   if (kind === 'save_reach') {
     return saveReachSignal(landmarks);
   }
@@ -154,6 +158,45 @@ export function computeSignal(landmarks, spec) {
   }
 
   return null;
+}
+
+/**
+ * How far apart the feet are, along the athlete's own left-right axis, in
+ * torso lengths.
+ *
+ * The first horizontal signal in this file. Everything else measures a height
+ * or an angle, which is the whole reason a defensive slide -- the most common
+ * footwork in basketball, tennis, soccer defending and goaltending -- had no
+ * drill in any sport.
+ *
+ * Measured along the shoulder axis rather than the picture's x, so it does not
+ * matter which way the athlete faces or how square they are to the phone. And
+ * it is SIGNED, which is the point: a shuffle keeps the feet apart and the
+ * value stays positive, and the moment the feet cross the ankles swap sides of
+ * the axis and it goes negative. That is the one error every defensive coach
+ * spends a season shouting about, and this is the only thing here that sees it.
+ *
+ * Returns null rather than a guess when the athlete is side-on. The shoulder
+ * axis collapses in that view, and a projection onto a collapsed axis reports
+ * a crossed step for a perfectly good one.
+ */
+export function stanceWidthSignal(landmarks) {
+  const ls = lm(landmarks, 'left_shoulder');
+  const rs = lm(landmarks, 'right_shoulder');
+  const la = lm(landmarks, 'left_ankle');
+  const ra = lm(landmarks, 'right_ankle');
+  const torso = torsoLength(landmarks);
+  if (!ls || !rs || !la || !ra || !torso) return null;
+
+  // Unit vector along the shoulders, pointing to the athlete's right.
+  const ax = rs.x - ls.x;
+  const ay = rs.y - ls.y;
+  const span = Math.hypot(ax, ay);
+  if (span < 0.35 * torso) return null;
+
+  const value = ((ra.x - la.x) * ax + (ra.y - la.y) * ay) / span / torso;
+  // Which foot is leading, for drills that care which way the athlete slid.
+  return { value, hand: value >= 0 ? 'right' : 'left' };
 }
 
 /**
@@ -314,6 +357,11 @@ export class RepCounter {
     // value finally caught up.
     this.pendingZone = null;
     this.pendingRawPeak = null;
+    // Stance-width drills only: whether the feet crossed at any point during
+    // this rep. A signed signal makes this free to detect -- crossing is the
+    // value going negative -- and it is the one thing a defensive coach
+    // actually wants to know.
+    this.pendingCrossed = false;
     this.peakValue = null;
     // Per-cycle extremes. The span between them is the rep's range of motion,
     // which is what form quality is measured from -- counting reps throws this
@@ -433,6 +481,28 @@ export class RepCounter {
     const { down_threshold: down, up_threshold: up, min_rep_ms, max_rep_ms } = this.counter;
     const rising = this.counter.rising_completes !== false;
     const armThreshold = rising ? down : up;
+
+    // Crossed feet, watched on every frame because the trail foot swings
+    // through partway into the recovery -- after the rep has already fired.
+    //
+    // Which rep it belongs to needs care. A cross drives the signal to its
+    // minimum, and the minimum is exactly where the next rep arms, so the naive
+    // version tagged two steps for one mistake. The rule that works: while the
+    // signal is still down at the arming end, we are between steps and the
+    // cross belongs to the one that just finished. Once it has risen away from
+    // there the new push has begun and the cross is the new step's.
+    if (this.spec.signal.kind === 'stance_width' && value < 0) {
+      const betweenSteps = rising ? s <= armThreshold : s >= armThreshold;
+      if (betweenSteps) {
+        // Belongs to the step that just finished, or to nothing at all. It is
+        // deliberately not passed along to the step about to start: `lastRep`
+        // is cleared the moment that step arms, and falling through to the new
+        // one is what made a single mistake tag two of them.
+        if (this.lastRep) this.lastRep.crossed = true;
+      } else {
+        this.pendingCrossed = true;
+      }
+    }
     const fireThreshold = rising ? up : down;
     const reachedArm = rising ? s <= armThreshold : s >= armThreshold;
     const reachedFire = rising ? s >= fireThreshold : s <= fireThreshold;
@@ -455,6 +525,10 @@ export class RepCounter {
         // which the server would score as "drifted to the middle": a miss
         // invented out of a camera problem.
         this.pendingZone = null;
+        // Deliberately not seeded from this frame: a cross still showing at the
+        // moment the next step arms belonged to the step that just finished,
+        // and has already been recorded against it.
+        this.pendingCrossed = false;
         this.lastRep = null;
       } else if (this.lastRep) {
         // Still following through on the rep just emitted. Extend its span so
@@ -518,6 +592,11 @@ export class RepCounter {
         // needs to tell "we could not see the hands" apart from "the hands
         // went to the wrong place", and a missing field cannot say which.
         ...(this.spec.cues ? { zone: this.pendingZone || 'unknown' } : {}),
+        // Stance-width drills only. Sent as a flag rather than inferred from
+        // `peak`, because the crossing is usually not at the extreme of the
+        // rep and would be invisible in a min/max.
+        ...(this.spec.signal.kind === 'stance_width'
+            ? { crossed: this.pendingCrossed } : {}),
       };
       this.reps.push(rep);
       this.lastRepAt = tMs;
@@ -525,6 +604,7 @@ export class RepCounter {
       this.armedAt = null;
       this.pendingHand = 'none';
       this.pendingZone = null;
+      this.pendingCrossed = false;
       // Deliberately not cleared with the zone: the follow-through frames
       // after this point still belong to this rep and may yet find its real
       // furthest reach.

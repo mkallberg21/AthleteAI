@@ -4075,3 +4075,80 @@ class TestSecondLooksThroughTheApi:
         body = client.get("/api/curriculum/lacrosse").json()
         assert "the interesting part is the shot" in body["what_to_cut"]
         assert "Not highlight reels" in body["not_this"]
+
+
+class TestASlideSessionEndToEnd:
+    """The crossed-feet flag through the real endpoints."""
+
+    def _submit(self, client, headers, steps):
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "bkb_slide"}, headers=headers,
+        ).json()
+        reps = [
+            {"t_ms": 900 * (i + 1), "hand": "right", "confidence": 0.9,
+             "peak": 2.0, "rom": 0.72, "cycle_ms": 520, "crossed": c}
+            for i, c in enumerate(steps)
+        ]
+        return client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": started["session_id"], "nonce": started["nonce"],
+                "duration_ms": 900 * (len(steps) + 1), "reps": reps,
+                "mean_confidence": 0.9,
+            },
+            headers=headers,
+        )
+
+    def test_a_clean_set_comes_back_clean(self, client, program):
+        res = self._submit(client, program["athletes"][0]["headers"], [False] * 20)
+        assert res.status_code == 200
+        foot = res.json()["footwork"]
+        assert foot["steps"] == 20
+        assert foot["crossed"] == 0
+        assert "never crossed" in foot["note"]
+
+    def test_crossed_steps_are_counted_and_named(self, client, program):
+        res = self._submit(
+            client, program["athletes"][0]["headers"], [True] * 7 + [False] * 13,
+        )
+        foot = res.json()["footwork"]
+        assert foot["crossed"] == 7
+        assert foot["share"] == 0.35
+
+    def test_crossing_costs_no_xp(self, client, program):
+        # Counted, never scored. The same twenty steps earn the same either way.
+        headers = program["athletes"][0]["headers"]
+        clean = self._submit(client, headers, [False] * 20).json()
+        crossed = self._submit(client, headers, [True] * 20).json()
+        assert crossed["reps_total"] == clean["reps_total"]
+        assert crossed["xp_awarded"] == clean["xp_awarded"]
+
+    def test_a_self_paced_drill_carries_no_footwork_block(self, client, program):
+        res = do_session(client, program["athletes"][0]["headers"])
+        assert "footwork" not in res.json()
+
+    def test_the_flag_is_persisted_for_review(self, client, program):
+        self._submit(client, program["athletes"][0]["headers"], [True, False, True])
+        rows = [
+            r["crossed"] for r in api_module._store.conn.execute(
+                "SELECT crossed FROM rep_events WHERE crossed IS NOT NULL"
+            )
+        ]
+        assert rows == [1, 0, 1]
+
+    def test_a_bogus_crossed_value_is_rejected_at_the_edge(self, client, program):
+        headers = program["athletes"][0]["headers"]
+        started = client.post(
+            "/api/sessions/start", json={"drill_key": "bkb_slide"}, headers=headers,
+        ).json()
+        res = client.post(
+            "/api/sessions/submit",
+            json={
+                "session_id": started["session_id"], "nonce": started["nonce"],
+                "duration_ms": 30_000,
+                "reps": [{"t_ms": 1000, "crossed": "sideways"}],
+                "mean_confidence": 0.9,
+            },
+            headers=headers,
+        )
+        assert res.status_code == 422

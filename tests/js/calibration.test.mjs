@@ -63,6 +63,8 @@ const SWEEP = {
   gen_dead_bug:      { lo: 92,    hi: 168,  kind: 'hip' },
   // Ready position out to a committed save and back, in torso lengths.
   lax_goalie_saves:  { lo: 0.40,  hi: 1.18, kind: 'reach' },
+  // Defensive stance out to a full slide step and back, measured at the feet.
+  bkb_slide:         { lo: 1.22,  hi: 2.00, kind: 'stance' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept
@@ -107,6 +109,12 @@ function frame(kind, v) {
     pts[IDX.right_hip] = { x: 0.54, y: hipY, z: 0, visibility: 0.95 };
     pts[IDX.left_shoulder] = { x: 0.45, y: hipY - 0.25, z: 0, visibility: 0.95 };
     pts[IDX.right_shoulder] = { x: 0.55, y: hipY - 0.25, z: 0, visibility: 0.95 };
+  } else if (kind === 'stance') {
+    // Feet apart by v torso lengths, centred under the athlete. The sweep only
+    // has to exercise counting and range; the sign -- which is what catches a
+    // crossed step -- is tested in counter.test.mjs.
+    pts[IDX.left_ankle] = { x: 0.5 - (v * TORSO) / 2, y: 0.95, z: 0, visibility: 0.95 };
+    pts[IDX.right_ankle] = { x: 0.5 + (v * TORSO) / 2, y: 0.95, z: 0, visibility: 0.95 };
   } else if (kind === 'reach') {
     // Both hands the same distance from the chest. The sweep only has to
     // exercise counting and range; where the hands went is saveZone's job and

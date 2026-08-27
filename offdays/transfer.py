@@ -213,6 +213,12 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
+    "bkb_slide": (
+        Transfer("Tennis", "recovering across the baseline between shots"),
+        Transfer("Soccer", "jockeying a winger without turning your hips"),
+        Transfer("Lacrosse", "a defender's approach and break down"),
+        Transfer("Hockey", "the same lateral push, on edges"),
+    ),
     "bkb_crossover": (
         Transfer("Soccer", "the same push-and-go, with a foot instead of a hand"),
         Transfer("Lacrosse", "a split dodge is this move holding a stick"),

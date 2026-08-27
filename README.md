@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2588 tests
+python -m pytest tests/ -q          # 2620 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 148 tests
+  node --test tests/js/*.test.mjs   # 159 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3274,6 +3274,85 @@ asserts no topic smuggles one in.
   sliding.
 - **Between the legs is unverifiable**, and behind-the-back handling is not
   attempted for the same reason.
+
+---
+
+## The lateral signal
+
+Every signal in the library measured a height or an angle. That is why the most
+common footwork in basketball, tennis, soccer defending and goaltending —
+the defensive slide — had no drill in any sport: there was nothing to count it
+with.
+
+`stance_width` is the first horizontal measurement. It is the **signed** distance
+from the left ankle to the right ankle, projected onto the shoulder axis, in
+torso lengths. Projected rather than read off the picture's x, so it does not
+matter which way the athlete faces or how square they are to the phone.
+
+Against a real skeleton:
+
+| | reads |
+|---|---|
+| Feet together | 0.24 |
+| Defensive stance | 1.28 |
+| Mid slide | 1.76 |
+| Full slide step | 2.08 |
+| **Feet crossed** | **−0.40** |
+
+### The sign is the point
+
+Crossing your feet is the one thing every defensive coach spends a season
+shouting about, and because the signal is signed it is **not an inference about
+form — it is a number going below zero**. That makes it the only technique fault
+anywhere in this product the camera can *establish* rather than estimate.
+
+`bkb_slide` counts one rep per push, arming at 1.30 and firing at 1.80 — so a
+shuffle that never widens the stance counts nothing, which is the failure mode
+the drill exists to catch.
+
+### Attributing a cross took three attempts
+
+The first version watched only the armed phase, and missed crossings entirely:
+the trail foot swings through during the *recovery*, after the rep has already
+fired.
+
+The second version watched every frame — and tagged **two** reps for one
+mistake. A cross drives the signal to its minimum, and the minimum is exactly
+where the next rep arms.
+
+The rule that works: while the signal is still down at the arming end, we are
+between steps and the cross belongs to the one that just finished. Once it has
+risen away from there, the new push has begun and the cross is the new step's.
+And a cross between steps attaches to the finished rep **or to nothing** — never
+passed along to the step about to start, since `lastRep` is cleared the moment
+that step arms and falling through to the new one is what caused the
+double-tagging.
+
+A test drives three slides with the middle one crossed and asserts exactly
+`[false, true, false]`.
+
+### Counted, never punished
+
+`footwork.py` reports the count, the share and one sentence. There is no
+penalty, no deduction, and nothing subtracted — a test asserts the same twenty
+steps earn identical XP whether every one crossed or none did.
+
+A twelve-year-old learning to slide **will** cross their feet, and the useful
+response is a coach saying so, not the app quietly paying them less for it. The
+note is addressed to the athlete on their own screen: a fault the app can see
+and only tells the coach about is surveillance; one it tells the athlete about
+is coaching.
+
+Below ten steps it says nothing at all — one crossed step out of four is 25% and
+means nothing.
+
+### What it does not measure
+
+Stance width sees the *step*, not the *travel*. An athlete sliding on the spot
+with a wide, committed push scores the same as one covering ground. Distance
+travelled would need a signal with memory — a baseline that follows the athlete
+across the frame — and every signal here is deliberately memoryless so that
+`computeSignal` stays a pure function of one frame.
 
 ---
 

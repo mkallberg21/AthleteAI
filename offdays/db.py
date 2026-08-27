@@ -405,7 +405,9 @@ CREATE TABLE IF NOT EXISTS rep_events (
     -- Cued drills only: which of the nine cells the hands reached. Null on
     -- every self-paced drill, and 'unknown' when the camera could not tell --
     -- which is deliberately not the same value as a wrong cell.
-    zone        TEXT
+    zone        TEXT,
+    -- Stance-width drills only: 1 when the feet crossed during this rep.
+    crossed     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_rep_events_session ON rep_events(session_id);
 
@@ -924,6 +926,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "rep_events": [
         ("zone", "TEXT"),
+        ("crossed", "INTEGER"),
     ],
     "clip_watches": [
         ("looks", "INTEGER NOT NULL DEFAULT 1"),

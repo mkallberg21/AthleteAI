@@ -51,6 +51,20 @@ class SignalKind(str, Enum):
     # torso length. Used for jumps and general body-height drills.
     BODY_HEIGHT = "body_height"
 
+    # Signed distance from the left ankle to the right ankle, projected onto
+    # the shoulder axis, in torso lengths. The first horizontal measurement in
+    # the library -- everything else here is vertical or angular, which is why
+    # a defensive slide, the most common footwork in several sports, had no
+    # drill anywhere.
+    #
+    # Signed rather than absolute, and that sign is the interesting part. A
+    # shuffle keeps the feet apart and the value stays comfortably positive; the
+    # moment the feet cross, the ankles swap sides of the axis and it goes
+    # negative. Crossing your feet is the one thing every defensive coach spends
+    # the season shouting about, and this is the only signal here that can see
+    # it happen.
+    STANCE_WIDTH = "stance_width"
+
     # Distance of the leading hand from the chest, in torso lengths. Purpose-
     # built for cued drills, where the athlete is sent to a different place
     # every rep: a height signal rises for a high save and falls for a low one,

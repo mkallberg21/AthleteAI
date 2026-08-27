@@ -396,6 +396,25 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "bkb_slide": (
+        Cue("depth", "Push off the back foot and cover ground. A step that "
+                     "does not widen your stance is a step that went nowhere.",
+            "the app measures how far your feet get apart, and so does an "
+            "offensive player"),
+        Cue("tempo", "Push, then let the trail foot catch up. Do not hop -- "
+                     "both feet off the floor at once means you cannot change "
+                     "direction.",
+            "you get beaten in the moment neither foot is down"),
+        Cue("consistency", "Never let your feet cross. The app can see it "
+                           "happen and will tell you how many times.",
+            "crossed feet is how a good defender ends up on the floor"),
+        Cue("offhand", "Slide both directions evenly. Almost everybody is "
+                       "worse going to their weak side.",
+            "an offence finds the side you cannot slide to inside a quarter"),
+        Cue("endurance", "Stop when your stance starts standing up, not when "
+                         "your legs burn.",
+            "a high stance slides slowly, and the legs go before the hands do"),
+    ),
     "bkb_crossover": (
         Cue("depth", "Push it across below your knees. A crossover at your "
                      "waist is a ball somebody else is about to have.",

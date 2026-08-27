@@ -16,6 +16,7 @@ from typing import Any
 from .config import CONFIG
 from . import sports
 from . import ball as ball_mod
+from . import footwork
 from . import goalie
 from . import rewatch
 from . import notifications
@@ -27,6 +28,7 @@ from . import rtp
 from . import wellness
 from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
 from .drills import DRILLS_BY_KEY, get_drill
+from .drills.base import SignalKind
 from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import guardians as guardians_mod
@@ -2494,6 +2496,8 @@ class Store:
                     rom=_opt_float(r.get("rom")),
                     cycle_ms=_opt_int(r.get("cycle_ms")),
                     zone=(str(r["zone"]) if r.get("zone") else None),
+                    crossed=(None if r.get("crossed") is None
+                             else bool(r["crossed"])),
                 )
                 for r in reps
             ],
@@ -2562,6 +2566,15 @@ class Store:
                 top_hand=hand,
             )
 
+        # A stance-width drill carries the one technique fault this product can
+        # establish rather than infer, so it is counted and handed straight
+        # back to the athlete rather than left in the rep stream.
+        footwork_report = None
+        if drill.signal.kind is SignalKind.STANCE_WIDTH:
+            footwork_report = footwork.analyze(
+                [{"crossed": r.crossed} for r in claim.reps],
+            )
+
         # Form quality reads the same rep stream the counting did, so it costs
         # nothing extra to collect and is the half of the signal a rep count
         # throws away.
@@ -2624,12 +2637,13 @@ class Store:
             # `prune_rep_events`. They are timings, never imagery.
             c.executemany(
                 "INSERT INTO rep_events(session_id, t_ms, hand, confidence, peak, rom, "
-                "cycle_ms, zone) VALUES (?,?,?,?,?,?,?,?)",
+                "cycle_ms, zone, crossed) VALUES (?,?,?,?,?,?,?,?,?)",
                 [
                     (
                         session_id, r.t_ms,
                         r.hand if r.hand in ("left", "right") else "none",
                         r.confidence, r.peak, r.rom, r.cycle_ms, r.zone,
+                        None if r.crossed is None else int(r.crossed),
                     )
                     for r in claim.reps
                 ],
@@ -2662,6 +2676,7 @@ class Store:
             "notes": verdict.notes,
             **({"ball": ball_review.to_dict()} if ball_review else {}),
             **({"saves": save_report.to_dict()} if save_report else {}),
+            **({"footwork": footwork_report.to_dict()} if footwork_report else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,

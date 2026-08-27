@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { RepCounter, computeSignal, saveZone, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
+import { RepCounter, computeSignal, saveZone, stanceWidthSignal, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
 
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
 
@@ -535,4 +535,146 @@ test('save reach: the leading hand is still reported for off-hand credit', () =>
   const right = computeSignal(reachingTo(...SPOTS.high_right), drill);
   assert.equal(left.hand, 'left');
   assert.equal(right.hand, 'right');
+});
+
+
+/* -------------------------------------------------------------------------
+ * Stance width: the first horizontal signal in the library.
+ *
+ * Every other signal here measures a height or an angle, which is why the
+ * most common footwork in several sports had no drill anywhere. This one is
+ * signed on purpose: a shuffle keeps the feet apart and stays positive, and
+ * the moment they cross it goes negative -- so the cardinal error of defensive
+ * footwork is a sign change rather than a judgement call about form.
+ * ---------------------------------------------------------------------- */
+
+/** Feet at the given frame positions; shoulders and hips left square. */
+function standing(leftAnkleX, rightAnkleX) {
+  const pts = baseSkeleton();
+  pts[IDX.left_ankle] = { x: leftAnkleX, y: 0.95, z: 0, visibility: 0.95 };
+  pts[IDX.right_ankle] = { x: rightAnkleX, y: 0.95, z: 0, visibility: 0.95 };
+  return pts;
+}
+
+/** Feet `width` torso lengths apart, centred. Negative width crosses them. */
+function stanceOf(width) {
+  return standing(0.5 - (width * TORSO) / 2, 0.5 + (width * TORSO) / 2);
+}
+
+test('stance width: measures how far apart the feet are, in torso lengths', () => {
+  const drill = spec('bkb_slide');
+  for (const want of [0.4, 1.3, 1.8, 2.1]) {
+    const got = computeSignal(stanceOf(want), drill).value;
+    assert.ok(Math.abs(got - want) < 0.02, `${want} read as ${got}`);
+  }
+});
+
+test('stance width: goes negative the moment the feet cross', () => {
+  const drill = spec('bkb_slide');
+  // The whole reason this signal is signed rather than a distance.
+  assert.ok(computeSignal(stanceOf(1.4), drill).value > 0);
+  assert.ok(computeSignal(standing(0.56, 0.44), drill).value < 0);
+});
+
+test('stance width: crossing is read from the athlete, not the picture', () => {
+  const drill = spec('bkb_slide');
+  // Turn them around. The same screen positions are now an ordinary stance,
+  // because left and right have swapped -- a raw x would call this crossed.
+  const pts = standing(0.56, 0.44);
+  pts[IDX.left_shoulder] = { x: 0.55, y: 0.35, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.45, y: 0.35, z: 0, visibility: 0.95 };
+  assert.ok(computeSignal(pts, drill).value > 0);
+});
+
+test('stance width: side-on it says nothing rather than reporting a cross', () => {
+  const drill = spec('bkb_slide');
+  const pts = stanceOf(1.6);
+  // Shoulders collapsed: there is no left-right axis left to project onto, and
+  // a projection onto a collapsed axis reports a crossed step for a good one.
+  pts[IDX.left_shoulder] = { x: 0.495, y: 0.35, z: 0, visibility: 0.95 };
+  pts[IDX.right_shoulder] = { x: 0.505, y: 0.35, z: 0, visibility: 0.95 };
+  assert.equal(computeSignal(pts, drill), null);
+});
+
+test('stance width: a missing foot is no signal at all', () => {
+  const drill = spec('bkb_slide');
+  const pts = stanceOf(1.6);
+  pts[IDX.left_ankle].visibility = 0.1;
+  assert.equal(computeSignal(pts, drill), null);
+});
+
+/** One slide step: push out to `peak` width and let the trail foot catch up. */
+function playSlide(counter, startMs, { peak = 2.05, base = 1.25, cross = false } = {}) {
+  let t = startMs;
+  const step = 1000 / 30;
+  for (let i = 1; i <= 7; i += 1) {
+    counter.push(stanceOf(base + (peak - base) * (i / 7)), t);
+    t += step;
+  }
+  for (let i = 6; i >= 0; i -= 1) {
+    // A crossed step is the trail foot swinging through the standing one, which
+    // happens partway through the recovery -- not at the very end. Modelled at
+    // the end it would still be crossed as the next step arms, and the next
+    // step really would be starting from crossed feet.
+    const w = cross && (i === 4 || i === 3) ? -0.35 : base + (peak - base) * (i / 7);
+    counter.push(stanceOf(w), t);
+    t += step;
+  }
+  for (let i = 0; i < 3; i += 1) { counter.push(stanceOf(base), t); t += step; }
+  return t;
+}
+
+test('defensive slides: counts one rep per push', () => {
+  const drill = spec('bkb_slide');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 5; i += 1) { counter.push(stanceOf(1.25), t); t += 33; }
+  for (let i = 0; i < 8; i += 1) t = playSlide(counter, t);
+  assert.equal(counter.count, 8);
+});
+
+test('defensive slides: a step that never widens does not count', () => {
+  // Shuffling on the spot without covering ground is the failure mode this
+  // drill exists to catch, and it should read as nothing rather than as work.
+  const drill = spec('bkb_slide');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 5; i += 1) { counter.push(stanceOf(1.25), t); t += 33; }
+  for (let i = 0; i < 8; i += 1) t = playSlide(counter, t, { peak: 1.55 });
+  assert.equal(counter.count, 0);
+});
+
+test('defensive slides: a crossed step still counts, and is flagged', () => {
+  // Counting it matters: the athlete did the work and a rep quietly vanishing
+  // teaches nothing. The flag is what turns it into coaching.
+  const drill = spec('bkb_slide');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 5; i += 1) { counter.push(stanceOf(1.25), t); t += 33; }
+  t = playSlide(counter, t);
+  t = playSlide(counter, t, { cross: true });
+  t = playSlide(counter, t);
+  assert.equal(counter.count, 3);
+  assert.deepEqual(counter.reps.map((r) => r.crossed), [false, true, false]);
+});
+
+test('defensive slides: the flag resets between reps', () => {
+  // A single crossed step must not stain every rep after it.
+  const drill = spec('bkb_slide');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 5; i += 1) { counter.push(stanceOf(1.25), t); t += 33; }
+  t = playSlide(counter, t, { cross: true });
+  for (let i = 0; i < 4; i += 1) t = playSlide(counter, t);
+  assert.equal(counter.reps.filter((r) => r.crossed).length, 1);
+});
+
+test('drills that are not stance-width carry no crossed field', () => {
+  const drill = spec('lax_goalie_saves');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let i = 0; i < 6; i += 1) { counter.push(readySkeleton(), t); t += 33; }
+  t = playSave(counter, 'high_right', t);
+  assert.ok(counter.count > 0);
+  for (const rep of counter.reps) assert.ok(!('crossed' in rep));
 });

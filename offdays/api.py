@@ -400,6 +400,10 @@ class RepPayload(BaseModel):
     # vocabulary rather than a free string, so a client cannot invent a zone
     # the scorer has never heard of and quietly land outside every bucket.
     zone: ZoneName | None = None
+    # Stance-width drills only: whether the feet crossed during this rep. The
+    # one technique fault in this product the camera establishes rather than
+    # infers, because the signal is signed.
+    crossed: bool | None = None
 
 
 class SubmitSessionRequest(BaseModel):

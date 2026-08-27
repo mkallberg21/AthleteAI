@@ -39,6 +39,8 @@ class RepEvent:
     # Cued drills only: which cell the hands reached. None on self-paced
     # drills, 'unknown' when the camera could not tell.
     zone: str | None = None
+    # Stance-width drills only: whether the feet crossed during this rep.
+    crossed: bool | None = None
 
 
 @dataclass

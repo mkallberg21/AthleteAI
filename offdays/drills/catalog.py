@@ -1616,6 +1616,72 @@ BKB_WALL_PASS = DrillSpec(
     tracks_handedness=False,
 )
 
+
+BKB_SLIDE = DrillSpec(
+    key="bkb_slide",
+    name="Defensive Slides",
+    sport="basketball",
+    category=Category.AGILITY,
+    metric=Metric.REPS,
+    description=(
+        "Push off the back foot, step out with the front, then slide the back "
+        "foot in. One rep is one push. The app measures how far apart your "
+        "feet are, so a step that never really goes anywhere does not count -- "
+        "and it can see when your feet cross, which is the one thing that "
+        "makes a slide stop working."
+    ),
+    signal=SignalSpec(
+        # The first horizontal signal in the catalogue, and the reason this
+        # drill can exist at all. Everything else measures a height or an
+        # angle, which is why the most common footwork in the sport had no
+        # drill anywhere.
+        kind=SignalKind.STANCE_WIDTH,
+        # Light: the push is quick, and a heavy filter would flatten the step
+        # out of it.
+        smoothing=0.45,
+    ),
+    counter=CounterSpec(
+        # A defensive stance is already wider than the shoulders -- around 1.3
+        # torso lengths at the feet -- and a real slide step takes it past 1.8
+        # before the trail foot catches up.
+        down_threshold=1.30,
+        up_threshold=1.80,
+        min_rep_ms=280,
+        max_rep_ms=3_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=140),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0, min_reps_per_second=0.15,
+        min_reps=10, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see both feet. Get "
+        "in your stance and slide -- push off the back foot, do not hop, and "
+        "never let your feet cross."
+    ),
+    quality=QualitySpec(
+        # Ready stance to full extension and back, in torso lengths at the feet.
+        target_rom=0.70,
+        consistency_target=0.18,
+        tempo_min_ms=280,
+        tempo_max_ms=1_400,
+        w_consistency=0.30,
+        w_depth=0.35,
+        w_tempo=0.20,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(
+        load_per_rep=1.1,
+        # Nothing overhead, so this must not touch throwing volume.
+        throws_per_rep=0.0,
+        tissue=Tissue.LOWER_BODY,
+    ),
+    # Which foot led the step, so a squad that can only slide one way shows up.
+    tracks_handedness=True,
+)
+
 BKB_STANCE = DrillSpec(
     key="bkb_stance",
     name="Defensive Stance",
@@ -1755,6 +1821,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     BKB_POUND_LOW,
     BKB_WALL_PASS,
     BKB_STANCE,
+    BKB_SLIDE,
     VB_SET,
     BB_WALL_THROW,
     TEN_WALL_RALLY,

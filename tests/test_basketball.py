@@ -17,6 +17,7 @@ import random
 import pytest
 
 from offdays import ball as ball_mod
+from offdays import footwork
 from offdays import curriculum, film, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
 from offdays.drills.base import Metric
@@ -259,3 +260,88 @@ class TestASportWithNoCurriculumSaysSo:
     def test_the_note_explains_what_is_missing(self):
         note = curriculum.catalogue("hockey")["note"]
         assert "no film curriculum for hockey yet" in note
+
+
+class TestTheLateralSignal:
+    """The first horizontal measurement in the library.
+
+    Every other signal here reads a height or an angle, which is why the most
+    common footwork in basketball, tennis, soccer defending and goaltending had
+    no drill in any sport. Stance width is signed rather than a distance, and
+    that sign is the whole point: a crossed step is a number going below zero
+    rather than a judgement about form.
+    """
+
+    def test_the_signal_kind_exists_and_the_drill_uses_it(self):
+        from offdays.drills.base import SignalKind
+        assert get_drill("bkb_slide").signal.kind is SignalKind.STANCE_WIDTH
+
+    def test_it_is_the_only_horizontal_signal_and_is_used(self):
+        from offdays.drills.base import SignalKind
+        users = [d.key for d in ALL_DRILLS
+                 if d.signal.kind is SignalKind.STANCE_WIDTH]
+        assert users, "a signal kind nothing uses is a signal kind nobody tested"
+
+    def test_the_stance_band_sits_above_a_normal_standing_width(self):
+        # Feet at shoulder width is about 0.9 torso lengths. A drill that armed
+        # there would count somebody standing still shifting their weight.
+        drill = get_drill("bkb_slide")
+        assert drill.counter.down_threshold > 1.0
+        assert drill.counter.up_threshold > drill.counter.down_threshold
+
+    def test_slides_do_not_count_as_throwing(self):
+        assert get_drill("bkb_slide").load.throws_per_rep == 0.0
+
+    def test_every_basketball_plan_includes_the_footwork(self):
+        for pos in [p for p in ALL_POSITIONS if p.sport == "basketball"]:
+            assert pos.emphasis.get("bkb_slide", 0) > 0, pos.key
+
+
+class TestCrossedFeetAreCountedNotPunished:
+    """The one technique fault in this product the camera establishes.
+
+    Everywhere else, form is inferred from range and tempo. Here the signal is
+    signed, so crossing is not an inference -- it happened or it did not. That
+    makes it the one place where saying so plainly is both possible and useful.
+    """
+
+    def _steps(self, total, crossed):
+        return [{"crossed": i < crossed} for i in range(total)]
+
+    def test_a_clean_set_is_told_so(self):
+        report = footwork.analyze(self._steps(20, 0))
+        assert report.crossed == 0
+        assert report.share == 0.0
+        assert "never crossed" in report.note
+
+    def test_the_odd_slip_is_not_treated_as_a_habit(self):
+        report = footwork.analyze(self._steps(20, 2))
+        assert "slip rather than a habit" in report.note
+
+    def test_crossing_often_enough_is_named_as_how_they_are_sliding(self):
+        report = footwork.analyze(self._steps(20, 8))
+        assert "how you are sliding" in report.note
+
+    def test_too_few_steps_says_nothing_either_way(self):
+        # One crossed step out of four is 25% and means nothing at all.
+        report = footwork.analyze(self._steps(4, 1))
+        assert report.share is None
+        assert "not enough steps" in report.note.lower()
+
+    def test_it_never_subtracts_anything(self):
+        # A twelve-year-old learning to slide will cross their feet. The useful
+        # response is a coach saying so, not the app quietly paying them less.
+        report = footwork.analyze(self._steps(20, 20))
+        blob = report.to_dict()
+        assert set(blob) == {"steps", "crossed", "share", "note"}
+        for word in ("penalty", "deduct", "lost", "docked", "invalid"):
+            assert word not in report.note.lower()
+
+    def test_the_note_is_addressed_to_the_athlete(self):
+        report = footwork.analyze(self._steps(20, 8))
+        assert "your" in report.note.lower()
+
+    def test_a_drill_that_reports_nothing_produces_an_empty_report(self):
+        report = footwork.analyze([{"t_ms": 1}, {"t_ms": 2}])
+        assert report.steps == 0
+        assert report.note == ""
