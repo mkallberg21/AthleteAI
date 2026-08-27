@@ -9,6 +9,7 @@ roster spellings rather than canonical keys.
 import pytest
 
 from offdays import positions as P
+from offdays.drills import ALL_DRILLS
 from offdays.positions import ALL_POSITIONS
 from offdays.drills.catalog import DRILLS_BY_KEY
 
@@ -238,11 +239,42 @@ class TestEverySportIsWiredUpProperly:
         assert P.normalize(raw, sport).key == expected
 
     def test_weak_hand_is_only_compared_where_a_drill_reports_it(self):
-        """Only the two stick drills report a left/right split, so ranking any
-        other sport on it would rank every child on zero."""
+        """The rule, restated once the premise stopped being true.
+
+        This used to assert "lacrosse only", on the reasoning that the two
+        stick drills were the only ones reporting a left/right split. That held
+        while every other sport's own drill sat in nobody's plan. Now that they
+        are prescribed, juggling reports which foot and dribbling reports which
+        hand -- so the rule has to be the thing it always meant: compare weak-
+        hand parity where a position's own sport has a drill that reports the
+        split.
+        """
         for position in P.ALL_POSITIONS:
-            if position.sport not in ("lacrosse", "general"):
-                assert position.offhand_matters is False, position.key
+            if not position.offhand_matters or position.sport == "general":
+                continue
+            reporting = [
+                key for key in position.emphasis
+                if DRILLS_BY_KEY[key].sport == position.sport
+                and DRILLS_BY_KEY[key].tracks_handedness
+            ]
+            assert reporting, (
+                f"{position.key} is compared on weak-hand parity but nothing in "
+                "its plan reports a split, so the number would be zero for "
+                "every child in the sport"
+            )
+
+    def test_the_sports_that_do_not_compare_it_have_a_reason(self):
+        # Each of these is a judgement rather than an oversight, and the
+        # reasons live next to BILATERAL_SPORTS. Pinned so that turning one on
+        # is a deliberate edit.
+        assert P.BILATERAL_SPORTS == {"lacrosse", "soccer", "basketball"}
+
+    def test_bilateral_throwing_is_never_encouraged(self):
+        # The one place parity would be actively harmful: a growing elbow does
+        # not want to learn to throw with the other arm.
+        for position in P.ALL_POSITIONS:
+            if position.sport in ("baseball", "softball"):
+                assert not position.offhand_matters, position.key
 
     def test_a_sport_with_no_model_still_gets_honest_silence(self):
         assert P.for_sport("underwater basket weaving") == ()
@@ -318,3 +350,55 @@ class TestTheGoalieTrainsBothHands:
         # The flag is not obsolete -- basketball positions still use it, and
         # this change was about lacrosse rather than about deleting the idea.
         assert any(not p.offhand_matters for p in ALL_POSITIONS)
+
+
+class TestEverySportsOwnDrillIsReachable:
+    """A drill nobody's plan prescribes is a drill the position system cannot
+    reach.
+
+    Five sports shipped exactly one drill each -- juggling, dribbling, setting,
+    wall throws, wall rally. All five existed, counted, were tested, and
+    appeared in nobody's plan, so a soccer player following their position's
+    guidance did push-ups and squats and never touched a ball. The plans were
+    100% general fitness for every sport except lacrosse.
+    """
+
+    #: Lacrosse patterns that are deliberately choosable but not prescribed:
+    #: strong-hand-only duplicates what an athlete does by default, and
+    #: behind-the-back is a trick before it is a skill. Listed rather than
+    #: inferred, so a genuinely stranded drill still fails below.
+    ON_THE_MENU_ONLY = {"lax_wall_ball_strong", "lax_wall_ball_btb"}
+
+    def test_no_sport_drill_is_stranded(self):
+        stranded = {
+            d.key for d in ALL_DRILLS
+            if d.sport != "general"
+            and not any(d.key in p.emphasis for p in ALL_POSITIONS)
+        }
+        assert stranded == self.ON_THE_MENU_ONLY, stranded
+
+    def test_every_sport_with_a_drill_prescribes_it_somewhere(self):
+        sports = {d.sport for d in ALL_DRILLS if d.sport != "general"}
+        for sport in sports:
+            own = {
+                key for p in ALL_POSITIONS if p.sport == sport
+                for key in p.emphasis if DRILLS_BY_KEY[key].sport == sport
+            }
+            assert own, f"{sport} positions prescribe none of their own drills"
+
+    def test_a_plan_is_never_pure_general_fitness_when_the_sport_has_a_drill(self):
+        with_drills = {d.sport for d in ALL_DRILLS if d.sport != "general"}
+        for pos in ALL_POSITIONS:
+            if pos.sport not in with_drills:
+                continue
+            share = sum(
+                v for k, v in pos.emphasis.items()
+                if DRILLS_BY_KEY[k].sport == pos.sport
+            )
+            assert share > 0, f"{pos.key} prescribes no {pos.sport} at all"
+
+    def test_a_pitchers_plan_stays_light_on_throwing(self):
+        # Wall throws cost a full throw per rep against a growing shoulder.
+        for pos in ALL_POSITIONS:
+            if pos.key == "pitcher":
+                assert pos.emphasis["bb_wall_throw"] <= 0.08, pos.sport

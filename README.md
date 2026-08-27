@@ -88,7 +88,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2462 tests
+python -m pytest tests/ -q          # 2468 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 143 tests
@@ -3108,6 +3108,84 @@ the rep simply does not count.
 Measured against the test skeleton: a two-handed save to the high corner reads
 **1.20**, the same movement one-armed reads **0.54**, and the firing line is at
 0.95. Six one-armed stabs count zero; six two-handed saves count six.
+
+---
+
+## The other fifteen sports
+
+Running the same audit across every sport it was worth running it on, and the
+result is the headline rather than the fixes.
+
+### The pay-differential bug does not exist anywhere else
+
+The wall-ball defect needed **two drills sharing one signal** before it could
+happen. Fifteen of the sixteen sports have at most one drill, so the audit comes
+back clean for all of them — not because they are well built, but because there
+is nothing there to be wrong.
+
+### What is actually wrong is much simpler
+
+**Every sport-specific drill outside lacrosse was in nobody's plan.** Juggling,
+dribbling, setting, wall throws and wall rally all existed, counted, scored and
+had tests — and no position prescribed any of them. A soccer player following
+their position's guidance did push-ups, squats and lateral bounds, and never
+touched a ball.
+
+Measured as the share of a plan made of that sport's own work:
+
+| | before | after |
+|---|---|---|
+| Lacrosse | 44–72% | 44–72% |
+| Basketball | **0%** | 8–24% |
+| Volleyball | **0%** | 9–24% |
+| Tennis | **0%** | 19–21% |
+| Soccer | **0%** | 12–19% |
+| Baseball / softball | **0%** | 5–16% |
+| The other ten sports | **0%** | **0%** |
+
+The ten with nothing are cheer, cross country, dance, football, gymnastics,
+hockey, rugby, softball, swimming and track. They have positions, aliases,
+focus lines and conditioning plans — and no drill of their own to prescribe.
+Softball is the near-miss: its athletes now get wall throws, but the drill is
+filed under baseball, so its own-sport share still reads zero.
+
+The pitcher's plan is deliberately the lightest at 5%. Wall throws cost a full
+throw per rep against a growing shoulder, and a solo plan that quietly adds
+throwing volume to a twelve-year-old pitcher's week is exactly what the load
+model exists to prevent. A test pins it.
+
+### And a second stale premise, in the same shape as the goalie one
+
+The blanket `offhand_matters = False` on all fifty-one non-lacrosse positions
+was justified in a comment reading *"the only drills that report a left/right
+split are the two stick drills"*. That stopped being true the moment the other
+sports' drills were prescribed: juggling reports which foot, dribbling reports
+which hand.
+
+Weak-hand parity is now compared for **lacrosse, soccer and basketball**, and
+stays off elsewhere for stated reasons rather than by default:
+
+- **Baseball and softball** — wall throws do report an arm, but bilateral
+  throwing is not a goal in these sports, it is a way to hurt a growing elbow.
+  This is the one place parity would be actively harmful, and a test enforces
+  that it is never switched on.
+- **Tennis** — the wall rally reports a hand, but a player has one racket hand.
+  The two wings that matter are forehand and backhand, which it does not
+  measure and should not pretend to.
+- **Everything with no reporting drill** — a metric that reads zero for every
+  child in the sport ranks them on nothing.
+
+The sports that do compare it are listed in `BILATERAL_SPORTS`, and a test
+asserts each one actually has a prescribed drill of its own that reports the
+split — so adding a sport there without the drill to back it fails rather than
+shipping a comparison that means nothing.
+
+### Two lacrosse drills are deliberately unprescribed
+
+`lax_wall_ball_strong` and `lax_wall_ball_btb` are on the menu but in no plan.
+Strong-hand-only duplicates what an athlete does by default, and behind-the-back
+is a trick before it is a skill. They are listed by name in the test rather than
+inferred, so a genuinely stranded drill still fails.
 
 ---
 
