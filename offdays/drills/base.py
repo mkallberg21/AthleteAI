@@ -467,6 +467,22 @@ class DrillSpec:
     # shipped before goalie work existed.
     cues: CueSpec | None = None
 
+    #: Whether the app can actually confirm the athlete did *this* pattern
+    #: rather than a simpler one sharing the same signal.
+    #:
+    #: False on the wall-ball variants, and the reason is physical: one camera,
+    #: no stick, and the hands travel the same path whether the rep was a plain
+    #: wall ball or a split dodge. Nothing in a future model fixes that, because
+    #: the information is not in the frame.
+    #:
+    #: A drill that cannot be confirmed must not out-earn the plain version --
+    #: otherwise the highest-paying thing an athlete can do is pick the fanciest
+    #: name in the menu and then do the easy movement. So the pattern stays as a
+    #: label for the athlete's own practice, carrying its own coaching cues, and
+    #: the *reward* comes only from what is genuinely measured: which hand was on
+    #: top, and how well the reps were shaped. `test_drills.py` enforces it.
+    pattern_verified: bool = True
+
     # Whether left/right attribution is meaningful. True for wall ball and
     # single-arm lifts; false for squats.
     tracks_handedness: bool = False

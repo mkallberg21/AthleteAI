@@ -170,7 +170,7 @@ QUICK_STICK = DrillSpec(
         max_rep_ms=2_500,
         rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=500, diminishing_after_reps=150),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=500, diminishing_after_reps=150),
     validation=ValidationSpec(
         max_reps_per_second=4.0, min_reps_per_second=0.25, min_reps=10
     ),
@@ -254,8 +254,7 @@ WALL_BALL_OFFHAND = DrillSpec(
     category=Category.SKILL,
     metric=Metric.REPS,
     description=(
-        "Every rep with your weaker hand on top. The hardest pattern in the "
-        "routine and the one that changes a player fastest."
+        'Every rep with your weaker hand on top. The hardest pattern in the routine and the one that changes a player fastest -- and the one pattern the camera really can check, because it can see which hand is on top. Off-hand reps are paid at a premium wherever you do them.'
     ),
     signal=SignalSpec(
         kind=SignalKind.WALL_BALL_CYCLE,
@@ -270,7 +269,7 @@ WALL_BALL_OFFHAND = DrillSpec(
     # product most wants a young player to do. Nothing else in the catalogue
     # is paid above 1.4.
     scoring=ScoringSpec(
-        xp_per_rep=1.6, daily_rep_cap=500,
+        xp_per_rep=1.0, daily_rep_cap=500,
         diminishing_after_reps=200, diminishing_rate=0.35,
     ),
     validation=ValidationSpec(
@@ -302,8 +301,7 @@ WALL_BALL_ONE_HAND = DrillSpec(
     category=Category.SKILL,
     metric=Metric.REPS,
     description=(
-        "Bottom hand off the stick. Short, controlled throws that build the "
-        "top-hand strength a one-handed catch in traffic needs."
+        'Bottom hand off the stick. Short, controlled throws that build the top-hand strength a one-handed catch in traffic needs. The app counts your reps but cannot see whether the bottom hand was off -- that one is on you, and it earns the same as any other wall ball.'
     ),
     signal=SignalSpec(
         kind=SignalKind.WALL_BALL_CYCLE,
@@ -314,10 +312,14 @@ WALL_BALL_ONE_HAND = DrillSpec(
         down_threshold=0.0, up_threshold=0.14,
         min_rep_ms=320, max_rep_ms=3_000, rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=350, diminishing_after_reps=120),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=350, diminishing_after_reps=120),
     validation=ValidationSpec(
         max_reps_per_second=3.5, min_reps_per_second=0.15, min_reps=10
     ),
+    # One camera and no stick: the hands travel the same path as a plain
+    # wall ball, so the app counts the reps honestly and cannot confirm
+    # the pattern. It pays the plain rate for exactly that reason.
+    pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL_FAST,
     setup_hint="One hand only, close to the wall. Short and controlled.",
@@ -341,8 +343,7 @@ WALL_BALL_CROSS = DrillSpec(
     category=Category.SKILL,
     metric=Metric.REPS,
     description=(
-        "Catch on one side, switch hands, throw from the other. Builds the "
-        "hand exchange a dodge actually needs."
+        'Catch on one side, switch hands, throw from the other. Builds the hand exchange a dodge actually needs. The app counts your reps but cannot see the switch, so this earns the same as any other wall ball.'
     ),
     signal=SignalSpec(
         kind=SignalKind.WALL_BALL_CYCLE,
@@ -353,10 +354,14 @@ WALL_BALL_CROSS = DrillSpec(
         down_threshold=-0.05, up_threshold=0.16,
         min_rep_ms=550, max_rep_ms=7_000, rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=400, diminishing_after_reps=150),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=400, diminishing_after_reps=150),
     validation=ValidationSpec(
         max_reps_per_second=2.5, min_reps_per_second=0.08, min_reps=10
     ),
+    # One camera and no stick: the hands travel the same path as a plain
+    # wall ball, so the app counts the reps honestly and cannot confirm
+    # the pattern. It pays the plain rate for exactly that reason.
+    pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL,
     setup_hint="Catch one side, switch, throw the other. Alternate every rep.",
@@ -378,9 +383,7 @@ WALL_BALL_BTB = DrillSpec(
     category=Category.SKILL,
     metric=Metric.REPS,
     description=(
-        "Catch, wrap behind the back, release. Showy, but it is real hand "
-        "control and it is how a player learns where the head is without "
-        "looking."
+        'Catch, wrap behind the back, release. Showy, but it is real hand control and it is how a player learns where the head is without looking. The app counts your reps but cannot see behind you, so this earns the same as any other wall ball.'
     ),
     signal=SignalSpec(
         kind=SignalKind.WALL_BALL_CYCLE,
@@ -394,10 +397,14 @@ WALL_BALL_BTB = DrillSpec(
     # A lower cap than the rest of the routine on purpose. This is a garnish,
     # and a child grinding 600 behind-the-back reps is not building a lacrosse
     # player.
-    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=200, diminishing_after_reps=80),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=200, diminishing_after_reps=80),
     validation=ValidationSpec(
         max_reps_per_second=2.5, min_reps_per_second=0.06, min_reps=8
     ),
+    # One camera and no stick: the hands travel the same path as a plain
+    # wall ball, so the app counts the reps honestly and cannot confirm
+    # the pattern. It pays the plain rate for exactly that reason.
+    pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL,
     setup_hint="Wrap behind the back and release. Slow is fine.",
@@ -420,8 +427,7 @@ WALL_BALL_SPLIT = DrillSpec(
     category=Category.SKILL,
     metric=Metric.REPS,
     description=(
-        "Catch, split dodge, throw from the new hand. Footwork and hands in "
-        "one rep, which is how they happen in a game."
+        'Catch, split dodge, throw from the new hand. Footwork and hands in one rep, which is how they happen in a game. The app counts the hands and cannot see the split, so this earns the same as any other wall ball.'
     ),
     signal=SignalSpec(
         kind=SignalKind.WALL_BALL_CYCLE,
@@ -436,10 +442,14 @@ WALL_BALL_SPLIT = DrillSpec(
         max_rep_ms=9_000,
         rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.5, daily_rep_cap=300, diminishing_after_reps=120),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=120),
     validation=ValidationSpec(
         max_reps_per_second=1.6, min_reps_per_second=0.05, min_reps=8
     ),
+    # One camera and no stick: the hands travel the same path as a plain
+    # wall ball, so the app counts the reps honestly and cannot confirm
+    # the pattern. It pays the plain rate for exactly that reason.
+    pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL,
     setup_hint="Catch, plant, split, throw from the other hand. Sell the dodge.",
@@ -1100,9 +1110,13 @@ GEN_LUNGE = DrillSpec(
         min_rep_ms=600,
         max_rep_ms=6_000,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.1, daily_rep_cap=400, diminishing_after_reps=140),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=400, diminishing_after_reps=140),
     validation=ValidationSpec(max_reps_per_second=1.4, min_reps=6),
     setup_hint="Side-on, hips and both knees in frame.",
+    # Same knee-angle signal as the squat, and a lunge's trace sits inside a
+    # squat's -- so the app cannot tell which one was done and must not pay
+    # more for saying 'lunge'.
+    pattern_verified=False,
     quality=QualitySpec(
         target_rom=72.0,
         tempo_min_ms=700,

@@ -91,3 +91,109 @@ class TestCatalog:
         """Off-hand attribution is the core feature; it must not regress."""
         for key in ("lax_wall_ball", "lax_quick_stick"):
             assert DRILLS_BY_KEY[key].tracks_handedness
+
+
+class TestNoDrillOutEarnsOneItCannotBeToldApartFrom:
+    """The catalogue must not pay for a name the app cannot verify.
+
+    Several drills share one signal and one set of thresholds that nest inside
+    each other -- the whole wall-ball family reads as the top hand rising above
+    the shoulder line and coming back, whether the rep was a plain wall ball, a
+    split dodge or a behind-the-back. That is not a tuning problem: with one
+    camera and no stick in the model, the information is not in the frame, and
+    no future work puts it there.
+
+    What made it a defect rather than a caveat was the reward. While the fancier
+    patterns paid more per rep, the highest-earning thing an athlete could do was
+    pick the fanciest name in the menu and then do the easy movement -- and they
+    would not even be cheating, because the app told them it counted.
+
+    So the rule is: if doing drill X necessarily satisfies drill Y's thresholds,
+    Y must not pay more than X. Differentiation has to come from something
+    actually measured -- which hand was on top, and how well the reps were
+    shaped.
+    """
+
+    def _pose_counted(self):
+        # Hold drills score time, and count-mode ball drills never feed the pose
+        # counter at all -- their reps come from ball contacts, so their pose
+        # thresholds decide nothing.
+        return [
+            d for d in ALL_DRILLS
+            if d.metric is not Metric.HOLD_SECONDS
+            and not (d.ball is not None and d.ball.counts)
+        ]
+
+    def _signal_of(self, drill):
+        s = drill.signal
+        return (s.kind, s.joints, s.landmark, s.reference)
+
+    def _subsumes(self, outer, inner):
+        """Whether every rep of `outer` also fires `inner`."""
+        return (inner.counter.down_threshold >= outer.counter.down_threshold
+                and inner.counter.up_threshold <= outer.counter.up_threshold)
+
+    def test_a_drill_never_out_earns_one_that_subsumes_it(self):
+        drills = self._pose_counted()
+        offences = []
+        for outer in drills:
+            for inner in drills:
+                if inner is outer:
+                    continue
+                if self._signal_of(inner) != self._signal_of(outer):
+                    continue
+                if not self._subsumes(outer, inner):
+                    continue
+                if inner.scoring.xp_per_rep > outer.scoring.xp_per_rep:
+                    offences.append(
+                        f"{inner.key} pays {inner.scoring.xp_per_rep} but fires on "
+                        f"any {outer.key} rep ({outer.scoring.xp_per_rep})"
+                    )
+        assert offences == [], "; ".join(offences)
+
+    def test_an_unverifiable_pattern_never_out_earns_a_verifiable_one(self):
+        # Belt and braces on the same idea, in case thresholds are retuned so
+        # they no longer nest: a pattern the app cannot confirm must never be
+        # the best-paying thing on its own signal.
+        by_signal = {}
+        for drill in self._pose_counted():
+            by_signal.setdefault(self._signal_of(drill), []).append(drill)
+        for family in by_signal.values():
+            if len(family) < 2:
+                continue
+            best_verified = max(
+                (d.scoring.xp_per_rep for d in family if d.pattern_verified),
+                default=None,
+            )
+            if best_verified is None:
+                continue
+            for drill in family:
+                if not drill.pattern_verified:
+                    assert drill.scoring.xp_per_rep <= best_verified, drill.key
+
+    def test_the_wall_ball_family_all_pays_the_same(self):
+        family = [d for d in ALL_DRILLS
+                  if d.signal.kind is SignalKind.WALL_BALL_CYCLE]
+        assert len(family) >= 8
+        rates = {d.scoring.xp_per_rep for d in family}
+        assert rates == {1.0}, f"wall ball rates drifted apart: {rates}"
+
+    def test_the_unverifiable_patterns_are_marked_as_such(self):
+        # If one of these ever becomes genuinely detectable, this test is the
+        # thing that has to be edited deliberately rather than drifting.
+        unverified = {d.key for d in ALL_DRILLS if not d.pattern_verified}
+        assert unverified == {
+            "lax_wall_ball_one_hand", "lax_wall_ball_cross",
+            "lax_wall_ball_btb", "lax_wall_ball_split", "gen_lunge",
+        }, unverified
+
+    def test_the_off_hand_premium_survives_and_is_measured(self):
+        # The premium moved from the drill's name to the hand actually on top,
+        # which is the one thing here the camera really does see. It must still
+        # exist, or levelling the base rates quietly deleted the incentive to do
+        # the hardest work in the routine.
+        from offdays.config import CONFIG
+        assert CONFIG.scoring.offhand_bonus_multiplier > 1.0
+        for drill in ALL_DRILLS:
+            if drill.signal.kind is SignalKind.WALL_BALL_CYCLE:
+                assert drill.tracks_handedness, drill.key

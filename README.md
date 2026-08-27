@@ -88,7 +88,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2443 tests
+python -m pytest tests/ -q          # 2448 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 138 tests
@@ -2983,6 +2983,59 @@ they go looking for footage. The same rule is enforced on the way back in.
 
 ---
 
+## Paying for what is measured, not what was selected
+
+An audit of the catalogue turned up a live defect, and it is worth writing down
+because the shape of it is easy to reproduce.
+
+**Eight drills share one signal.** The whole wall-ball family — plain, strong
+hand, off hand, one handed, cross handed, behind the back, split dodge, and
+quick stick — is read the same way: the top hand rises above the shoulder line
+and comes back. Their thresholds nest inside one another, so a single plain
+wall-ball rep satisfies all eight.
+
+**They were paying 1.0 to 1.6 XP per rep.** Feeding one identical synthetic
+wall-ball stream into every counter produced 24 reps in all eight, worth 24 XP
+as a plain wall ball and 38 as a split dodge. The highest-earning thing an
+athlete could do was pick the fanciest name in the menu and then do the easy
+movement — and they would not have been cheating, because the app told them it
+counted.
+
+That is not a tuning problem. One camera, no stick in the model, and the hands
+travel the same path whether the rep was a plain wall ball or a split dodge.
+The information is not in the frame, so no future model recovers it.
+
+**The fix is to stop paying for the label.** Every wall-ball-family drill now
+pays the same base rate. The patterns stay — each carries its own coaching cues
+and technique reference, and choosing one is a statement of what the athlete
+means to practise — but the reward comes only from things actually measured:
+
+- **which hand was on top**, which the counter genuinely reads, and which earns
+  the off-hand premium on any handedness-tracking drill; and
+- **how well the reps were shaped**, which the form score already measures.
+
+`gen_lunge` had the same problem against `gen_squat` on the knee-angle signal,
+at a much smaller 10%, and is levelled too.
+
+Drills the app cannot confirm now carry `pattern_verified = False`, and their
+descriptions say so in the athlete's own words: *"The app counts the hands and
+cannot see the split, so this earns the same as any other wall ball."*
+
+Two tests pin it. The first is the general rule — **if doing drill X
+necessarily satisfies drill Y's thresholds, Y must not pay more than X** — which
+catches this whole class rather than these eight cases. The second asserts the
+unverifiable set by name, so a pattern becoming genuinely detectable is a
+deliberate edit rather than a drift.
+
+**One consequence to be aware of.** The top-end off-hand reward drops: an
+off-hand rep in the off-hand drill used to earn 1.6 × 1.5 = 2.4 effective, and
+now earns 1.0 × 1.5 = 1.5. The premium is now fully earned rather than partly
+resting on an unverifiable base, but it *is* smaller. Raising
+`offhand_bonus_multiplier` is the honest lever if the old level was right —
+that change pays every measured off-hand rep more, wherever it happens.
+
+---
+
 ## Assignments
 
 A coach assigns a drill with any combination of targets — total reps, number of
@@ -3505,7 +3558,13 @@ contact with a real driveway:
     notice makes it honest rather than making it optional, and whether that
     trade is right is worth revisiting with real athletes.
 
-62. **Two of the nine cells are never called.** A ball straight at the chest
+62. **Wall-ball patterns are athlete-selected, not measured.** The app counts
+    the reps honestly and cannot tell a split dodge from a plain wall ball —
+    one camera, no stick, same hand path. They all pay the same for that
+    reason, but a coach reading "200 split dodge reps" is reading the
+    athlete's own label, not a measurement.
+
+63. **Two of the nine cells are never called.** A ball straight at the chest
     needs the hands to come forward, and forward is what a single camera reads
     worst, so chest-high and hip-high middle are observable but never targets.
     A goalie who only ever gets beaten straight on will not learn it here.
