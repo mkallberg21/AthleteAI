@@ -227,7 +227,8 @@ test('every ball drill is exercised by this file', () => {
                            'bb_wall_throw', 'ten_wall_rally']);
   const missing = SPECS
     .filter((d) => d.ball && !covered.has(d.key)
-                && !['lacrosse', 'basketball', 'volleyball', 'soccer'].includes(d.sport))
+                && !['lacrosse', 'basketball', 'volleyball', 'soccer',
+                     'tennis'].includes(d.sport))
     .map((d) => d.key);
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
 });
@@ -651,4 +652,53 @@ test('the alternation rules read a foot the same way they read a hand', () => {
 test('wall passing gates on strike speed, not on the foot', () => {
   const pass = spec('soc_wall_pass');
   assert.ok(pass.ball.min_speed > spec('soc_juggle').ball.min_speed * 2);
+});
+
+
+/* -------------------------------------------------------------------------
+ * Tennis
+ *
+ * The one sport here where the ball never touches the athlete -- it comes off
+ * a racket head well beyond the hand, and the detector attributes the contact
+ * to the nearest wrist. Enough to tell one wing from the other, not enough to
+ * tell which is which.
+ * ---------------------------------------------------------------------- */
+
+const TEN = () => SPECS.filter((d) => d.sport === 'tennis' && d.ball);
+
+test('every tennis drill uses the same ball', () => {
+  for (const drill of TEN()) {
+    assert.equal(drill.ball.diameter_cm, 6.7, `${drill.key} ball size drifted`);
+    assert.equal(drill.ball.colour, 'optic', `${drill.key} colour drifted`);
+  }
+});
+
+test('every count-mode tennis drill counts a struck ball', () => {
+  for (const drill of TEN()) {
+    if (drill.ball.mode !== 'count') continue;
+    const counter = new BallRepCounter(drill);
+    run(counter, bounce({ floor: 0.70, apex: 1.6, every: 2, frames: 400 }),
+        pose({ left_wrist: { x: 0.44, y: 0.70 },
+               right_wrist: { x: 0.60, y: 0.70 } }));
+    assert.ok(counter.count > 0, `${drill.key} saw nothing off a struck ball`);
+  }
+});
+
+test('the wing rules read a racket hand the same way they read any hand', () => {
+  const rules = new Map(TEN().map((d) => [d.key, d.ball.alternation]));
+  assert.equal(rules.get('ten_alternate'), 'alternating');
+  assert.equal(rules.get('ten_one_wing'), 'same_hand');
+  assert.equal(rules.get('ten_wall_rally'), 'any');
+});
+
+test('volleys gate contacts tighter than a groundstroke rally', () => {
+  assert.ok(spec('ten_volley').ball.min_gap_ms
+            < spec('ten_wall_rally').ball.min_gap_ms);
+});
+
+test('the serve confirms rather than counting', () => {
+  // Its reps come from the arm, so the ball's only job is to establish there
+  // was one -- the same rule every lacrosse drill follows.
+  assert.equal(spec('ten_serve').ball.mode, 'confirm');
+  assert.equal(spec('ten_serve').ball.required, false);
 });

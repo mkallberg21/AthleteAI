@@ -1808,10 +1808,376 @@ SOC_ADVANCED: tuple[Topic, ...] = (
 SOC_TOPICS: tuple[Topic, ...] = SOC_FUNDAMENTALS + SOC_CORE + SOC_ADVANCED
 
 
+
+
+# ---------------------------------------------------------------------------
+# Tennis
+#
+# The only sport in this file with no teammates, and the syllabus reflects it.
+# There is nothing here about where to stand relative to five other people --
+# tennis IQ is about *patterns*: what you are trying to make happen over the
+# next three balls, and what your own body language is telling the other end.
+# ---------------------------------------------------------------------------
+
+TEN_ALL = ("singles", "doubles")
+TEN_SINGLES = ("singles",)
+TEN_DOUBLES = ("doubles",)
+
+TEN_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="ten_iq_recover",
+        title="Get back to the middle before the next ball",
+        focus="Movement",
+        positions=TEN_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A rally where one player recovers to the middle after every shot "
+            "and the other admires theirs. Cut it wide enough to see the whole "
+            "court and both players' feet."
+        ),
+        ask=Ask(
+            prompt="You hit a good shot to the corner. What do you do next?",
+            options=(
+                "Move back towards the middle straight away",
+                "Watch to see whether it lands in",
+                "Stay where you are in case they hit it back there",
+            ),
+            answer=0,
+            because=(
+                "Standing still after a good shot is how a good shot becomes a "
+                "lost point. The court you have just left is the one they will "
+                "aim at."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_high_net",
+        title="Aim higher over the net than feels right",
+        focus="Margin",
+        positions=TEN_ALL, min_age=0, max_age=200, target_s=65,
+        find=(
+            "Two rallies from the same match: one with balls crossing well "
+            "above the net, one skimming it. Count the errors in each."
+        ),
+        ask=Ask(
+            prompt="Why aim a metre above the net rather than just over it?",
+            options=(
+                "Almost every miss goes into the net, not long",
+                "It gives the ball more topspin",
+                "It makes the ball land deeper",
+            ),
+            answer=0,
+            because=(
+                "The net is the only thing on court that never moves and never "
+                "misses. Most points are lost to it rather than to the back "
+                "line."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_ready_early",
+        title="Racket back before the ball bounces",
+        focus="Preparation",
+        positions=TEN_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A player turning and preparing as the ball crosses the net, next "
+            "to one starting their swing after the bounce. Slow footage helps."
+        ),
+        ask=Ask(
+            prompt="When should your racket be back?",
+            options=(
+                "Before the ball bounces on your side",
+                "As you start to swing",
+                "Once you know where the ball is going",
+            ),
+            answer=0,
+            because=(
+                "After the bounce there is about half a second left. Everything "
+                "that has to happen before the swing has to have happened "
+                "already."
+            ),
+        ),
+    ),
+)
+
+TEN_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="ten_iq_cross_court",
+        title="Why the cross-court ball is the safe one",
+        focus="Patterns",
+        positions=TEN_ALL, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A baseline exchange where both players hit cross-court until one "
+            "changes direction. The clip is what happens on the ball that goes "
+            "down the line."
+        ),
+        ask=Ask(
+            prompt="Why do rallies stay cross-court so often?",
+            options=(
+                "The net is lower there and the court is longer diagonally",
+                "It is easier to hit a forehand cross-court",
+                "It keeps the ball away from the opponent's forehand",
+            ),
+            answer=0,
+            because=(
+                "More margin over a lower net and more court to land in. "
+                "Changing direction is the riskier shot, which is why it should "
+                "be a choice rather than a habit."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_change_direction",
+        title="Changing direction on the right ball",
+        focus="Patterns",
+        positions=TEN_ALL, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A player going down the line off a short, high ball, and another "
+            "trying it off a deep one at their shoelaces."
+        ),
+        ask=Ask(
+            prompt="When is it right to change direction and go down the line?",
+            options=(
+                "On a short ball you can step into",
+                "When the rally has gone on too long",
+                "Whenever the opponent is out of position",
+            ),
+            answer=0,
+            because=(
+                "Direction changes need time and a comfortable contact point. "
+                "Trying one off a deep ball on the stretch is the highest-risk "
+                "shot in the sport."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_serve_placement",
+        title="Serving to a place, not just in",
+        focus="Serving",
+        positions=TEN_ALL, min_age=13, max_age=200, target_s=115,
+        find=(
+            "A server going wide to open the court, and the same player hitting "
+            "the middle of the box. What the returner does next is the clip."
+        ),
+        ask=Ask(
+            prompt="What does a wide serve do beyond winning the point outright?",
+            options=(
+                "It drags the returner off court and opens the other side",
+                "It is harder to return than a fast serve",
+                "It stops them attacking your second serve",
+            ),
+            answer=0,
+            because=(
+                "Most serves come back. The question is what the court looks "
+                "like when they do, and a wide serve answers it before the "
+                "rally starts."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_second_serve_return",
+        title="Standing in on a second serve",
+        focus="Returning",
+        positions=TEN_ALL, min_age=13, max_age=200, target_s=110,
+        find=(
+            "A returner stepping inside the baseline on a second serve, next to "
+            "one standing three metres back for both."
+        ),
+        ask=Ask(
+            prompt="Where do you stand for a second serve?",
+            options=(
+                "Closer in, to take time away and attack it",
+                "The same place as the first serve, for consistency",
+                "Further back, because second serves have more spin",
+            ),
+            answer=0,
+            because=(
+                "A second serve is the one ball in the sport the server has to "
+                "make safe. Standing back turns their problem into a free "
+                "start."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_net_position",
+        title="Closing after you approach",
+        focus="Net play",
+        positions=TEN_DOUBLES, min_age=13, max_age=200, target_s=120,
+        find=(
+            "An approach followed by two more steps forward, next to one where "
+            "the player stops on the service line and gets passed."
+        ),
+        ask=Ask(
+            prompt="You hit an approach shot. Where do you stop?",
+            options=(
+                "Keep moving forward -- the service line is the worst place to stand",
+                "On the service line, where you can cover both a lob and a pass",
+                "Halfway, so you can react to whatever comes",
+            ),
+            answer=0,
+            because=(
+                "The service line is where every ball lands at your feet. "
+                "Committing forward is what makes the volley easy."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_body_language",
+        title="What the other end can see",
+        focus="Competing",
+        positions=TEN_ALL, min_age=13, max_age=200, target_s=110,
+        find=(
+            "A player between points after an error -- one walking to the towel "
+            "with their head up, one dropping their shoulders. Both are easy to "
+            "find in any junior match."
+        ),
+        ask=Ask(
+            prompt="Why does what you do between points matter?",
+            options=(
+                "Your opponent is watching, and it tells them how you are feeling",
+                "The umpire can penalise you for it",
+                "It affects how the crowd reacts",
+            ),
+            answer=0,
+            because=(
+                "There is nobody else on your side of the net. The only "
+                "information your opponent gets about how you are doing is what "
+                "you show them."
+            ),
+        ),
+    ),
+)
+
+TEN_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="ten_iq_serve_plus_one",
+        title="Serve plus one",
+        focus="Patterns",
+        positions=TEN_ALL, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A serve wide followed by the first ball into the open court. Cut "
+            "from the toss so the whole pattern is visible as one idea."
+        ),
+        ask=Ask(
+            prompt="What is the most important shot after the serve?",
+            options=(
+                "The first ball, hit to the space the serve opened",
+                "The second serve, because it decides the pressure",
+                "Whichever one ends the point",
+            ),
+            answer=0,
+            because=(
+                "The serve is chosen for what it opens up. A player who serves "
+                "well and then rallies neutrally has thrown away the advantage "
+                "they just built."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_neutral_ball",
+        title="Knowing when you are neutral",
+        focus="Decision-making",
+        positions=TEN_ALL, min_age=15, max_age=200, target_s=160,
+        find=(
+            "A rally where one player attacks a neutral ball and misses, next "
+            "to one who resets and wins the point three shots later."
+        ),
+        ask=Ask(
+            prompt="You are behind the baseline and the ball is deep. What is the right shot?",
+            options=(
+                "A high, deep, safe ball to get back to neutral",
+                "A winner, because you have to end the point sometime",
+                "A drop shot to change the pattern",
+            ),
+            answer=0,
+            because=(
+                "Attacking from a defensive position is the most common way "
+                "juniors lose points. Getting back to neutral is a skill, not "
+                "an absence of one."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_return_position",
+        title="Reading a serve before it is struck",
+        focus="Returning",
+        positions=TEN_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A server whose toss changes between wide and body serves. Slow "
+            "footage of two or three service motions from the same player."
+        ),
+        ask=Ask(
+            prompt="What can tell you where a serve is going before contact?",
+            options=(
+                "The toss position and the server's shoulder line",
+                "How fast they bounce the ball beforehand",
+                "Which side of the court they stand on",
+            ),
+            answer=0,
+            because=(
+                "A toss further to the side has to produce a wider serve. Most "
+                "juniors have a different toss for each serve and do not know "
+                "it."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_doubles_movement",
+        title="Moving as a pair, not a pair of players",
+        focus="Doubles",
+        positions=TEN_DOUBLES, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A doubles pair shifting across together, next to one where a gap "
+            "opens up the middle. Wide footage only -- the shape is the clip."
+        ),
+        ask=Ask(
+            prompt="Your partner is pulled wide. Where do you go?",
+            options=(
+                "Across with them, so the gap between you does not open",
+                "Stay covering your own half of the court",
+                "Back, to cover the lob over their head",
+            ),
+            answer=0,
+            because=(
+                "Two players who defend their own halves leave a gap down the "
+                "middle that grows every shot. Doubles is played on a piece of "
+                "elastic."
+            ),
+        ),
+    ),
+    Topic(
+        key="ten_iq_score_pressure",
+        title="The points that are not worth the same",
+        focus="Competing",
+        positions=TEN_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A game reaching 30-30 or deuce. The clip is what both players "
+            "choose to do on the big point rather than how it ends."
+        ),
+        ask=Ask(
+            prompt="It is 30-30. How should you play the point?",
+            options=(
+                "Your best pattern, played with margin -- not something new",
+                "More aggressively, to take the initiative",
+                "More safely, and wait for a mistake",
+            ),
+            answer=0,
+            because=(
+                "Big points are the worst moment to try something you have not "
+                "practised. Doing your ordinary thing well is what holds up "
+                "under pressure."
+            ),
+        ),
+    ),
+)
+
+TEN_TOPICS: tuple[Topic, ...] = TEN_FUNDAMENTALS + TEN_CORE + TEN_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
     "volleyball": VB_TOPICS,
     "soccer": SOC_TOPICS,
+    "tennis": TEN_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

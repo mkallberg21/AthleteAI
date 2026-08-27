@@ -396,6 +396,100 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "ten_alternate": (
+        Cue("depth", "Turn your shoulders early. If you are reaching for the "
+                     "ball you have already lost the wing change.",
+            "the turn is what makes the swing possible, not the swing itself"),
+        Cue("tempo", "Stand further off the wall than feels comfortable. This "
+                     "drill is about having time, not about speed.",
+            "close to the wall you never get to change wings at all"),
+        Cue("consistency", "Every other ball on the other side, with no "
+                           "cheating back to the good wing.",
+            "the app checks this, and so does an opponent"),
+        Cue("offhand", "Half of this is already your weaker wing, which is why "
+                       "it earns more than a plain rally.",
+            "alternating is the cheapest way to get weak-wing balls in"),
+        Cue("endurance", "Stop when you start running around your backhand.",
+            "running around it is the habit this drill exists to break"),
+    ),
+    "ten_one_wing": (
+        Cue("depth", "Recover to the middle after every ball. Standing on one "
+                     "side is a much easier drill than the one you meant to do.",
+            "the recovery is most of the work and all of the fitness"),
+        Cue("tempo", "Same rhythm every ball. This is a grooving drill, not a "
+                     "race.",
+            "grooving a stroke needs repetition, not intensity"),
+        Cue("consistency", "Same contact point every time -- out in front, not "
+                           "beside you.",
+            "a late contact point is the single most common fault in the sport"),
+        Cue("offhand", "Pick your weaker wing. The stronger one does not need "
+                       "the reps and you know which is which.",
+            "nobody improves the shot they already like hitting"),
+        Cue("endurance", "Stop when your contact point starts drifting back.",
+            "a late ball is a tired ball, and it grooves the wrong thing"),
+    ),
+    "ten_volley": (
+        Cue("depth", "No backswing. Block it -- the pace is already there and "
+                     "the racket only has to be in the way.",
+            "a backswing at the net is how a volley ends up in the fence"),
+        Cue("tempo", "Fast and continuous. There is a speed floor here and a "
+                     "groundstroke rally does not clear it.",
+            "the rate is the whole verification"),
+        Cue("consistency", "Racket head above your wrist, every ball. Drop it "
+                           "and the volley goes down.",
+            "a dropped racket head is the fault that ends every net point"),
+        Cue("offhand", "Both wings evenly. Backhand volleys are the ones "
+                       "nobody practises.",
+            "a net player gets attacked on the wing they avoid"),
+        Cue("endurance", "Stop when your racket head starts dropping.",
+            "the arm tires before the legs here, and it shows first in the head"),
+    ),
+    "ten_serve": (
+        Cue("depth", "Reach up and hit it at full stretch. A serve struck "
+                     "below full reach has to be hit harder for the same "
+                     "result.",
+            "height buys angle, and angle is free"),
+        Cue("tempo", "The toss is the serve. Same height, same spot, every "
+                     "time -- everything after it is just repeating.",
+            "an inconsistent toss makes an inconsistent serve, always"),
+        Cue("consistency", "Change one thing at a time. Grip, stance or toss, "
+                           "never two at once.",
+            "changing two things at once teaches you nothing about either"),
+        Cue("offhand", "Serve with your usual hand. This is not a drill for "
+                       "building the other one.",
+            "a serving shoulder is not something to build twice"),
+        Cue("endurance", "Stop well before your shoulder aches. Serving is the "
+                         "one thing in tennis that counts as throwing.",
+            "a sore serving shoulder at fifteen becomes a chronic one at twenty"),
+    ),
+    "ten_split_step": (
+        Cue("depth", "Land wider than your shoulders. A narrow landing means "
+                     "you cannot push off in either direction.",
+            "the width is what makes the next step possible"),
+        Cue("tempo", "Land just as they hit it, not before and not after. The "
+                     "timing is the entire skill.",
+            "an early split step has landed and stopped by the time you need it"),
+        Cue("consistency", "Same small hop every time. This is not a jump.",
+            "a big hop takes longer to land from than the ball takes to arrive"),
+        Cue("endurance", "Stop when the hop starts disappearing.",
+            "the split step is the first thing tired legs quietly drop"),
+    ),
+    "ten_recovery": (
+        Cue("depth", "Push off and actually cover ground. A shuffle that stays "
+                     "still leaves the whole court open.",
+            "the app measures how far your feet get apart, and so does your "
+            "opponent"),
+        Cue("tempo", "Recover before the next ball, not while it is coming.",
+            "moving as the ball arrives means hitting off balance"),
+        Cue("consistency", "Never cross your feet. The app can see it happen "
+                           "and will tell you how many times.",
+            "crossed feet is the moment you cannot change direction"),
+        Cue("offhand", "Both directions evenly. Everybody is worse recovering "
+                       "to one side.",
+            "an opponent finds the side you cannot recover to inside a set"),
+        Cue("endurance", "Stop when you start standing up out of your stance.",
+            "an upright player has already given up the next two shots"),
+    ),
     "soc_juggle_weak": (
         Cue("depth", "Small touches, knee height. A weak foot that has to "
                      "stretch for every ball never gets comfortable.",

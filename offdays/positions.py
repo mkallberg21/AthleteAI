@@ -621,17 +621,28 @@ GYMNASTICS: tuple[Position, ...] = (
          "beam gymnasts"),
 )
 
+# Two positions in this sport rather than four, and they are genuinely
+# different jobs: a singles player covers ground and grooves groundstrokes, a
+# doubles player lives inside two steps of the net. Both serve, and both get the
+# split step, because it is the one movement that precedes every shot either of
+# them will ever hit.
 TENNIS: tuple[Position, ...] = (
     _pos("singles", "Singles", "tennis", "court",
          ("singles", "single", "baseline", "baseliner"),
-         mix(ten_wall_rally=6, gen_lateral_bound=5, gen_side_plank=4, gen_lunge=3, gen_high_knees=3,
-             gen_glute_bridge=2, gen_wall_sit=2, gen_dead_bug=2, gen_squat=1),
+         mix(ten_alternate=4, ten_one_wing=4, ten_wall_rally=3, ten_recovery=3,
+             ten_split_step=3, ten_serve=2, ten_volley=1,
+             gen_lateral_bound=3, gen_side_plank=2, gen_lunge=2,
+             gen_high_knees=2, gen_glute_bridge=1),
          "Cover the width of the court, then hit a ball while balanced.",
          "singles players"),
     _pos("doubles", "Doubles", "tennis", "court",
          ("doubles", "double", "net", "serve volley", "volleyer"),
-         mix(ten_wall_rally=5, gen_lateral_bound=4, gen_squat_jump=3, gen_side_plank=3, gen_lunge=3,
-             gen_wall_sit=3, gen_mountain_climber=2, gen_push_up=2, gen_plank=2),
+         # The net position, so volleys lead and the long grooving rallies give
+         # way to reactions inside two steps.
+         mix(ten_volley=5, ten_split_step=4, ten_serve=3, ten_alternate=2,
+             ten_wall_rally=2, ten_recovery=2, ten_one_wing=1,
+             gen_lateral_bound=3, gen_squat_jump=2, gen_side_plank=2,
+             gen_lunge=2, gen_push_up=1, gen_wall_sit=1),
          "Short, sharp, reactive. Most of it happens inside two steps.",
          "doubles players"),
 )

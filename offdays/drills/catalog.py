@@ -2397,6 +2397,30 @@ BB_WALL_THROW = DrillSpec(
     tracks_handedness=True,
 )
 
+# --------------------------------------------------------------------------
+# Tennis
+#
+# The one sport here where the ball never touches the athlete. It comes off a
+# racket head roughly sixty centimetres beyond the hand, and the detector
+# attributes the contact to the nearest wrist -- so what these drills really
+# measure is "the ball left from near this hand". That is enough to tell a
+# forehand wing from a backhand one, and not enough to tell which is which, so
+# nothing below claims to.
+# --------------------------------------------------------------------------
+
+TENNIS = BallSpec(
+    required=True,
+    contact="body",
+    parts=("left_wrist", "right_wrist"),
+    min_gap_ms=350,
+    min_speed=0.45,
+    attribute_side=True,
+    detector="vision",
+    colour="optic",
+    diameter_cm=6.7,
+)
+
+
 TEN_WALL_RALLY = DrillSpec(
     key="ten_wall_rally",
     name="Wall Rally",
@@ -2408,19 +2432,9 @@ TEN_WALL_RALLY = DrillSpec(
     counter=CounterSpec(
         down_threshold=0.0, up_threshold=1.0, min_rep_ms=350, max_rep_ms=6_000,
     ),
-    ball=BallSpec(
-        required=True,
-        contact="body",
-        parts=("left_wrist", "right_wrist"),
-        min_gap_ms=350,
-        # A tennis ball comes off the strings fast, which makes the impulse
-        # obvious -- and lets the floor bounce in between be ignored.
-        min_speed=0.45,
-        attribute_side=True,
-        detector="vision",
-        colour="optic",
-        diameter_cm=6.7,
-    ),
+    # A tennis ball comes off the strings fast, which makes the impulse obvious
+    # -- and lets the floor bounce in between be ignored.
+    ball=TENNIS,
     scoring=ScoringSpec(xp_per_rep=0.8, daily_rep_cap=700, diminishing_after_reps=250),
     validation=ValidationSpec(max_reps_per_second=2.5, min_reps=8),
     setup_hint="Prop the phone up behind or beside you. It just needs to see the ball.",
@@ -2428,6 +2442,263 @@ TEN_WALL_RALLY = DrillSpec(
     load=LoadSpec(load_per_rep=0.5, load_per_minute=1.8, tissue=Tissue.UPPER_BODY),
     tracks_handedness=True,
 )
+
+TEN_ALTERNATE = DrillSpec(
+    key="ten_alternate",
+    name="Alternating Wings",
+    sport="tennis",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Rally against the wall changing wing every shot -- forehand, "
+        "backhand, forehand. The app checks the ball really is leaving from "
+        "alternate sides of you; if you settle onto one wing it counts as an "
+        "ordinary rally and says so."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=450, max_rep_ms=6_000,
+    ),
+    ball=replace(TENNIS, alternation="alternating", min_gap_ms=450),
+    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=400, diminishing_after_reps=180),
+    validation=ValidationSpec(max_reps_per_second=2.0, min_reps=12),
+    setup_hint=(
+        "Stand further off the wall than feels comfortable so you have time to "
+        "turn. Phone square to you -- from the side it cannot tell which wing "
+        "the ball came off."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.6, load_per_minute=1.9, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=True,
+)
+
+TEN_ONE_WING = DrillSpec(
+    key="ten_one_wing",
+    name="One Wing",
+    sport="tennis",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Every ball on the same wing, recovering to the middle between shots. "
+        "The app checks the ball keeps leaving from the same side of you -- it "
+        "cannot tell a forehand from a backhand, so which wing you pick is "
+        "yours to decide and worth making the weaker one."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=450, max_rep_ms=6_000,
+    ),
+    ball=replace(TENNIS, alternation="same_hand", min_gap_ms=450),
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=400, diminishing_after_reps=180),
+    validation=ValidationSpec(max_reps_per_second=2.0, min_reps=12),
+    setup_hint=(
+        "Pick a wing and stay on it. Recover to the middle after every ball -- "
+        "standing still on one side is a different, much easier drill."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.6, load_per_minute=1.9, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=True,
+)
+
+TEN_VOLLEY = DrillSpec(
+    key="ten_volley",
+    name="Wall Volleys",
+    sport="tennis",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "Close to the wall, no bounce, short punchy blocks. This one has a "
+        "speed floor rather than a ceiling: a groundstroke rally cannot be "
+        "sustained this fast, which is how the app knows these were volleys."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=200, max_rep_ms=3_000,
+    ),
+    ball=replace(TENNIS, min_gap_ms=200, min_speed=0.35),
+    scoring=ScoringSpec(xp_per_rep=1.1, daily_rep_cap=500, diminishing_after_reps=200),
+    validation=ValidationSpec(
+        max_reps_per_second=5.0,
+        # The whole verification. Standing back and rallying cannot reach this
+        # rate, and standing close and blocking cannot avoid it.
+        min_reps_per_second=1.3,
+        min_reps=20, min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Two metres off the wall, racket up in front of you. Short blocks, no "
+        "backswing -- if you are taking one, you are too far back."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.3, load_per_minute=2.0, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=True,
+)
+
+TEN_SERVE = DrillSpec(
+    key="ten_serve",
+    name="Serve Motion",
+    sport="tennis",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Toss and serve into a fence or a wall. It watches your hitting arm "
+        "rather than the ball, so it counts full service motions and not "
+        "half-hearted ones -- and it has no idea whether the serve would have "
+        "gone in."
+    ),
+    signal=SignalSpec(
+        # The same signal the basketball shot and the volleyball swing use, for
+        # the same reason: it picks the hitting arm out of the frame rather
+        # than naming a side, so a left-handed server is measured on the arm
+        # that is actually serving.
+        kind=SignalKind.SHOOTING_ARM,
+        smoothing=0.28,
+    ),
+    counter=CounterSpec(
+        # Racket dropped behind the back, then driven up through contact.
+        down_threshold=85.0,
+        up_threshold=162.0,
+        min_rep_ms=1_200,
+        max_rep_ms=12_000,
+        rising_completes=True,
+    ),
+    # Confirm, never count: the arm finds the serve and the ball's only job is
+    # to establish there was one.
+    ball=replace(
+        TENNIS, mode="confirm", required=False, min_gap_ms=1_200,
+        min_speed=0.5, attribute_side=False, min_track_quality=0.28,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.8, daily_rep_cap=150, diminishing_after_reps=70),
+    validation=ValidationSpec(
+        max_reps_per_second=0.8, min_reps_per_second=0.03,
+        min_reps=8, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Somewhere you can hit into safely, phone square to you and far enough "
+        "back to see your whole arm. Same toss every time -- everything after "
+        "it is just repeating."
+    ),
+    quality=QualitySpec(
+        target_rom=75.0,
+        # A serve has to be repeatable before it is worth making it fast, so
+        # consistency carries the most weight.
+        consistency_target=0.11,
+        consistency_ceiling=0.36,
+        tempo_min_ms=1_200,
+        tempo_max_ms=4_000,
+        w_consistency=0.40,
+        w_depth=0.30,
+        w_tempo=0.15,
+        w_endurance=0.15,
+        min_reps=10,
+    ),
+    load=LoadSpec(
+        load_per_rep=1.2,
+        # The serve is tennis's throwing action. It is the same overhead chain
+        # a pitch count exists to watch, and a serving shoulder at fifteen gets
+        # hurt exactly the way a pitching one does.
+        throws_per_rep=1.0, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+TEN_SPLIT_STEP = DrillSpec(
+    key="ten_split_step",
+    name="Split Steps",
+    sport="tennis",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "The small hop you land from just as your opponent hits. Land wide and "
+        "balanced, then push off. It counts the hop, so a step that never "
+        "leaves the ground does not register."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.32),
+    counter=CounterSpec(
+        # A split step is a small hop from an already-low stance, so it lives
+        # high and narrow -- well clear of every jump drill in the catalogue,
+        # which all start from standing and go much further.
+        down_threshold=0.86,
+        up_threshold=1.04,
+        min_rep_ms=500,
+        max_rep_ms=4_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.7, daily_rep_cap=400, diminishing_after_reps=180),
+    validation=ValidationSpec(
+        max_reps_per_second=2.0, min_reps_per_second=0.15,
+        min_reps=15, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone side-on at hip height. Small hop, land with your feet wider "
+        "than your shoulders, and push off straight away. If you are landing "
+        "narrow you cannot go anywhere."
+    ),
+    quality=QualitySpec(
+        # The counter band spans 0.18 and a real hop overshoots it slightly, so a
+        # textbook rep covers about this much. 0.16 was guesswork and the
+        # calibration sweep caught it.
+        target_rom=0.20,
+        consistency_target=0.16,
+        tempo_min_ms=500,
+        tempo_max_ms=2_500,
+        w_consistency=0.35,
+        w_depth=0.25,
+        w_tempo=0.20,
+        w_endurance=0.20,
+        min_reps=15,
+    ),
+    load=LoadSpec(load_per_rep=0.5, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+TEN_RECOVERY = DrillSpec(
+    key="ten_recovery",
+    name="Recovery Shuffle",
+    sport="tennis",
+    category=Category.AGILITY,
+    metric=Metric.REPS,
+    description=(
+        "Side to side along the baseline without crossing your feet. One rep "
+        "is one push. It measures how far apart your feet get, and it can see "
+        "when they cross -- which is the moment you stop being able to change "
+        "direction."
+    ),
+    signal=SignalSpec(kind=SignalKind.STANCE_WIDTH, smoothing=0.45),
+    counter=CounterSpec(
+        # Identical to the basketball slide and the soccer shuffle. It is the
+        # same movement measured the same way, and the app cannot tell a player
+        # recovering across a baseline from a guard sliding -- so it must not
+        # pay differently for the sport's name.
+        down_threshold=1.30,
+        up_threshold=1.80,
+        min_rep_ms=280,
+        max_rep_ms=3_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=140),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0, min_reps_per_second=0.15,
+        min_reps=10, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see both feet. Stay "
+        "low, shuffle, and never cross your feet."
+    ),
+    quality=QualitySpec(
+        target_rom=0.70,
+        consistency_target=0.18,
+        tempo_min_ms=280,
+        tempo_max_ms=1_400,
+        w_consistency=0.30,
+        w_depth=0.35,
+        w_tempo=0.20,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=1.1, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
 
 
 ALL_DRILLS: tuple[DrillSpec, ...] = (
@@ -2456,6 +2727,12 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     VB_BLOCK_JUMP,
     BB_WALL_THROW,
     TEN_WALL_RALLY,
+    TEN_ALTERNATE,
+    TEN_ONE_WING,
+    TEN_VOLLEY,
+    TEN_SERVE,
+    TEN_SPLIT_STEP,
+    TEN_RECOVERY,
     GEN_LUNGE,
     GEN_GLUTE_BRIDGE,
     GEN_MOUNTAIN_CLIMBER,

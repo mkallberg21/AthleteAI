@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2892 tests
+python -m pytest tests/ -q          # 3010 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 184 tests
+  node --test tests/js/*.test.mjs   # 192 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3595,6 +3595,90 @@ that drags a defender somewhere useful. Almost none of the thinking in this
 sport happens while you have possession.
 
 Four sports now have a syllabus.
+
+---
+
+## Tennis, built to lacrosse depth
+
+One drill and two plans of conditioning becomes **seven drills, two plans that
+lead on tennis, and a fourteen-topic film syllabus.**
+
+Both of the signals built for other sports paid off here without a line of new
+code: `shooting_arm` reads the service motion, and `stance_width` reads the
+baseline recovery.
+
+### The limit that shaped the whole build
+
+Tennis is the only sport in the catalogue where **the ball never touches the
+athlete.** It comes off a racket head roughly sixty centimetres beyond the hand,
+and the detector attributes the contact to the nearest wrist — so what these
+drills really measure is *"the ball left from near this hand"*.
+
+That is enough to tell that the wing **changed**. It is not enough to tell
+**which wing** either shot was: a right-hander's backhand and a left-hander's
+forehand look identical from the front, and the spec cannot know handedness
+because one record is shared by every athlete.
+
+So nothing claims to. `ten_one_wing` says it in its own description — *"it
+cannot tell a forehand from a backhand, so which wing you pick is yours to
+decide and worth making the weaker one"* — and a test asserts no drill name
+contains the word forehand or backhand.
+
+### Seven drills, all verified
+
+| Drill | What separates it |
+|---|---|
+| Wall Rally | the baseline |
+| **Alternating Wings** | the ball must keep leaving from alternate sides |
+| **One Wing** | it must keep leaving from the same side |
+| **Wall Volleys** | a rate floor a groundstroke rally cannot sustain |
+| **Serve Motion** | a different signal entirely — the hitting arm |
+| **Split Steps** | a small hop, in a band well clear of every jump drill |
+| **Recovery Shuffle** | stance width |
+
+Nothing is marked unverifiable, and a test asserts it.
+
+**The recovery shuffle pays exactly what the basketball slide and the soccer
+shuffle pay.** Three sports, one movement, one measurement — the app cannot tell
+a player recovering across a baseline from a guard sliding or a defender
+jockeying, so all three pay the same. That is now a three-way tie held by a
+test.
+
+### The serve is a throw
+
+It is the same overhead chain a pitch count exists to watch, and a serving
+shoulder at fifteen gets hurt exactly the way a pitching one does. `ten_serve`
+carries throwing load, is capped at 150 reps a day, and no plan gives it more
+than 12%. Nothing else in tennis touches the throwing axis, and a test enforces
+both halves of that.
+
+### Two positions that are genuinely different
+
+| | own-sport | leads on |
+|---|---|---|
+| Singles | 67% | Alternating Wings 13% · One Wing 13% · Wall Rally 10% |
+| Doubles | 63% | Wall Volleys 17% · Split Steps 13% · Serve Motion 10% |
+
+Two positions is few enough that identical plans would make the distinction
+meaningless, so a test asserts they differ and that the doubles player gets more
+than twice the volley work. Both get the split step, because it is the one
+movement that precedes every shot either of them will ever hit.
+
+### The calibration sweep caught a bad number
+
+I set `target_rom` for the split step at 0.16. The sweep measured a textbook rep
+at 0.21 against a counter band spanning 0.18, and refused it at a ratio of 1.32.
+The 0.16 was guesswork; 0.20 is what the band actually implies.
+
+### Fourteen film topics, and one thing the other sports do not need
+
+Tennis is the only sport here played **alone**, so there is nothing about where
+to stand relative to five other people. Tennis IQ is about *patterns* — what you
+are trying to make happen over the next three balls — and about something no
+team sport syllabus needs: **what your own body language is telling the other
+end**, and how to think about a scoreline when nobody else can help.
+
+Five sports now have a syllabus.
 
 ---
 

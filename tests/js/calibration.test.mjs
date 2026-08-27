@@ -77,6 +77,12 @@ const SWEEP = {
   // Defending stance out to a full shuffle step -- the same measurement the
   // basketball slide uses, because it is the same movement.
   soc_shuffle:       { lo: 1.22,  hi: 2.00, kind: 'stance' },
+  // Baseline recovery -- the same measurement again, for the same reason.
+  ten_recovery:      { lo: 1.22,  hi: 2.00, kind: 'stance' },
+  // Racket dropped behind the back to full extension through contact.
+  ten_serve:         { lo: 72,    hi: 172,  kind: 'shootarm' },
+  // A small hop from an already-low stance, in hip height above the floor.
+  ten_split_step:    { lo: 0.84,  hi: 1.06, kind: 'body' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept

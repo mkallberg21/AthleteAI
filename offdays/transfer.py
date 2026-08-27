@@ -213,6 +213,33 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
+    "ten_alternate": (
+        Transfer("Basketball", "changing hands under pressure"),
+        Transfer("Lacrosse", "switching hands on the move"),
+    ),
+    "ten_one_wing": (
+        Transfer("Lacrosse", "off-hand wall ball -- grooving the side you avoid"),
+        Transfer("Soccer", "your weak foot, for the same reason"),
+    ),
+    "ten_volley": (
+        Transfer("Volleyball", "blocking hands, quick and without a swing"),
+        Transfer("Basketball", "catch and release with no wasted motion"),
+    ),
+    "ten_serve": (
+        Transfer("Volleyball", "a serve is this motion without a racket"),
+        Transfer("Baseball", "the same overhead chain, and the same shoulder"),
+        Transfer("Basketball", "the overhead outlet pass"),
+    ),
+    "ten_split_step": (
+        Transfer("Volleyball", "the hop a libero lands from before every dig"),
+        Transfer("Basketball", "being stopped before a closeout arrives"),
+        Transfer("Soccer", "a keeper's set position before a shot"),
+    ),
+    "ten_recovery": (
+        Transfer("Basketball", "a defensive slide is this exact movement"),
+        Transfer("Soccer", "jockeying a winger without turning your hips"),
+        Transfer("Lacrosse", "a defender's approach and break down"),
+    ),
     "soc_juggle_weak": (
         Transfer("Basketball", "your weak hand, and the same reason for it"),
         Transfer("Lacrosse", "off-hand wall ball -- the hard half of the work"),
