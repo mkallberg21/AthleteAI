@@ -67,6 +67,13 @@ const SWEEP = {
   bkb_slide:         { lo: 1.22,  hi: 2.00, kind: 'stance' },
   // Shooting pocket to release, in degrees of elbow extension.
   bkb_form_shot:     { lo: 80,    hi: 168,  kind: 'shootarm' },
+  // Elbow drawn back to full extension through contact -- the same arm as the
+  // shot, drawn further back.
+  vb_arm_swing:      { lo: 75,    hi: 170,  kind: 'shootarm' },
+  // Loaded approach to the top of the jump, in hip height above the floor.
+  vb_approach:       { lo: 0.32,  hi: 1.20, kind: 'body' },
+  // Hands at the shoulders to pressed over, in torso lengths above them.
+  vb_block_jump:     { lo: 0.14,  hi: 0.70, kind: 'wrist' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept

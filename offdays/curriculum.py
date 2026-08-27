@@ -1086,8 +1086,370 @@ BKB_TOPICS: tuple[Topic, ...] = BKB_FUNDAMENTALS + BKB_CORE + BKB_ADVANCED
 
 # Registered at the end, once both syllabuses exist. A sport is a key here and
 # nothing else -- there is no branch anywhere that names one.
+
+
+# ---------------------------------------------------------------------------
+# Volleyball
+#
+# Same rules again: no video ids, every target length inside the ceiling for its
+# own minimum age, a question with the reason its answer is right. What differs
+# is where the decisions live. Volleyball IQ is mostly about *reading a set
+# before it is set* and about where the six of you are standing -- the sport is
+# played in a small box and almost every error is a positioning error.
+# ---------------------------------------------------------------------------
+
+VB_ALL = ("setter", "hitter", "middle", "libero")
+VB_FRONT = ("hitter", "middle")
+VB_BACK = ("setter", "libero")
+
+VB_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="vb_iq_call_it",
+        title="Call it before you touch it",
+        focus="Communication",
+        positions=VB_ALL, min_age=0, max_age=200, target_s=65,
+        find=(
+            "Any rally with a ball dropping between two players. Cut one where "
+            "somebody calls early and one where nobody does. Youth footage is "
+            "better -- the silence is more obvious."
+        ),
+        ask=Ask(
+            prompt="A ball is coming down between you and a teammate. What do you do?",
+            options=(
+                "Call for it loudly and early, before it gets there",
+                "Wait to see if they call it first",
+                "Go for it -- whoever gets there first takes it",
+            ),
+            answer=0,
+            because=(
+                "Two players both going is how the ball lands between them, and "
+                "how ankles get rolled. The early call decides it while there "
+                "is still time to move."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_ready_early",
+        title="Be stopped before the ball is hit",
+        focus="Ready position",
+        positions=VB_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "A serve receive. Look for a passer who is already set and still "
+            "when contact happens, and one who is still shuffling. The "
+            "difference in the pass is the clip."
+        ),
+        ask=Ask(
+            prompt="When should you be in your ready position?",
+            options=(
+                "Before the other team contacts the ball",
+                "As soon as you see where the ball is going",
+                "While you are moving toward the ball",
+            ),
+            answer=0,
+            because=(
+                "You cannot change direction while you are already moving. "
+                "Being stopped first is what lets you go either way."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_three_touches",
+        title="Why three touches beats one",
+        focus="Team offence",
+        positions=VB_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Two rallies side by side: one where the team passes, sets and "
+            "hits, and one where somebody sends the first ball straight back "
+            "over. Both happen constantly at youth level."
+        ),
+        ask=Ask(
+            prompt="The ball comes over. Why not just send it straight back?",
+            options=(
+                "Three touches let you attack instead of just returning it",
+                "It is against the rules to send it back on one",
+                "It gives your team time to rest",
+            ),
+            answer=0,
+            because=(
+                "A first-ball return arrives slow and easy to read. Three "
+                "touches are what turn a defence into an attack."
+            ),
+        ),
+    ),
+)
+
+VB_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="vb_iq_read_the_setter",
+        title="Reading the setter's hands",
+        focus="Blocking",
+        positions=VB_FRONT, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A setter releasing the ball, cut from before their hands move. "
+            "The clip is the shoulders and hands, not where the ball ends up."
+        ),
+        ask=Ask(
+            prompt="What tells you where a set is going before it gets there?",
+            options=(
+                "The setter's shoulders and where their hands are pointing",
+                "Which hitter starts their approach first",
+                "Where the setter is looking",
+            ),
+            answer=0,
+            because=(
+                "Good setters hide their eyes but cannot hide their platform. "
+                "The shoulders have to face where the ball is going."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_seams",
+        title="Passing the seam",
+        focus="Serve receive",
+        positions=VB_ALL, min_age=13, max_age=200, target_s=115,
+        find=(
+            "A serve landing between two passers. Cut it wide enough to see "
+            "both of them and who moved."
+        ),
+        ask=Ask(
+            prompt="A serve is coming down the seam between you and a teammate. Whose is it?",
+            options=(
+                "Whoever the ball is moving toward takes it",
+                "The stronger passer of the two",
+                "Whoever is closest when it lands",
+            ),
+            answer=0,
+            because=(
+                "Passing across your body sends the ball sideways. The player "
+                "the ball is coming to can play it in front of them."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_block_shape",
+        title="Taking a line and trusting the defence",
+        focus="Blocking",
+        positions=VB_FRONT, min_age=13, max_age=200, target_s=130,
+        find=(
+            "A block where the outside blocker holds the line and a digger "
+            "covers the angle. Look for one where the blocker chases the ball "
+            "instead and leaves both open."
+        ),
+        ask=Ask(
+            prompt="You are blocking the outside hitter. What is your job?",
+            options=(
+                "Take away one shot and let the defence have the other",
+                "Move to wherever the hitter is swinging",
+                "Get your hands on every ball you can reach",
+            ),
+            answer=0,
+            because=(
+                "A block that chases covers nothing. Taking one shot away is "
+                "what lets six players cover the court instead of one."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_transition",
+        title="Getting off the net after you block",
+        focus="Transition",
+        positions=VB_FRONT, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A blocker landing and pulling straight off for their approach, "
+            "next to one who stays flat at the net and gets set anyway."
+        ),
+        ask=Ask(
+            prompt="You land from a block and your team digs it. What now?",
+            options=(
+                "Pull straight off the net so you can approach",
+                "Stay at the net in case it comes back over",
+                "Turn and watch where the dig goes first",
+            ),
+            answer=0,
+            because=(
+                "A hitter who is still under the net has no approach, and a "
+                "set arriving to a standing player is a free ball for them."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_cover_your_hitter",
+        title="Covering your own hitter",
+        focus="Team offence",
+        positions=VB_ALL, min_age=13, max_age=200, target_s=115,
+        find=(
+            "A hit that comes off the block and drops. Cut it wide -- the clip "
+            "is the three players around the hitter, not the swing."
+        ),
+        ask=Ask(
+            prompt="Your teammate is about to hit. Where do you go?",
+            options=(
+                "Low and close, ready for the ball to rebound off the block",
+                "Back, in case the other team counter-attacks",
+                "Stay where you are so you do not get in the way",
+            ),
+            answer=0,
+            because=(
+                "Most blocked balls drop within a couple of metres of the "
+                "hitter. Nobody is standing there unless they went there on "
+                "purpose."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_serve_target",
+        title="Serving at somebody, not just over",
+        focus="Serving",
+        positions=VB_ALL, min_age=13, max_age=200, target_s=110,
+        find=(
+            "A server aiming at a seam or a weak passer, next to one hitting "
+            "the middle of the court. The receiving team's shape is the clip."
+        ),
+        ask=Ask(
+            prompt="What makes a serve difficult, other than speed?",
+            options=(
+                "Where it lands -- a seam, a weak passer, or deep in a corner",
+                "How hard it is hit",
+                "How much spin is on it",
+            ),
+            answer=0,
+            because=(
+                "A hard serve straight at a good passer is an easy pass. A "
+                "slow one at a seam is not."
+            ),
+        ),
+    ),
+)
+
+VB_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="vb_iq_tempo",
+        title="Set tempo and what it does to a block",
+        focus="Team offence",
+        positions=VB_ALL, min_age=15, max_age=200, target_s=160,
+        find=(
+            "A quick middle attack and a high outside set from the same match. "
+            "The clip is the blockers' feet, not the hitters."
+        ),
+        ask=Ask(
+            prompt="Why run a quick set to the middle?",
+            options=(
+                "It commits the middle blocker and leaves the outside one-on-one",
+                "It is harder for the defence to dig",
+                "It is the fastest way to score",
+            ),
+            answer=0,
+            because=(
+                "The quick is usually not the attack. It is what stops the "
+                "middle blocker helping outside, which is where the point "
+                "actually comes from."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_out_of_system",
+        title="Out of system, and what changes",
+        focus="Decision-making",
+        positions=VB_ALL, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A bad pass and what the team does next. Look for a high ball to "
+            "the outside rather than an attempt to run the offence anyway."
+        ),
+        ask=Ask(
+            prompt="The pass is bad and your setter cannot get to it. What should happen?",
+            options=(
+                "A high ball to the outside, and everybody covers",
+                "Run the same play a bit slower",
+                "Send it straight over on two",
+            ),
+            answer=0,
+            because=(
+                "Out of system, the goal is a swing somebody can cover, not a "
+                "point. Forcing the offence from a bad pass is how a rally "
+                "becomes a free ball for them."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_hitter_tools",
+        title="Tooling the block and hitting the seam",
+        focus="Attacking",
+        positions=VB_FRONT, min_age=15, max_age=200, target_s=155,
+        find=(
+            "A hitter using the blocker's outside hand deliberately. Slow "
+            "footage helps -- the intent is only visible if you can see the "
+            "arm change late."
+        ),
+        ask=Ask(
+            prompt="There is a big block in front of you. What is the highest-percentage swing?",
+            options=(
+                "Off the blocker's outside hand, or into the seam between them",
+                "Hard and straight down the line",
+                "Tip it over into the middle",
+            ),
+            answer=0,
+            because=(
+                "A block is a wall with edges. Hitting through the middle of "
+                "it is the one place it is strongest."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_base_positions",
+        title="Base, then read, then go",
+        focus="Team defence",
+        positions=VB_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A full defensive rotation from base position to the read. Cut it "
+            "wide enough to see all six players move together."
+        ),
+        ask=Ask(
+            prompt="When do you leave your base defensive position?",
+            options=(
+                "Once you have read where the set is going",
+                "As soon as the ball crosses the net",
+                "When the hitter starts their approach",
+            ),
+            answer=0,
+            because=(
+                "Leaving early on a guess opens the court you just left. Base "
+                "first, read second, move third -- in that order every time."
+            ),
+        ),
+    ),
+    Topic(
+        key="vb_iq_free_ball",
+        title="The free ball nobody converts",
+        focus="Transition",
+        positions=VB_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A free ball coming over and what the receiving team does with it. "
+            "Find one converted into a proper attack and one played back over "
+            "casually."
+        ),
+        ask=Ask(
+            prompt="A free ball is floating over. What is the biggest mistake?",
+            options=(
+                "Treating it casually instead of running your best play",
+                "Passing it too tight to the net",
+                "Not calling for it early enough",
+            ),
+            answer=0,
+            because=(
+                "A free ball is the easiest chance you get to run exactly what "
+                "you practise. Teams lose more points relaxing on these than "
+                "on hard-served ones."
+            ),
+        ),
+    ),
+)
+
+VB_TOPICS: tuple[Topic, ...] = VB_FUNDAMENTALS + VB_CORE + VB_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
+    "volleyball": VB_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

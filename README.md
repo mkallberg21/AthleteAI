@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2655 tests
+python -m pytest tests/ -q          # 2776 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 169 tests
+  node --test tests/js/*.test.mjs   # 177 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -3421,6 +3421,95 @@ ball and nothing more, the same rule every lacrosse drill follows. And a shot is
 an overhead *push*, not a throw: `throws_per_rep` is zero, because on the
 throwing axis an evening of form shooting would read as an evening of throwing
 and trip a shoulder advisory for work that never went near one.
+
+---
+
+## Volleyball, built to lacrosse depth
+
+One drill and four plans of conditioning becomes **seven drills, four plans that
+lead on volleyball, and a fourteen-topic film syllabus.**
+
+Volleyball turns out to be the best sport in this catalogue for honest
+differentiation, because its three basic skills contact the ball in three
+different places: a **set** above the head, a **forearm pass** below the
+shoulders, a **hit** off one hand overhead.
+
+### A hands gate, because a set and a pass were the same event
+
+To the detector they were identical — the wrist is the nearest listed part
+either way. `BallSpec` gained `hands`: `any`, `above_shoulders`, or
+`below_shoulders`, checked in `ball.js` when a contact fires.
+
+That single field turns the sport's two most fundamental skills from one drill
+with two names into two drills that can each be verified. A test asserts the
+gates are mutually exclusive, so a rep counts for one skill or the other and
+never both.
+
+The gate is **permissive when it cannot see the shoulders**. A half-resolved
+skeleton should cost a contact its attribution, not its existence — otherwise
+the drill silently counts nothing and the athlete is told they did no work.
+
+| Drill | What separates it | Verified |
+|---|---|---|
+| **Setting** | hands above the shoulders | ✅ hands gate |
+| **Forearm Passing** | hands below the shoulders | ✅ hands gate |
+| **Serving** | one hand, same hand, overhead | ✅ hands + attribution |
+| **Arm Swing** | elbow angle of the swinging arm | ✅ shooting_arm |
+| **Approach Jump** | hip travel, band clear of every other jump | ✅ body height |
+| **Block Jump** | hands against the shoulder line, not the hips | ✅ different landmark |
+| Wall Setting | hands above the shoulders, same as a set | ❌ pays the baseline |
+
+### The guard caught a cross-sport confusion
+
+`bkb_form_shot` (95–155°) sits inside `vb_arm_swing` (90–158°), so a volleyball
+arm swing fires the basketball shot's thresholds — and the shot was paying more.
+
+That is real: **the app cannot tell a jump shot from a volleyball arm swing.**
+Both are one-armed overhead extensions. The signal generalises across the two
+sports and so does the ambiguity, so they now pay the same. Paying one more
+would be paying for the sport's name.
+
+This is the first time that guard has fired *across* sports rather than within
+one, and it is the reason it was written as a catalogue-wide rule.
+
+### The load model finally has something to say
+
+Volleyball is the sport where this matters most, and the plans say so:
+
+- **Serving and arm swings count as throwing.** They are the same overhead
+  mechanism a pitch count exists to watch, and a serving shoulder gets hurt the
+  same way. Serving stays under 12% of every plan for exactly that reason.
+- **The approach jump is the heaviest landing in the catalogue** at 2.6 per rep,
+  above a tuck jump, because a maximal jump off a run-up comes down from higher
+  than a standing one. Jumper's knee is what this sport hands teenagers, and a
+  hundred approach jumps in a driveway is a real week's landing volume.
+
+I claimed in a test that it was the heaviest rep in the catalogue. A pull-up is
+3.0, so that was false — the claim is now "heaviest *landing*", which is true
+and is the thing that matters.
+
+### Plans that lead on volleyball
+
+| | own-sport | leads on |
+|---|---|---|
+| Setter | 57% | Setting 20% · Wall Setting 13% · Passing 10% |
+| Hitter | 53% | Approach Jump 17% · Arm Swing 13% · Passing 10% |
+| Middle Blocker | 53% | Block Jump 17% · Approach 13% · Arm Swing 10% |
+| Libero | 43% | Passing 25% · Lateral Bounds 14% · Setting 11% |
+
+Everybody passes and everybody serves. **The libero never hits** — no approach,
+no arm swing — because prescribing them would be prescribing somebody else's
+practice, and a test enforces it.
+
+### Fourteen film topics
+
+Where lacrosse IQ is about a slide and basketball IQ is about spacing,
+volleyball IQ is about **reading a set before it is set** and about where the
+six of you are standing. The sport is played in a small box and almost every
+error is a positioning error.
+
+Three sports now have a syllabus. Adding the third was a data change and
+nothing else.
 
 ---
 

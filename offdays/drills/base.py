@@ -323,6 +323,21 @@ class BallSpec:
     #: Share of frames that must have a real detection behind them. Below
     #: this the session is held for review rather than counted.
     min_track_quality: float = 0.35
+    #: Where the hands have to be for a contact to count.
+    #:
+    #: 'any'             -- no requirement.
+    #: 'above_shoulders' -- both wrists above the shoulder line, which is a
+    #:                      volleyball set and not a forearm pass.
+    #: 'below_shoulders' -- both wrists below it, which is a forearm pass and
+    #:                      not a set.
+    #:
+    #: Volleyball's three basic skills contact the ball in three different
+    #: places, and this is what makes two of them tellable apart. Without it a
+    #: set and a pass are the same event to the detector -- the wrist is the
+    #: nearest listed part either way -- and the catalogue would be paying for
+    #: a name again.
+    hands: str = "any"
+
     #: What the hands are required to do across contacts.
     #:
     #: 'any'         -- no requirement. A plain dribble is a plain dribble.
@@ -360,6 +375,8 @@ class BallSpec:
     def __post_init__(self) -> None:
         if self.alternation not in ("any", "alternating", "same_hand"):
             raise ValueError(f"unknown alternation rule: {self.alternation!r}")
+        if self.hands not in ("any", "above_shoulders", "below_shoulders"):
+            raise ValueError(f"unknown hands rule: {self.hands!r}")
         if self.alternation != "any" and not self.attribute_side:
             raise ValueError(
                 "an alternation rule needs attribute_side, or there are no "
@@ -388,6 +405,7 @@ class BallSpec:
             "colour": self.colour,
             "diameter_cm": self.diameter_cm,
             "alternation": self.alternation,
+            "hands": self.hands,
         }
 
 

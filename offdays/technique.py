@@ -396,6 +396,96 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "your hands slow down.",
             "the stance goes first and takes everything else with it"),
     ),
+    "vb_pass": (
+        Cue("depth", "Get your platform under the ball by moving your feet, "
+                     "not by swinging your arms up at it.",
+            "arms that swing send the ball anywhere but where you meant"),
+        Cue("tempo", "Let the ball come to you. Rushing at it is what makes a "
+                     "pass shoot off sideways.",
+            "a passer who reaches is a passer who shanks"),
+        Cue("consistency", "Same platform every ball -- thumbs together, "
+                           "elbows locked, shoulders forward.",
+            "the platform is the only flat surface in the whole skill"),
+        Cue("endurance", "Stop when you start playing the ball with your hands "
+                         "instead of your arms.",
+            "hands come out when the legs are gone, and that is a set, not a pass"),
+    ),
+    "vb_set_wall": (
+        Cue("depth", "Hands above your forehead, every ball. If they drop to "
+                     "your chin you are passing with your fingers.",
+            "a low set is how fingers get jammed"),
+        Cue("tempo", "Quick and soft. The wall gives it back faster than you "
+                     "do, which is the whole reason to do it here.",
+            "the speed is the point; a slow wall set is just setting to yourself"),
+        Cue("consistency", "Same distance off the wall the whole set. Drifting "
+                           "in makes it easier and teaches you nothing.",
+            "the drill only works at the range that is hard for you"),
+        Cue("endurance", "Stop when your hands start slapping rather than "
+                         "catching and pushing.",
+            "slapping is a tired setter, and it is also a double"),
+    ),
+    "vb_serve": (
+        Cue("depth", "Reach up and hit it at full stretch. A serve struck "
+                     "below full reach has to be hit harder to do the same "
+                     "thing.",
+            "height buys you angle, and angle is free"),
+        Cue("tempo", "The toss is the serve. Same height, same spot, every "
+                     "time -- everything after it is just repeating.",
+            "an inconsistent toss makes an inconsistent serve, always"),
+        Cue("consistency", "Same starting spot, same number of steps. Change "
+                           "one thing at a time or you will never know what "
+                           "helped.",
+            "changing two things at once teaches you nothing about either"),
+        Cue("offhand", "Serve with your usual hand. This is not a drill for "
+                       "building the other one.",
+            "a serving shoulder is not something to build twice"),
+        Cue("endurance", "Stop well before your shoulder aches. Serving is the "
+                         "one thing here that counts as throwing.",
+            "a sore serving shoulder at fourteen becomes a chronic one at twenty"),
+    ),
+    "vb_arm_swing": (
+        Cue("depth", "Draw the elbow back and high, then swing all the way "
+                     "through. A half swing builds a half swing.",
+            "range now is power later, and it is easier to build than to fix"),
+        Cue("tempo", "Fast through contact, then let the arm finish across "
+                     "your body. Do not stop it dead.",
+            "stopping the arm dead is how a shoulder gets hurt"),
+        Cue("consistency", "Same swing every rep. It has to be repeatable "
+                           "before it is worth making it fast.",
+            "a swing that varies is a hitter who cannot be set"),
+        Cue("offhand", "Both arms work here -- the non-hitting arm points and "
+                       "pulls down. Do not let it hang.",
+            "the arm that is not hitting is half of where the power comes from"),
+        Cue("endurance", "Stop counting and start listening to your shoulder. "
+                         "These count as throws for a reason.",
+            "swing volume is the injury nobody counts in this sport"),
+    ),
+    "vb_approach": (
+        Cue("depth", "Get low into the last two steps. The jump comes out of "
+                     "that, not out of your arms.",
+            "a tall approach is a short jump"),
+        Cue("tempo", "Slow, then fast. The last two steps are the quick ones.",
+            "a run-up at one speed does not load anything"),
+        Cue("consistency", "Same number of steps, same foot pattern, every "
+                           "time.",
+            "a hitter whose approach changes cannot be set by anyone"),
+        Cue("endurance", "Stop when your landings stop being quiet. That is "
+                         "the signal, not your legs.",
+            "loud landings are what jumper's knee is made of"),
+    ),
+    "vb_block_jump": (
+        Cue("depth", "Press up and over, not just up. Your hands should "
+                     "finish higher than they started by a long way.",
+            "a block that goes straight up gets hit through"),
+        Cue("tempo", "Straight from a standing start. No dip and no wind-up -- "
+                     "at the net you do not get either.",
+            "the dip is exactly the time a hitter uses"),
+        Cue("consistency", "Land where you took off. Drifting sideways is how "
+                           "ankles get rolled on somebody else's foot.",
+            "landing on a teammate's foot is the most common injury in the sport"),
+        Cue("endurance", "Stop when you start landing flat-footed.",
+            "flat landings mean the calves are done, and they cushion the knees"),
+    ),
     "bkb_form_shot": (
         Cue("depth", "Dip into the pocket and come all the way up through the "
                      "ball. A shot that starts at your chest has no legs in "

@@ -220,11 +220,14 @@ test('every ball drill is exercised by this file', () => {
   //
   // Basketball is covered the same way for the same reason: every one of its
   // ball drills shares BASKETBALL, and the loop below drives all of them.
+  //
+  // Volleyball is covered as a family too, for the same reason: every one of
+  // its ball drills shares VOLLEYBALL, and the loop below drives all of them.
   const covered = new Set(['soc_juggle', 'bkb_dribble', 'vb_set',
                            'bb_wall_throw', 'ten_wall_rally']);
   const missing = SPECS
     .filter((d) => d.ball && !covered.has(d.key)
-                && d.sport !== 'lacrosse' && d.sport !== 'basketball')
+                && !['lacrosse', 'basketball', 'volleyball'].includes(d.sport))
     .map((d) => d.key);
   assert.deepEqual(missing, [], `untested ball drills: ${missing.join(', ')}`);
 });
@@ -306,6 +309,19 @@ test('every count-mode drill can actually count through its own spec', () => {
     const parts = {};
     for (const name of drill.ball.parts) {
       parts[name] = ground ? { x: 0.52, y: 0.55 } : { x: 0.52, y: floor };
+    }
+    // Some drills also gate on where the hands are -- a volleyball set only
+    // counts above the shoulders, a forearm pass only below. The shoulders are
+    // staged to satisfy whichever gate this drill declares, because the
+    // question here is whether a drill can count through its OWN spec.
+    const gate = drill.ball.hands ?? 'any';
+    if (gate !== 'any') {
+      const wristY = parts.left_wrist ? parts.left_wrist.y : floor;
+      const shoulderY = gate === 'above_shoulders' ? wristY + 0.2 : wristY - 0.2;
+      parts.left_wrist = parts.left_wrist ?? { x: 0.50, y: wristY };
+      parts.right_wrist = parts.right_wrist ?? { x: 0.54, y: wristY };
+      parts.left_shoulder = { x: 0.46, y: shoulderY };
+      parts.right_shoulder = { x: 0.54, y: shoulderY };
     }
     const path = bounce({ floor, apex: 1.4, every: 2, frames: 360 });
     run(counter, path, pose(parts));
@@ -485,4 +501,90 @@ test('the fast basketball patterns gate contacts tighter than the slow ones', ()
   const gap = (key) => spec(key).ball.min_gap_ms;
   assert.ok(gap('bkb_pound_low') < gap('bkb_dribble'));
   assert.ok(gap('bkb_wall_pass') > gap('bkb_dribble'));
+});
+
+
+/* -------------------------------------------------------------------------
+ * Volleyball
+ *
+ * The sport where contact location does the most work: a set above the head,
+ * a forearm pass below the shoulders, a hit off one hand. The hands gate is
+ * what turns the first two from one event into two.
+ * ---------------------------------------------------------------------- */
+
+const VB = () => SPECS.filter((d) => d.sport === 'volleyball' && d.ball);
+
+/** A bounce off the hands, with the shoulders staged above or below them. */
+function volley({ handsAbove }) {
+  const wristY = 0.55;
+  const shoulderY = handsAbove ? wristY + 0.18 : wristY - 0.18;
+  return pose({
+    left_wrist: { x: 0.50, y: wristY },
+    right_wrist: { x: 0.54, y: wristY },
+    nose: { x: 0.52, y: wristY - 0.02 },
+    left_elbow: { x: 0.48, y: wristY + 0.02 },
+    right_elbow: { x: 0.56, y: wristY + 0.02 },
+    left_shoulder: { x: 0.46, y: shoulderY },
+    right_shoulder: { x: 0.58, y: shoulderY },
+  });
+}
+
+test('every volleyball drill uses the same ball', () => {
+  for (const drill of VB()) {
+    assert.equal(drill.ball.diameter_cm, 21, `${drill.key} ball size drifted`);
+    assert.equal(drill.ball.detector, 'vision', `${drill.key} uses the general model`);
+  }
+});
+
+test('a set counts with the hands up and nothing with them down', () => {
+  const up = new BallRepCounter(spec('vb_set'));
+  run(up, bounce({ floor: 0.55, apex: 1.4, every: 2, frames: 360 }),
+      volley({ handsAbove: true }));
+  assert.ok(up.count > 0, 'a set above the shoulders should count');
+
+  const down = new BallRepCounter(spec('vb_set'));
+  run(down, bounce({ floor: 0.55, apex: 1.4, every: 2, frames: 360 }),
+      volley({ handsAbove: false }));
+  assert.equal(down.count, 0, 'hands below the shoulders is a pass, not a set');
+});
+
+test('a forearm pass counts with the hands down and nothing with them up', () => {
+  const down = new BallRepCounter(spec('vb_pass'));
+  run(down, bounce({ floor: 0.55, apex: 1.4, every: 2, frames: 360 }),
+      volley({ handsAbove: false }));
+  assert.ok(down.count > 0, 'a pass below the shoulders should count');
+
+  const up = new BallRepCounter(spec('vb_pass'));
+  run(up, bounce({ floor: 0.55, apex: 1.4, every: 2, frames: 360 }),
+      volley({ handsAbove: true }));
+  assert.equal(up.count, 0, 'hands above the shoulders is a set, not a pass');
+});
+
+test('the gate is permissive when it cannot see the shoulders', () => {
+  // Tested with the wrists present and the shoulders missing, because that is
+  // the only place the permissiveness is observable: a body-contact drill needs
+  // pose to find a contact at all, so with no skeleton there is nothing for the
+  // gate to allow or refuse either way.
+  //
+  // A half-resolved skeleton should cost a contact its attribution, not its
+  // existence -- otherwise the drill silently counts nothing and the athlete
+  // is told they did no work.
+  const counter = new BallRepCounter(spec('vb_set'));
+  const half = pose({ left_wrist: { x: 0.50, y: 0.55 },
+                      right_wrist: { x: 0.54, y: 0.55 },
+                      nose: { x: 0.52, y: 0.53 } });
+  // `pose` fills every landmark, so the shoulders have to be knocked out
+  // explicitly to model a skeleton that has only half resolved.
+  for (const name of ['left_shoulder', 'right_shoulder']) {
+    half[LANDMARK_INDEX[name]] = { x: 0.5, y: 0.5, z: 0, visibility: 0.1 };
+  }
+  run(counter, bounce({ floor: 0.55, apex: 1.4, every: 2, frames: 360 }), half);
+  assert.ok(counter.count > 0);
+});
+
+test('the hands gate reaches the browser on every volleyball drill', () => {
+  const gates = new Map(VB().map((d) => [d.key, d.ball.hands]));
+  assert.equal(gates.get('vb_set'), 'above_shoulders');
+  assert.equal(gates.get('vb_pass'), 'below_shoulders');
+  assert.equal(gates.get('vb_serve'), 'above_shoulders');
 });

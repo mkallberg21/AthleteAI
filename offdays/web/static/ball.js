@@ -457,6 +457,13 @@ export class BallRepCounter {
     const wanted = this.ball.contact ?? 'body';
     if (contact.kind !== wanted) return null;
 
+    // Where the hands were decides which skill this was. Volleyball's set and
+    // forearm pass are the same event to the detector -- the wrist is the
+    // nearest listed part either way -- and the only thing that separates them
+    // is that a set happens above the shoulders and a pass below them. Without
+    // this gate the catalogue would be paying for a name again.
+    if (!this._handsAllowed(landmarks)) return null;
+
     const rep = {
       t_ms: Math.round(contact.t),
       hand: this.ball.attribute_side ? sideOf(contact, landmarks, this.aspect) : 'none',
@@ -527,6 +534,34 @@ export class BallRepCounter {
   }
 
   /** The landmarks this drill treats as able to touch the ball. */
+  /**
+   * Whether the hands are where this drill requires them.
+   *
+   * Permissive when the rule is 'any' and when pose has not resolved -- a
+   * missing skeleton should cost a contact its attribution, not its existence.
+   */
+  _handsAllowed(landmarks) {
+    const rule = this.ball.hands ?? 'any';
+    if (rule === 'any') return true;
+    if (!landmarks) return true;
+
+    const at = (name) => {
+      const point = landmarks[LANDMARK_INDEX[name]];
+      if (!point || (point.visibility ?? 1) < 0.4) return null;
+      return point;
+    };
+    const lw = at('left_wrist');
+    const rw = at('right_wrist');
+    const ls = at('left_shoulder');
+    const rs = at('right_shoulder');
+    if (!lw || !rw || !ls || !rs) return true;
+
+    // Smaller y is higher on screen.
+    const line = (ls.y + rs.y) / 2;
+    const above = lw.y < line && rw.y < line;
+    return rule === 'above_shoulders' ? above : !above;
+  }
+
   parts(landmarks) {
     const out = {};
     if (!landmarks) return out;

@@ -1793,6 +1793,29 @@ BKB_STANCE = DrillSpec(
 )
 
 
+# --------------------------------------------------------------------------
+# Volleyball
+#
+# Unusually good for this catalogue, because the three basic skills contact the
+# ball in three different places: a set above the head, a forearm pass below the
+# shoulders, a hit off one hand overhead. Two of those are separated by the
+# hands gate and the third by hand attribution, so every drill that pays more
+# than the baseline has earned it on something checkable rather than on a name.
+# --------------------------------------------------------------------------
+
+VOLLEYBALL = BallSpec(
+    required=True,
+    contact="body",
+    parts=("left_wrist", "right_wrist", "nose"),
+    min_gap_ms=350,
+    min_speed=0.28,
+    attribute_side=False,
+    detector="vision",
+    colour="white",
+    diameter_cm=21.0,
+)
+
+
 VB_SET = DrillSpec(
     key="vb_set",
     name="Setting",
@@ -1804,23 +1827,296 @@ VB_SET = DrillSpec(
     counter=CounterSpec(
         down_threshold=0.0, up_threshold=1.0, min_rep_ms=350, max_rep_ms=6_000,
     ),
-    ball=BallSpec(
-        required=True,
-        contact="body",
-        parts=("left_wrist", "right_wrist", "nose"),
-        min_gap_ms=350,
-        min_speed=0.28,
-        attribute_side=False,
-        detector="vision",
-        colour="white",
-        diameter_cm=21.0,
-    ),
+    # Above the shoulders, which is what makes this a set and not a pass.
+    ball=replace(VOLLEYBALL, hands="above_shoulders"),
     scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=500, diminishing_after_reps=180),
     validation=ValidationSpec(max_reps_per_second=2.0, min_reps=6),
     setup_hint="Prop the phone up so it can see you and the top of the ball's flight.",
     quality=None,
     load=LoadSpec(load_per_rep=0.3, load_per_minute=1.4, tissue=Tissue.UPPER_BODY),
 )
+
+VB_PASS = DrillSpec(
+    key="vb_pass",
+    name="Forearm Passing",
+    sport="volleyball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Bump the ball straight up off your platform, over and over. The app "
+        "checks your hands are below your shoulders -- a pass played up at "
+        "head height is a set, and it counts as one."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=400, max_rep_ms=6_000,
+    ),
+    # The other side of the gate from the set. Between them they cover the two
+    # skills that are otherwise the same event to the detector.
+    ball=replace(
+        VOLLEYBALL, hands="below_shoulders",
+        parts=("left_elbow", "right_elbow", "left_wrist", "right_wrist"),
+        min_gap_ms=400,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=500, diminishing_after_reps=180),
+    validation=ValidationSpec(max_reps_per_second=2.5, min_reps=10),
+    setup_hint=(
+        "Phone square in front of you so it can see your arms and the ball. "
+        "Platform flat, thumbs together, and move your feet rather than "
+        "swinging your arms."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.3, load_per_minute=1.5, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=False,
+)
+
+VB_SERVE = DrillSpec(
+    key="vb_serve",
+    name="Serving",
+    sport="volleyball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Toss and serve into a wall, one hand, over and over. The app reads "
+        "which hand struck it, so a serve is genuinely tellable from a set -- "
+        "and it has no idea whether the ball would have gone in."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=1_200, max_rep_ms=12_000,
+    ),
+    # One hand, above the shoulders, and the same hand every time. All three
+    # are checkable, which is why this one earns more than a set.
+    ball=replace(
+        VOLLEYBALL, hands="above_shoulders", attribute_side=True,
+        alternation="same_hand", min_gap_ms=1_200, min_speed=0.45,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.6, daily_rep_cap=200, diminishing_after_reps=90),
+    validation=ValidationSpec(max_reps_per_second=0.8, min_reps=8, min_duration_ms=30_000),
+    setup_hint=(
+        "Find a wall nobody parks a car behind and stand well back. Phone "
+        "side-on so it sees your toss and your hitting arm. Same toss every "
+        "time -- that is the whole serve."
+    ),
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=1.0, load_per_minute=0.6,
+        # A serve is the one volleyball action that genuinely belongs on the
+        # throwing axis. It is the same overhead mechanism a pitch count exists
+        # to watch, and a serving shoulder gets hurt the same way.
+        throws_per_rep=1.0, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+VB_ARM_SWING = DrillSpec(
+    key="vb_arm_swing",
+    name="Arm Swing",
+    sport="volleyball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "The hitting swing on its own, no ball needed. Draw the elbow back and "
+        "high, then swing through and finish. It watches your hitting arm and "
+        "counts full swings -- a lazy half swing does not register."
+    ),
+    signal=SignalSpec(
+        # The same signal the basketball shot uses, and for the same reason: it
+        # picks the swinging arm out of the frame rather than naming a side, so
+        # a left-handed hitter is measured on the arm that is actually working.
+        kind=SignalKind.SHOOTING_ARM,
+        smoothing=0.28,
+    ),
+    counter=CounterSpec(
+        # Elbow drawn back and flexed, then extended through contact.
+        down_threshold=90.0,
+        up_threshold=158.0,
+        min_rep_ms=500,
+        max_rep_ms=5_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=300, diminishing_after_reps=140),
+    # Deliberately the same rate as the basketball form shot. Both are one
+    # armed overhead extensions and the elbow angle cannot tell them apart --
+    # the signal generalises across the two sports, and so does the ambiguity.
+    # Paying one more than the other would be paying for the sport's name.
+    validation=ValidationSpec(
+        max_reps_per_second=1.8, min_reps_per_second=0.05,
+        min_reps=12, min_duration_ms=25_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see your whole arm. "
+        "Turned sideways it cannot tell a high elbow from a dropped one. No "
+        "ball -- this is the swing on its own."
+    ),
+    quality=QualitySpec(
+        target_rom=80.0,
+        # A hitter's swing has to be the same every time before it can be fast,
+        # so consistency carries the most weight here.
+        consistency_target=0.12,
+        consistency_ceiling=0.38,
+        tempo_min_ms=500,
+        tempo_max_ms=2_200,
+        w_consistency=0.40,
+        w_depth=0.30,
+        w_tempo=0.15,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.6,
+        # Overhead and repeated, so it belongs on the throwing axis even
+        # without a ball. A hundred swings is a hundred swings to a shoulder.
+        throws_per_rep=1.0, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+VB_APPROACH = DrillSpec(
+    key="vb_approach",
+    name="Approach Jump",
+    sport="volleyball",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "The full approach and jump, landing balanced. Counts each jump from "
+        "how far your hips travel, so a hop off two feet does not read as an "
+        "approach."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
+    counter=CounterSpec(
+        # Deeper and higher than a squat jump: the approach loads further down
+        # and the jump goes further up, and the band has to sit outside the
+        # general jump drills or the two would count each other.
+        down_threshold=0.38,
+        up_threshold=1.12,
+        min_rep_ms=900,
+        max_rep_ms=8_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=2.2, daily_rep_cap=120, diminishing_after_reps=60),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps_per_second=0.03,
+        min_reps=8, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "You need a few metres of run-up and a clear landing. Phone side-on "
+        "at hip height. Land on two feet, bend your knees, and stop -- the "
+        "landing is the part that keeps you playing."
+    ),
+    quality=QualitySpec(
+        target_rom=0.72,
+        consistency_target=0.16,
+        tempo_min_ms=900,
+        tempo_max_ms=4_000,
+        w_consistency=0.25,
+        w_depth=0.35,
+        w_tempo=0.10,
+        w_endurance=0.30,
+        min_reps=8,
+    ),
+    load=LoadSpec(
+        # The heaviest landing in the catalogue, above a tuck jump, because a
+        # maximal jump off a run-up comes down from higher than a standing one.
+        # Jumper's knee is the injury this sport hands teenagers, and a hundred
+        # approach jumps in a driveway is a real week's landing volume.
+        load_per_rep=2.6,
+        throws_per_rep=0.0, tissue=Tissue.LOWER_BODY,
+    ),
+    tracks_handedness=False,
+)
+
+VB_BLOCK_JUMP = DrillSpec(
+    key="vb_block_jump",
+    name="Block Jump",
+    sport="volleyball",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "From a blocking stance: hands up, jump straight, press over, land "
+        "where you took off. No approach and no swing -- this one is about "
+        "getting up quickly from standing and coming down under control."
+    ),
+    signal=SignalSpec(
+        # Wrists against the shoulder line rather than hip height, because a
+        # block is judged on the hands getting up rather than the feet leaving
+        # the floor -- and that also keeps it clear of every jump drill in the
+        # catalogue, which all read the hips.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="right_wrist",
+        reference="right_shoulder",
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        down_threshold=0.20,
+        up_threshold=0.62,
+        min_rep_ms=700,
+        max_rep_ms=6_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.5, daily_rep_cap=180, diminishing_after_reps=90),
+    validation=ValidationSpec(
+        max_reps_per_second=1.5, min_reps_per_second=0.04,
+        min_reps=10, min_duration_ms=25_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you so it can see both hands. Start with "
+        "your hands already up at your shoulders -- a block that starts from "
+        "your waist is a block that arrives late."
+    ),
+    quality=QualitySpec(
+        target_rom=0.46,
+        consistency_target=0.15,
+        tempo_min_ms=700,
+        tempo_max_ms=3_000,
+        w_consistency=0.30,
+        w_depth=0.35,
+        w_tempo=0.15,
+        w_endurance=0.20,
+        min_reps=10,
+    ),
+    load=LoadSpec(load_per_rep=1.6, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+VB_SET_WALL = DrillSpec(
+    key="vb_set_wall",
+    name="Wall Setting",
+    sport="volleyball",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Set against a wall from close range, quick and repeated. Faster than "
+        "setting to yourself, which is the point. The app counts the contacts "
+        "and cannot tell a wall from the ceiling, so this earns the same as "
+        "any other set."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=280, max_rep_ms=4_000,
+    ),
+    ball=replace(VOLLEYBALL, hands="above_shoulders", min_gap_ms=280),
+    # Hands above the shoulders and a ball off them: identical to a set in
+    # everything the camera can reach. Only the wall differs, and there is no
+    # wall in the skeleton.
+    pattern_verified=False,
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=400, diminishing_after_reps=160),
+    validation=ValidationSpec(
+        max_reps_per_second=3.5,
+        # The one thing that does separate it: wall setting is quick, and a
+        # slow rally against a wall is just setting to yourself.
+        min_reps_per_second=0.6,
+        min_reps=15,
+    ),
+    setup_hint=(
+        "Stand a metre off a wall with the phone side-on. Hands above your "
+        "forehead the whole time -- if they drop, you are passing."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.3, load_per_minute=1.8, tissue=Tissue.UPPER_BODY),
+    tracks_handedness=False,
+)
+
 
 BB_WALL_THROW = DrillSpec(
     key="bb_wall_throw",
@@ -1903,6 +2199,12 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     BKB_SLIDE,
     BKB_FORM_SHOT,
     VB_SET,
+    VB_PASS,
+    VB_SET_WALL,
+    VB_SERVE,
+    VB_ARM_SWING,
+    VB_APPROACH,
+    VB_BLOCK_JUMP,
     BB_WALL_THROW,
     TEN_WALL_RALLY,
     GEN_LUNGE,

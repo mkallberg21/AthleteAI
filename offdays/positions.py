@@ -354,30 +354,44 @@ SOCCER: tuple[Position, ...] = (
          "forwards"),
 )
 
+# Volleyball plans lead on volleyball. Every position passes and every position
+# serves, so both appear in all four -- the libero heaviest on passing, and the
+# serve kept modest everywhere because it is the one action in this sport that
+# lands on the throwing axis.
 VOLLEYBALL: tuple[Position, ...] = (
     _pos("setter", "Setter", "volleyball", "back",
          ("setter", "s", "set"),
-         mix(vb_set=7, gen_lateral_bound=4, gen_squat_jump=3, gen_push_up=3, gen_plank=3,
-             gen_lunge=3, gen_side_plank=2, gen_wall_sit=2, gen_dead_bug=2),
+         mix(vb_set=6, vb_set_wall=4, vb_pass=3, vb_serve=2, vb_block_jump=2,
+             gen_lateral_bound=3, gen_squat_jump=2, gen_plank=2, gen_lunge=2,
+             gen_push_up=2, gen_side_plank=1, gen_dead_bug=1),
          "Get to the ball early and be balanced when you arrive.",
          "setters"),
     _pos("hitter", "Hitter", "volleyball", "front",
          ("hitter", "outside", "outside hitter", "oh", "opposite", "opp", "right side",
           "rs", "attacker", "spiker"),
-         mix(vb_set=2, gen_tuck_jump=5, gen_squat_jump=4, gen_squat=3, gen_lunge=2,
-             gen_side_plank=2, gen_hollow_hold=2, gen_glute_bridge=2, gen_push_up=1),
+         # The approach carries the most weight and the most load in the whole
+         # catalogue, which is the honest shape of this position: jumper's knee
+         # is what this sport hands teenagers.
+         mix(vb_approach=5, vb_arm_swing=4, vb_pass=3, vb_serve=2, vb_set=2,
+             gen_tuck_jump=3, gen_squat_jump=2, gen_squat=2, gen_lunge=2,
+             gen_hollow_hold=2, gen_glute_bridge=2, gen_side_plank=1),
          "Jump high, land safe, do it forty more times.",
          "hitters"),
     _pos("middle", "Middle Blocker", "volleyball", "front",
          ("middle", "middle blocker", "mb", "middle hitter", "blocker"),
-         mix(vb_set=2, gen_tuck_jump=5, gen_lateral_bound=4, gen_squat_jump=3, gen_squat=3,
-             gen_glute_bridge=2, gen_side_plank=2, gen_plank=1, gen_lunge=1),
+         mix(vb_block_jump=5, vb_approach=4, vb_arm_swing=3, vb_pass=2, vb_serve=2,
+             gen_lateral_bound=3, gen_tuck_jump=3, gen_squat=2, gen_squat_jump=2,
+             gen_glute_bridge=2, gen_side_plank=1, gen_plank=1),
          "Sideways along the net, then straight up. Both, every rally.",
          "middle blockers"),
     _pos("libero", "Libero", "volleyball", "back",
          ("libero", "l", "ds", "defensive specialist", "back row"),
-         mix(vb_set=3, gen_lateral_bound=5, gen_wall_sit=3, gen_lunge=3, gen_mountain_climber=3,
-             gen_burpee=2, gen_plank=2, gen_squat=2, gen_high_knees=2),
+         # The one position that never hits, so no approach and no arm swing --
+         # and the only one where passing leads outright.
+         mix(vb_pass=7, vb_set=3, vb_serve=2,
+             gen_lateral_bound=4, gen_wall_sit=2, gen_lunge=2,
+             gen_mountain_climber=2, gen_burpee=2, gen_plank=2, gen_squat=1,
+             gen_high_knees=1),
          "Low the whole time, and off the floor fast when you hit it.",
          "liberos"),
 )
