@@ -39,7 +39,25 @@ class ScoringConfig:
 
     # Off-hand work is the single highest-leverage habit in lacrosse and the
     # thing athletes avoid most, so it is paid at a premium.
-    offhand_bonus_multiplier: float = 1.5
+    #
+    # 2.4 rather than the 1.5 this used to be, and the change is a restoration
+    # rather than an inflation. The old top rate for an off-hand rep was 2.4 --
+    # but it was reached as 1.6 base on a drill called "Off Hand" times this
+    # 1.5, and that 1.6 base was paid on every rep of that drill whether the
+    # weak hand was on top or not. The app cannot see which wall-ball pattern
+    # was chosen, so the base rates were levelled; had this stayed at 1.5 the
+    # levelling would have quietly halved the premium on the one habit the
+    # product most wants to buy.
+    #
+    # Moving the whole premium here makes it strictly better targeted. It is
+    # paid per rep on the hand actually detected on top, which is measured
+    # rather than selected from a menu, so it now lands on off-hand reps
+    # wherever they happen instead of only inside one drill -- and it lands on
+    # none of the strong-hand reps that used to collect it by association.
+    #
+    # The daily XP cap bounds the total either way, so this changes what a day
+    # rewards rather than how much a day can earn.
+    offhand_bonus_multiplier: float = 2.4
 
     # Balanced-session bonus: awarded when the weaker hand carries at least
     # this share of the session's reps.

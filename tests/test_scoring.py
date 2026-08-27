@@ -172,3 +172,76 @@ class TestBadges:
 
     def test_empty_stats_earn_nothing(self):
         assert earned_badges(AthleteStats()) == []
+
+
+class TestTheOffHandPremiumIsWorthChasing:
+    """The premium now lives entirely on the measured hand.
+
+    It used to be split: part of it came from this multiplier, and part from a
+    fatter base rate on a drill called "Off Hand" -- which the app could not
+    verify, and which therefore paid the same fat rate for strong-hand reps
+    logged under that name. Levelling those base rates was right, but on its own
+    it would have quietly halved the reward for the one habit this product most
+    wants to buy.
+
+    So the whole premium sits on the multiplier now, and these tests exist to
+    stop it eroding again: the reward for off-hand work is the thing most likely
+    to be lost as a side effect of some unrelated retune.
+    """
+
+    def _score(self, drill_key, left, right, **kw):
+        drill = get_drill(drill_key)
+        result = IntegrityResult(
+            score=1.0, status="counted",
+            reps_total=left + right, reps_left=left, reps_right=right,
+        )
+        return score_session(drill, result, dominant_hand="right", **kw)
+
+    def test_an_off_hand_rep_earns_well_over_double_a_strong_hand_one(self):
+        strong = self._score("lax_wall_ball", 0, 200).base
+        both = self._score("lax_wall_ball", 200, 0)
+        # Base is paid on every rep; the bonus is what the weak hand adds.
+        off_hand_total = both.base + both.offhand_bonus
+        assert off_hand_total / strong >= 2.3, (off_hand_total, strong)
+
+    def test_the_old_top_rate_is_restored(self):
+        # Before the base rates were levelled, the best an off-hand rep could
+        # earn was 1.6 (the "Off Hand" drill's base) x 1.5 = 2.4. That number is
+        # the bar: the levelling must not have cost an athlete anything for
+        # doing the actual work.
+        both = self._score("lax_wall_ball", 100, 0)
+        per_rep = (both.base + both.offhand_bonus) / 100
+        assert per_rep == pytest.approx(2.4, abs=0.05), per_rep
+
+    def test_it_pays_the_same_wherever_the_off_hand_reps_happen(self):
+        # The premium used to be reachable only by selecting one drill. It is
+        # now attached to the hand, so every wall-ball pattern pays it -- which
+        # is the whole point of moving it here.
+        rates = set()
+        for key in ("lax_wall_ball", "lax_wall_ball_strong",
+                    "lax_wall_ball_offhand", "lax_wall_ball_split"):
+            b = self._score(key, 100, 0)
+            rates.add(round((b.base + b.offhand_bonus) / 100, 2))
+        assert len(rates) == 1, rates
+
+    def test_strong_hand_reps_collect_no_premium_anywhere(self):
+        # The old scheme paid 1.6/rep for strong-hand reps logged under the
+        # "Off Hand" drill, because the base rate could not tell the difference.
+        for key in ("lax_wall_ball", "lax_wall_ball_offhand"):
+            b = self._score(key, 0, 100)
+            assert b.offhand_bonus == 0, key
+            assert b.base == 100, key
+
+    def test_the_daily_cap_still_binds(self):
+        # A bigger multiplier must not become a bigger day. The cap is the
+        # burnout guard and it outranks every incentive in the file.
+        from offdays.config import CONFIG
+        huge = self._score("lax_wall_ball", 800, 0)
+        assert huge.total <= CONFIG.scoring.daily_xp_cap
+
+    def test_a_session_after_the_cap_earns_nothing_more(self):
+        from offdays.config import CONFIG
+        spent = self._score(
+            "lax_wall_ball", 200, 0, xp_already_today=CONFIG.scoring.daily_xp_cap,
+        )
+        assert spent.total == 0

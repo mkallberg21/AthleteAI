@@ -88,7 +88,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 2456 tests
+python -m pytest tests/ -q          # 2462 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 143 tests
@@ -3027,12 +3027,31 @@ catches this whole class rather than these eight cases. The second asserts the
 unverifiable set by name, so a pattern becoming genuinely detectable is a
 deliberate edit rather than a drift.
 
-**One consequence to be aware of.** The top-end off-hand reward drops: an
-off-hand rep in the off-hand drill used to earn 1.6 × 1.5 = 2.4 effective, and
-now earns 1.0 × 1.5 = 1.5. The premium is now fully earned rather than partly
-resting on an unverifiable base, but it *is* smaller. Raising
-`offhand_bonus_multiplier` is the honest lever if the old level was right —
-that change pays every measured off-hand rep more, wherever it happens.
+**The off-hand premium moved rather than shrank.** Levelling the base rates
+would have halved the reward for the one habit this product most wants to buy —
+an off-hand rep used to reach 1.6 × 1.5 = 2.4 and would have landed at
+1.0 × 1.5 = 1.5. So `offhand_bonus_multiplier` went from 1.5 to **2.4**, and an
+off-hand rep earns 2.4 again.
+
+That is a restoration, not an inflation, and it is better targeted than what it
+replaced:
+
+| | old | new |
+|---|---|---|
+| Off-hand rep, plain wall ball | 1.5 | **2.4** |
+| Off-hand rep, "Off Hand" drill | 2.4 | **2.4** |
+| Strong-hand rep, "Off Hand" drill | **1.6** | 1.0 |
+| Strong-hand rep, plain wall ball | 1.0 | 1.0 |
+
+The premium now lands on off-hand reps *wherever they happen* rather than only
+inside one drill, and on none of the strong-hand reps that used to collect it by
+association. It is paid per rep against the hand actually detected on top, which
+is measured rather than selected from a menu.
+
+The daily XP cap is unchanged and still binds, so this changes what a day
+rewards rather than how much a day can earn — and a test asserts that, because a
+bigger multiplier quietly becoming a bigger day is exactly the failure worth
+guarding against.
 
 ---
 
