@@ -1305,11 +1305,12 @@ sharing everything except the mound).
 drill declares what it *develops* — power, quickness, strength, endurance or
 skill — which is not what its category says: a burpee is filed under
 conditioning, a lateral bound under agility, a squat jump under speed. Asked
-properly, ten plans across seven sports turned out to contain no power or
-quickness work at all, including both pitchers, a cheer base, a ballet dancer
-and a track thrower. Every one of the 63 plans now gives at least 10% of its
-time to power or quickness, and the spread runs from 10% for a lineman to 57%
-for a defensive back — a floor, not a template.
+properly, six plans turned out to contain none at all — a cheer base, a
+backspot, a ballet dancer, a bars gymnast, a rugby prop and a distance swimmer —
+and eighteen of the sixty-three sat under 10%, including both pitchers and a
+track thrower. Every plan now gives at least 10% of its time to power or
+quickness, and the spread runs from 10% for a lineman to 57% for a defensive
+back — a floor, not a template.
 
 **A drill only pays for what the camera can confirm.** Every skill drill has an
 unambiguous pose signal, and where several drills share one signal their

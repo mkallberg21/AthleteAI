@@ -6,11 +6,12 @@ could answer: `Category` files a burpee under conditioning, a lateral bound
 under agility and a squat jump under speed, which is a fine way to lay out a
 menu and useless for this.
 
-Answered properly, **ten position plans across seven sports contained no power
-or quickness work at all** -- a baseball pitcher, a softball pitcher, a cheer
-base, a cheer backspot, a ballet dancer, a bars gymnast, a rugby prop and a
-distance swimmer among them. Eight more sat in single digits, including a track
-thrower, which is the worst of the lot: a throw *is* power.
+Answered properly, **six position plans contained no power or quickness work at
+all** -- a cheer base, a cheer backspot, a ballet dancer, a bars gymnast, a
+rugby prop and a distance swimmer -- and **eighteen of the sixty-three sat below
+ten percent**, across ten different sports. Both pitchers were among them at
+seven and eight percent, and a track thrower at eight, which is the worst of the
+lot: a throw *is* power.
 
 None of those plans looked wrong. Every one was full of drills that a category
 listing makes look varied. That is exactly the kind of hole a guard exists to
