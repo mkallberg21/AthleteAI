@@ -3287,6 +3287,331 @@ JDG_ADVANCED: tuple[Topic, ...] = (
 JDG_TOPICS: tuple[Topic, ...] = JDG_FUNDAMENTALS + JDG_CORE + JDG_ADVANCED
 
 
+# ---------------------------------------------------------------------------
+# Football
+#
+# The sport where the syllabus has the least excuse to be about anything else.
+# Football IQ is real -- leverage, keys, where help is -- and it is taught here,
+# but head contact is this sport's defining risk in a way hockey's is not even
+# close to, and a syllabus that covered coverage shells and said nothing about
+# tackling with your head up would be teaching the easy half.
+#
+# So four of these are about the head and the neck, they start at the youngest
+# band rather than the oldest, and they are aimed at every position rather than
+# only at the ones who tackle.
+# ---------------------------------------------------------------------------
+
+FB_ALL = ("quarterback", "skill", "line", "linebacker", "defensive_back", "specialist")
+FB_TACKLERS = ("line", "linebacker", "defensive_back", "skill")
+FB_BALL = ("quarterback", "skill")
+FB_BACK = ("linebacker", "defensive_back")
+
+FB_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="fb_iq_head_up",
+        title="See what you hit",
+        focus="Staying safe",
+        positions=FB_TACKLERS, min_age=0, max_age=200, target_s=72,
+        find=(
+            "Coaching-education footage of a tackle with the head up and to the "
+            "side, next to one where the crown goes in first. Official "
+            "governing-body material is better here than game footage."
+        ),
+        ask=Ask(
+            prompt="Where should your head be when you make a tackle?",
+            options=(
+                "Up, with your eyes on what you are hitting",
+                "Tucked down, so your helmet takes it",
+                "Turned away at the last moment",
+            ),
+            answer=0,
+            because=(
+                "Your neck is only strong in the position it can see from. A "
+                "head that goes down first is a neck taking a load it was "
+                "never built for."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_say_something",
+        title="After a big hit, say something",
+        focus="Staying safe",
+        positions=FB_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Sideline footage of a player being checked after a collision, and "
+            "one jogging straight back to the huddle. What happens on the next "
+            "series is the clip."
+        ),
+        ask=Ask(
+            prompt="You took a big hit and your head feels odd, but you can play. What now?",
+            options=(
+                "Tell an adult before the next snap",
+                "Get through the series and see how you feel",
+                "Ask a teammate whether you seem alright",
+            ),
+            answer=0,
+            because=(
+                "You are using the injured part to decide whether you are "
+                "injured. One snap is not worth a season, and the person who "
+                "tells somebody has done the whole job."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_know_the_down",
+        title="Know the down and the distance",
+        focus="Situations",
+        positions=FB_ALL, min_age=0, max_age=200, target_s=68,
+        find=(
+            "A third-and-two next to a third-and-nine from the same team. The "
+            "clip is what everybody does before the snap, not after it."
+        ),
+        ask=Ask(
+            prompt="Why does the down and distance change what you do before the snap?",
+            options=(
+                "It tells you what the other team is most likely to try",
+                "It tells you how much time is left",
+                "It decides where the ball is placed",
+            ),
+            answer=0,
+            because=(
+                "Everybody on the field is guessing, and the down is the "
+                "biggest clue anybody gets. Guessing better is most of what "
+                "good players do."
+            ),
+        ),
+    ),
+)
+
+FB_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="fb_iq_neck",
+        title="Why your neck is training equipment",
+        focus="Staying safe",
+        positions=FB_ALL, min_age=13, max_age=200, target_s=125,
+        find=(
+            "Coaching or sports-science education footage on neck strength in "
+            "collision sports. Anything that shows what a head does on impact "
+            "with a braced neck against a loose one."
+        ),
+        ask=Ask(
+            prompt="What does a stronger neck actually do for you?",
+            options=(
+                "It slows how fast your head moves when you get hit",
+                "It stops you getting hit as hard",
+                "It protects your helmet",
+            ),
+            answer=0,
+            because=(
+                "Nothing stops the hit. What a braced neck changes is how "
+                "violently your head travels afterwards, and that is the part "
+                "that matters."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_leverage",
+        title="Low man wins, and why",
+        focus="Technique sense",
+        positions=("line", "linebacker"), min_age=13, max_age=200, target_s=120,
+        find=(
+            "Two blocks from the same game: one where the lower player moves "
+            "the higher one, and one the other way round. Watch the hips, not "
+            "the hands."
+        ),
+        ask=Ask(
+            prompt="Two players hit each other with the same effort. Who usually wins?",
+            options=(
+                "The one with their hips lower and their feet still moving",
+                "The heavier one",
+                "The one who arrives first",
+            ),
+            answer=0,
+            because=(
+                "Leverage beats size at this age nearly every time, and it is "
+                "the only one of the two you can do anything about this week."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_eyes",
+        title="Look at the right thing",
+        focus="Situations",
+        positions=FB_BACK, min_age=13, max_age=200, target_s=128,
+        find=(
+            "A defender whose eyes are in the backfield on a play-action, next "
+            "to one reading their key. The clip is where they are standing two "
+            "seconds later."
+        ),
+        ask=Ask(
+            prompt="On a play fake, what should a defender's eyes be on?",
+            options=(
+                "Their key -- the player their job says to read",
+                "The ball",
+                "The quarterback's eyes",
+            ),
+            answer=0,
+            because=(
+                "The ball is exactly what the offence wants you looking at. "
+                "Your key does not lie, and a play fake only works on people "
+                "watching the wrong thing."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_throw_it_away",
+        title="The best throw is sometimes no throw",
+        focus="Situations",
+        positions=FB_BALL, min_age=13, max_age=200, target_s=122,
+        find=(
+            "A quarterback taking a sack or forcing one into coverage, next to "
+            "one throwing it away and living to the next down."
+        ),
+        ask=Ask(
+            prompt="The play has broken down and nobody is open. What is the best outcome?",
+            options=(
+                "Throw it away and play the next down",
+                "Force it to your best receiver",
+                "Run until something opens up",
+            ),
+            answer=0,
+            because=(
+                "Second and ten is a bad down. An interception is a worse one, "
+                "and so is a hit you did not have to take."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_arm_count",
+        title="Nobody counts a quarterback's throws",
+        focus="Staying safe",
+        positions=FB_BALL, min_age=13, max_age=200, target_s=130,
+        find=(
+            "A quarterback through a full practice -- individual period, "
+            "seven-on-seven, team. Count the throws. That number is the clip."
+        ),
+        ask=Ask(
+            prompt="Roughly how many throws does a quarterback make in a normal week?",
+            options=(
+                "Far more than anybody has ever counted",
+                "About as many as a pitcher throws in a game",
+                "It depends on how many passes are called",
+            ),
+            answer=0,
+            because=(
+                "Baseball counts pitches down to the last one. Football counts "
+                "nothing, and the same shoulder and the same elbow are doing "
+                "the work. The app counts what it can see -- the rest is on "
+                "you to notice."
+            ),
+        ),
+    ),
+)
+
+FB_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="fb_iq_targeting",
+        title="The hit you have to pull out of",
+        focus="Staying safe",
+        positions=FB_TACKLERS, min_age=15, max_age=200, target_s=160,
+        find=(
+            "Officiating or governing-body education footage on targeting and "
+            "defenceless players. Use material where the call is explained, "
+            "because the explanation is the lesson."
+        ),
+        ask=Ask(
+            prompt="A receiver is stretched out for a catch and you can get there. What do you do?",
+            options=(
+                "Pull up or hit low. They cannot protect themselves at all",
+                "Finish it -- they chose to go up for it",
+                "Lead with your shoulder and aim high",
+            ),
+            answer=0,
+            because=(
+                "A player in the air with their arms up has no way to brace. "
+                "Every serious injury in this sport starts with somebody "
+                "deciding the hit was still available."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_help",
+        title="Knowing where your help is",
+        focus="Situations",
+        positions=FB_BACK, min_age=15, max_age=200, target_s=155,
+        find=(
+            "The same corner with a safety over the top and without one. How "
+            "differently they play the same route is the whole clip."
+        ),
+        ask=Ask(
+            prompt="You have a safety over the top. How does that change how you cover?",
+            options=(
+                "You can play the short route harder and let help take the deep one",
+                "You play further off, because deep is still yours",
+                "It does not change anything you do",
+            ),
+            answer=0,
+            because=(
+                "Coverage is a group of people dividing up the field. Playing "
+                "as though you are alone when you are not gives away the "
+                "throw underneath for nothing."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_specialist_reps",
+        title="A kicker's season is a repetition count",
+        focus="Staying safe",
+        positions=("specialist",), min_age=15, max_age=200, target_s=150,
+        find=(
+            "A kicker's ordinary practice, uncut if you can get it. What you "
+            "are counting is swings, including the ones with no ball."
+        ),
+        ask=Ask(
+            prompt="What is the risk in a kicker's week that nobody watches?",
+            options=(
+                "The sheer number of full-effort swings, all on one hip",
+                "Kicking in bad weather",
+                "Not stretching enough",
+            ),
+            answer=0,
+            because=(
+                "It is the same hip, the same range, at full effort, hundreds "
+                "of times, alone. Nobody is counting because nobody has ever "
+                "had to, and it is the reason this app counts swings at all."
+            ),
+        ),
+    ),
+    Topic(
+        key="fb_iq_offseason",
+        title="What an off season is actually for",
+        focus="Training sense",
+        positions=FB_ALL, min_age=15, max_age=200, target_s=158,
+        find=(
+            "Coaching-education footage on year-round football and what a real "
+            "break does. Look for material about tissue and recovery rather "
+            "than about burnout alone."
+        ),
+        ask=Ask(
+            prompt="Why does the app ask when your season ends and what else you play?",
+            options=(
+                "Because the same tissue needs a stretch of the year off it",
+                "To compare you with other players",
+                "To work out which drills to show you",
+            ),
+            answer=0,
+            because=(
+                "Collision, throwing and sprinting all load something that has "
+                "to be given time back. Twelve months of football is twelve "
+                "months of the same load on the same places."
+            ),
+        ),
+    ),
+)
+
+FB_IQ_TOPICS: tuple[Topic, ...] = FB_FUNDAMENTALS + FB_CORE + FB_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
@@ -3305,5 +3630,6 @@ BY_SPORT.update({
     "gymnastics": JDG_TOPICS,
     "cheer": JDG_TOPICS,
     "dance": JDG_TOPICS,
+    "football": FB_IQ_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

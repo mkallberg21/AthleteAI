@@ -105,6 +105,15 @@ const SWEEP = {
   // Heel against the toe of the same foot. By some distance the smallest
   // excursion in the catalogue, which is exactly why it needs the guard.
   gen_calf_raise:    { lo: 0.00,  hi: 0.16, kind: 'heel' },
+  // The throwing hand against the shoulder on the same side. Three drills,
+  // deliberately nested: a quick release cannot reach a deep ball's band.
+  fb_quick_release:  { lo: -0.16, hi: 0.48, kind: 'throw' },
+  fb_wall_throw:     { lo: -0.26, hi: 0.58, kind: 'throw' },
+  fb_deep_ball:      { lo: -0.38, hi: 0.70, kind: 'throw' },
+  // The kicking foot against the hip. The largest leg excursion here -- a punt
+  // finishes with the ankle above the hip, which nothing else ever does.
+  fb_kick:           { lo: -1.40, hi: 0.95, kind: 'kick' },
+  fb_shuffle:        { lo: 1.22,  hi: 2.00, kind: 'stance' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept
@@ -167,6 +176,14 @@ function frame(kind, v) {
     // is tested in counter.test.mjs.
     pts[IDX.left_wrist] = { x: 0.49, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
     pts[IDX.right_wrist] = { x: 0.51, y: 0.35 + v * TORSO, z: 0, visibility: 0.95 };
+  } else if (kind === 'throw') {
+    // Throwing hand rising past the shoulder on the same side. The off arm is
+    // left low so nothing else claims to be the throwing one.
+    pts[IDX.right_wrist] = { x: 0.60, y: 0.35 - v * TORSO, z: 0, visibility: 0.95 };
+    pts[IDX.left_wrist] = { x: 0.42, y: 0.55, z: 0, visibility: 0.95 };
+  } else if (kind === 'kick') {
+    // Kicking foot swinging from the floor up past the hip.
+    pts[IDX.right_ankle] = { x: 0.58, y: 0.60 - v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'heel') {
     // Toe pinned to the floor, heel rising off it. The whole movement is a
     // couple of centimetres of real life, so the fixture is deliberately at
@@ -232,6 +249,12 @@ for (const drill of SPECS) {
     assert.ok(roms.length > 0, `${drill.key} reported no range of motion`);
     roms.sort((a, b) => a - b);
     const median = roms[Math.floor(roms.length / 2)];
+
+    // A drill with no QualitySpec is not form-scored, so there is no declared
+    // range to check the measurement against -- the counting assertions above
+    // are the whole guard for it. This used to throw instead, which meant a
+    // drill could only skip form scoring by also having a ball.
+    if (!drill.quality) return;
 
     const target = drill.quality.target_rom;
     const ratio = median / target;

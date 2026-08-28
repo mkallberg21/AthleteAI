@@ -576,6 +576,93 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when you start standing up out of your stance.",
             "an upright player has already given up the next two shots"),
     ),
+    "fb_quick_release": (
+        Cue("depth", "Ball from your ear, not from behind your head. If you "
+                     "are winding up, it is not a quick release.",
+            "the whole drill is the distance the ball does not travel"),
+        Cue("tempo", "Fast and repeatable. If you have to reset your feet "
+                     "between throws you are throwing, not releasing.",
+            "the speed floor is what tells these apart from full throws"),
+        Cue("consistency", "Same slot every rep. A compact motion that changes "
+                           "every time is just a small inaccurate one.",
+            "quick and wrong is still wrong"),
+        Cue("offhand", "Do not throw these with your other arm to even things "
+                       "up. One arm throws in this sport, and it is the one "
+                       "the day's total is protecting.",
+            "a throwing arm is not a hand you swap"),
+        Cue("endurance", "Stop when the ball starts sailing. That is the arm "
+                         "talking, not your aim.",
+            "accuracy goes before the arm feels like anything"),
+    ),
+    "fb_wall_throw": (
+        Cue("depth", "Full motion. Load it properly and finish across your "
+                     "body -- a throw that stops at release is an arm throw.",
+            "the follow-through is where the shoulder gets to slow down"),
+        Cue("tempo", "One throw at a time. Set your feet, throw, reset.",
+            "rushed reps are how a session of forty becomes a session of a hundred"),
+        Cue("consistency", "Same footwork every rep. Change one thing at a "
+                           "time or you are practising forty different throws.",
+            "a repeatable throw is what becomes an accurate one"),
+        Cue("offhand", "This is a one-armed sport and that is fine. What "
+                       "matters is that the app knows how many that arm threw "
+                       "today.",
+            "the count is the point, not the balance"),
+        Cue("endurance", "When you start dropping your elbow to get the ball "
+                         "there, the session is over.",
+            "a dropping elbow is the first sign an arm has had enough"),
+    ),
+    "fb_deep_ball": (
+        Cue("depth", "Everything into it -- hips, front side, full "
+                     "follow-through. If you are not doing that, throw the "
+                     "shorter drill instead.",
+            "a half-hearted deep ball costs the arm the same and teaches less"),
+        Cue("tempo", "Take your time between them. These are not a set, they "
+                     "are individual throws.",
+            "the rest between is part of the drill"),
+        Cue("consistency", "Same drop, same launch point. The distance comes "
+                           "from your legs being in the same place each time.",
+            "throwing further with your arm is the way arms get hurt"),
+        Cue("offhand", "Never these with the other arm. Not once.",
+            "an unconditioned arm throwing maximally is the worst version of this"),
+        Cue("endurance", "Keep the number small on purpose. Twenty good ones "
+                         "beats fifty, and the app will tell you where you are "
+                         "against the day.",
+            "this is the drill the daily throwing total exists for"),
+    ),
+    "fb_kick": (
+        Cue("depth", "Swing all the way through and let the leg finish high. "
+                     "Stopping the swing at the ball is where groins get hurt.",
+            "the follow-through is how the leg decelerates safely"),
+        Cue("tempo", "One at a time, with a proper walk-back. Kicking is not a "
+                     "set you rush through.",
+            "the approach is most of the kick"),
+        Cue("consistency", "Same steps, same plant, every single time. Move "
+                           "one and you have changed the whole thing.",
+            "a kicker's job is doing one movement identically"),
+        Cue("offhand", "Do a few easy swings with the other leg at the end. "
+                       "Not to kick with -- just so one hip is not doing "
+                       "everything.",
+            "the plant leg and the swing leg age very differently"),
+        Cue("endurance", "Stop when your plant foot starts drifting. That is "
+                         "fatigue, and it is the rep before something tweaks.",
+            "the last few of a long session are the ones that hurt you"),
+    ),
+    "fb_shuffle": (
+        Cue("depth", "Push off the outside foot and cover ground. A slide that "
+                     "stays still gives up the whole route.",
+            "the app measures how far your feet get apart, and so does a receiver"),
+        Cue("tempo", "Slide, reset, slide. Do not hop -- both feet in the air "
+                     "means you cannot break on anything.",
+            "the moment you are airborne you are beaten"),
+        Cue("consistency", "Never cross your feet. The app can see it happen "
+                           "and will tell you how many times.",
+            "crossed feet is the exact moment somebody runs past you"),
+        Cue("offhand", "Both directions evenly. Everybody has a side they "
+                       "cannot go, and a receiver finds it in one drive.",
+            "you will be tested to your worse side, on purpose"),
+        Cue("endurance", "Stop when you start standing up out of your stance.",
+            "an upright defender has already lost the route"),
+    ),
     "gen_calf_raise": (
         Cue("depth", "All the way up onto the balls of your feet, then all the "
                      "way down until your heels touch. The top inch is the "

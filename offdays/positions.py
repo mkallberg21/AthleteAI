@@ -599,40 +599,68 @@ TRACK: tuple[Position, ...] = (
          "throwers"),
 )
 
+# Six positions rather than five. Kickers and punters were missing entirely,
+# which is a strange omission for the one group on the roster whose whole
+# practice is solo and repetitive -- exactly the athlete this product is for.
 FOOTBALL: tuple[Position, ...] = (
     _pos("quarterback", "Quarterback", "football", "skill",
          ("quarterback", "qb", "signal caller"),
-         mix(gen_side_plank=4, gen_lunge=3, gen_glute_bridge=3, gen_dead_bug=3,
-             gen_lateral_bound=3, gen_squat=2, gen_plank=2, gen_push_up=1),
-         "Throw from a base that does not move, and move when it has to.",
+         # A quarterback throws more in a week than most pitchers do, into an
+         # off season that does not exist. The passing work leads, and the
+         # deep ball is deliberately the smallest slice of it.
+         mix(fb_wall_throw=5, fb_quick_release=4, fb_deep_ball=2,
+             gen_side_plank=3, gen_lunge=3, gen_glute_bridge=3, gen_dead_bug=3,
+             gen_lateral_bound=2, gen_squat=2, gen_plank=2, gen_push_up=1),
+         "Throw from a base that does not move, and know what the arm has left.",
          "quarterbacks"),
     _pos("skill", "Running Back & Receiver", "football", "skill",
          ("running back", "rb", "halfback", "tailback", "fullback", "wide receiver",
           "wr", "receiver", "tight end", "te", "slot", "athlete"),
-         mix(gen_lateral_bound=4, gen_high_knees=4, gen_squat_jump=3, gen_lunge=3,
-             gen_glute_bridge=3, gen_squat=2, gen_plank=1, gen_mountain_climber=1),
+         mix(gen_lateral_bound=4, gen_high_knees=4, gen_squat_jump=3,
+             fb_shuffle=3, gen_lunge=3, gen_calf_raise=3, gen_glute_bridge=3,
+             gen_squat=2, gen_plank=1, gen_mountain_climber=1),
          "Cut without slowing down, and be there again the next play.",
          "skill players"),
     _pos("line", "Line", "football", "line",
          ("offensive line", "o line", "ol", "lineman", "line", "guard", "tackle",
           "center", "defensive line", "d line", "dl", "defensive end", "de", "nose"),
-         mix(gen_squat=5, gen_push_up=4, gen_lunge=3, gen_wall_sit=3,
-             gen_glute_bridge=3, gen_side_plank=2, gen_plank=2, gen_burpee=1),
+         # There is deliberately no get-off drill: that is horizontal
+         # explosion and the camera measures vertical hip travel, which is a
+         # squat jump with a different name. What a lineman does get is the
+         # slide -- a tackle's kick-slide and a defensive back's mirror are the
+         # same feet doing the same job, and the camera could not tell them
+         # apart even if we wanted two drills, so there is one.
+         mix(gen_squat=5, gen_push_up=4, fb_shuffle=3, gen_lunge=3,
+             gen_wall_sit=3, gen_glute_bridge=3, gen_dead_hang=2,
+             gen_side_plank=2, gen_plank=2, gen_calf_raise=2, gen_burpee=1),
          "Low, strong, and still strong in the fourth quarter.",
          "linemen"),
     _pos("linebacker", "Linebacker", "football", "front_seven",
          ("linebacker", "lb", "mike", "will", "sam", "backer"),
-         mix(gen_lateral_bound=4, gen_squat=3, gen_burpee=3, gen_lunge=3,
-             gen_mountain_climber=3, gen_squat_jump=2, gen_plank=2, gen_push_up=2),
+         mix(fb_shuffle=4, gen_lateral_bound=4, gen_squat=3, gen_burpee=3,
+             gen_lunge=3, gen_mountain_climber=3, gen_squat_jump=2,
+             gen_calf_raise=2, gen_plank=2, gen_push_up=2),
          "Read it, then be somewhere else fast. Sideways more than forwards.",
          "linebackers"),
     _pos("defensive_back", "Defensive Back", "football", "secondary",
-         ("defensive back", "db", "cornerback", "corner", "cb", "safety", "free safety",
-          "strong safety", "nickel"),
-         mix(gen_lateral_bound=5, gen_high_knees=4, gen_squat_jump=3, gen_lunge=3,
-             gen_glute_bridge=3, gen_plank=1, gen_squat=1, gen_side_plank=1),
-         "Backpedal, flip your hips, and run with someone who knows where they are going.",
+         ("defensive back", "db", "cornerback", "corner", "cb", "safety",
+          "free safety", "strong safety", "nickel"),
+         mix(fb_shuffle=5, gen_lateral_bound=4, gen_high_knees=4,
+             gen_calf_raise=3, gen_squat_jump=3, gen_lunge=3, gen_glute_bridge=3,
+             gen_plank=1, gen_squat=1, gen_side_plank=1),
+         "Mirror somebody who already knows where they are going.",
          "defensive backs"),
+    _pos("specialist", "Kicker & Punter", "football", "specialist",
+         ("kicker", "punter", "k", "p", "placekicker", "special teams",
+          "long snapper", "specialist"),
+         # The only position in the sport whose season is spent alone with a
+         # ball and a net, and the only one whose volume nobody has ever
+         # counted. The swing leads and the hip work backs it up.
+         mix(fb_kick=6, gen_lunge=4, gen_glute_bridge=4, gen_side_plank=3,
+             gen_dead_bug=3, gen_calf_raise=3, gen_squat=2, gen_plank=2,
+             gen_lateral_bound=2, gen_squat_jump=1),
+         "Same swing every time, and a hip that will still be there in November.",
+         "specialists"),
 )
 
 GYMNASTICS: tuple[Position, ...] = (

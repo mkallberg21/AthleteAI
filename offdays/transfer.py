@@ -267,6 +267,29 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "jockeying a winger without turning your hips"),
         Transfer("Lacrosse", "a defender's approach and break down"),
     ),
+    "fb_quick_release": (
+        Transfer("Basketball", "catch and shoot with no wasted motion"),
+        Transfer("Baseball", "an infielder's transfer and release"),
+    ),
+    "fb_wall_throw": (
+        Transfer("Baseball", "very nearly the same arm, on a smaller ball"),
+        Transfer("Lacrosse", "throwing through your hips rather than your arm"),
+        Transfer("Volleyball", "a serve loads the shoulder the same way"),
+    ),
+    "fb_deep_ball": (
+        Transfer("Baseball", "a long toss, and the same reason to count them"),
+        Transfer("Track", "the throwing events reward the same repeatability"),
+    ),
+    "fb_kick": (
+        Transfer("Soccer", "a goal kick is this swing, from a run-up"),
+        Transfer("Dance", "the same hip range, held under control"),
+        Transfer("Track", "hurdling asks the same hip to open that far"),
+    ),
+    "fb_shuffle": (
+        Transfer("Basketball", "a defensive slide is this exact movement"),
+        Transfer("Tennis", "recovering to the middle without crossing over"),
+        Transfer("Hockey", "walking the blue line without turning your hips"),
+    ),
     "gen_calf_raise": (
         Transfer("Volleyball", "every block and every approach leaves from here"),
         Transfer("Basketball", "the last thing that touches the floor on a jump"),

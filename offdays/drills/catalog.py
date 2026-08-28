@@ -3539,6 +3539,289 @@ HOC_STANCE = DrillSpec(
 )
 
 
+# --------------------------------------------------------------------------
+# Football
+#
+# The sport that walks straight into a model built for a different one. The
+# diamond build gave the load model an age-scaled daily throwing ceiling
+# because youth pitching volume is the most-studied injury risk in this
+# catalogue. A quarterback throws more in a week than most pitchers, into an
+# off season that does not exist, and nobody counts any of it.
+#
+# **No ball spec anywhere in this sport, and for a different reason than
+# hockey's.** A football is not a sphere. The vision detector finds a ball by
+# fitting a circle of a known diameter, so an oblong brown object seen from an
+# angle it never predicts is not a hard case for it -- it is the wrong shape of
+# problem entirely. So these count from the body, and nothing claims otherwise.
+#
+# What is missing here is missing honestly. A lineman's get-off is horizontal
+# explosion and the camera measures vertical hip travel, which is a squat jump
+# with a different name; a backpedal and a hip flip need a depth the phone does
+# not have. Those are not in the catalogue rather than being approximated.
+# --------------------------------------------------------------------------
+
+#: All three passing drills read the throwing hand against the shoulder on the
+#: same side, and are separated from each other by how much of the arm action
+#: the athlete actually used -- a quick release physically cannot reach a deep
+#: ball's thresholds. Each pays more than the band it contains, and each costs
+#: the arm more, which is the part that matters.
+FB_THROW_SIGNAL = SignalSpec(
+    kind=SignalKind.RELATIVE_HEIGHT,
+    landmark="right_wrist",
+    reference="right_shoulder",
+    smoothing=0.40,
+)
+
+FB_QUICK_RELEASE = DrillSpec(
+    key="fb_quick_release",
+    name="Quick Release",
+    sport="football",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "Short, fast throws with a compact arm action -- ball out before the "
+        "front foot lands. There is a speed floor here: a full throw cannot be "
+        "repeated this quickly, which is how the app knows these were quick "
+        "ones."
+    ),
+    signal=FB_THROW_SIGNAL,
+    counter=CounterSpec(
+        # The narrowest of the three. The hand barely drops below the shoulder
+        # before it comes back through.
+        down_threshold=-0.10,
+        up_threshold=0.40,
+        min_rep_ms=700,
+        max_rep_ms=5_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.8, daily_rep_cap=250, diminishing_after_reps=120),
+    validation=ValidationSpec(
+        max_reps_per_second=1.6,
+        # The verification, and it has to clear the FULL throw's ceiling rather
+        # than the deep ball's. At 0.40 a session of ordinary throws satisfied
+        # this floor -- and because a quick release costs the arm half what a
+        # throw does, mislabelling would have halved what the day's throwing
+        # total ever saw. In this sport that is the one exploit that matters.
+        min_reps_per_second=1.00,
+        min_reps=20, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone side-on so it can see your throwing arm through the whole "
+        "motion. Close to the wall or the net -- this is the release, not the "
+        "throw."
+    ),
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=0.5,
+        # Submaximal and short, but still overhead and still repeated, so it
+        # belongs on the arm's ledger at a reduced rate rather than at none.
+        throws_per_rep=0.5, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+FB_WALL_THROW = DrillSpec(
+    key="fb_wall_throw",
+    # Not "Wall Throws" -- baseball already has that name, and two drills with
+    # one name is two drills a coach cannot tell apart in a menu.
+    name="Pocket Throws",
+    sport="football",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Ordinary throws into a wall or a net, at the distance you actually "
+        "play at. It follows your throwing hand, so a full motion counts and a "
+        "flick does not. Every rep goes on the day's arm total."
+    ),
+    signal=FB_THROW_SIGNAL,
+    counter=CounterSpec(
+        down_threshold=-0.18,
+        up_threshold=0.48,
+        min_rep_ms=1_200,
+        max_rep_ms=10_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=200, diminishing_after_reps=100),
+    validation=ValidationSpec(
+        max_reps_per_second=0.9, min_reps_per_second=0.05,
+        min_reps=12, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone side-on, far enough back to see your arm from the load to the "
+        "follow-through. Same footwork every rep."
+    ),
+    quality=QualitySpec(
+        target_rom=0.70,
+        # A throw has to be repeatable before it is worth making it hard.
+        consistency_target=0.10,
+        consistency_ceiling=0.34,
+        tempo_min_ms=1_200,
+        tempo_max_ms=5_000,
+        w_consistency=0.40,
+        w_depth=0.25,
+        w_tempo=0.15,
+        w_endurance=0.20,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=1.0, throws_per_rep=1.0, tissue=Tissue.THROWING),
+    tracks_handedness=True,
+)
+
+FB_DEEP_BALL = DrillSpec(
+    key="fb_deep_ball",
+    name="Deep Balls",
+    sport="football",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Fewer throws, all of them hard. Full drop, full turn, everything into "
+        "it. Each one costs the arm more than a normal throw and the app "
+        "counts it that way -- which is the whole reason to keep the number "
+        "small."
+    ),
+    signal=FB_THROW_SIGNAL,
+    counter=CounterSpec(
+        # The widest of the three: the hand drops further into the load and
+        # finishes higher across the body.
+        down_threshold=-0.28,
+        up_threshold=0.58,
+        min_rep_ms=2_500,
+        max_rep_ms=20_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=2.0, daily_rep_cap=60, diminishing_after_reps=30),
+    validation=ValidationSpec(
+        max_reps_per_second=0.35, min_reps_per_second=0.02,
+        min_reps=6, min_duration_ms=60_000,
+    ),
+    setup_hint=(
+        "Somewhere with real room, phone side-on. If you are throwing these "
+        "flat-footed you are throwing with your arm, and that is exactly what "
+        "the day's total is trying to protect."
+    ),
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=1.8,
+        # Each of these is a harder throw than a catch-play one, and the arm
+        # knows it. Counting them one-for-one would understate the day.
+        throws_per_rep=1.5, tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+FB_KICK = DrillSpec(
+    key="fb_kick",
+    name="Kicking Swings",
+    sport="football",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "The full leg swing, with or without a ball. It follows your kicking "
+        "foot from the ground to the top of the follow-through, so a half "
+        "swing does not count. This is the highest-volume thing anybody on a "
+        "football field does alone, and until now nothing counted it."
+    ),
+    signal=SignalSpec(
+        # The kicking foot against the hip on the same side. By far the largest
+        # excursion of any leg measurement here -- a punt finishes with the
+        # ankle above the hip, which nothing else in the catalogue ever does.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="right_ankle",
+        reference="right_hip",
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        down_threshold=-1.10,
+        up_threshold=0.55,
+        min_rep_ms=1_500,
+        max_rep_ms=15_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.6, daily_rep_cap=120, diminishing_after_reps=60),
+    validation=ValidationSpec(
+        max_reps_per_second=0.6, min_reps_per_second=0.02,
+        min_reps=10, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone side-on to your kicking leg, far enough back to see the whole "
+        "swing. Same approach every rep -- changing it teaches you nothing."
+    ),
+    quality=QualitySpec(
+        # Measured, not guessed -- and the guess was badly low. Standing puts
+        # the kicking ankle about 1.4 torso lengths below the hip and a punt
+        # finishes nearly a torso above it, so a textbook swing covers 2.3.
+        # At 1.55 every honest rep would have scored full depth with a third of
+        # the swing missing, which is exactly the half a young kicker skips.
+        target_rom=2.30,
+        consistency_target=0.12,
+        consistency_ceiling=0.38,
+        tempo_min_ms=1_500,
+        tempo_max_ms=6_000,
+        w_consistency=0.40,
+        w_depth=0.30,
+        w_tempo=0.10,
+        w_endurance=0.20,
+        min_reps=10,
+    ),
+    load=LoadSpec(
+        load_per_rep=1.5,
+        # Nothing overhead, so this stays off the arm's ledger -- but a young
+        # kicker's hip and groin take a beating that nobody counts either, and
+        # the per-rep load says so.
+        throws_per_rep=0.0, tissue=Tissue.LOWER_BODY,
+    ),
+    tracks_handedness=True,
+)
+
+FB_SHUFFLE = DrillSpec(
+    key="fb_shuffle",
+    name="Mirror Slides",
+    sport="football",
+    category=Category.AGILITY,
+    metric=Metric.REPS,
+    description=(
+        "Slide across without turning your hips -- a defensive back mirroring "
+        "a receiver, or a tackle's kick-slide in pass protection. They are the "
+        "same feet doing the same job, so they are one drill. One rep is one "
+        "push, and it can see when your feet cross, which is the moment "
+        "somebody gets past you."
+    ),
+    signal=SignalSpec(kind=SignalKind.STANCE_WIDTH, smoothing=0.45),
+    counter=CounterSpec(
+        # The fifth sport on this one band. Basketball's slide, soccer's
+        # shuffle, tennis's recovery step, hockey's zone slide and this are the
+        # same feet doing the same work, and they all pay the same.
+        down_threshold=1.30,
+        up_threshold=1.80,
+        min_rep_ms=280,
+        max_rep_ms=3_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=140),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0, min_reps_per_second=0.15,
+        min_reps=10, min_duration_ms=20_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see both feet. Stay "
+        "low, push off the outside foot, and never let them cross."
+    ),
+    quality=QualitySpec(
+        target_rom=0.70,
+        consistency_target=0.18,
+        tempo_min_ms=280,
+        tempo_max_ms=1_400,
+        w_consistency=0.30,
+        w_depth=0.35,
+        w_tempo=0.20,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=1.1, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
     SOC_JUGGLE,
     SOC_JUGGLE_WEAK,
@@ -3583,6 +3866,11 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     HOC_BUTTERFLY,
     HOC_SHUFFLE,
     HOC_STANCE,
+    FB_QUICK_RELEASE,
+    FB_WALL_THROW,
+    FB_DEEP_BALL,
+    FB_KICK,
+    FB_SHUFFLE,
     GEN_LUNGE,
     GEN_GLUTE_BRIDGE,
     GEN_MOUNTAIN_CLIMBER,
