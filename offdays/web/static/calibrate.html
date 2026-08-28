@@ -19,6 +19,7 @@
   th { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; opacity: .65; }
   .verdict { font-weight: 700; }
   .ok { color: #2C6449; } .warn { color: #8E5A11; } .bad { color: #97301F; }
+  .queue { font-family: ui-monospace, Menlo, monospace; font-size: .8rem; opacity: .75; margin: 4px 0 10px; }
   .note { border-left: 3px solid currentColor; padding: 10px 14px; margin: 18px 0; opacity: .9; font-size: .9rem; }
 </style>
 </head>
@@ -77,15 +78,18 @@
       </select>
     </div>
     <div class="field">
-      <label for="file">Video file</label>
-      <input id="file" type="file" accept="video/*">
+      <label for="file">Video files — pick as many as you like</label>
+      <input id="file" type="file" accept="video/*" multiple>
     </div>
   </div>
 
+  <p id="queue" class="queue"></p>
   <video id="vid" playsinline muted controls></video>
-  <p><button id="run" disabled>Run the counter over it</button>
-     <button id="save" disabled>Add to the set</button>
-     <button id="dump" disabled>Download the set</button></p>
+  <p><button id="run" disabled>Run the counter over this one</button>
+     <button id="save" disabled>Record it and go to the next</button>
+     <button id="skip" disabled>Skip this clip</button>
+     <button id="dump" disabled>Download the set</button>
+     <button id="clear">Clear saved work</button></p>
 
   <div id="out"></div>
   <div id="set"></div>
@@ -99,8 +103,18 @@ const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/'
   + 'pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
 const $ = (id) => document.getElementById(id);
+const STORE = 'offdays.calibration.set';
 let specs = [], landmarker = null, lastRun = null;
-const collected = [];
+let queue = [], at = 0;
+
+// An evening of clips is an evening lost to a refresh otherwise. Kept in this
+// browser only -- like everything else here, nothing is sent anywhere.
+let collected = [];
+try { collected = JSON.parse(localStorage.getItem(STORE) || '[]'); } catch { collected = []; }
+
+function persist() {
+  try { localStorage.setItem(STORE, JSON.stringify(collected)); } catch { /* private mode */ }
+}
 
 // Every drill, straight from the API, so the bench can never drift from what
 // the product actually ships.
@@ -109,12 +123,39 @@ specs = (await res.json()).drills;
 $('drill').innerHTML = specs
   .map((d) => `<option value="${d.key}">${d.sport} · ${d.name}</option>`).join('');
 
-$('file').addEventListener('change', (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
+function loadCurrent() {
+  const f = queue[at];
+  if (!f) {
+    $('queue').textContent = queue.length
+      ? `All ${queue.length} clip(s) done. Download the set.` : '';
+    $('vid').removeAttribute('src');
+    $('run').disabled = $('skip').disabled = true;
+    return;
+  }
   $('vid').src = URL.createObjectURL(f);
   $('vid').dataset.name = f.name;
+  $('queue').textContent = `Clip ${at + 1} of ${queue.length} — ${f.name}`;
+  $('truth').value = '';
+  $('out').textContent = '';
   $('run').disabled = false;
+  $('skip').disabled = false;
+  $('save').disabled = true;
+  lastRun = null;
+}
+
+$('file').addEventListener('change', (e) => {
+  queue = [...e.target.files];
+  at = 0;
+  loadCurrent();
+});
+
+$('skip').addEventListener('click', () => { at += 1; loadCurrent(); });
+
+$('clear').addEventListener('click', () => {
+  if (!confirm('Delete every clip recorded so far?')) return;
+  collected = [];
+  persist();
+  renderSet();
 });
 
 async function ensureLandmarker() {
@@ -211,13 +252,27 @@ $('run').addEventListener('click', async () => {
   $('save').disabled = false;
 });
 
+function renderSet() {
+  $('dump').disabled = collected.length === 0;
+  if (!collected.length) { $('set').innerHTML = ''; return; }
+  const rows = collected.map((c) => `<tr><td>${c.clip}</td><td>${c.drill}</td>`
+    + `<td>${c.counted} / ${c.truth ?? '—'}</td><td>${c.median_rom ?? '—'}</td>`
+    + `<td>${c.source || 'unlabelled'}</td></tr>`).join('');
+  $('set').innerHTML = `<p>${collected.length} clip(s) recorded, kept in this `
+    + `browser until you download them.</p><table><tr><th>Clip</th><th>Drill</th>`
+    + `<th>Counted / eye</th><th>Median ROM</th><th>Source</th></tr>${rows}</table>`;
+}
+
 $('save').addEventListener('click', () => {
   if (!lastRun) return;
   collected.push(lastRun);
-  $('dump').disabled = false;
-  $('set').innerHTML = `<p>${collected.length} clip(s) in the set. `
-    + `Provenance: ${[...new Set(collected.map((c) => c.source || 'unlabelled'))].join(', ')}.</p>`;
+  persist();
+  renderSet();
+  at += 1;
+  loadCurrent();
 });
+
+renderSet();
 
 $('dump').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(collected, null, 1)], { type: 'application/json' });
