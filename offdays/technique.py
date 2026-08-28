@@ -708,6 +708,32 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when you start standing up out of your stance.",
             "an upright defender has already lost the route"),
     ),
+    "swm_streamline": (
+        Cue("position", "One hand over the other, arms locked, and squeeze "
+                        "your ears with your biceps. If your head is poking "
+                        "forward the line is broken.",
+            "the line is what a streamline is -- everything else is stretching"),
+        Cue("endurance", "Come down when your hands start drifting forward, "
+                         "not after they have. Shake it out and go again.",
+            "a drifting streamline is the one you will push off a wall with"),
+    ),
+    "swm_pull": (
+        Cue("depth", "All the way from full reach through to your hip. The "
+                     "back half is the half that vanishes first.",
+            "in the water that missing half is the part that moves you"),
+        Cue("tempo", "Slow on the way back out. Letting the band snap you "
+                     "back is the band training, not you.",
+            "the return is free speed and free speed builds nothing"),
+        Cue("consistency", "Hinge at the hips and keep your back flat. Every "
+                           "rep should start from the same place.",
+            "standing up between reps changes which muscles are doing it"),
+        Cue("offhand", "Same number both arms, and be honest about which one "
+                       "is easier. Almost every swimmer has a strong side.",
+            "a lopsided pull is a crooked stroke, and it shows in the water"),
+        Cue("endurance", "Stop when you cannot finish at the hip. Short pulls "
+                         "at the end teach a short stroke.",
+            "the set you cannot finish properly is the set that is over"),
+    ),
     "gen_butt_kick": (
         Cue("depth", "Heel all the way up to level with your knee. Halfway is "
                      "a jog with extra steps.",

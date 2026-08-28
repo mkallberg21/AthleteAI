@@ -78,7 +78,7 @@ def _csv(rows: list[sqlite3.Row], columns: list[str]) -> str:
 #: rather than anything clinical, but a downloadable list of which children
 #: have accommodations is the same object by another name.
 SOURCE_TABLES: frozenset[str] = frozenset({
-    "users", "teams", "team_members", "sessions", "run_log", "assignments",
+    "users", "teams", "team_members", "sessions", "training_log", "assignments",
     "team_goals", "badges", "xp_ledger", "organizations",
 })
 
@@ -203,14 +203,14 @@ def _tables(conn: sqlite3.Connection, org_id: int) -> list[Table]:
             "not count.",
         ),
         Table(
-            "run_log",
-            ["athlete_id", "day", "minutes", "note"],
-            q("SELECT r.athlete_id, r.day, r.minutes, r.note FROM run_log r "
-              "JOIN users u ON u.id = r.athlete_id WHERE u.org_id = ? "
-              "ORDER BY r.athlete_id, r.day"),
-            "Running the athlete logged themselves. Unverified by design and "
-            "worth no XP -- it exists so the load model can see training that "
-            "happens away from the camera.",
+            "training_log",
+            ["athlete_id", "day", "activity", "minutes", "note"],
+            q("SELECT t.athlete_id, t.day, t.activity, t.minutes, t.note "
+              "FROM training_log t JOIN users u ON u.id = t.athlete_id "
+              "WHERE u.org_id = ? ORDER BY t.athlete_id, t.day, t.activity"),
+            "Running and swimming the athlete logged themselves. Unverified by "
+            "design and worth no XP -- it exists so the load model can see "
+            "training that happens away from the camera.",
         ),
         Table(
             "assignments",

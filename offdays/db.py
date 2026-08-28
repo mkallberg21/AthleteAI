@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -414,36 +414,44 @@ CREATE TABLE IF NOT EXISTS rep_events (
 );
 CREATE INDEX IF NOT EXISTS idx_rep_events_session ON rep_events(session_id);
 
--- Running an athlete did that no camera saw.
+-- Training an athlete did that no camera saw.
 --
--- The load model was blind to the single thing that hurts distance runners.
+-- The load model was blind to the single thing that hurts endurance athletes.
 -- Every other sport's training load arrives through a counted session; a
--- runner's arrives through their feet, on a road, miles from a phone. So a
--- fifty-mile week and a five-mile week produced the SAME acute:chronic ratio,
--- and the app would cheerfully suggest more.
+-- runner's arrives through their feet on a road and a swimmer's through four
+-- thousand yards of water, both miles from any phone. So a fifty-mile week and
+-- a five-mile week produced the SAME acute:chronic ratio, and the app would
+-- cheerfully suggest more.
 --
--- This is self-reported and therefore unverifiable, which is normally the end
--- of the conversation in this codebase. It is admissible here because of what
--- it is wired to: **a logged run earns nothing at all.** No XP, no streak, no
+-- Self-reported and therefore unverifiable, which is normally the end of the
+-- conversation in this codebase. It is admissible because of what it is wired
+-- to: **a logged session earns nothing at all.** No XP, no streak, no
 -- leaderboard, no badge. It feeds the load model and nothing else, and the
--- load model only ever produces cautions. Over-reporting buys an athlete a
--- warning they did not need; under-reporting buys them silence they do not
--- want. There is no direction in which lying pays, which is what makes an
--- unverifiable number safe to accept here and nowhere else.
+-- load model only ever produces cautions. Over-reporting buys a warning nobody
+-- needed; under-reporting buys silence nobody wants. There is no direction in
+-- which lying pays, which is what makes an unverifiable number safe to accept
+-- here and nowhere else.
 --
--- One row per athlete per day, replaced on re-entry rather than accumulated:
--- somebody correcting yesterday's number is the common case, and two rows for
--- one run would double it.
-CREATE TABLE IF NOT EXISTS run_log (
+-- `activity` is what was done, because the same minute costs different things.
+-- An hour of running is bone loading; an hour of swimming is shoulder volume
+-- and no bone loading at all. One rate for both would have been a number that
+-- was wrong for whichever sport was not thought of first.
+--
+-- One row per athlete per day per activity, replaced on re-entry rather than
+-- accumulated: somebody correcting yesterday is the common case, and two rows
+-- for one session would count it twice.
+CREATE TABLE IF NOT EXISTS training_log (
     id          INTEGER PRIMARY KEY,
     athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     day         TEXT NOT NULL,          -- YYYY-MM-DD, athlete-local
+    activity    TEXT NOT NULL,          -- 'run' | 'swim'
     minutes     INTEGER NOT NULL,
     note        TEXT NOT NULL DEFAULT '',
     created_at  TEXT NOT NULL,
-    UNIQUE(athlete_id, day)
+    UNIQUE(athlete_id, day, activity)
 );
-CREATE INDEX IF NOT EXISTS idx_run_log_athlete ON run_log(athlete_id, day);
+CREATE INDEX IF NOT EXISTS idx_training_log_athlete
+    ON training_log(athlete_id, day);
 
 -- Append-only XP record. Every leaderboard and streak is derived from this,
 -- so a scoring bug can be audited and recomputed rather than guessed at.

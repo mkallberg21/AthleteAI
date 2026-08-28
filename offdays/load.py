@@ -103,13 +103,26 @@ THROW_CEILING_BY_AGE: tuple[tuple[int, int], ...] = (
     (8, 60), (10, 90), (12, 105), (14, 120), (16, 135), (18, 150),
 )
 
-#: Load units per minute of running.
+#: Load units per minute of logged training, by activity.
 #:
-#: A calibration constant, not a measurement, and it is stated as one. It is
-#: set so that an hour of running and an hour of drill work land in the same
+#: Calibration constants, not measurements, and stated as such. They are set so
+#: that an hour of any of these and an hour of drill work land in the same
 #: range, because an athlete who does both should not see one of them vanish
-#: next to the other. Nothing downstream treats it as evidence about anything.
-RUN_LOAD_PER_MINUTE = 3.0
+#: next to the other. Nothing downstream treats them as evidence about anything.
+#:
+#: Swimming is rated below running deliberately and not because it is easier.
+#: An hour in the water carries no bodyweight and loads no bone, which is the
+#: mechanism the running figure is calibrated against. What a swimming hour
+#: does load is a shoulder, and that shows up through the tissue axis rather
+#: than through this number.
+LOAD_PER_MINUTE: dict[str, float] = {"run": 3.0, "swim": 2.2}
+
+#: Activities the log will accept. Kept closed rather than free text: an
+#: activity nobody has picked a rate for would silently contribute nothing.
+LOGGED_ACTIVITIES: tuple[str, ...] = tuple(LOAD_PER_MINUTE)
+
+#: Kept for the callers that predate the swim column.
+RUN_LOAD_PER_MINUTE = LOAD_PER_MINUTE["run"]
 
 #: Week-on-week increase in running minutes that is worth a word.
 #:
@@ -155,10 +168,11 @@ class DayLoad:
     load: float = 0.0
     throws: int = 0
     sessions: int = 0
-    #: Minutes of running the athlete logged for this day. Self-reported, and
-    #: kept separate from `load` on the way in so the advisory can say how much
-    #: of the total came from a number nobody measured.
+    #: Minutes the athlete logged for this day, by activity. Self-reported,
+    #: and kept separate from `load` on the way in so each advisory can say how
+    #: much of the total came from a number nobody measured.
     run_minutes: int = 0
+    swim_minutes: int = 0
 
 
 @dataclass
@@ -183,10 +197,12 @@ class LoadState:
     throws_today: int = 0
     throw_ceiling: int | None = None
 
-    #: Running the athlete logged, this week and last. None for the earlier
-    #: week when there is not enough of it to compare against.
+    #: Logged training this week, and the change on last week. The change is
+    #: None for an earlier week too small to compare against.
     weekly_run_minutes: int = 0
     run_change: float | None = None
+    weekly_swim_minutes: int = 0
+    swim_change: float | None = None
     #: Consecutive days ending today with a logged run and no rest day.
     run_streak: int = 0
 
@@ -219,6 +235,9 @@ class LoadState:
             "tightened": self.tightened,
             "history_note": self.history_note,
             "weekly_run_minutes": self.weekly_run_minutes,
+            "weekly_swim_minutes": self.weekly_swim_minutes,
+            "swim_change": (round(self.swim_change, 2)
+                            if self.swim_change is not None else None),
             "run_change": (round(self.run_change, 2)
                            if self.run_change is not None else None),
             "run_streak": self.run_streak,
@@ -318,13 +337,17 @@ def analyze(
     ) if acute_window else 0
 
     # --- Running, which until now the model could not see at all ------------
-    state.weekly_run_minutes = sum(d.run_minutes for d in acute_window)
     previous_week = window[-(cfg.acute_days * 2):-cfg.acute_days]
-    prior_minutes = sum(d.run_minutes for d in previous_week)
-    if prior_minutes >= RUN_JUMP_FLOOR:
-        state.run_change = (
-            (state.weekly_run_minutes - prior_minutes) / prior_minutes
-        )
+
+    def _week_change(field: str) -> tuple[int, float | None]:
+        this_week = sum(getattr(d, field) for d in acute_window)
+        prior = sum(getattr(d, field) for d in previous_week)
+        if prior < RUN_JUMP_FLOOR:
+            return this_week, None
+        return this_week, (this_week - prior) / prior
+
+    state.weekly_run_minutes, state.run_change = _week_change("run_minutes")
+    state.weekly_swim_minutes, state.swim_change = _week_change("swim_minutes")
     # Days ending today with a run and no rest day between them.
     for day in reversed(window):
         if day.run_minutes <= 0:
@@ -549,6 +572,19 @@ def _add_advisories(
                 "part that does not warn you first.",
                 f"{state.weekly_run_minutes} minutes logged this week -- and "
                 "only what was logged, not what was run.",
+            )
+        )
+
+    if state.swim_change is not None and state.swim_change >= RUN_JUMP_SHARE:
+        state.advisories.append(
+            Advisory(
+                "caution",
+                "swim_jump",
+                f"Pool time is up {state.swim_change:.0%} on last week. A "
+                "swimmer's shoulder does not complain until a long time after "
+                "the yardage that did it.",
+                f"{state.weekly_swim_minutes} minutes logged this week -- and "
+                "only what was logged, not what was swum.",
             )
         )
 

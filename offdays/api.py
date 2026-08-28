@@ -3052,24 +3052,25 @@ def log_self_reported(
     )
 
 
-class RunEntry(BaseModel):
+class TrainingEntry(BaseModel):
     minutes: int = Field(ge=1, le=600)
+    activity: Literal["run", "swim"] = "run"
     day: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     note: str = Field(default="", max_length=200)
 
 
-@app.post("/api/runs", status_code=201)
-def log_run(
-    body: RunEntry,
+@app.post("/api/training-log", status_code=201)
+def log_training(
+    body: TrainingEntry,
     principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """Log a run the camera will never see.
+    """Log training the camera will never see -- a run, or time in the pool.
 
     Open to every athlete, unlike a self-reported session, and the difference
-    is what the number is wired to. A logged run earns **nothing** -- no XP, no
-    streak, no leaderboard, no badge, no session row. It reaches the load model
-    and stops, and the load model only ever raises cautions.
+    is what the number is wired to. A logged session earns **nothing** -- no
+    XP, no streak, no leaderboard, no badge, no session row. It reaches the
+    load model and stops, and the load model only ever raises cautions.
 
     That is the whole reason an unverifiable number is admissible here and
     nowhere else in this product: there is no direction in which lying about it
@@ -3082,28 +3083,35 @@ def log_run(
     except ValueError:
         raise HTTPException(status_code=400, detail="day must be YYYY-MM-DD")
     try:
-        return store.log_run(
-            principal.id, minutes=body.minutes, day=day, note=body.note,
+        return store.log_training(
+            principal.id, minutes=body.minutes, activity=body.activity,
+            day=day, note=body.note,
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/api/runs")
-def read_run_log(
+@app.get("/api/training-log")
+def read_training_log(
     principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     """What this athlete has logged, and what it is used for."""
-    entries = store.run_log(principal.id)
+    entries = store.training_log(principal.id)
+    by_activity: dict[str, int] = {}
+    for entry in entries:
+        by_activity[entry["activity"]] = (
+            by_activity.get(entry["activity"], 0) + entry["minutes"]
+        )
     return {
         "entries": entries,
-        "total_minutes": sum(e["minutes"] for e in entries),
+        "minutes_by_activity": by_activity,
+        "total_minutes": sum(by_activity.values()),
         "counts_toward": "training load only",
         "note": (
-            "Logged runs earn no XP and appear on no leaderboard. They exist "
-            "so the load model can see the training that happens away from "
-            "the camera, which for a runner is nearly all of it."
+            "Logged training earns no XP and appears on no leaderboard. It "
+            "exists so the load model can see the work that happens away from "
+            "the camera, which for a runner or a swimmer is nearly all of it."
         ),
     }
 

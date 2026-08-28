@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3655 tests
+python -m pytest tests/ -q          # 3717 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 231 tests
+  node --test tests/js/*.test.mjs   # 232 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1292,15 +1292,15 @@ sessions.
 
 ### The drill catalog, and what is deliberately missing
 
-Eighty-seven drills: twenty-five bodyweight movements that work for any sport —
+Eighty-nine drills: twenty-five bodyweight movements that work for any sport —
 squats, lunges, glute bridges, push-ups, pull-ups, planks, side planks, hollow
 holds, wall sits, dead bugs, mountain climbers, burpees, squat jumps, tuck
 jumps, lateral bounds, skater bounds, pogo hops, high knees, butt kicks,
 knee drive holds, jumping jacks, sit-ups, calf raises, wall handstands, dead
-hangs — and skill work for the nine sports built out so far:
-lacrosse (11), basketball (9), soccer, volleyball and tennis (7 each), hockey
-(6), football (5), rugby (3), and baseball and softball (7 between them,
-sharing everything except the mound).
+hangs — and skill work for eleven sports: lacrosse (11), basketball (9),
+soccer, volleyball and tennis (7 each), hockey (6), football (5), rugby (3),
+swimming (2), and baseball and softball (7 between them, sharing everything
+except the mound).
 
 **Every position plan builds explosiveness, and a guard enforces it.** Each
 drill declares what it *develops* — power, quickness, strength, endurance or
@@ -1356,9 +1356,17 @@ streak, no leaderboard, no session row — which is exactly why an unverified
 number is admissible there and nowhere else: there is no direction in which
 lying about it pays.
 
-Swimming is the last sport with no skill drills. It gets positions, benchmarks,
-load monitoring and the bodyweight catalogue, and is honest about the rest
-rather than being handed another sport's drills with the labels changed.
+**Swimming's two drills are dryland by definition rather than by compromise** —
+the athlete trains somewhere a phone cannot go, and their dryland hour is the
+part that decides whether their shoulders survive the yardage. Nothing counts a
+stroke, a length or a turn. Pool time reaches the load model through the same
+training log running uses, at its own rate and with its own caution: an hour on
+a road loads bone, an hour in water loads none at all and loads a shoulder
+instead.
+
+All sixteen sports now have position plans and a film syllabus. Five of them —
+gymnastics, cheer, dance, track and cross country — deliberately have no skill
+drills of their own, for reasons stated in each case rather than left as a gap.
 
 ### Position benchmarks
 

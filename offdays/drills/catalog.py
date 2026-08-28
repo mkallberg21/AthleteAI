@@ -4359,6 +4359,143 @@ RUG_SPIN_PASS = DrillSpec(
 )
 
 
+# --------------------------------------------------------------------------
+# Swimming
+#
+# The only sport here where the athlete is somewhere the phone cannot follow,
+# and the only one whose drills are therefore ALL dryland by definition rather
+# than by compromise. That is not a workaround -- a swimmer's dryland hour is a
+# real and separately coached part of the sport, and it is the part that
+# decides whether their shoulders survive the yardage.
+#
+# Nothing here counts a stroke, a length or a turn, and nothing pretends to.
+# What the pool volume itself does is reach the load model through the training
+# log, which is where swimming's actual injury risk lives.
+# --------------------------------------------------------------------------
+
+SWM_STREAMLINE = DrillSpec(
+    key="swm_streamline",
+    name="Streamline Hold",
+    sport="swimming",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Arms locked overhead, one hand over the other, ears squeezed between "
+        "your biceps, body in one straight line. The clock runs only while "
+        "your hands are actually up -- letting them drift forward stops it."
+    ),
+    signal=SignalSpec(
+        # The hands against the shoulder line. This is the one position the
+        # whole sport is built around: every push-off, every turn and every
+        # start passes through it, and until now nothing in the catalogue
+        # measured an arm held overhead at all.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_wrist",
+        reference="left_shoulder",
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        # Wrists well above the shoulder line. A jumping jack passes through
+        # the bottom of this on the way up; a streamline lives at the top of
+        # it, which is why the floor sits above where a jack ever reaches.
+        down_threshold=0.55,
+        up_threshold=1.15,
+        min_rep_ms=400,
+        max_rep_ms=60_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=30.0, daily_rep_cap=1_000),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps=0, min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Phone side-on, far enough back to see your hands and your hips at "
+        "once. Standing is fine. If your ribs are flaring out at the front you "
+        "are arching rather than streamlining."
+    ),
+    quality=None,
+    load=LoadSpec(
+        load_per_rep=0.0,
+        load_per_minute=3.0,
+        throws_per_rep=0.0,
+        # The same shoulder a throwing sport loads, reached a different way.
+        # It goes on the tissue axis so a swimmer with a shoulder history gets
+        # an earlier caution -- and NOT on the throw count, because that
+        # ceiling is derived from pitch guidance and holding a position is not
+        # a pitch.
+        tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=False,
+)
+
+SWM_PULL = DrillSpec(
+    key="swm_pull",
+    name="Dryland Pulls",
+    sport="swimming",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.REPS,
+    description=(
+        "Bands anchored high, bent forward, and pull from full reach through "
+        "to your hip. It follows your hand the whole way, so a half pull does "
+        "not count -- and a half pull is what everybody does once the set gets "
+        "long."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="right_wrist",
+        reference="right_shoulder",
+        smoothing=0.40,
+    ),
+    counter=CounterSpec(
+        # Hand at the hip through to full extension in front of the shoulder.
+        # Sits inside a softball windmill's band, which is why it pays less
+        # than one -- see the subsumption guard.
+        down_threshold=-0.60,
+        up_threshold=0.40,
+        min_rep_ms=900,
+        max_rep_ms=8_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=300, diminishing_after_reps=140),
+    validation=ValidationSpec(
+        max_reps_per_second=1.2, min_reps_per_second=0.06,
+        min_reps=15, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone side-on to the arm you are pulling with, far enough back to see "
+        "it from full reach to your hip. Hinge at the hips so your back is "
+        "flat -- standing upright turns this into a different exercise."
+    ),
+    quality=QualitySpec(
+        # Measured. Hinged forward, the hand starts about half a torso above
+        # the shoulder line and finishes about 0.7 below it at the hip, so a
+        # full pull covers roughly 1.15. The 0.90 I first wrote would have paid
+        # full depth for a pull that stopped at the ribs.
+        target_rom=1.15,
+        consistency_target=0.12,
+        consistency_ceiling=0.38,
+        tempo_min_ms=900,
+        tempo_max_ms=3_500,
+        # Depth is the point. The back half of the pull is the half that
+        # disappears when a swimmer gets tired, in the water and out of it.
+        w_consistency=0.25,
+        w_depth=0.40,
+        w_tempo=0.15,
+        w_endurance=0.20,
+        min_reps=15,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.7,
+        # Same reasoning as the streamline: the right tissue, and deliberately
+        # not the pitch-derived throw count.
+        throws_per_rep=0.0,
+        tissue=Tissue.THROWING,
+    ),
+    tracks_handedness=True,
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
     SOC_JUGGLE,
     SOC_JUGGLE_WEAK,
@@ -4411,6 +4548,8 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     RUG_QUICK_HANDS,
     RUG_WALL_PASS,
     RUG_SPIN_PASS,
+    SWM_STREAMLINE,
+    SWM_PULL,
     GEN_LUNGE,
     GEN_GLUTE_BRIDGE,
     GEN_MOUNTAIN_CLIMBER,

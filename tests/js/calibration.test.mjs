@@ -109,6 +109,8 @@ const SWEEP = {
   gen_pogo:          { lo: 0.86,  hi: 1.06, kind: 'body' },
   // Heel folding up behind the knee -- the back half of a running stride.
   gen_butt_kick:     { lo: -0.68, hi: 0.16, kind: 'heelfold' },
+  // Hand from the hip through to full reach in front of the shoulder.
+  swm_pull:          { lo: -0.70, hi: 0.50, kind: 'shoulderarm' },
   // The lateral bound's measurement, opened right up.
   gen_skater_bound:  { lo: -0.42, hi: 0.42, kind: 'ankles' },
   // The throwing hand against the shoulder on the same side. Three drills,
@@ -195,6 +197,11 @@ function frame(kind, v) {
   } else if (kind === 'kick') {
     // Kicking foot swinging from the floor up past the hip.
     pts[IDX.right_ankle] = { x: 0.58, y: 0.60 - v * TORSO, z: 0, visibility: 0.95 };
+  } else if (kind === 'shoulderarm') {
+    // One wrist tracked against the shoulder on the same side. The other arm
+    // is left low so nothing else claims to be the working one.
+    pts[IDX.right_wrist] = { x: 0.60, y: 0.35 - v * TORSO, z: 0, visibility: 0.95 };
+    pts[IDX.left_wrist] = { x: 0.42, y: 0.58, z: 0, visibility: 0.95 };
   } else if (kind === 'heelfold') {
     // Knee pinned, ankle folding up towards it.
     pts[IDX.left_knee] = { x: 0.46, y: 0.78, z: 0, visibility: 0.95 };

@@ -558,27 +558,37 @@ DANCE: tuple[Position, ...] = (
          "pom dancers"),
 )
 
+# Every one of these is dryland, by definition rather than by compromise: the
+# athlete trains somewhere the phone cannot go. A swimmer's dryland hour is a
+# separately coached part of the sport and it is the part that decides whether
+# their shoulders survive the yardage -- which itself reaches the load model
+# through the training log rather than through any drill here.
 SWIMMING: tuple[Position, ...] = (
     _pos("sprint", "Sprint Freestyle", "swimming", "sprint",
          ("sprint", "sprinter", "freestyle", "free", "50", "100", "sprint free"),
-         mix(gen_squat_jump=4, gen_pull_up=4, gen_hollow_hold=3, gen_push_up=3,
-             gen_glute_bridge=2, gen_dead_bug=2, gen_side_plank=2, gen_squat=2),
+         mix(gen_squat_jump=4, swm_pull=4, gen_pull_up=4, swm_streamline=3,
+             gen_hollow_hold=3, gen_push_up=3, gen_pogo=2, gen_glute_bridge=2,
+             gen_dead_bug=2, gen_side_plank=2, gen_squat=2),
          "The start and the walls. Explosive legs and a strong pull.",
          "sprinters"),
     _pos("distance", "Distance", "swimming", "distance",
-         ("distance", "distance free", "500", "1000", "1650", "mid distance", "open water"),
+         ("distance", "distance free", "500", "1000", "1650", "mid distance",
+          "open water"),
          # Every wall is a jump, and a distance swimmer hits a lot of walls.
-         mix(gen_pull_up=4, gen_hollow_hold=4, gen_plank=3, gen_pogo=3,
-             gen_dead_bug=3, gen_glute_bridge=3, gen_squat_jump=2,
-             gen_push_up=2, gen_side_plank=2, gen_squat=1),
+         mix(swm_pull=5, gen_pull_up=4, gen_hollow_hold=4, swm_streamline=3,
+             gen_plank=3, gen_pogo=3, gen_dead_bug=3, gen_glute_bridge=3,
+             gen_squat_jump=2, gen_push_up=2, gen_side_plank=2, gen_squat=1),
          "Hold your line when you are tired. That is where races are lost.",
          "distance swimmers"),
     _pos("stroke", "Stroke", "swimming", "stroke",
-         ("stroke", "butterfly", "fly", "backstroke", "back", "breaststroke", "breast", "im"),
-         # Starts and turns are where a race is won by whoever trained legs.
-         mix(gen_pull_up=4, gen_hollow_hold=4, gen_push_up=3, gen_side_plank=3,
-             gen_glute_bridge=3, gen_squat_jump=3, gen_pogo=2, gen_dead_bug=2,
-             gen_plank=1),
+         ("stroke", "butterfly", "fly", "backstroke", "back", "breaststroke",
+          "breast", "im"),
+         # The streamline leads here. A butterflyer and a backstroker pass
+         # through that position more times a session than anybody else, and
+         # it is the one their shoulders complain about first.
+         mix(swm_streamline=5, swm_pull=4, gen_pull_up=4, gen_hollow_hold=4,
+             gen_push_up=3, gen_side_plank=3, gen_glute_bridge=3,
+             gen_squat_jump=3, gen_pogo=2, gen_dead_bug=2, gen_plank=1),
          "Shoulders that last and a middle that does not wriggle.",
          "stroke swimmers"),
 )

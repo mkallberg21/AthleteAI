@@ -303,6 +303,16 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Tennis", "recovering to the middle without crossing over"),
         Transfer("Hockey", "walking the blue line without turning your hips"),
     ),
+    "swm_streamline": (
+        Transfer("Gymnastics", "the same overhead line, held upside down"),
+        Transfer("Volleyball", "the shoulders a block is made of"),
+        Transfer("Dance", "an overhead position that has to look effortless"),
+    ),
+    "swm_pull": (
+        Transfer("Lacrosse", "the same lats, pulling instead of throwing"),
+        Transfer("Rowing", "very nearly the same pull, seated"),
+        Transfer("Basketball", "grabbing a rebound out of the air and holding it"),
+    ),
     "gen_butt_kick": (
         Transfer("Soccer", "the recovery half of a sprint, which is most of one"),
         Transfer("Football", "top speed is a fast fold, not a longer stride"),

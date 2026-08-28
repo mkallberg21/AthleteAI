@@ -4327,6 +4327,335 @@ TRK_ADVANCED: tuple[Topic, ...] = (
 TRK_IQ_TOPICS: tuple[Topic, ...] = TRK_FUNDAMENTALS + TRK_CORE + TRK_ADVANCED
 
 
+# ---------------------------------------------------------------------------
+# Swimming
+#
+# The last sport, and the one whose syllabus has the least to say about
+# tactics. A swimming race has no opponent to read -- everybody is in their own
+# lane looking at a black line -- so what is left is technique sense, pacing,
+# and the two things that end more age-group careers than anything else:
+# shoulders, and the sheer number of hours.
+#
+# Nothing here teaches a stroke. That is a pool deck job, done by somebody who
+# can see the athlete under the water, and a phone in a garden has no business
+# in it.
+# ---------------------------------------------------------------------------
+
+SWM_ALL = ("sprint", "distance", "stroke")
+SWM_RACE = ("sprint", "distance")
+
+SWM_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="swm_iq_streamline",
+        title="The fastest you go is off the wall",
+        focus="Technique sense",
+        positions=SWM_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Underwater footage of a push-off held in a tight streamline next "
+            "to one that opens up early. The clip is the first five metres, "
+            "not the length."
+        ),
+        ask=Ask(
+            prompt="When are you moving fastest in a race?",
+            options=(
+                "Just after you push off the wall",
+                "In the middle of a length",
+                "On the finish",
+            ),
+            answer=0,
+            because=(
+                "Nothing you do with your arms is as fast as the wall already "
+                "made you. Every stroke you take early is you slowing yourself "
+                "down on purpose."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_shoulder_ache",
+        title="A shoulder that aches every session",
+        focus="Staying safe",
+        positions=SWM_ALL, min_age=0, max_age=200, target_s=72,
+        find=(
+            "Coaching-education footage on shoulder pain in age-group "
+            "swimmers. Material about what to do rather than what it is "
+            "called."
+        ),
+        ask=Ask(
+            prompt="Your shoulder has ached at the same point in every session for two weeks. What do you do?",
+            options=(
+                "Tell an adult, even though you can still swim on it",
+                "Swim more with a pull buoy so your legs rest",
+                "Stretch it more before practice",
+            ),
+            answer=0,
+            because=(
+                "A shoulder that hurts in the same place every time is the one "
+                "to have looked at. It is the most common reason a swimmer "
+                "stops being a swimmer, and it is very fixable early."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_count",
+        title="Count your strokes",
+        focus="Technique sense",
+        positions=SWM_ALL, min_age=0, max_age=200, target_s=68,
+        find=(
+            "Two swimmers covering a length in the same time, one taking "
+            "noticeably fewer strokes. Count them out loud over the clip."
+        ),
+        ask=Ask(
+            prompt="Two swimmers finish a length together, one taking 14 strokes and one taking 20. What does that tell you?",
+            options=(
+                "The first one is getting more out of each stroke",
+                "The first one is faster",
+                "The second one is working harder",
+            ),
+            answer=0,
+            because=(
+                "Same time, fewer strokes means every pull did more. It is the "
+                "single easiest thing to measure about your own swimming and "
+                "almost nobody does it."
+            ),
+        ),
+    ),
+)
+
+SWM_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="swm_iq_yardage",
+        title="Why the app asks how long you were in the water",
+        focus="Training sense",
+        positions=SWM_ALL, min_age=13, max_age=200, target_s=128,
+        find=(
+            "Not footage -- a coach going through a training log with a squad, "
+            "or a screen recording of one being filled in. The point is what "
+            "the log is FOR."
+        ),
+        ask=Ask(
+            prompt="What does logging your pool time in this app get you?",
+            options=(
+                "Nothing, except a load model that can see your actual week",
+                "Points and a longer streak",
+                "A place on the leaderboard",
+            ),
+            answer=0,
+            because=(
+                "It is worth no XP on purpose. Nothing you type can earn you "
+                "anything, which is exactly why the app is willing to believe "
+                "it -- and why over-stating it only buys you a warning you did "
+                "not need."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_dryland",
+        title="What dryland is actually for",
+        focus="Training sense",
+        positions=SWM_ALL, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A dryland session next to the pool session it feeds. Look for "
+            "footage where somebody explains what a particular exercise is "
+            "protecting."
+        ),
+        ask=Ask(
+            prompt="Why do swimmers do strength work out of the water?",
+            options=(
+                "So the shoulders can take the yardage the sport asks for",
+                "To swim faster straight away",
+                "Because there is not enough pool time",
+            ),
+            answer=0,
+            because=(
+                "The pull is the point in the water; out of it the point is "
+                "everything holding that shoulder together. It is the least "
+                "glamorous hour of a swimmer's week and the one that keeps "
+                "them in the sport."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_pull_buoy",
+        title="The pull buoy is not a rest",
+        focus="Staying safe",
+        positions=SWM_ALL, min_age=13, max_age=200, target_s=118,
+        find=(
+            "A set done with a pull buoy and paddles, and a coach explaining "
+            "what it is doing to the shoulder load. Education material rather "
+            "than a training montage."
+        ),
+        ask=Ask(
+            prompt="Your shoulders are sore, so you grab a pull buoy. What have you actually done?",
+            options=(
+                "Given your legs a rest and your shoulders more work",
+                "Given everything a rest",
+                "Made the set easier",
+            ),
+            answer=0,
+            because=(
+                "The buoy takes the kick away, so the arms do all of it. It is "
+                "the most common way a sore shoulder becomes an injured one."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_negative_split",
+        title="Coming home faster than you went out",
+        focus="Racing",
+        positions=SWM_RACE, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A distance race with splits on screen. Compare somebody who goes "
+            "out hard and dies with somebody whose second half is quicker."
+        ),
+        ask=Ask(
+            prompt="In a distance race, what should the second half look like?",
+            options=(
+                "As fast as the first, or faster",
+                "Slightly slower -- that is normal",
+                "Much faster, saving everything for the end",
+            ),
+            answer=0,
+            because=(
+                "Going out too fast costs far more later than it gains early. "
+                "Nearly every best time anybody swims is evenly paced or "
+                "slightly negative."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_fuel",
+        title="You cannot train on not enough food",
+        focus="Staying safe",
+        positions=SWM_ALL, min_age=13, max_age=200, target_s=135,
+        find=(
+            "Sports-dietitian or governing-body education footage aimed at "
+            "young swimmers about eating enough to train. Choose material "
+            "about fuel and performance, not about weight."
+        ),
+        ask=Ask(
+            prompt="What happens to a swimmer who is not eating enough for their training?",
+            options=(
+                "They get slower, break more easily and heal more slowly",
+                "They get lighter and the water feels easier",
+                "Nothing, as long as they feel fine",
+            ),
+            answer=0,
+            because=(
+                "Twenty hours a week in the water on too little fuel takes it "
+                "out of muscle and bone. It shows up as times that stop "
+                "improving long before it feels like anything is wrong."
+            ),
+        ),
+    ),
+)
+
+SWM_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="swm_iq_specialise_late",
+        title="Swimming all four strokes for as long as you can",
+        focus="Training sense",
+        positions=SWM_ALL, min_age=15, max_age=200, target_s=155,
+        find=(
+            "Coaching-education footage on early specialisation in age-group "
+            "swimming. Look for material about what an IM background gives a "
+            "swimmer later rather than only warnings."
+        ),
+        ask=Ask(
+            prompt="Why do coaches push young swimmers to keep doing all four strokes?",
+            options=(
+                "Different strokes load different things, and nobody knows yet what you will be",
+                "It makes training more interesting",
+                "It is required at meets",
+            ),
+            answer=0,
+            because=(
+                "A twelve-year-old specialist is doing one shoulder movement "
+                "twenty hours a week, and is usually a specialist because they "
+                "grew early rather than because that is their event."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_double_days",
+        title="Two sessions a day, and what they cost",
+        focus="Staying safe",
+        positions=SWM_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "Coaching-education footage on training volume in age-group "
+            "swimming. Anything that talks about what the second session of "
+            "the day is actually adding."
+        ),
+        ask=Ask(
+            prompt="When does a second session in one day stop being useful?",
+            options=(
+                "When you are too tired to hold the technique you came for",
+                "When you stop enjoying it",
+                "It does not -- more work is more fitness",
+            ),
+            answer=0,
+            because=(
+                "Yardage swum with a stroke falling apart teaches the stroke "
+                "that is falling apart. It is the most expensive way there is "
+                "to get slower."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_taper",
+        title="Why the fast weeks are the easy ones",
+        focus="Training sense",
+        positions=SWM_ALL, min_age=15, max_age=200, target_s=148,
+        find=(
+            "Coaching-education footage on taper. Look for material that "
+            "explains why the work stops before the meet rather than only "
+            "that it does."
+        ),
+        ask=Ask(
+            prompt="Why does training volume drop right before a big meet?",
+            options=(
+                "Because the fitness is already built and the fatigue is not gone",
+                "To keep swimmers fresh mentally",
+                "Because there is no time left to improve",
+            ),
+            answer=0,
+            because=(
+                "Everything you gained in the hard months is sitting under a "
+                "layer of tiredness. A taper does not add fitness -- it takes "
+                "the tiredness off the top of it."
+            ),
+        ),
+    ),
+    Topic(
+        key="swm_iq_lane_etiquette",
+        title="The lane is shared",
+        focus="Training sense",
+        positions=SWM_ALL, min_age=15, max_age=200, target_s=140,
+        find=(
+            "A busy lane circle-swimming well, and one where somebody leaves "
+            "on the wrong interval and everybody behind them has a worse set."
+        ),
+        ask=Ask(
+            prompt="Somebody faster is right behind you at the wall. What do you do?",
+            options=(
+                "Let them go first at the next wall",
+                "Speed up so they do not catch you",
+                "Stay where you are -- you were there first",
+            ),
+            answer=0,
+            because=(
+                "A lane where nobody moves over is a lane where nobody gets "
+                "the set they came for, including you. It costs one push-off "
+                "to fix."
+            ),
+        ),
+    ),
+)
+
+SWM_IQ_TOPICS: tuple[Topic, ...] = (
+    SWM_FUNDAMENTALS + SWM_CORE + SWM_ADVANCED
+)
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
@@ -4351,5 +4680,6 @@ BY_SPORT.update({
     # runner are usually the same child in a different season.
     "track": TRK_IQ_TOPICS,
     "cross_country": TRK_IQ_TOPICS,
+    "swimming": SWM_IQ_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

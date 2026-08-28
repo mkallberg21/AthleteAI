@@ -1835,20 +1835,21 @@ class Store:
             set_by=set_by, set_by_name=set_by_name, note=note,
         )
 
-    def log_run(
+    def log_training(
         self,
         athlete_id: int,
         *,
         minutes: int,
+        activity: str = "run",
         day: date | None = None,
         note: str = "",
     ) -> dict[str, Any]:
-        """Record running the camera will never see.
+        """Record training the camera will never see.
 
         Unverifiable, and admissible anyway because of what it is wired to.
-        **A logged run earns nothing.** No XP, no streak, no leaderboard, no
-        badge, no session row. It reaches the load model and stops there, and
-        the load model only ever produces cautions.
+        **A logged session earns nothing.** No XP, no streak, no leaderboard,
+        no badge, no session row. It reaches the load model and stops there,
+        and the load model only ever produces cautions.
 
         That is the whole integrity argument, and it is worth stating in one
         line: there is no direction in which lying about this pays. Inflate it
@@ -1857,42 +1858,81 @@ class Store:
         be a way around the integrity layer, because everywhere else numbers
         buy something.
 
-        One row per day, replaced rather than added to. Somebody correcting
-        yesterday's entry is the common case; two rows for one run would count
-        it twice.
+        `activity` is closed rather than free text. A run and a swim cost
+        different things per minute -- one loads bone and the other loads a
+        shoulder -- and an activity nobody has picked a rate for would be
+        accepted and then contribute nothing, which is the worst of both.
+
+        One row per day per activity, replaced rather than added to. Somebody
+        correcting yesterday's entry is the common case; two rows for one
+        session would count it twice.
         """
+        if activity not in load_mod.LOGGED_ACTIVITIES:
+            raise StoreError(
+                f"unknown activity: {activity!r} "
+                f"(expected one of {', '.join(load_mod.LOGGED_ACTIVITIES)})"
+            )
         if minutes <= 0 or minutes > 600:
             raise StoreError("minutes must be between 1 and 600")
         day = day or _now().date()
         if day > _now().date():
-            raise StoreError("cannot log a run in the future")
+            raise StoreError("cannot log training in the future")
         with transaction(self.conn) as conn:
             conn.execute(
-                "INSERT INTO run_log(athlete_id, day, minutes, note, created_at) "
-                "VALUES (?,?,?,?,?) "
-                "ON CONFLICT(athlete_id, day) DO UPDATE SET "
+                "INSERT INTO training_log"
+                "  (athlete_id, day, activity, minutes, note, created_at) "
+                "VALUES (?,?,?,?,?,?) "
+                "ON CONFLICT(athlete_id, day, activity) DO UPDATE SET "
                 "  minutes = excluded.minutes, note = excluded.note, "
                 "  created_at = excluded.created_at",
-                (athlete_id, day.isoformat(), int(minutes), note.strip()[:200],
-                 _iso(_now())),
+                (athlete_id, day.isoformat(), activity, int(minutes),
+                 note.strip()[:200], _iso(_now())),
             )
         return {
             "day": day.isoformat(),
+            "activity": activity,
             "minutes": int(minutes),
             "xp_awarded": 0,
             "counts_toward": "training load only",
         }
 
-    def run_log(self, athlete_id: int, days: int = 28) -> list[dict[str, Any]]:
+    def log_run(
+        self,
+        athlete_id: int,
+        *,
+        minutes: int,
+        day: date | None = None,
+        note: str = "",
+    ) -> dict[str, Any]:
+        """Log a run. Thin alias over `log_training`, kept because running was
+        the first activity the log existed for and reads better at call sites
+        that only ever mean one thing."""
+        return self.log_training(
+            athlete_id, minutes=minutes, activity="run", day=day, note=note,
+        )
+
+    def training_log(
+        self, athlete_id: int, days: int = 28, activity: str | None = None
+    ) -> list[dict[str, Any]]:
         """What the athlete has logged, most recent first."""
         since = (_now().date() - timedelta(days=days)).isoformat()
+        sql = ("SELECT day, activity, minutes, note FROM training_log "
+               "WHERE athlete_id = ? AND day >= ?")
+        args: list[Any] = [athlete_id, since]
+        if activity:
+            sql += " AND activity = ?"
+            args.append(activity)
         return [
-            {"day": r["day"], "minutes": int(r["minutes"]), "note": r["note"]}
-            for r in self.conn.execute(
-                "SELECT day, minutes, note FROM run_log "
-                "WHERE athlete_id = ? AND day >= ? ORDER BY day DESC",
-                (athlete_id, since),
-            )
+            {"day": r["day"], "activity": r["activity"],
+             "minutes": int(r["minutes"]), "note": r["note"]}
+            for r in self.conn.execute(sql + " ORDER BY day DESC, activity", args)
+        ]
+
+    def run_log(self, athlete_id: int, days: int = 28) -> list[dict[str, Any]]:
+        """Runs only, without the activity column. See `training_log`."""
+        return [
+            {"day": r["day"], "minutes": r["minutes"], "note": r["note"]}
+            for r in self.training_log(athlete_id, days, activity="run")
         ]
 
     def log_self_reported(
@@ -3061,20 +3101,25 @@ class Store:
             entry.throws += throws
             entry.sessions += 1
 
-        # Logged running, which no session row will ever carry. Added to the
+        # Logged training, which no session row will ever carry. Added to the
         # same load figure the ratio is computed from -- the whole point is
-        # that a runner's acute:chronic stops being a ratio of their warm-up.
+        # that an endurance athlete's acute:chronic stops being a ratio of
+        # their warm-up.
         since = (_now().date() - timedelta(days=days)).isoformat()
         for row in self.conn.execute(
-            "SELECT day, minutes FROM run_log "
+            "SELECT day, activity, minutes FROM training_log "
             "WHERE athlete_id = ? AND day >= ? ORDER BY day",
             (athlete_id, since),
         ):
             entry = by_day.setdefault(
                 row["day"], load_mod.DayLoad(day=date.fromisoformat(row["day"]))
             )
-            entry.run_minutes += int(row["minutes"])
-            entry.load += int(row["minutes"]) * load_mod.RUN_LOAD_PER_MINUTE
+            activity, minutes = row["activity"], int(row["minutes"])
+            if activity == "swim":
+                entry.swim_minutes += minutes
+            else:
+                entry.run_minutes += minutes
+            entry.load += minutes * load_mod.LOAD_PER_MINUTE.get(activity, 0.0)
         return sorted(by_day.values(), key=lambda d: d.day)
 
     def load_state(self, athlete_id: int) -> load_mod.LoadState:
