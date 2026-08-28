@@ -576,6 +576,51 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when you start standing up out of your stance.",
             "an upright player has already given up the next two shots"),
     ),
+    "rug_quick_hands": (
+        Cue("depth", "The ball has to cross your body. Catching and popping it "
+                     "straight back out on the same side is not a pass.",
+            "the app counts the crossing, and so does a defender"),
+        Cue("tempo", "Catch and pass in one movement. If you have time to "
+                     "gather it, get further from the wall.",
+            "the whole drill is the time you do not take"),
+        Cue("consistency", "Both directions, every time. Alternate on purpose "
+                           "rather than drifting onto your good side.",
+            "everybody drifts, and nobody notices they have"),
+        Cue("endurance", "Stop when the ball starts hitting your chest before "
+                         "your hands do.",
+            "that is your hands slowing down, not the ball speeding up"),
+    ),
+    "rug_wall_pass": (
+        Cue("depth", "Hands from your back hip through to pointing at the "
+                     "target. A pass that starts at your chest has half the "
+                     "distance and half the accuracy.",
+            "the pass gets its speed from how far you carry it"),
+        Cue("tempo", "Catch, turn your shoulders, pass. Same rhythm each way, "
+                     "even though one way will feel wrong for a while.",
+            "the side that feels wrong is the side worth the session"),
+        Cue("consistency", "Same number each way. The app will tell you if one "
+                           "side is coming up short.",
+            "one-sided passers get found in a single game"),
+        Cue("endurance", "When your weak side starts getting shorter, that is "
+                         "the end of the set rather than the moment to push.",
+            "a tired weak side practises being weak"),
+    ),
+    "rug_spin_pass": (
+        Cue("depth", "All the way from behind your back hip to a full "
+                     "follow-through. This is the drill where the width is the "
+                     "whole point.",
+            "a short spin pass is just a pass with a longer name"),
+        Cue("tempo", "One at a time, with your feet set. These are individual "
+                     "passes, not a set you rush through.",
+            "the feet are where the distance comes from"),
+        Cue("consistency", "Same launch point both ways. Most players have a "
+                           "long side and a short side and have never measured "
+                           "either.",
+            "the app measures both and will tell you the gap"),
+        Cue("endurance", "Stop when the ball stops spinning. That is your hands "
+                         "going, and the next twenty reps teach the wrong thing.",
+            "a wobbling pass is a slower pass"),
+    ),
     "fb_quick_release": (
         Cue("depth", "Ball from your ear, not from behind your head. If you "
                      "are winding up, it is not a quick release.",

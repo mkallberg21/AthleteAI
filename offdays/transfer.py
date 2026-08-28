@@ -267,6 +267,19 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "jockeying a winger without turning your hips"),
         Transfer("Lacrosse", "a defender's approach and break down"),
     ),
+    "rug_quick_hands": (
+        Transfer("Basketball", "moving the ball before the defence resets"),
+        Transfer("Netball", "very nearly the same pass, on the same clock"),
+    ),
+    "rug_wall_pass": (
+        Transfer("Lacrosse", "the same reason to give your weak side the reps"),
+        Transfer("Basketball", "a chest pass, thrown further"),
+        Transfer("Hockey", "the same hands crossing the body, on a stick"),
+    ),
+    "rug_spin_pass": (
+        Transfer("Baseball", "rotation through the hips rather than the arms"),
+        Transfer("Football", "the ball travels because your body turned"),
+    ),
     "fb_quick_release": (
         Transfer("Basketball", "catch and shoot with no wasted motion"),
         Transfer("Baseball", "an infielder's transfer and release"),

@@ -127,7 +127,13 @@ class TestTheSweepSignal:
 
 
 class TestTheSweepReport:
-    """The backhand, reported without ever guessing which side it is."""
+    """The backhand, reported without ever guessing which side it is.
+
+    The report itself no longer uses the word: rugby reads the same number and
+    a rugby player has no backhand, so `sweep.py` names neither side and lets
+    the athlete supply the label. For a hockey player the label is always the
+    same one.
+    """
 
     @staticmethod
     def _reps(a, b, n=20):
@@ -142,15 +148,17 @@ class TestTheSweepReport:
     def test_a_short_side_is_reported(self):
         report = sweep.analyze(self._reps(0.60, 0.40))
         assert report.balance == pytest.approx(0.667, abs=0.01)
-        assert "backhand" in report.note
+        assert "one side" in report.note.lower()
+        # Says it cannot tell which one, which is the load-bearing half.
+        assert "cannot tell" in report.note
 
     def test_a_side_that_is_barely_moving_is_said_more_strongly(self):
         report = sweep.analyze(self._reps(0.60, 0.18))
         assert report.balance == pytest.approx(0.30, abs=0.01)
         assert "barely" in report.note
-        # Still says it cannot tell which side. The worst case is exactly
+        # Still admits it cannot tell which side. The worst case is exactly
         # where a confident guess would do the most damage.
-        assert "backhand" in report.note
+        assert "cannot tell" in report.note
 
     def test_it_never_says_which_side_is_the_backhand(self):
         """With one camera and no stick in the pose model, the app knows the

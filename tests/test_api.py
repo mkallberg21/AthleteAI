@@ -4117,7 +4117,8 @@ class TestAStickSessionEndToEnd:
         res = self._submit(client, program["athletes"][0]["headers"], 0.45, 0.20)
         block = res.json()["sweep"]
         assert block["balance"] == pytest.approx(0.444, abs=0.01)
-        assert "backhand" in block["note"]
+        assert "one side" in block["note"].lower()
+        assert "cannot tell" in block["note"]
 
     def test_a_short_side_costs_no_xp(self, client, program):
         # Counted, never scored -- the same rule as the crossed-feet report.

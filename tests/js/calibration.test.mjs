@@ -114,6 +114,11 @@ const SWEEP = {
   // finishes with the ankle above the hip, which nothing else ever does.
   fb_kick:           { lo: -1.40, hi: 0.95, kind: 'kick' },
   fb_shuffle:        { lo: 1.22,  hi: 2.00, kind: 'stance' },
+  // The rugby passes share the hockey sweep signal. Six drills across two
+  // sports now sit on one measurement, nested so every rate rises with width.
+  rug_quick_hands:   { lo: -0.30, hi: 0.30, kind: 'sweep' },
+  rug_wall_pass:     { lo: -0.54, hi: 0.54, kind: 'sweep' },
+  rug_spin_pass:     { lo: -0.82, hi: 0.82, kind: 'sweep' },
 };
 
 // Hold drills score time in a valid band rather than a rep cycle, so a swept

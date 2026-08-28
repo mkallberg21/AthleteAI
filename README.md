@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3427 tests
+python -m pytest tests/ -q          # 3493 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 225 tests
+  node --test tests/js/*.test.mjs   # 228 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1292,14 +1292,14 @@ sessions.
 
 ### The drill catalog, and what is deliberately missing
 
-Eighty drills: twenty-one bodyweight movements that work for any sport —
+Eighty-three drills: twenty-one bodyweight movements that work for any sport —
 squats, lunges, glute bridges, push-ups, pull-ups, planks, side planks, hollow
 holds, wall sits, dead bugs, mountain climbers, burpees, squat jumps, tuck
 jumps, lateral bounds, high knees, jumping jacks, sit-ups, calf raises, wall
-handstands, dead hangs — and skill work for the eight sports built out so far:
+handstands, dead hangs — and skill work for the nine sports built out so far:
 lacrosse (11), basketball (9), soccer, volleyball and tennis (7 each), hockey
-(6), football (5), and baseball and softball (7 between them, sharing
-everything except the mound).
+(6), football (5), rugby (3), and baseball and softball (7 between them,
+sharing everything except the mound).
 
 **A drill only pays for what the camera can confirm.** Every skill drill has an
 unambiguous pose signal, and where several drills share one signal their
@@ -1329,7 +1329,12 @@ sports should be. The last three general drills came out of that build: the
 catalogue had eighteen bodyweight movements that between them never measured an
 ankle, never went overhead and never asked anybody to hang.
 
-The remaining four — rugby, track, cross country and swimming — get positions,
+Rugby's three is the smallest set here and deliberately so: tackling, rucking,
+scrummaging and lineout lifting all need another person, none of them belong to
+a child alone in a garden, and they are taught on film rather than approximated
+by something a camera could count.
+
+The remaining three — track, cross country and swimming — get positions,
 benchmarks, load monitoring and the bodyweight catalogue, and are honest about
 having no skill drills rather than being handed another sport's with the labels
 changed.

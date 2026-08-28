@@ -3612,6 +3612,363 @@ FB_ADVANCED: tuple[Topic, ...] = (
 FB_IQ_TOPICS: tuple[Topic, ...] = FB_FUNDAMENTALS + FB_CORE + FB_ADVANCED
 
 
+# ---------------------------------------------------------------------------
+# Rugby
+#
+# Same rules as every syllabus here. What is distinctive is that this sport has
+# spent the last decade actively changing its own laws about where a tackle may
+# land, because the answer turned out to matter more than anybody thought -- so
+# the safety half of this syllabus is teaching a moving target, and it says so
+# rather than presenting one country's current law as physics.
+#
+# Five topics are about contact and the head. That is not editorialising: the
+# tackle is the single most common event in the game and the single most common
+# way anybody gets hurt in it.
+# ---------------------------------------------------------------------------
+
+RUG_ALL = ("front_row", "second_row", "half_back", "backs")
+RUG_FORWARDS = ("front_row", "second_row")
+RUG_BACKS = ("half_back", "backs")
+
+RUG_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="rug_iq_low_tackle",
+        title="Tackle low, and look at what you are tackling",
+        focus="Staying safe",
+        positions=RUG_ALL, min_age=0, max_age=200, target_s=72,
+        find=(
+            "Governing-body coaching footage of a tackle around the thighs "
+            "with the head to the side, next to an upright one. Official "
+            "material is much better here than match footage."
+        ),
+        ask=Ask(
+            prompt="Where should your head go when you tackle?",
+            options=(
+                "To the side of them, with your eyes open and on the target",
+                "Straight into the contact, so you take it evenly",
+                "Tucked down and away so it is out of the way",
+            ),
+            answer=0,
+            because=(
+                "A head that goes into the contact is a head and neck taking a "
+                "load nothing about a fourteen-year-old is built for. To the "
+                "side and eyes open is the whole technique."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_say_something",
+        title="After a knock, say something",
+        focus="Staying safe",
+        positions=RUG_ALL, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Sideline footage of a player being assessed after contact, and "
+            "one who gets up and plays on. What they do over the next two "
+            "minutes is the clip."
+        ),
+        ask=Ask(
+            prompt="You took a knock to the head and you feel a bit off, but you can carry on. What now?",
+            options=(
+                "Come off and tell an adult straight away",
+                "Play the rest of the passage and reassess",
+                "Ask a teammate whether you look alright",
+            ),
+            answer=0,
+            because=(
+                "You are using the injured part to decide whether you are "
+                "injured. Nobody has ever regretted coming off, and the person "
+                "who says something has done the entire job."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_both_hands",
+        title="A pass off one hand is half a player",
+        focus="Skills",
+        positions=RUG_ALL, min_age=0, max_age=200, target_s=68,
+        find=(
+            "A back line moving the ball both ways, next to one where a player "
+            "has to turn their whole body to pass left. Watch the defence read "
+            "the second one."
+        ),
+        ask=Ask(
+            prompt="Why does it matter that you can pass off both hands?",
+            options=(
+                "Because a defence works out which way you cannot pass",
+                "Because it looks better",
+                "Because coaches ask for it",
+            ),
+            answer=0,
+            because=(
+                "Everybody watching can see which side you turn to. Once they "
+                "know, half the field stops being available to your team."
+            ),
+        ),
+    ),
+)
+
+RUG_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="rug_iq_tackle_height_law",
+        title="The legal height keeps moving, and why",
+        focus="Staying safe",
+        positions=RUG_ALL, min_age=13, max_age=200, target_s=130,
+        find=(
+            "Your own union's current guidance on tackle height for this age "
+            "group. This one has to be re-cut when the law changes, which it "
+            "has done repeatedly -- do not use footage from another country or "
+            "another season."
+        ),
+        ask=Ask(
+            prompt="Why has rugby kept lowering where a tackle is allowed to land?",
+            options=(
+                "Because lower tackles produce fewer head collisions",
+                "To make the game faster",
+                "To make it harder to defend",
+            ),
+            answer=0,
+            because=(
+                "Most head-to-head contact in this sport happens when the "
+                "tackler is upright. Lowering the target lowers both heads, "
+                "which is the only part of it anybody can control."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_scrum_safety",
+        title="A scrum is not a thing to practise alone",
+        focus="Staying safe",
+        positions=RUG_FORWARDS, min_age=13, max_age=200, target_s=125,
+        find=(
+            "Coaching-education footage on the scrum sequence and why it is "
+            "called. The clip is the setup and the call, not the shove."
+        ),
+        ask=Ask(
+            prompt="Why is every scrum called in the same sequence, every single time?",
+            options=(
+                "So nobody's neck is loaded before they are ready for it",
+                "To give the referee time to get into position",
+                "To slow the game down",
+            ),
+            answer=0,
+            because=(
+                "The sequence exists because front rows get hurt when the "
+                "engagement is early or uneven. It is the one part of this "
+                "sport where the ritual is the safety measure."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_support",
+        title="The pass is only half of it",
+        focus="Support",
+        positions=RUG_ALL, min_age=13, max_age=200, target_s=120,
+        find=(
+            "A carrier going into contact with two players arriving behind "
+            "them, and the same carrier arriving alone. Cut wide enough to see "
+            "who is running and who is watching."
+        ),
+        ask=Ask(
+            prompt="Your teammate is about to be tackled. Where should you be?",
+            options=(
+                "Close enough behind them to arrive before the defence does",
+                "Wide, in case the ball comes out",
+                "Back, in case it goes wrong",
+            ),
+            answer=0,
+            because=(
+                "A carrier with nobody behind them loses the ball. Most turnovers "
+                "at this level are not tackles -- they are a carrier arriving "
+                "alone."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_depth",
+        title="Standing flat gives you nothing",
+        focus="Attack",
+        positions=RUG_BACKS, min_age=13, max_age=200, target_s=126,
+        find=(
+            "A back line taking the ball flat and one taking it with depth. "
+            "The clip is where each receiver is standing when the ball leaves, "
+            "not where they end up."
+        ),
+        ask=Ask(
+            prompt="Why do backs stand deeper than feels necessary?",
+            options=(
+                "So you are moving at speed when the ball arrives",
+                "To give the passer an easier target",
+                "To stay away from the defence",
+            ),
+            answer=0,
+            because=(
+                "Standing flat means catching it standing still, a metre from "
+                "somebody who is not. Depth is how you get to be the one "
+                "arriving at pace."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_never_sideways",
+        title="Running across the field helps the defence",
+        focus="Attack",
+        positions=RUG_BACKS, min_age=13, max_age=200, target_s=118,
+        find=(
+            "A back line drifting sideways until it runs out of pitch, next to "
+            "one attacking straight and passing late. Watch the touchline in "
+            "the first one."
+        ),
+        ask=Ask(
+            prompt="What happens when an attack runs sideways?",
+            options=(
+                "The defence gets to slide across and nobody has to beat anyone",
+                "It creates space on the outside",
+                "It buys time for support to arrive",
+            ),
+            answer=0,
+            because=(
+                "Running sideways gives the defence exactly what they want: "
+                "time, and a touchline to push you into. Straight first, then "
+                "the pass."
+            ),
+        ),
+    ),
+)
+
+RUG_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="rug_iq_head_on_head",
+        title="The collision nobody meant",
+        focus="Staying safe",
+        positions=RUG_ALL, min_age=15, max_age=200, target_s=160,
+        find=(
+            "Officiating or union education footage explaining head-on-head "
+            "contact and how it is judged. Material where the decision is "
+            "talked through is worth far more than the incident."
+        ),
+        ask=Ask(
+            prompt="Most head-to-head contact in a tackle happens because of what?",
+            options=(
+                "A tackler upright and a carrier dipping into them",
+                "Two players running very fast",
+                "A player not being strong enough",
+            ),
+            answer=0,
+            because=(
+                "Two heads end up in the same place because one player stayed "
+                "tall and the other dropped. Both of those are decisions, which "
+                "is why both are coached."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_ruck_arrival",
+        title="Arriving at a ruck on your feet",
+        focus="Staying safe",
+        positions=RUG_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "A player arriving low, square and on their feet, and one diving "
+            "off their feet into the side. The penalty in the second one is "
+            "part of the lesson, and so is the neck position."
+        ),
+        ask=Ask(
+            prompt="Why does the law insist you stay on your feet at a ruck?",
+            options=(
+                "Because a player off their feet cannot protect their own neck",
+                "To keep the ball available",
+                "To make it easier to referee",
+            ),
+            answer=0,
+            because=(
+                "A player diving in headfirst has no way to brace and nowhere "
+                "to go. The law is a safety rule that happens to also keep the "
+                "ball moving."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_kick_choice",
+        title="When to kick and when not to",
+        focus="Decisions",
+        positions=("half_back",), min_age=15, max_age=200, target_s=158,
+        find=(
+            "Two kicks from the same match: one that puts a side into a good "
+            "position and one that hands the ball back with the field open. "
+            "The clip is the four seconds before each."
+        ),
+        ask=Ask(
+            prompt="You have the ball in your own half with defenders up fast. What is the question?",
+            options=(
+                "Whether kicking gets you more than keeping it does",
+                "Whether you can kick it far enough",
+                "Whether your winger is fast enough to chase",
+            ),
+            answer=0,
+            because=(
+                "A kick gives the ball away on purpose. That is sometimes the "
+                "best decision on the field and sometimes the worst one, and "
+                "the difference is what you get back for it."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_neck",
+        title="Your neck is training equipment",
+        focus="Staying safe",
+        positions=RUG_ALL, min_age=15, max_age=200, target_s=155,
+        find=(
+            "Sports-science or union education footage on neck strength in "
+            "contact sports. Anything showing what a head does on impact with "
+            "a braced neck against a loose one."
+        ),
+        ask=Ask(
+            prompt="What does a stronger neck actually do for you?",
+            options=(
+                "It slows how fast your head moves when you get hit",
+                "It stops you getting hit as hard",
+                "It prevents you being tackled",
+            ),
+            answer=0,
+            because=(
+                "Nothing stops the contact. What a braced neck changes is how "
+                "violently your head travels afterwards, and that is the part "
+                "that matters. This app cannot count neck work -- a good "
+                "isometric hold does not move -- so it is coached rather than "
+                "scored."
+            ),
+        ),
+    ),
+    Topic(
+        key="rug_iq_offseason",
+        title="Twelve months of contact",
+        focus="Training sense",
+        positions=RUG_ALL, min_age=15, max_age=200, target_s=152,
+        find=(
+            "Coaching-education footage on year-round contact loading in young "
+            "players. Look for material about what a real break gives back "
+            "rather than only warning about burnout."
+        ),
+        ask=Ask(
+            prompt="Why does the app ask when your season ends and what else you play?",
+            options=(
+                "Because contact loads something that needs a stretch of the year off",
+                "To compare you with other players",
+                "To pick which drills to show you",
+            ),
+            answer=0,
+            because=(
+                "Every collision is absorbed by something, and that something "
+                "repairs on a timescale nobody sees. The answer changes how "
+                "much solo work this app will suggest, which is the only "
+                "reason it asks."
+            ),
+        ),
+    ),
+)
+
+RUG_IQ_TOPICS: tuple[Topic, ...] = RUG_FUNDAMENTALS + RUG_CORE + RUG_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
@@ -3631,5 +3988,6 @@ BY_SPORT.update({
     "cheer": JDG_TOPICS,
     "dance": JDG_TOPICS,
     "football": FB_IQ_TOPICS,
+    "rugby": RUG_IQ_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

@@ -781,32 +781,49 @@ HOCKEY: tuple[Position, ...] = (
          "goaltenders"),
 )
 
+# The sport where most of the game cannot be practised alone, and the plans say
+# so by what is in them. Tackling, rucking, scrummaging and lineout lifting all
+# need another person and none of them belong in a garden, so every plan here is
+# passing, kicking and conditioning -- which is what a rugby player's hour at
+# home has always actually been.
+#
+# Passing is in all four. In this sport that is not a nicety: a player who can
+# only pass one way is a player the opposition finds inside one game.
 RUGBY: tuple[Position, ...] = (
     _pos("front_row", "Front Row", "rugby", "forwards",
          ("front row", "prop", "hooker", "loosehead", "tighthead", "1", "2", "3"),
-         mix(gen_squat=5, gen_push_up=4, gen_wall_sit=3, gen_glute_bridge=3,
-             gen_side_plank=3, gen_lunge=2, gen_plank=2, gen_pull_up=1),
+         # Strength leads, and the hang is here for the neck and shoulders that
+         # a scrum asks everything of. The passing is real but short.
+         mix(gen_squat=5, gen_push_up=4, gen_dead_hang=3, gen_wall_sit=3,
+             gen_glute_bridge=3, gen_side_plank=3, rug_quick_hands=2,
+             gen_lunge=2, gen_plank=2, gen_calf_raise=1),
          "Scrummaging is a squat against another person. Legs, back, neck.",
          "front rowers"),
     _pos("second_row", "Second & Back Row", "rugby", "forwards",
-         ("second row", "lock", "back row", "flanker", "flank", "number 8", "no 8",
-          "4", "5", "6", "7", "8"),
+         ("second row", "lock", "back row", "flanker", "flank", "number 8",
+          "no 8", "4", "5", "6", "7", "8"),
          mix(gen_squat=4, gen_burpee=3, gen_pull_up=3, gen_lunge=3,
-             gen_mountain_climber=3, gen_push_up=2, gen_squat_jump=2, gen_plank=2),
+             gen_mountain_climber=3, rug_quick_hands=3, gen_push_up=2,
+             gen_squat_jump=2, gen_dead_hang=2, gen_plank=2),
          "Up and down all game. Get off the floor and into the next one.",
          "forwards"),
     _pos("half_back", "Half Backs", "rugby", "backs",
-         ("half back", "halfback", "scrum half", "scrumhalf", "fly half", "flyhalf",
-          "9", "10"),
-         mix(gen_lateral_bound=4, gen_side_plank=4, gen_lunge=3, gen_high_knees=3,
-             gen_glute_bridge=2, gen_dead_bug=2, gen_squat=2, gen_plank=2),
+         ("half back", "halfback", "scrum half", "scrumhalf", "fly half",
+          "flyhalf", "9", "10"),
+         # The only plan in the sport that is mostly its own sport. A nine and
+         # a ten pass and kick more than everybody else combined, and the app
+         # can count both of those.
+         mix(rug_spin_pass=5, rug_wall_pass=4, fb_kick=4, rug_quick_hands=3,
+             gen_lateral_bound=3, gen_side_plank=3, gen_lunge=2,
+             gen_high_knees=2, gen_glute_bridge=2, gen_dead_bug=2),
          "Pass off both hands from anywhere, and be moving when you do it.",
          "half backs"),
     _pos("backs", "Centres & Back Three", "rugby", "backs",
-         ("centre", "center", "wing", "winger", "fullback", "full back", "back three",
-          "outside back", "11", "12", "13", "14", "15"),
-         mix(gen_high_knees=4, gen_lateral_bound=4, gen_squat_jump=3, gen_lunge=3,
-             gen_glute_bridge=3, gen_squat=2, gen_side_plank=2, gen_plank=1),
+         ("centre", "center", "wing", "winger", "fullback", "full back",
+          "back three", "outside back", "11", "12", "13", "14", "15"),
+         mix(gen_high_knees=4, gen_lateral_bound=4, rug_wall_pass=3,
+             gen_squat_jump=3, gen_calf_raise=3, gen_lunge=3, rug_spin_pass=2,
+             gen_glute_bridge=2, gen_squat=2, gen_side_plank=2, gen_plank=1),
          "Straight-line speed, and the ability to change your mind mid-stride.",
          "backs"),
 )

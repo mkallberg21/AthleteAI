@@ -1,31 +1,31 @@
-"""What a hand-sweep session says about the two sides of a stick.
+"""What a hand-sweep session says about the two sides of an athlete.
 
-Every stick sport has a strong side and a weak one, and hockey's version of
-that is not a hand you can swap. A lacrosse player switches their top hand and
-a wall-ball drill can credit the off-hand reps directly; a hockey player holds
-the stick the same way for their whole life. Their weak side is the *backhand*,
-and it is weak in exactly the way an off-hand is: it gets a fraction of the
-reps and it is the first thing to disappear under pressure.
+The sweep signal is signed, so every counted rep already carries how far the
+hands got in each direction: `peak` is the furthest one way and `peak - rom` is
+the furthest the other. Nothing extra is recorded, no new column, and no new
+field on the rep payload.
 
-The sweep signal can see it, because it is signed. A rep arms on one side of
-the chest and fires on the other, so every counted rep already carries how far
-the hands got in each direction -- `peak` is the furthest one way and
-`peak - rom` is the furthest the other. Nothing extra is recorded, no new
-column, and no new field on the rep payload.
+**Two sports read the same number and mean different things by it, which is why
+this module names neither.** A hockey player holds the stick the same way for
+their whole life -- their weak side is the backhand, and it is weak in exactly
+the way an off-hand is. A rugby player is required to pass off both hands from
+anywhere, so their weak side is a gap the sport will find inside one game. The
+measurement is identical; the conclusion belongs to the athlete, who knows
+which sport they play and which way they hold things.
 
-Three rules shape what comes out, and two of them are the same rules that
-shaped the goalie report and the crossed-feet report.
+Three rules shape what comes out, and two of them are the rules that shaped the
+goalie report and the crossed-feet report.
 
 **Counted, never scored.** A short side is reported as a measurement, not a
-deduction. A thirteen-year-old's backhand is short because it is a backhand,
-and the useful response to that is being told so, not being quietly paid less.
+deduction. A thirteen-year-old's weak side is short because it is their weak
+side, and the useful response is being told so, not being quietly paid less.
 
 **Said plainly to the athlete.** The line below goes on their own screen.
 
-**It never says which side is the backhand.** With one camera and no stick in
-the pose model, the app knows the hands went further right than left; it does
-not know which way the player shoots, and guessing would be a coaching
-instruction built on a coin flip. So it reports the asymmetry and lets the
+**It never says which side.** With one camera and no stick or ball in the pose
+model, the app knows the hands went further one way than the other; it does not
+know which way the athlete shoots or passes, and a coaching instruction built
+on a coin flip is worse than none. So it reports the asymmetry and lets the
 athlete -- who knows perfectly well -- supply the label. That is the same rule
 the tennis drills follow about forehand and backhand wings.
 """
@@ -54,8 +54,8 @@ class SweepReport:
     reps: int = 0
     #: Median distance the hands reached each way, in torso lengths. Sides are
     #: 'a' and 'b' rather than left and right on purpose: they are the
-    #: athlete's own sides, and naming them forehand and backhand would be a
-    #: guess about which way they shoot.
+    #: athlete's own sides, and naming either one would be a guess about which
+    #: way they hold a stick or which hand they pass off.
     reach_a: float | None = None
     reach_b: float | None = None
     #: Short side over long side. 1.0 is perfectly even.
@@ -115,14 +115,15 @@ def analyze(reps: list[dict[str, Any]]) -> SweepReport:
     elif report.balance >= VERY_SHORT:
         report.note = (
             f"One side is going about {round(report.balance * 100)}% as far as "
-            "the other. The app cannot tell which one is your backhand -- but "
-            "you can, and that is the side to work on."
+            "the other. The app cannot tell which of your two sides that is "
+            "-- but you can, and that is the one to work on."
         )
     else:
         report.note = (
             f"One side is going about {round(report.balance * 100)}% as far as "
             "the other, which is barely using it at all. The app cannot tell "
-            "which one is your backhand -- but you can. Slow the whole drill "
-            "down until both sides look the same, then build the speed back."
+            "which of your two sides that is -- but you can. Slow the whole "
+            "drill down until both sides look the same, then build the speed "
+            "back."
         )
     return report

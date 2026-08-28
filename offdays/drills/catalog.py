@@ -3718,8 +3718,9 @@ FB_KICK = DrillSpec(
     description=(
         "The full leg swing, with or without a ball. It follows your kicking "
         "foot from the ground to the top of the follow-through, so a half "
-        "swing does not count. This is the highest-volume thing anybody on a "
-        "football field does alone, and until now nothing counted it."
+        "swing does not count. A punt is a punt in either code, so rugby "
+        "kickers use this drill too -- it is the highest-volume thing anybody "
+        "on either field does alone, and until now nothing counted it."
     ),
     signal=SignalSpec(
         # The kicking foot against the hip on the same side. By far the largest
@@ -3822,6 +3823,197 @@ FB_SHUFFLE = DrillSpec(
 )
 
 
+# --------------------------------------------------------------------------
+# Rugby
+#
+# The sport where most of the game is unavailable to a solo camera, and saying
+# so is most of the work. Tackling, rucking, scrummaging and lineout lifting
+# all need at least one other person, and none of them should be practised
+# alone by a fourteen-year-old in a garden. What is left is passing, kicking
+# and conditioning -- which happens to be exactly what a rugby player's hour at
+# home has always been.
+#
+# **Passing reads on the hockey sweep signal, and means something different on
+# it.** A hockey player's short side is their backhand, which they will have
+# for life. A rugby player is required to pass off both hands from anywhere,
+# so a short side is a gap the sport finds inside one game. Same number,
+# different conclusion -- which is why `sweep.py` reports the asymmetry and
+# names neither side.
+#
+# The three drills below extend a ladder that now runs across two sports and
+# six drills on one measurement. Every band contains the one below it, so every
+# rate has to rise with it: there is no way to earn more by doing less.
+# --------------------------------------------------------------------------
+
+RUG_QUICK_HANDS = DrillSpec(
+    key="rug_quick_hands",
+    # Not "Quick Hands" -- baseball has that. A pop is what a rugby coach calls
+    # a short ball anyway, so the sport's own word is also the unique one.
+    name="Pop Passing",
+    sport="rugby",
+    category=Category.SPEED,
+    metric=Metric.REPS,
+    description=(
+        "Catch and pass in one movement, close to the wall, both directions. "
+        "One rep is one trip across your body. There is a speed floor here: a "
+        "long pass cannot be repeated this fast, which is how the app knows "
+        "these were quick ones."
+    ),
+    signal=SignalSpec(
+        # The same measurement a stickhandle runs on: the hands crossing the
+        # middle of the chest. A pass is that crossing done once and released.
+        kind=SignalKind.HAND_SWEEP,
+        smoothing=0.55,
+    ),
+    counter=CounterSpec(
+        # The hands stay in tight. Narrow on purpose -- this is the band the
+        # other two contain rather than the other way round.
+        down_threshold=-0.22,
+        up_threshold=0.22,
+        min_rep_ms=350,
+        max_rep_ms=3_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=1.1,
+        daily_rep_cap=500,
+        diminishing_after_reps=220,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=3.0,
+        # The verification. A full pass cannot be repeated at this rate.
+        min_reps_per_second=0.70,
+        min_reps=25,
+        min_duration_ms=25_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you at chest height. It has to see you from "
+        "the front -- side-on it cannot tell a pass left from a pass right at "
+        "all, and this drill is entirely about the difference."
+    ),
+    quality=QualitySpec(
+        target_rom=0.55,
+        consistency_target=0.12,
+        consistency_ceiling=0.36,
+        tempo_min_ms=350,
+        tempo_max_ms=1_400,
+        w_consistency=0.40,
+        w_depth=0.20,
+        w_tempo=0.20,
+        w_endurance=0.20,
+        min_reps=25,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.15,
+        load_per_minute=1.2,
+        # A rugby pass is a chest-height push, not an overhead throw. Putting
+        # it on the arm's ledger would fill the one number that ledger exists
+        # to protect with work that does not threaten it.
+        throws_per_rep=0.0,
+        tissue=Tissue.UPPER_BODY,
+    ),
+    tracks_handedness=False,
+)
+
+RUG_WALL_PASS = DrillSpec(
+    key="rug_wall_pass",
+    # Not "Wall Passing" -- soccer has that.
+    name="Catch and Pass",
+    sport="rugby",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Pass into a wall, catch it, pass it back the other way. A rep only "
+        "counts if your hands actually cross your body, so passing off your "
+        "good side all session does not register as passing."
+    ),
+    signal=SignalSpec(kind=SignalKind.HAND_SWEEP, smoothing=0.50),
+    counter=CounterSpec(
+        down_threshold=-0.38,
+        up_threshold=0.38,
+        min_rep_ms=600,
+        max_rep_ms=6_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=400, diminishing_after_reps=180),
+    validation=ValidationSpec(
+        max_reps_per_second=1.6, min_reps_per_second=0.15,
+        min_reps=15, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you, far enough back to see both hands the "
+        "whole way across. Stand further off the wall than feels necessary."
+    ),
+    quality=QualitySpec(
+        target_rom=0.98,
+        consistency_target=0.14,
+        consistency_ceiling=0.42,
+        tempo_min_ms=600,
+        tempo_max_ms=2_500,
+        w_consistency=0.35,
+        w_depth=0.30,
+        w_tempo=0.15,
+        w_endurance=0.20,
+        min_reps=15,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.30, load_per_minute=1.3,
+        throws_per_rep=0.0, tissue=Tissue.UPPER_BODY,
+    ),
+    tracks_handedness=False,
+)
+
+RUG_SPIN_PASS = DrillSpec(
+    key="rug_spin_pass",
+    name="Spin Passing",
+    sport="rugby",
+    category=Category.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "The long one, off both hands. Hands start behind your back hip and "
+        "finish pointing at the target, which is the widest sweep in the "
+        "sport -- and the app can tell it from a short pass, because a short "
+        "pass never gets there."
+    ),
+    signal=SignalSpec(kind=SignalKind.HAND_SWEEP, smoothing=0.45),
+    counter=CounterSpec(
+        down_threshold=-0.58,
+        up_threshold=0.58,
+        min_rep_ms=1_100,
+        max_rep_ms=9_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.35, daily_rep_cap=250, diminishing_after_reps=110),
+    validation=ValidationSpec(
+        max_reps_per_second=0.9, min_reps_per_second=0.05,
+        min_reps=12, min_duration_ms=30_000,
+    ),
+    setup_hint=(
+        "Room to throw it properly, phone square in front of you. If the pass "
+        "is not travelling you are doing the short drill with a longer name."
+    ),
+    quality=QualitySpec(
+        target_rom=1.50,
+        consistency_target=0.14,
+        consistency_ceiling=0.44,
+        tempo_min_ms=1_100,
+        tempo_max_ms=4_000,
+        # Width is what makes a spin pass a spin pass.
+        w_consistency=0.30,
+        w_depth=0.35,
+        w_tempo=0.15,
+        w_endurance=0.20,
+        min_reps=12,
+    ),
+    load=LoadSpec(
+        load_per_rep=0.45, load_per_minute=1.2,
+        throws_per_rep=0.0, tissue=Tissue.UPPER_BODY,
+    ),
+    tracks_handedness=False,
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
     SOC_JUGGLE,
     SOC_JUGGLE_WEAK,
@@ -3871,6 +4063,9 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     FB_DEEP_BALL,
     FB_KICK,
     FB_SHUFFLE,
+    RUG_QUICK_HANDS,
+    RUG_WALL_PASS,
+    RUG_SPIN_PASS,
     GEN_LUNGE,
     GEN_GLUTE_BRIDGE,
     GEN_MOUNTAIN_CLIMBER,
