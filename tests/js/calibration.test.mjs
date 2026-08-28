@@ -105,6 +105,10 @@ const SWEEP = {
   // Heel against the toe of the same foot. By some distance the smallest
   // excursion in the catalogue, which is exactly why it needs the guard.
   gen_calf_raise:    { lo: 0.00,  hi: 0.16, kind: 'heel' },
+  // A tiny dip high up: the hips barely move, which is the whole drill.
+  gen_pogo:          { lo: 0.86,  hi: 1.06, kind: 'body' },
+  // The lateral bound's measurement, opened right up.
+  gen_skater_bound:  { lo: -0.42, hi: 0.42, kind: 'ankles' },
   // The throwing hand against the shoulder on the same side. Three drills,
   // deliberately nested: a quick release cannot reach a deep ball's band.
   fb_quick_release:  { lo: -0.16, hi: 0.48, kind: 'throw' },

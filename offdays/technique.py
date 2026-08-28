@@ -708,6 +708,36 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when you start standing up out of your stance.",
             "an upright defender has already lost the route"),
     ),
+    "gen_pogo": (
+        Cue("tempo", "As fast as you can get off the floor again. Think about "
+                     "the ground being hot rather than about getting high.",
+            "the time on the floor is the whole measurement"),
+        Cue("depth", "Stay tall. Knees almost straight, ankles doing the work "
+                     "-- if you are squatting between them these are jumps.",
+            "bending the knees turns a pogo into a slow small jump"),
+        Cue("consistency", "Same little bounce every time, in one spot. If you "
+                           "are travelling across the floor you are jumping.",
+            "the rhythm is the drill and it should sound identical"),
+        Cue("endurance", "Stop when the rhythm breaks, not when your calves "
+                         "burn. A slow pogo is a different exercise.",
+            "the app stops counting them anyway, which is the point"),
+    ),
+    "gen_skater_bound": (
+        Cue("depth", "Bound sideways as far as you can and land on one leg. "
+                     "The distance is what makes it worth doing.",
+            "a small hop side to side is a different, easier drill"),
+        Cue("tempo", "Land, stop dead, hold it a beat, then go back. The pause "
+                     "is not a rest -- it is the half that protects your knee.",
+            "learning to stop is what stops you getting hurt when you have to"),
+        Cue("consistency", "Same distance both ways. Land quiet, with your "
+                           "knee over your foot rather than falling inwards.",
+            "the knee collapsing in is the exact thing this is preventing"),
+        Cue("offhand", "Both legs evenly. Almost everybody bounds further off "
+                       "one and has never checked which.",
+            "the weaker leg is the one that gets hurt"),
+        Cue("endurance", "Stop when you cannot stick the landing any more.",
+            "reps you cannot land are practising not landing"),
+    ),
     "gen_calf_raise": (
         Cue("depth", "All the way up onto the balls of your feet, then all the "
                      "way down until your heels touch. The top inch is the "

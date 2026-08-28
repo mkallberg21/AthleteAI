@@ -36,6 +36,55 @@ class Category(str, Enum):
     CONDITIONING = "conditioning"
 
 
+class Stimulus(str, Enum):
+    """What a drill actually develops, as opposed to what it looks like.
+
+    `Category` exists and is not this. It groups drills the way a menu does --
+    a burpee is filed under conditioning, a lateral bound under agility, a
+    squat jump under speed -- which is fine for a screen and useless for the
+    one question a coach actually needs answered: **is this athlete doing
+    anything that makes them more explosive?**
+
+    Asking that with `Category` gave the wrong answer. Ten position plans
+    across seven sports turned out to contain no power or quickness work at
+    all -- a baseball pitcher, a cheer base, a rugby prop, a ballet dancer --
+    and nothing in the codebase could see it, because every one of those plans
+    was full of drills that a category listing makes look varied.
+
+    Kept deliberately coarse. Five values that a coach would recognise, and no
+    field with a default: a new drill has to say which of these it is, so the
+    guard can never be quietly bypassed by omission.
+    """
+
+    #: Move something as fast as you can, once. Jumps, bounds, throws for
+    #: distance -- the quality with the shortest useful set and the longest
+    #: rest.
+    POWER = "power"
+
+    #: Move the feet often and change direction. Slides, shuffles, high knees,
+    #: reactive hops. Not the same as power and trained differently.
+    QUICKNESS = "quickness"
+
+    #: Move something heavy, or hold a position against gravity. Includes every
+    #: isometric hold in the catalogue.
+    STRENGTH = "strength"
+
+    #: Keep going. Conditioning staples whose point is the duration rather than
+    #: any single rep.
+    ENDURANCE = "endurance"
+
+    #: Do the thing the sport is made of. Every ball, stick and throwing drill
+    #: is here regardless of how fast it is done -- a quick release is a skill
+    #: drill with a speed check on it, not a quickness drill.
+    SKILL = "skill"
+
+
+#: The two that answer "is this athlete getting more explosive". Named once
+#: here so the position guard, the drill catalogue and the coach-facing
+#: summaries cannot drift apart on what counts.
+EXPLOSIVE: frozenset[Stimulus] = frozenset({Stimulus.POWER, Stimulus.QUICKNESS})
+
+
 class SignalKind(str, Enum):
     """How to collapse 33 pose landmarks into one number per frame."""
 
@@ -540,6 +589,9 @@ class DrillSpec:
     name: str
     sport: str
     category: Category
+    #: What the drill develops, as opposed to what menu it belongs on. No
+    #: default on purpose -- see Stimulus. A new drill has to answer this.
+    stimulus: Stimulus
     metric: Metric
     description: str
     signal: SignalSpec

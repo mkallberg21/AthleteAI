@@ -415,15 +415,20 @@ BASEBALL_POSITIONS = (
     # volume to a twelve-year-old pitcher's week is the exact thing the load
     # model exists to prevent.
     ("pitcher", "Pitcher", ("pitcher", "p", "rhp", "lhp", "starter", "reliever"),
+     # Velocity comes off the back leg, and this plan had almost nothing in it
+     # that asked a leg to move fast. It is the plan's real job.
      mix(bb_long_toss=2, bb_wall_throw=1, bb_fielding=2, bb_tee_swing=2,
-         gen_glute_bridge=4, gen_side_plank=4, gen_lunge=3, gen_dead_bug=3,
-         gen_squat=2, gen_plank=2, gen_push_up=1),
+         gen_glute_bridge=4, gen_squat_jump=4, gen_side_plank=4,
+         gen_skater_bound=3, gen_lunge=3, gen_dead_bug=3, gen_squat=2,
+         gen_plank=2, gen_push_up=1),
      "Everything you throw comes up from the ground through your middle.",
      "pitchers"),
     ("catcher", "Catcher", ("catcher", "c", "backstop"),
-     mix(bb_catcher_stance=5, bb_quick_hands=4, bb_wall_throw=2, bb_tee_swing=3,
-         bb_fielding=2, gen_wall_sit=3, gen_squat=3, gen_lunge=2,
-         gen_glute_bridge=2, gen_side_plank=2, gen_push_up=1),
+     # Pop time is one explosive movement out of the deepest squat in sport.
+     mix(bb_catcher_stance=5, bb_quick_hands=4, bb_tee_swing=3, gen_pogo=3,
+         bb_wall_throw=2, bb_fielding=2, gen_wall_sit=3, gen_squat=3,
+         gen_squat_jump=2, gen_lunge=2, gen_glute_bridge=2, gen_side_plank=2,
+         gen_push_up=1),
      "You are in a squat for two hours. Build legs that can take it.",
      "catchers"),
     ("infield", "Infield", ("infield", "infielder", "shortstop", "ss", "second base",
@@ -456,9 +461,11 @@ BASEBALL: tuple[Position, ...] = tuple(
 #: pitcher a baseball pitcher's plan was the same mistake as handing a goalie a
 #: midfielder's, and it hid the one number in this sport most worth counting.
 SOFTBALL_PITCHER = mix(
+    # The push off the rubber is the pitch. Same correction the baseball
+    # pitcher needed, and for the same reason.
     sb_windmill=5, bb_fielding=2, bb_tee_swing=2, bb_wall_throw=1,
-    gen_glute_bridge=4, gen_side_plank=4, gen_lunge=3, gen_dead_bug=3,
-    gen_squat=2, gen_plank=2,
+    gen_glute_bridge=4, gen_squat_jump=4, gen_side_plank=4, gen_skater_bound=3,
+    gen_lunge=3, gen_dead_bug=3, gen_squat=2, gen_plank=2,
 )
 
 SOFTBALL: tuple[Position, ...] = tuple(
@@ -481,23 +488,26 @@ CHEER: tuple[Position, ...] = (
          ("base", "main base", "side base", "bases"),
          # Somebody else is standing on these hands, so the overhead position
          # is the job rather than a nice extra.
-         mix(gen_squat=5, gen_handstand_hold=4, gen_dead_hang=3, gen_wall_sit=3,
-             gen_lunge=3, gen_push_up=3, gen_side_plank=3, gen_calf_raise=2,
-             gen_glute_bridge=2, gen_plank=2),
+         # A base's dip and drive is a jump with somebody standing on it.
+         mix(gen_squat=5, gen_handstand_hold=4, gen_squat_jump=3, gen_dead_hang=3,
+             gen_wall_sit=3, gen_lunge=3, gen_push_up=3, gen_side_plank=3,
+             gen_pogo=2, gen_calf_raise=2, gen_glute_bridge=2, gen_plank=2),
          "Someone else's safety is your legs, your shoulders and your grip.",
          "bases"),
     _pos("flyer", "Flyer", "cheer", "flyers",
          ("flyer", "flier", "top girl", "top"),
-         mix(gen_hollow_hold=5, gen_side_plank=4, gen_calf_raise=3, gen_dead_bug=3,
-             gen_plank=3, gen_lunge=2, gen_glute_bridge=2, gen_wall_sit=2,
-             gen_tuck_jump=1),
+         # A flyer is thrown and has to land. Both ends of that are explosive.
+         mix(gen_hollow_hold=5, gen_side_plank=4, gen_pogo=3, gen_calf_raise=3,
+             gen_dead_bug=3, gen_plank=3, gen_tuck_jump=2, gen_lunge=2,
+             gen_glute_bridge=2, gen_wall_sit=2),
          "Stay tight and still. Core control, and ankles that do not wobble.",
          "flyers"),
     _pos("backspot", "Backspot", "cheer", "bases",
          ("backspot", "back spot", "back", "spotter"),
-         mix(gen_squat=4, gen_dead_hang=3, gen_glute_bridge=3, gen_side_plank=3,
-             gen_push_up=3, gen_plank=3, gen_lunge=3, gen_calf_raise=2,
-             gen_dead_bug=2, gen_wall_sit=2),
+         # You have to get under a falling flyer faster than they are falling.
+         mix(gen_squat=4, gen_squat_jump=3, gen_dead_hang=3, gen_glute_bridge=3,
+             gen_side_plank=3, gen_push_up=3, gen_plank=3, gen_lunge=3,
+             gen_pogo=2, gen_calf_raise=2, gen_dead_bug=2, gen_wall_sit=2),
          "You catch what goes wrong. Strong back, strong middle, strong hands.",
          "backspots"),
     _pos("tumbler", "Tumbler", "cheer", "tumbling",
@@ -515,16 +525,19 @@ DANCE: tuple[Position, ...] = (
          # The calf raise leads, and in this sport that is not a supporting
          # exercise -- it is the movement, and the ankle is where dancers get
          # hurt more than anywhere else.
-         mix(gen_calf_raise=6, gen_lunge=4, gen_hollow_hold=3, gen_glute_bridge=3,
-             gen_dead_bug=3, gen_side_plank=3, gen_wall_sit=2, gen_plank=2,
-             gen_squat=2),
+         # Petit allegro is pogo hops with better feet, and until now there
+         # was nothing in the catalogue that trained it.
+         mix(gen_calf_raise=6, gen_lunge=4, gen_pogo=4, gen_hollow_hold=3,
+             gen_glute_bridge=3, gen_dead_bug=3, gen_side_plank=3,
+             gen_tuck_jump=2, gen_wall_sit=2, gen_plank=2, gen_squat=2),
          "Single-leg control, and ankles strong enough to hold it all night.",
          "ballet dancers"),
     _pos("contemporary", "Contemporary", "dance", "technique",
          ("contemporary", "modern", "lyrical", "jazz"),
-         mix(gen_lunge=4, gen_calf_raise=4, gen_glute_bridge=3, gen_hollow_hold=3,
-             gen_side_plank=3, gen_squat_jump=2, gen_dead_bug=2, gen_push_up=2,
-             gen_plank=2, gen_handstand_hold=1),
+         # Travelling off one leg and landing on the other, over and over.
+         mix(gen_lunge=4, gen_calf_raise=4, gen_skater_bound=3, gen_glute_bridge=3,
+             gen_hollow_hold=3, gen_side_plank=3, gen_pogo=2, gen_squat_jump=2,
+             gen_dead_bug=2, gen_push_up=2, gen_plank=2, gen_handstand_hold=1),
          "Getting to the floor and back up without it costing you anything.",
          "contemporary dancers"),
     _pos("hip_hop", "Hip Hop", "dance", "power",
@@ -554,14 +567,18 @@ SWIMMING: tuple[Position, ...] = (
          "sprinters"),
     _pos("distance", "Distance", "swimming", "distance",
          ("distance", "distance free", "500", "1000", "1650", "mid distance", "open water"),
-         mix(gen_pull_up=4, gen_hollow_hold=4, gen_plank=3, gen_dead_bug=3,
-             gen_glute_bridge=3, gen_push_up=2, gen_side_plank=2, gen_squat=1),
+         # Every wall is a jump, and a distance swimmer hits a lot of walls.
+         mix(gen_pull_up=4, gen_hollow_hold=4, gen_plank=3, gen_pogo=3,
+             gen_dead_bug=3, gen_glute_bridge=3, gen_squat_jump=2,
+             gen_push_up=2, gen_side_plank=2, gen_squat=1),
          "Hold your line when you are tired. That is where races are lost.",
          "distance swimmers"),
     _pos("stroke", "Stroke", "swimming", "stroke",
          ("stroke", "butterfly", "fly", "backstroke", "back", "breaststroke", "breast", "im"),
+         # Starts and turns are where a race is won by whoever trained legs.
          mix(gen_pull_up=4, gen_hollow_hold=4, gen_push_up=3, gen_side_plank=3,
-             gen_glute_bridge=3, gen_squat_jump=2, gen_dead_bug=2, gen_plank=1),
+             gen_glute_bridge=3, gen_squat_jump=3, gen_pogo=2, gen_dead_bug=2,
+             gen_plank=1),
          "Shoulders that last and a middle that does not wriggle.",
          "stroke swimmers"),
 )
@@ -581,9 +598,11 @@ TRACK: tuple[Position, ...] = (
          "middle distance runners"),
     _pos("distance", "Distance", "track", "endurance",
          ("distance", "3200", "5000", "10000", "3k", "5k", "10k", "steeple"),
-         mix(gen_lunge=4, gen_glute_bridge=4, gen_side_plank=3, gen_dead_bug=3,
-             gen_plank=2, gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
-         "Single-leg strength and hip control. That is what stops injuries.",
+         # Same omission as the cross country plan, and the same fix.
+         mix(gen_lunge=4, gen_glute_bridge=4, gen_pogo=3, gen_side_plank=3,
+             gen_dead_bug=3, gen_plank=2, gen_high_knees=2, gen_squat=2,
+             gen_wall_sit=1),
+         "Single-leg strength, hip control, and feet that leave the ground.",
          "distance runners"),
     _pos("jumps", "Jumps", "track", "power",
          ("jumps", "jumper", "long jump", "high jump", "triple jump", "pole vault", "vault"),
@@ -593,8 +612,11 @@ TRACK: tuple[Position, ...] = (
          "jumpers"),
     _pos("throws", "Throws", "track", "power",
          ("throws", "thrower", "shot", "shot put", "discus", "javelin", "hammer"),
-         mix(gen_squat=5, gen_side_plank=4, gen_push_up=3, gen_glute_bridge=3,
-             gen_dead_bug=3, gen_lunge=2, gen_squat_jump=2, gen_pull_up=2),
+         # A throw IS power, and this plan being short of it was the worst
+         # single miss the stimulus audit turned up anywhere.
+         mix(gen_squat=5, gen_squat_jump=5, gen_side_plank=4, gen_skater_bound=4,
+             gen_push_up=3, gen_glute_bridge=3, gen_dead_bug=3, gen_tuck_jump=3,
+             gen_lunge=2, gen_pull_up=2),
          "Legs and rotation. The arm is the last thing that happens.",
          "throwers"),
 )
@@ -608,9 +630,10 @@ FOOTBALL: tuple[Position, ...] = (
          # A quarterback throws more in a week than most pitchers do, into an
          # off season that does not exist. The passing work leads, and the
          # deep ball is deliberately the smallest slice of it.
-         mix(fb_wall_throw=5, fb_quick_release=4, fb_deep_ball=2,
+         # The pocket is two steps in any direction, taken very quickly.
+         mix(fb_wall_throw=5, fb_quick_release=4, gen_pogo=3, fb_deep_ball=2,
              gen_side_plank=3, gen_lunge=3, gen_glute_bridge=3, gen_dead_bug=3,
-             gen_lateral_bound=2, gen_squat=2, gen_plank=2, gen_push_up=1),
+             gen_lateral_bound=3, gen_squat=2, gen_plank=2, gen_push_up=1),
          "Throw from a base that does not move, and know what the arm has left.",
          "quarterbacks"),
     _pos("skill", "Running Back & Receiver", "football", "skill",
@@ -676,9 +699,12 @@ GYMNASTICS: tuple[Position, ...] = (
          ("bars", "uneven bars", "ub", "high bar", "rings", "parallel bars", "pommel"),
          # Grip was the missing piece here. Everything on this apparatus ends
          # when the hands do, and nothing in the catalogue measured that.
+         # Every routine on this apparatus ends with a landing, and the plan
+         # had nothing in it that landed.
          mix(gen_pull_up=6, gen_dead_hang=5, gen_hollow_hold=4,
-             gen_handstand_hold=4, gen_push_up=3, gen_dead_bug=2,
-             gen_side_plank=2, gen_plank=2, gen_glute_bridge=1),
+             gen_handstand_hold=4, gen_push_up=3, gen_squat_jump=2,
+             gen_pogo=2, gen_dead_bug=2, gen_side_plank=2, gen_plank=2,
+             gen_glute_bridge=1),
          "Your whole body hangs off your hands, and stays in one shape while it does.",
          "bars gymnasts"),
     _pos("floor_vault", "Floor & Vault", "gymnastics", "power",
@@ -690,9 +716,10 @@ GYMNASTICS: tuple[Position, ...] = (
          "floor gymnasts"),
     _pos("beam", "Beam", "gymnastics", "balance",
          ("beam", "balance beam", "bb"),
-         mix(gen_calf_raise=5, gen_lunge=4, gen_hollow_hold=4, gen_dead_bug=3,
-             gen_side_plank=3, gen_glute_bridge=3, gen_handstand_hold=2,
-             gen_plank=2, gen_tuck_jump=2, gen_wall_sit=1),
+         # Bouncing on a line is the event. Reactive feet are the event.
+         mix(gen_calf_raise=5, gen_lunge=4, gen_hollow_hold=4, gen_pogo=3,
+             gen_dead_bug=3, gen_side_plank=3, gen_glute_bridge=3,
+             gen_tuck_jump=3, gen_handstand_hold=2, gen_plank=2, gen_wall_sit=1),
          "Single-leg control, a middle that does not wobble, and feet that grip.",
          "beam gymnasts"),
 )
@@ -726,9 +753,12 @@ TENNIS: tuple[Position, ...] = (
 CROSS_COUNTRY: tuple[Position, ...] = (
     _pos("distance", "Distance Runner", "cross_country", "endurance",
          ("distance", "runner", "distance runner", "harrier", "5k", "varsity", "jv"),
-         mix(gen_lunge=4, gen_glute_bridge=4, gen_side_plank=3, gen_dead_bug=3,
-             gen_plank=2, gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
-         "Hills and single-leg strength. Most running injuries start at the hip.",
+         # Plyometrics buy running economy, and distance runners are the
+         # group most likely to skip them entirely.
+         mix(gen_lunge=4, gen_glute_bridge=4, gen_pogo=3, gen_side_plank=3,
+             gen_dead_bug=3, gen_plank=2, gen_high_knees=2, gen_squat=2,
+             gen_wall_sit=1),
+         "Hills, single-leg strength, and feet that leave the ground quickly.",
          "distance runners"),
 )
 
@@ -794,9 +824,12 @@ RUGBY: tuple[Position, ...] = (
          ("front row", "prop", "hooker", "loosehead", "tighthead", "1", "2", "3"),
          # Strength leads, and the hang is here for the neck and shoulders that
          # a scrum asks everything of. The passing is real but short.
-         mix(gen_squat=5, gen_push_up=4, gen_dead_hang=3, gen_wall_sit=3,
-             gen_glute_bridge=3, gen_side_plank=3, rug_quick_hands=2,
-             gen_lunge=2, gen_plank=2, gen_calf_raise=1),
+         # A prop still has to get off the floor and across the pitch, and
+         # this plan was the only one in the sport with nothing explosive in it.
+         mix(gen_squat=5, gen_push_up=4, gen_squat_jump=3, gen_dead_hang=3,
+             gen_wall_sit=3, gen_glute_bridge=3, gen_side_plank=3,
+             gen_skater_bound=2, rug_quick_hands=2, gen_lunge=2, gen_plank=2,
+             gen_calf_raise=1),
          "Scrummaging is a squat against another person. Legs, back, neck.",
          "front rowers"),
     _pos("second_row", "Second & Back Row", "rugby", "forwards",

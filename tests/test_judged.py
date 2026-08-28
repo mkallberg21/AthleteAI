@@ -153,9 +153,20 @@ class TestThePositionPlans:
         assert max(plan, key=plan.get) == "gen_calf_raise"
 
     def test_a_bars_gymnast_leads_with_the_hands(self):
+        """Hands are the biggest thing in the plan by a distance.
+
+        Asserted as a share of the whole and against the next group rather than
+        against a bare 50%: the explosiveness floor later took a deliberate
+        slice out of every plan in the product, including this one, and a
+        threshold that could not survive that was measuring the wrong thing.
+        The claim is that bars is a hands apparatus, not that hands are exactly
+        half an hour.
+        """
         plan = {p.key: p for p in BY_SPORT["gymnastics"]}["bars"].emphasis
         hands = plan["gen_pull_up"] + plan["gen_dead_hang"] + plan["gen_handstand_hold"]
-        assert hands > 0.5, plan
+        core = plan["gen_hollow_hold"] + plan["gen_dead_bug"] + plan["gen_plank"]
+        assert hands > 0.40, plan
+        assert hands > core * 1.5, plan
 
     def test_a_cheer_base_gets_the_overhead_work(self):
         # Somebody is standing on these hands. The overhead position is the

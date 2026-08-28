@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3493 tests
+python -m pytest tests/ -q          # 3598 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 228 tests
+  node --test tests/js/*.test.mjs   # 230 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1292,14 +1292,24 @@ sessions.
 
 ### The drill catalog, and what is deliberately missing
 
-Eighty-three drills: twenty-one bodyweight movements that work for any sport —
+Eighty-five drills: twenty-three bodyweight movements that work for any sport —
 squats, lunges, glute bridges, push-ups, pull-ups, planks, side planks, hollow
 holds, wall sits, dead bugs, mountain climbers, burpees, squat jumps, tuck
-jumps, lateral bounds, high knees, jumping jacks, sit-ups, calf raises, wall
-handstands, dead hangs — and skill work for the nine sports built out so far:
+jumps, lateral bounds, skater bounds, pogo hops, high knees, jumping jacks,
+sit-ups, calf raises, wall handstands, dead hangs — and skill work for the nine sports built out so far:
 lacrosse (11), basketball (9), soccer, volleyball and tennis (7 each), hockey
 (6), football (5), rugby (3), and baseball and softball (7 between them,
 sharing everything except the mound).
+
+**Every position plan builds explosiveness, and a guard enforces it.** Each
+drill declares what it *develops* — power, quickness, strength, endurance or
+skill — which is not what its category says: a burpee is filed under
+conditioning, a lateral bound under agility, a squat jump under speed. Asked
+properly, ten plans across seven sports turned out to contain no power or
+quickness work at all, including both pitchers, a cheer base, a ballet dancer
+and a track thrower. Every one of the 63 plans now gives at least 10% of its
+time to power or quickness, and the spread runs from 10% for a lineman to 57%
+for a defensive back — a floor, not a template.
 
 **A drill only pays for what the camera can confirm.** Every skill drill has an
 unambiguous pose signal, and where several drills share one signal their

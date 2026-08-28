@@ -28,6 +28,7 @@ from .base import (
     DrillSpec,
     Metric,
     QualitySpec,
+    Stimulus,
     ScoringSpec,
     Tissue,
     SignalKind,
@@ -82,6 +83,7 @@ WALL_BALL = DrillSpec(
     name="Wall Ball",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Throw and catch against a wall. Counts each throw-catch cycle and "
@@ -152,6 +154,7 @@ QUICK_STICK = DrillSpec(
     name="Quick Stick",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Catch and release in one motion, no cradle. Same cycle detector as "
@@ -214,6 +217,7 @@ WALL_BALL_STRONG = DrillSpec(
     name="Wall Ball - Strong Hand",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Every rep with your dominant hand on top, full throwing motion. The "
@@ -252,6 +256,7 @@ WALL_BALL_OFFHAND = DrillSpec(
     name="Wall Ball - Off Hand",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         'Every rep with your weaker hand on top. The hardest pattern in the routine and the one that changes a player fastest -- and the one pattern the camera really can check, because it can see which hand is on top. Off-hand reps are paid at a premium wherever you do them.'
@@ -299,6 +304,7 @@ WALL_BALL_ONE_HAND = DrillSpec(
     name="Wall Ball - One Handed",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         'Bottom hand off the stick. Short, controlled throws that build the top-hand strength a one-handed catch in traffic needs. The app counts your reps but cannot see whether the bottom hand was off -- that one is on you, and it earns the same as any other wall ball.'
@@ -341,6 +347,7 @@ WALL_BALL_CROSS = DrillSpec(
     name="Wall Ball - Cross Handed",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         'Catch on one side, switch hands, throw from the other. Builds the hand exchange a dodge actually needs. The app counts your reps but cannot see the switch, so this earns the same as any other wall ball.'
@@ -381,6 +388,7 @@ WALL_BALL_BTB = DrillSpec(
     name="Wall Ball - Behind the Back",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         'Catch, wrap behind the back, release. Showy, but it is real hand control and it is how a player learns where the head is without looking. The app counts your reps but cannot see behind you, so this earns the same as any other wall ball.'
@@ -425,6 +433,7 @@ WALL_BALL_SPLIT = DrillSpec(
     name="Wall Ball - Split Dodge",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         'Catch, split dodge, throw from the new hand. Footwork and hands in one rep, which is how they happen in a game. The app counts the hands and cannot see the split, so this earns the same as any other wall ball.'
@@ -470,6 +479,7 @@ GROUND_BALL = DrillSpec(
     name="Ground Balls",
     sport="lacrosse",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Roll the ball out, scoop through it, come up ready. The most "
@@ -524,6 +534,7 @@ FACEOFF_CLAMP = DrillSpec(
     name="Face-Off Clamp",
     sport="lacrosse",
     category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "From the down stance: clamp, rip the ball back, come up to ready, "
@@ -598,6 +609,7 @@ GOALIE_SAVES = DrillSpec(
     name="Goalie Save Positions",
     sport="lacrosse",
     category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         'The app calls a spot -- high, hip, low, either side, or five hole -- and you drive BOTH hands and your lead foot to it, then reset. Reaching with one arm does not count: the app measures your hands together, so a one-armed stab moves the measurement half as far and never registers as a save. There is no ball and no shooter -- this trains the path to the spot, not reading a shot, and it is not a save percentage.'
@@ -716,6 +728,7 @@ PUSH_UP = DrillSpec(
     name="Push-Ups",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description="Elbow angle cycles from locked out, to below 90 degrees, back to locked out.",
     signal=SignalSpec(
@@ -752,6 +765,7 @@ SQUAT = DrillSpec(
     name="Bodyweight Squats",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description="Knee angle cycles from standing, through parallel or below, back to standing.",
     signal=SignalSpec(
@@ -785,6 +799,7 @@ SIT_UP = DrillSpec(
     name="Sit-Ups",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description="Hip angle closes as the torso comes up, opens on the way back down.",
     signal=SignalSpec(
@@ -819,6 +834,7 @@ PULL_UP = DrillSpec(
     name="Pull-Ups",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description="Nose rises past the wrist line at the top of each rep.",
     signal=SignalSpec(
@@ -861,6 +877,7 @@ JUMPING_JACK = DrillSpec(
     name="Jumping Jacks",
     sport="general",
     category=Category.CONDITIONING,
+    stimulus=Stimulus.ENDURANCE,
     metric=Metric.REPS,
     description="Wrists travel above the shoulder line and back down each rep.",
     signal=SignalSpec(
@@ -896,6 +913,7 @@ HIGH_KNEES = DrillSpec(
     name="High Knees",
     sport="general",
     category=Category.SPEED,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description="Each knee drive above hip height counts as one rep.",
     signal=SignalSpec(
@@ -934,6 +952,7 @@ BURPEE = DrillSpec(
     name="Burpees",
     sport="general",
     category=Category.CONDITIONING,
+    stimulus=Stimulus.ENDURANCE,
     metric=Metric.REPS,
     description="Hip height drops to the floor and returns to standing each rep.",
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.40),
@@ -965,6 +984,7 @@ SQUAT_JUMP = DrillSpec(
     name="Squat Jumps",
     sport="general",
     category=Category.SPEED,
+    stimulus=Stimulus.POWER,
     metric=Metric.REPS,
     description="Explosive jump out of a squat. Counts each full extension.",
     # Smoothing deliberately light. An exponential filter attenuates a fast
@@ -1005,6 +1025,7 @@ LATERAL_BOUND = DrillSpec(
     name="Lateral Bounds",
     sport="general",
     category=Category.AGILITY,
+    stimulus=Stimulus.POWER,
     metric=Metric.REPS,
     description=(
         "Side-to-side skater bounds. Counts each single-leg landing, tracked "
@@ -1045,6 +1066,7 @@ PLANK = DrillSpec(
     name="Plank Hold",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Timed hold. The clock only runs while the body stays within a "
@@ -1094,6 +1116,7 @@ GEN_LUNGE = DrillSpec(
     name="Alternating Lunges",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description="Step forward, knee down, drive back. Counts each leg.",
     signal=SignalSpec(
@@ -1128,6 +1151,7 @@ GEN_GLUTE_BRIDGE = DrillSpec(
     name="Glute Bridges",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description="Hips up until shoulders, hips and knees line up. Counts each lift.",
     signal=SignalSpec(
@@ -1158,6 +1182,7 @@ GEN_MOUNTAIN_CLIMBER = DrillSpec(
     name="Mountain Climbers",
     sport="general",
     category=Category.CONDITIONING,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description="Knees driving to the chest from a plank. Counts each drive.",
     signal=SignalSpec(
@@ -1195,6 +1220,7 @@ GEN_TUCK_JUMP = DrillSpec(
     name="Tuck Jumps",
     sport="general",
     category=Category.SPEED,
+    stimulus=Stimulus.POWER,
     metric=Metric.REPS,
     description="Jump and pull both knees up. Counts each landing.",
     # Same light smoothing as squat jumps, and for the same reason.
@@ -1226,6 +1252,7 @@ GEN_DEAD_BUG = DrillSpec(
     name="Dead Bugs",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description="Opposite arm and leg out, slow and controlled. Counts each extension.",
     signal=SignalSpec(
@@ -1258,6 +1285,7 @@ GEN_WALL_SIT = DrillSpec(
     name="Wall Sit",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Timed hold against a wall. The clock runs while the knees stay near "
@@ -1293,6 +1321,7 @@ GEN_HOLLOW_HOLD = DrillSpec(
     name="Hollow Hold",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Timed hold on your back, shoulders and legs off the floor. The clock "
@@ -1326,6 +1355,7 @@ GEN_SIDE_PLANK = DrillSpec(
     name="Side Plank",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Timed hold on one forearm. The clock runs while your hips stay up "
@@ -1392,12 +1422,149 @@ GEN_SIDE_PLANK = DrillSpec(
 # sport. A calf raise is the launching mechanism for every jump in this
 # product.
 # --------------------------------------------------------------------------
+# The two explosive qualities the general catalogue could not train
+#
+# Audited rather than guessed. With every drill labelled by what it actually
+# develops, the general shelf turned out to hold exactly three power drills --
+# a squat jump, a tuck jump and a lateral bound -- and nothing at all for
+# reactive quickness. Ten position plans across seven sports contained no power
+# or quickness work whatsoever.
+#
+# These are the two missing qualities that a phone can genuinely verify.
+# Several others cannot be, and are deliberately absent rather than
+# approximated: a broad jump is horizontal distance the camera cannot measure,
+# a split jump is a squat jump the camera cannot tell apart, and an explosive
+# push-up is distinguished from an ordinary one by airtime that a side-on view
+# does not see.
+# --------------------------------------------------------------------------
+
+GEN_POGO = DrillSpec(
+    key="gen_pogo",
+    name="Pogo Hops",
+    sport="general",
+    category=Category.SPEED,
+    # The one quality nothing here trained. Not power -- a pogo is deliberately
+    # a small jump -- but how fast the ground can be left again, which is what
+    # a first step and a change of direction are made of.
+    stimulus=Stimulus.QUICKNESS,
+    metric=Metric.REPS,
+    description=(
+        "Fast, small bounces off the balls of your feet, knees almost "
+        "straight. Not jumps for height -- the point is how little time you "
+        "spend on the floor. Slow down and it stops counting them."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.60),
+    counter=CounterSpec(
+        # A deliberately tiny band high up: the hips barely dip, which is what
+        # separates this from every other jump in the catalogue.
+        down_threshold=0.90,
+        up_threshold=1.02,
+        min_rep_ms=180,
+        max_rep_ms=1_200,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=0.6,
+        daily_rep_cap=800,
+        diminishing_after_reps=300,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=5.0,
+        # The verification, and the whole drill. Nothing else in the catalogue
+        # can be sustained at this rate -- a tennis split step caps out at 2.0
+        # a second and a squat jump at 1.8 -- so a session that holds it was
+        # bouncing rather than jumping.
+        min_reps_per_second=2.20,
+        min_reps=40,
+        min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Phone side-on at about hip height. Stay tall, stay on the balls of "
+        "your feet, and think about pushing the floor away rather than about "
+        "how high you get."
+    ),
+    quality=QualitySpec(
+        target_rom=0.20,
+        consistency_target=0.04,
+        consistency_ceiling=0.12,
+        tempo_min_ms=180,
+        tempo_max_ms=500,
+        # Tempo carries this one. A pogo done slowly is a small squat jump.
+        w_consistency=0.30,
+        w_depth=0.10,
+        w_tempo=0.40,
+        w_endurance=0.20,
+        min_reps=40,
+    ),
+    load=LoadSpec(load_per_rep=0.10, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+GEN_SKATER_BOUND = DrillSpec(
+    key="gen_skater_bound",
+    name="Skater Bounds",
+    sport="general",
+    category=Category.AGILITY,
+    stimulus=Stimulus.POWER,
+    metric=Metric.REPS,
+    description=(
+        "Bound sideways off one leg, land on the other, and hold it still "
+        "before you go back. Distance, then balance. It measures how far apart "
+        "your feet get, so a little hop from side to side does not count."
+    ),
+    signal=SignalSpec(
+        # The same ankle-against-ankle measurement a lateral bound uses, opened
+        # right up. A quick bound cannot reach these thresholds, so the two are
+        # told apart by how far the athlete actually went.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_ankle",
+        reference="right_ankle",
+        smoothing=0.45,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.30,
+        up_threshold=0.30,
+        min_rep_ms=700,
+        max_rep_ms=6_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.7, daily_rep_cap=200, diminishing_after_reps=90),
+    validation=ValidationSpec(
+        max_reps_per_second=1.4, min_reps_per_second=0.08,
+        min_reps=12, min_duration_ms=25_000,
+    ),
+    setup_hint=(
+        "Phone square in front of you with room either side. Land on one leg "
+        "and stop dead before the next one -- the pause is the half of this "
+        "that protects your knees."
+    ),
+    quality=QualitySpec(
+        target_rom=0.75,
+        consistency_target=0.14,
+        tempo_min_ms=700,
+        tempo_max_ms=3_000,
+        # Distance is the point, and the landing is why the tempo matters.
+        w_consistency=0.20,
+        w_depth=0.40,
+        w_tempo=0.20,
+        w_endurance=0.20,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=1.5, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    # Which leg took off, so an athlete who can only bound one way shows up.
+    tracks_handedness=True,
+)
+
+
+# --------------------------------------------------------------------------
 
 GEN_CALF_RAISE = DrillSpec(
     key="gen_calf_raise",
     name="Calf Raises",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.REPS,
     description=(
         "Up onto the balls of your feet, all the way, and down under control. "
@@ -1465,6 +1632,7 @@ GEN_HANDSTAND_HOLD = DrillSpec(
     name="Wall Handstand",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Feet up the wall, arms locked, and stay there. The clock only runs "
@@ -1504,6 +1672,7 @@ GEN_DEAD_HANG = DrillSpec(
     name="Dead Hang",
     sport="general",
     category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Hang from a bar with your arms straight and stay there. The clock "
@@ -1561,6 +1730,7 @@ SOC_JUGGLE = DrillSpec(
     name="Juggling",
     sport="soccer",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description="Keep it up. Counts every touch, and which foot took it.",
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -1603,6 +1773,7 @@ SOC_JUGGLE_WEAK = DrillSpec(
     name="Weak-Foot Juggling",
     sport="soccer",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Weak foot only, for as long as you can keep it up. The app reads "
@@ -1632,6 +1803,7 @@ SOC_JUGGLE_ALT = DrillSpec(
     name="Alternating Juggling",
     sport="soccer",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Left, right, left, right, without letting it drop. The app checks the "
@@ -1659,6 +1831,7 @@ SOC_THIGH = DrillSpec(
     name="Thigh Juggling",
     sport="soccer",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Off the thigh, not the foot. Only thigh touches register -- a ball "
@@ -1691,6 +1864,7 @@ SOC_WALL_PASS = DrillSpec(
     name="Wall Passing",
     sport="soccer",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Pass firmly into a wall and control the return, over and over. This "
@@ -1725,6 +1899,7 @@ SOC_TOE_TAPS = DrillSpec(
     name="Toe Taps",
     sport="soccer",
     category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Ball still on the ground, tapping the top of it foot to foot as fast "
@@ -1761,6 +1936,7 @@ SOC_SHUFFLE = DrillSpec(
     name="Defending Shuffle",
     sport="soccer",
     category=Category.AGILITY,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
         "Side-on defending stance, shuffling across without crossing your feet. "
@@ -1839,6 +2015,7 @@ BKB_DRIBBLE = DrillSpec(
     name="Dribbling",
     sport="basketball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description="Counts every bounce, and which hand is on it.",
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -1860,6 +2037,7 @@ BKB_CROSSOVER = DrillSpec(
     name="Crossover",
     sport="basketball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Push the ball hard from one hand to the other, low and in front of "
@@ -1890,6 +2068,7 @@ BKB_BETWEEN_LEGS = DrillSpec(
     name="Between the Legs",
     sport="basketball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Same change of hands, through your legs instead of in front. The app "
@@ -1922,6 +2101,7 @@ BKB_POUND_WEAK = DrillSpec(
     name="Weak-Hand Pound",
     sport="basketball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Hard, low dribbles on your weak hand only, for as long as you can "
@@ -1956,6 +2136,7 @@ BKB_POUND_LOW = DrillSpec(
     name="Low Pound",
     sport="basketball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Both hands, ball below the knee, as hard and as fast as you can keep "
@@ -1990,6 +2171,7 @@ BKB_WALL_PASS = DrillSpec(
     name="Wall Passes",
     sport="basketball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Two-hand chest pass into a wall and catch it clean. The only drill "
@@ -2029,6 +2211,7 @@ BKB_FORM_SHOT = DrillSpec(
     name="Form Shooting",
     sport="basketball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "One hand, close to a wall or straight up to yourself. Dip, rise, "
@@ -2107,6 +2290,7 @@ BKB_SLIDE = DrillSpec(
     name="Defensive Slides",
     sport="basketball",
     category=Category.AGILITY,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
         "Push off the back foot, step out with the front, then slide the back "
@@ -2172,6 +2356,7 @@ BKB_STANCE = DrillSpec(
     name="Defensive Stance",
     sport="basketball",
     category=Category.CONDITIONING,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Sit in a real defensive stance and stay there. The clock only runs "
@@ -2227,6 +2412,7 @@ VB_SET = DrillSpec(
     name="Setting",
     sport="volleyball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description="Set it straight up, over and over. Counts every clean contact.",
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2247,6 +2433,7 @@ VB_PASS = DrillSpec(
     name="Forearm Passing",
     sport="volleyball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Bump the ball straight up off your platform, over and over. The app "
@@ -2281,6 +2468,7 @@ VB_SERVE = DrillSpec(
     name="Serving",
     sport="volleyball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Toss and serve into a wall, one hand, over and over. The app reads "
@@ -2320,6 +2508,7 @@ VB_ARM_SWING = DrillSpec(
     name="Arm Swing",
     sport="volleyball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "The hitting swing on its own, no ball needed. Draw the elbow back and "
@@ -2383,6 +2572,7 @@ VB_APPROACH = DrillSpec(
     name="Approach Jump",
     sport="volleyball",
     category=Category.SPEED,
+    stimulus=Stimulus.POWER,
     metric=Metric.REPS,
     description=(
         "The full approach and jump, landing balanced. Counts each jump from "
@@ -2437,6 +2627,7 @@ VB_BLOCK_JUMP = DrillSpec(
     name="Block Jump",
     sport="volleyball",
     category=Category.SPEED,
+    stimulus=Stimulus.POWER,
     metric=Metric.REPS,
     description=(
         "From a blocking stance: hands up, jump straight, press over, land "
@@ -2490,6 +2681,7 @@ VB_SET_WALL = DrillSpec(
     name="Wall Setting",
     sport="volleyball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Set against a wall from close range, quick and repeated. Faster than "
@@ -2580,6 +2772,7 @@ BB_WALL_THROW = DrillSpec(
     name="Wall Throws",
     sport="baseball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description="Throw and field off a wall. Counts every catch.",
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2606,6 +2799,7 @@ BB_LONG_TOSS = DrillSpec(
     name="Long Toss",
     sport="baseball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Back up and throw it properly, with a crow hop and a full arm. Fewer "
@@ -2643,6 +2837,7 @@ BB_QUICK_HANDS = DrillSpec(
     name="Quick Hands",
     sport="baseball",
     category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Short, quick transfers into the wall from close range -- glove to "
@@ -2680,6 +2875,7 @@ BB_TEE_SWING = DrillSpec(
     name="Tee Swings",
     sport="baseball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Off a tee, same swing every time. It reads your hands travelling out "
@@ -2746,6 +2942,7 @@ BB_FIELDING = DrillSpec(
     name="Fielding Reps",
     sport="baseball",
     category=Category.AGILITY,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
         "Down into fielding position and back up, over and over -- the "
@@ -2799,6 +2996,7 @@ SB_WINDMILL = DrillSpec(
     name="Windmill Pitching",
     sport="softball",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "The full underhand circle, with or without a ball. It follows your "
@@ -2864,6 +3062,7 @@ BB_CATCHER_STANCE = DrillSpec(
     name="Catcher's Stance",
     sport="baseball",
     category=Category.CONDITIONING,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Down in the crouch and stay there. The clock only runs while your "
@@ -2917,6 +3116,7 @@ TEN_WALL_RALLY = DrillSpec(
     name="Wall Rally",
     sport="tennis",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description="Rally against a wall. Counts every shot you hit.",
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2939,6 +3139,7 @@ TEN_ALTERNATE = DrillSpec(
     name="Alternating Wings",
     sport="tennis",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Rally against the wall changing wing every shot -- forehand, "
@@ -2968,6 +3169,7 @@ TEN_ONE_WING = DrillSpec(
     name="One Wing",
     sport="tennis",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Every ball on the same wing, recovering to the middle between shots. "
@@ -2996,6 +3198,7 @@ TEN_VOLLEY = DrillSpec(
     name="Wall Volleys",
     sport="tennis",
     category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Close to the wall, no bounce, short punchy blocks. This one has a "
@@ -3029,6 +3232,7 @@ TEN_SERVE = DrillSpec(
     name="Serve Motion",
     sport="tennis",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Toss and serve into a fence or a wall. It watches your hitting arm "
@@ -3100,6 +3304,7 @@ TEN_SPLIT_STEP = DrillSpec(
     name="Split Steps",
     sport="tennis",
     category=Category.SPEED,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
         "The small hop you land from just as your opponent hits. Land wide and "
@@ -3150,6 +3355,7 @@ TEN_RECOVERY = DrillSpec(
     name="Recovery Shuffle",
     sport="tennis",
     category=Category.AGILITY,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
         "Side to side along the baseline without crossing your feet. One rep "
@@ -3225,6 +3431,7 @@ HOC_STICKHANDLE = DrillSpec(
     name="Stickhandling",
     sport="hockey",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Ball or puck side to side in front of you, as quick as you can keep "
@@ -3303,6 +3510,7 @@ HOC_WIDE_HANDLES = DrillSpec(
     name="Wide Handles",
     sport="hockey",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "The same handle, pushed right out to each side -- full extension one "
@@ -3356,6 +3564,7 @@ HOC_SHOT = DrillSpec(
     name="Wrist Shots",
     sport="hockey",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Off a pad into a net. It follows your hands sweeping the puck from "
@@ -3412,6 +3621,7 @@ HOC_BUTTERFLY = DrillSpec(
     name="Butterfly Recoveries",
     sport="hockey",
     category=Category.AGILITY,
+    stimulus=Stimulus.POWER,
     metric=Metric.REPS,
     description=(
         "Down into the butterfly and back up to your skates, over and over. "
@@ -3462,6 +3672,7 @@ HOC_SHUFFLE = DrillSpec(
     name="Zone Slides",
     sport="hockey",
     category=Category.AGILITY,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
         "Slide across the top of the zone without ever turning your hips. One "
@@ -3511,6 +3722,7 @@ HOC_STANCE = DrillSpec(
     name="Skater's Stance",
     sport="hockey",
     category=Category.CONDITIONING,
+    stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
         "Knees bent, chest up, weight on the balls of your feet -- and stay "
@@ -3577,6 +3789,7 @@ FB_QUICK_RELEASE = DrillSpec(
     name="Quick Release",
     sport="football",
     category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Short, fast throws with a compact arm action -- ball out before the "
@@ -3627,6 +3840,7 @@ FB_WALL_THROW = DrillSpec(
     name="Pocket Throws",
     sport="football",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Ordinary throws into a wall or a net, at the distance you actually "
@@ -3672,6 +3886,7 @@ FB_DEEP_BALL = DrillSpec(
     name="Deep Balls",
     sport="football",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Fewer throws, all of them hard. Full drop, full turn, everything into "
@@ -3714,6 +3929,7 @@ FB_KICK = DrillSpec(
     name="Kicking Swings",
     sport="football",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "The full leg swing, with or without a ball. It follows your kicking "
@@ -3779,6 +3995,7 @@ FB_SHUFFLE = DrillSpec(
     name="Mirror Slides",
     sport="football",
     category=Category.AGILITY,
+    stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
         "Slide across without turning your hips -- a defensive back mirroring "
@@ -3852,6 +4069,7 @@ RUG_QUICK_HANDS = DrillSpec(
     name="Pop Passing",
     sport="rugby",
     category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Catch and pass in one movement, close to the wall, both directions. "
@@ -3922,6 +4140,7 @@ RUG_WALL_PASS = DrillSpec(
     name="Catch and Pass",
     sport="rugby",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "Pass into a wall, catch it, pass it back the other way. A rep only "
@@ -3969,6 +4188,7 @@ RUG_SPIN_PASS = DrillSpec(
     name="Spin Passing",
     sport="rugby",
     category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
         "The long one, off both hands. Hands start behind your back hip and "
@@ -4074,6 +4294,8 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     GEN_WALL_SIT,
     GEN_HOLLOW_HOLD,
     GEN_SIDE_PLANK,
+    GEN_POGO,
+    GEN_SKATER_BOUND,
     GEN_CALF_RAISE,
     GEN_HANDSTAND_HOLD,
     GEN_DEAD_HANG,

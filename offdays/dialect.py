@@ -163,14 +163,38 @@ class Finding:
         }
 
 
-#: Words that make a string literal a SQL statement rather than prose.
-#: Without this filter `date(` matches Python's own date() on every other
-#: line and the estimate comes out several times too large -- which would
-#: make this module exactly the kind of confidently wrong number it exists
-#: to replace.
+#: What makes a string literal SQL rather than prose.
+#:
+#: This filter has to exist at all because without it `date(` matches Python's
+#: own date() on every other line and the estimate comes out several times too
+#: large -- which would make this module exactly the kind of confidently wrong
+#: number it exists to replace.
+#:
+#: It used to match bare KEYWORDS, and that was the same mistake one level
+#: down: `FROM`, `WHERE`, `SET` and `VALUES` are ordinary English, so every
+#: docstring containing the word "from" was being counted as a query. It went
+#: unnoticed for as long as no such docstring also contained a question mark,
+#: and then one did.
+#:
+#: So each alternative below requires SQL *syntax* after the keyword, not just
+#: the keyword. Prose does not write "where x =" or "values (".
 _SQL_WORDS = re.compile(
-    r"\b(SELECT|INSERT|UPDATE|DELETE|WHERE|VALUES|FROM|JOIN|PRAGMA|"
-    r"CREATE TABLE|ORDER BY|GROUP BY|SET )",
+    r"\bSELECT\b[\s\S]{0,400}?\bFROM\b"
+    r"|\bINSERT\s+(?:OR\s+\w+\s+)?INTO\b"
+    r"|\bUPDATE\s+\w+[\s\S]{0,200}?\bSET\b"
+    r"|\bDELETE\s+FROM\b"
+    r"|\bCREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER|VIEW)\b"
+    r"|\bALTER\s+TABLE\b"
+    r"|\bDROP\s+(?:TABLE|INDEX|TRIGGER|VIEW)\b"
+    r"|\bPRAGMA\s+\w"
+    # Fragments, for queries assembled from pieces. Each still needs the
+    # punctuation or operator that only SQL puts there.
+    r"|\bWHERE\s+[\w.]+\s*(?:=|<|>|!=|IS\b|IN\b|LIKE\b|NOT\b|BETWEEN\b)"
+    r"|\bVALUES\s*\("
+    r"|\bSET\s+[\w.]+\s*="
+    r"|\b(?:ORDER|GROUP)\s+BY\s+[\w.]+"
+    r"|\bJOIN\s+\w+\s+(?:AS\s+\w+\s+)?ON\b"
+    r"|\bAND\s+[\w.]+\s*(?:=|<|>|!=|IS\b|IN\b)\s*\?",
     re.IGNORECASE,
 )
 

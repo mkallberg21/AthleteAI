@@ -303,6 +303,16 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Tennis", "recovering to the middle without crossing over"),
         Transfer("Hockey", "walking the blue line without turning your hips"),
     ),
+    "gen_pogo": (
+        Transfer("Basketball", "the second jump, which is the one that rebounds"),
+        Transfer("Dance", "petit allegro is this, with better feet"),
+        Transfer("Track", "sprinting is a series of very short ground contacts"),
+    ),
+    "gen_skater_bound": (
+        Transfer("Hockey", "a skating stride is a bound you never land from"),
+        Transfer("Tennis", "the wide ball, and getting back from it"),
+        Transfer("Soccer", "changing direction off one leg without slowing down"),
+    ),
     "gen_calf_raise": (
         Transfer("Volleyball", "every block and every approach leaves from here"),
         Transfer("Basketball", "the last thing that touches the floor on a jump"),
