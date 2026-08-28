@@ -641,6 +641,51 @@ class TestPrivacy:
             "the send button is not gated on the guardian consent"
         )
 
+    def test_the_calibration_bench_never_sends_the_video_anywhere(self, client):
+        """The bench exists so real footage can be measured without filming
+        children for a database. It would be a poor joke if the tool built to
+        avoid uploading video uploaded video.
+
+        It reads a local file, runs the production counter over it in the
+        browser, and the only thing that ever leaves is a JSON file the user
+        downloads to their own disk.
+        """
+        import re
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parent.parent
+            / "offdays" / "web" / "static" / "calibrate.html"
+        ).read_text()
+        code = re.sub(r"<!--[\s\S]*?-->|/\*[\s\S]*?\*/|//.*", "", source)
+
+        # The one network call it is allowed: reading the drill catalogue, so
+        # the bench cannot drift from the specs the product ships.
+        calls = re.findall(r"fetch\s*\(([^)]*)\)", code)
+        assert calls == ["'/api/drills'"], calls
+
+        # No upload verb anywhere near the file it just read.
+        for forbidden in ("formdata", "multipart", "method: 'post'",
+                          'method: "post"', "xmlhttprequest"):
+            assert forbidden not in code.lower(), forbidden
+
+    def test_the_bench_uses_the_production_counter_rather_than_a_copy(self):
+        """Calibrating a reimplementation would measure the reimplementation.
+
+        The whole value of the bench is that the thing being tested is the
+        thing that ships, so it imports the same module the capture app does.
+        """
+        from pathlib import Path
+
+        static = Path(__file__).resolve().parent.parent / "offdays" / "web" / "static"
+        bench = (static / "calibrate.html").read_text()
+        assert "from './counter.js'" in bench
+        assert "RepCounter" in bench
+        # And the same pose model, at the same version, as the capture app.
+        capture = (static / "capture.html").read_text()
+        for pin in ("tasks-vision@0.10.14", "pose_landmarker_lite"):
+            assert pin in bench and pin in capture, pin
+
     def test_submissions_store_no_imagery(self, client, program):
         """No table can hold a video, whatever its columns are called.
 

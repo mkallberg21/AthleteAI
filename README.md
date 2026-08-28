@@ -88,7 +88,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3782 tests
+python -m pytest tests/ -q          # 3800 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 232 tests
@@ -4111,6 +4111,13 @@ contact with a real driveway:
    who is hurt and silent looks identical to one who is fine. Nothing in it
    should ever delay getting a young athlete looked at.
 7. **Thresholds are calibrated against synthetic motion, not real athletes.**
+   There is now a bench for fixing that — `/app/calibrate.html` runs any local
+   video through the production counter in the browser and compares it against
+   a hand count, so the footage never leaves the machine. `calibration.py`
+   reads its export and **refuses to pool clips across provenance**: borrowed
+   demonstration footage can prove a counter is broken, and cannot settle a
+   depth target, because a demo clip is an adult's best rep and a target set
+   against it marks an honest child short.
    The calibration harness makes every drill self-consistent — a textbook rep
    counts and measures what its spec claims — but "textbook" is still a
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
