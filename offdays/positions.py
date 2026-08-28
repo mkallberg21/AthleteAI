@@ -583,35 +583,49 @@ SWIMMING: tuple[Position, ...] = (
          "stroke swimmers"),
 )
 
+# Five events that share a warm-up and share almost nothing else. What they do
+# share is that the app cannot see the thing they actually do -- a time and a
+# distance are not measurements a phone in a driveway takes -- so every plan
+# here is the work AROUND the event, and the run log in store.py is where the
+# running itself finally reaches the load model.
 TRACK: tuple[Position, ...] = (
     _pos("sprints", "Sprints", "track", "speed",
-         ("sprints", "sprint", "sprinter", "100", "200", "400", "relay", "hurdles", "hurdler"),
-         mix(gen_high_knees=5, gen_glute_bridge=4, gen_squat_jump=3, gen_lunge=3,
-             gen_hollow_hold=2, gen_squat=2, gen_dead_bug=1, gen_side_plank=1),
-         "Knees up, ground contact short, hamstrings strong enough to take it.",
+         ("sprints", "sprint", "sprinter", "100", "200", "400", "relay",
+          "hurdles", "hurdler"),
+         # Both halves of the stride now, plus the position that produces it.
+         mix(gen_high_knees=5, gen_butt_kick=4, gen_glute_bridge=4,
+             gen_squat_jump=3, gen_lunge=3, gen_knee_drive_hold=2,
+             gen_pogo=2, gen_hollow_hold=2, gen_squat=2, gen_dead_bug=1,
+             gen_side_plank=1),
+         "Knees up, heels folding, ground contact short, hamstrings strong.",
          "sprinters"),
     _pos("middle_distance", "Middle Distance", "track", "endurance",
          ("middle distance", "mid distance", "800", "1500", "mile", "1600"),
-         mix(gen_high_knees=4, gen_lunge=4, gen_glute_bridge=3, gen_burpee=2,
-             gen_plank=2, gen_side_plank=2, gen_dead_bug=2, gen_squat=2),
+         mix(gen_high_knees=4, gen_lunge=4, gen_glute_bridge=3, gen_butt_kick=3,
+             gen_pogo=2, gen_burpee=2, gen_plank=2, gen_side_plank=2,
+             gen_dead_bug=2, gen_squat=2, gen_calf_raise=2),
          "Form that holds when it hurts, and legs that hold you up on one foot.",
          "middle distance runners"),
     _pos("distance", "Distance", "track", "endurance",
          ("distance", "3200", "5000", "10000", "3k", "5k", "10k", "steeple"),
          # Same omission as the cross country plan, and the same fix.
          mix(gen_lunge=4, gen_glute_bridge=4, gen_pogo=3, gen_side_plank=3,
-             gen_dead_bug=3, gen_plank=2, gen_high_knees=2, gen_squat=2,
-             gen_wall_sit=1),
+             gen_dead_bug=3, gen_calf_raise=3, gen_butt_kick=2, gen_plank=2,
+             gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
          "Single-leg strength, hip control, and feet that leave the ground.",
          "distance runners"),
     _pos("jumps", "Jumps", "track", "power",
-         ("jumps", "jumper", "long jump", "high jump", "triple jump", "pole vault", "vault"),
-         mix(gen_squat_jump=5, gen_tuck_jump=4, gen_lunge=3, gen_glute_bridge=3,
-             gen_hollow_hold=2, gen_squat=2, gen_lateral_bound=2, gen_side_plank=1),
+         ("jumps", "jumper", "long jump", "high jump", "triple jump",
+          "pole vault", "vault"),
+         mix(gen_squat_jump=5, gen_tuck_jump=4, gen_skater_bound=3, gen_lunge=3,
+             gen_glute_bridge=3, gen_high_knees=2, gen_calf_raise=2,
+             gen_hollow_hold=2, gen_squat=2, gen_lateral_bound=2,
+             gen_side_plank=1),
          "One foot, all your speed, straight up. Land it safely too.",
          "jumpers"),
     _pos("throws", "Throws", "track", "power",
-         ("throws", "thrower", "shot", "shot put", "discus", "javelin", "hammer"),
+         ("throws", "thrower", "shot", "shot put", "discus", "javelin",
+          "hammer"),
          # A throw IS power, and this plan being short of it was the worst
          # single miss the stimulus audit turned up anywhere.
          mix(gen_squat=5, gen_squat_jump=5, gen_side_plank=4, gen_skater_bound=4,
@@ -754,10 +768,11 @@ CROSS_COUNTRY: tuple[Position, ...] = (
     _pos("distance", "Distance Runner", "cross_country", "endurance",
          ("distance", "runner", "distance runner", "harrier", "5k", "varsity", "jv"),
          # Plyometrics buy running economy, and distance runners are the
-         # group most likely to skip them entirely.
-         mix(gen_lunge=4, gen_glute_bridge=4, gen_pogo=3, gen_side_plank=3,
-             gen_dead_bug=3, gen_plank=2, gen_high_knees=2, gen_squat=2,
-             gen_wall_sit=1),
+         # group most likely to skip them entirely. Calf and ankle work is
+         # here for the same reason: it is where a runner's season ends.
+         mix(gen_lunge=4, gen_glute_bridge=4, gen_pogo=3, gen_calf_raise=3,
+             gen_side_plank=3, gen_dead_bug=3, gen_butt_kick=2, gen_plank=2,
+             gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
          "Hills, single-leg strength, and feet that leave the ground quickly.",
          "distance runners"),
 )

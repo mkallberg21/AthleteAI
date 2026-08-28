@@ -3969,6 +3969,364 @@ RUG_ADVANCED: tuple[Topic, ...] = (
 RUG_IQ_TOPICS: tuple[Topic, ...] = RUG_FUNDAMENTALS + RUG_CORE + RUG_ADVANCED
 
 
+# ---------------------------------------------------------------------------
+# Track and cross country
+#
+# One syllabus under both, on the same reasoning that gave baseball and softball
+# one: the decisions are the same decisions. A cross country runner and a track
+# distance runner are usually the same child in a different season.
+#
+# What makes this syllabus different from every other one here is that almost
+# none of it is about how to do the thing. These are TIMED sports. There is no
+# read, no coverage, no defender -- the skill is pacing, and everything else
+# that decides a season is load, fuel and knowing when a niggle is not a niggle.
+# So the syllabus is mostly about training rather than competing, and it says so.
+# ---------------------------------------------------------------------------
+
+TRK_ALL = ("sprints", "middle_distance", "distance", "jumps", "throws")
+TRK_RUN = ("sprints", "middle_distance", "distance")
+TRK_ENDURANCE = ("middle_distance", "distance")
+TRK_FIELD = ("jumps", "throws")
+
+TRK_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="trk_iq_even_pace",
+        title="The first lap is the one that ruins races",
+        focus="Racing",
+        positions=TRK_ENDURANCE, min_age=0, max_age=200, target_s=70,
+        find=(
+            "Two runners in the same race: one who goes out with the leaders "
+            "and fades, one who runs even splits and passes them. Youth "
+            "footage makes the first one very easy to find."
+        ),
+        ask=Ask(
+            prompt="You feel great in the first minute of a race. What does that mean?",
+            options=(
+                "Nothing yet -- everybody feels great in the first minute",
+                "You are having a good day and should push",
+                "You went out too slow",
+            ),
+            answer=0,
+            because=(
+                "Feeling good early is what running too fast feels like. The "
+                "runners who pass you at the end are the ones who did not "
+                "trust that feeling."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_niggle",
+        title="A niggle that keeps coming back",
+        focus="Staying safe",
+        positions=TRK_ALL, min_age=0, max_age=200, target_s=72,
+        find=(
+            "Coaching-education footage about running injuries that build up "
+            "slowly. Anything that shows a runner training through the same "
+            "pain for weeks is better than a dramatic injury."
+        ),
+        ask=Ask(
+            prompt="The same spot in your shin or foot has hurt for two weeks. What do you do?",
+            options=(
+                "Tell an adult and get it looked at properly",
+                "Run easier for a few days and see",
+                "Change your shoes",
+            ),
+            answer=0,
+            because=(
+                "Pain in the same spot that will not settle is the one to have "
+                "looked at rather than run through. Running injuries do not "
+                "announce themselves -- they build for weeks and then stop you "
+                "for months."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_easy_easy",
+        title="Easy days have to be actually easy",
+        focus="Training sense",
+        positions=TRK_ENDURANCE, min_age=0, max_age=200, target_s=68,
+        find=(
+            "A squad on a recovery run where half the group is racing it. The "
+            "clip is the conversation -- who can talk and who cannot."
+        ),
+        ask=Ask(
+            prompt="How fast should an easy run be?",
+            options=(
+                "Slow enough to hold a conversation the whole way",
+                "A bit slower than race pace",
+                "Whatever feels comfortable that day",
+            ),
+            answer=0,
+            because=(
+                "Every easy run done a little too hard turns a week into one "
+                "long medium effort. The hard days then are not hard, and the "
+                "easy days never repaired anything."
+            ),
+        ),
+    ),
+)
+
+TRK_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="trk_iq_mileage_jump",
+        title="Adding too much, too quickly",
+        focus="Staying safe",
+        positions=TRK_ALL, min_age=13, max_age=200, target_s=128,
+        find=(
+            "Coaching-education footage on building weekly volume in young "
+            "runners. Material that talks about bone rather than only about "
+            "fitness is worth much more here."
+        ),
+        ask=Ask(
+            prompt="Why does adding a lot of running in one week cause problems weeks later?",
+            options=(
+                "Bone adapts more slowly than muscle and lungs do",
+                "Your muscles need longer to recover",
+                "You get tired and your form goes",
+            ),
+            answer=0,
+            because=(
+                "Fitness arrives before the skeleton has caught up, so you "
+                "feel able to do more at exactly the point your bones are "
+                "furthest behind. That gap is where stress injuries live."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_fuel",
+        title="You cannot train on not enough food",
+        focus="Staying safe",
+        positions=TRK_ALL, min_age=13, max_age=200, target_s=135,
+        find=(
+            "Sports-dietitian or governing-body education footage aimed at "
+            "young endurance athletes about eating enough to train. Choose "
+            "material about fuel and performance, not about weight."
+        ),
+        ask=Ask(
+            prompt="What happens to a runner who is not eating enough for their training?",
+            options=(
+                "They get slower, break more easily and heal more slowly",
+                "They get lighter and races get easier",
+                "Nothing, as long as they feel fine",
+            ),
+            answer=0,
+            because=(
+                "Endurance training on too little fuel takes it out of bone "
+                "and muscle. It shows up as times that stop improving and "
+                "injuries that keep returning, long before it feels like "
+                "anything is wrong."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_rest_day",
+        title="What a rest day is actually for",
+        focus="Training sense",
+        positions=TRK_ALL, min_age=13, max_age=200, target_s=120,
+        find=(
+            "Coaching-education footage on recovery and adaptation. Look for "
+            "material that explains what happens on the day off rather than "
+            "only warning about overtraining."
+        ),
+        ask=Ask(
+            prompt="When does training actually make you fitter?",
+            options=(
+                "On the days off, while your body repairs the damage",
+                "During the hard sessions",
+                "Over the whole week evenly",
+            ),
+            answer=0,
+            because=(
+                "The session is the stimulus; the adaptation happens after it. "
+                "A week with no rest day is a week of stimulus with nothing "
+                "built on top of it."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_pack",
+        title="Racing the runners, not the clock",
+        focus="Racing",
+        positions=TRK_ENDURANCE, min_age=13, max_age=200, target_s=125,
+        find=(
+            "A cross country race where somebody sits on a shoulder for two "
+            "miles and goes past at the top of a hill. Cut it wide enough to "
+            "see the pack rather than only the leader."
+        ),
+        ask=Ask(
+            prompt="You are in a pack halfway through a cross country race. What is the job?",
+            options=(
+                "Stay in it and use it -- running alone costs you",
+                "Get clear of it so you have space",
+                "Drop back and save energy",
+            ),
+            answer=0,
+            because=(
+                "A pack drags you along at a pace you would not hold on your "
+                "own, and it does it for free. Runners who break away early "
+                "usually spend the rest of the race being caught."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_hills",
+        title="How to run a hill without paying for it",
+        focus="Racing",
+        positions=TRK_ENDURANCE, min_age=13, max_age=200, target_s=122,
+        find=(
+            "The same hill taken two ways: one runner charging it and blowing "
+            "up over the top, one keeping effort even and going past them on "
+            "the flat afterwards."
+        ),
+        ask=Ask(
+            prompt="Going up a steep hill in a race, what should stay the same?",
+            options=(
+                "Your effort -- which means your pace slows",
+                "Your pace -- which means your effort rises",
+                "Your stride length",
+            ),
+            answer=0,
+            because=(
+                "Holding pace up a hill spends far more than the time it saves. "
+                "The place to take it back is the thirty seconds over the top, "
+                "when everybody who charged it is recovering."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_field_approach",
+        title="The run-up is most of the event",
+        focus="Technique sense",
+        positions=TRK_FIELD, min_age=13, max_age=200, target_s=118,
+        find=(
+            "A jumper or thrower whose approach is identical every attempt "
+            "next to one adjusting on the way in. Watch the feet, not the "
+            "landing."
+        ),
+        ask=Ask(
+            prompt="Why do jumpers count their approach steps?",
+            options=(
+                "So the takeoff happens in the same place every time",
+                "To build up more speed",
+                "To help with concentration",
+            ),
+            answer=0,
+            because=(
+                "Everything after the takeoff depends on hitting it right. A "
+                "run-up that changes every attempt makes the rest of the event "
+                "a different event each time."
+            ),
+        ),
+    ),
+)
+
+TRK_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="trk_iq_season_shape",
+        title="Why nobody is fast all year",
+        focus="Training sense",
+        positions=TRK_ALL, min_age=15, max_age=200, target_s=158,
+        find=(
+            "Coaching-education footage on periodisation for young athletes. "
+            "Look for material that explains why the base phase looks slow on "
+            "purpose."
+        ),
+        ask=Ask(
+            prompt="Why does a season have a base phase where nothing is fast?",
+            options=(
+                "Because the fast work later only works on top of it",
+                "To keep training interesting",
+                "Because it is the off season",
+            ),
+            answer=0,
+            because=(
+                "Sharpness lasts weeks, not months. Trying to hold it all year "
+                "means arriving at the races that matter already flat, and "
+                "usually already injured."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_two_seasons",
+        title="Cross country and track are one long year",
+        focus="Training sense",
+        positions=TRK_ALL, min_age=15, max_age=200, target_s=150,
+        find=(
+            "Anything that lays a school cross country season next to the "
+            "indoor and outdoor track seasons on one calendar. The gap between "
+            "them is the clip."
+        ),
+        ask=Ask(
+            prompt="You run cross country in autumn and track in spring. How many seasons is that?",
+            options=(
+                "One, unless somebody deliberately puts a break in it",
+                "Two, with a natural break between them",
+                "Three, counting indoors",
+            ),
+            answer=0,
+            because=(
+                "The calendar has gaps; the legs do not notice them unless you "
+                "take one. Running through from September to June is a single "
+                "unbroken block, and it is the most common way a promising "
+                "young runner ends up hurt."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_log_honestly",
+        title="Why the app asks how long you ran",
+        focus="Training sense",
+        positions=TRK_ALL, min_age=15, max_age=200, target_s=145,
+        find=(
+            "Not footage -- a coach explaining a training log to a squad, or "
+            "a screen recording of one being filled in. The point is what the "
+            "log is FOR."
+        ),
+        ask=Ask(
+            prompt="What does logging your runs in this app get you?",
+            options=(
+                "Nothing, except a load model that can see your actual week",
+                "Points and a longer streak",
+                "A place on the leaderboard",
+            ),
+            answer=0,
+            because=(
+                "It is worth no XP on purpose. Nothing you type can earn you "
+                "anything, which is exactly why the app is willing to believe "
+                "it -- and why over-stating it only buys you a warning you did "
+                "not need."
+            ),
+        ),
+    ),
+    Topic(
+        key="trk_iq_shoes",
+        title="What shoes can and cannot do",
+        focus="Staying safe",
+        positions=TRK_RUN, min_age=15, max_age=200, target_s=140,
+        find=(
+            "Governing-body or coaching-education material on footwear for "
+            "young runners. Avoid anything produced by a shoe company."
+        ),
+        ask=Ask(
+            prompt="A shoe that feels great is doing what, exactly?",
+            options=(
+                "Changing where the load goes, not how much of it there is",
+                "Reducing the impact on your body",
+                "Preventing injuries",
+            ),
+            answer=0,
+            because=(
+                "The load is your bodyweight and your mileage. A different "
+                "shoe moves it around -- sometimes helpfully -- but the way to "
+                "have less of it is to run less of it."
+            ),
+        ),
+    ),
+)
+
+TRK_IQ_TOPICS: tuple[Topic, ...] = TRK_FUNDAMENTALS + TRK_CORE + TRK_ADVANCED
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
@@ -3989,5 +4347,9 @@ BY_SPORT.update({
     "dance": JDG_TOPICS,
     "football": FB_IQ_TOPICS,
     "rugby": RUG_IQ_TOPICS,
+    # One syllabus under both. A cross country runner and a track distance
+    # runner are usually the same child in a different season.
+    "track": TRK_IQ_TOPICS,
+    "cross_country": TRK_IQ_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}

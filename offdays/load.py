@@ -103,6 +103,32 @@ THROW_CEILING_BY_AGE: tuple[tuple[int, int], ...] = (
     (8, 60), (10, 90), (12, 105), (14, 120), (16, 135), (18, 150),
 )
 
+#: Load units per minute of running.
+#:
+#: A calibration constant, not a measurement, and it is stated as one. It is
+#: set so that an hour of running and an hour of drill work land in the same
+#: range, because an athlete who does both should not see one of them vanish
+#: next to the other. Nothing downstream treats it as evidence about anything.
+RUN_LOAD_PER_MINUTE = 3.0
+
+#: Week-on-week increase in running minutes that is worth a word.
+#:
+#: Shaped by the convention distance running has used for decades -- add about
+#: a tenth a week -- and deliberately looser than it, because that convention
+#: is a coaching heuristic rather than a finding, and because this number is
+#: computed from whatever the athlete happened to log rather than from what
+#: they ran. A rule of thumb, applied to an incomplete record, is not a place
+#: for a tight threshold.
+RUN_JUMP_SHARE = 0.30
+
+#: Below this many minutes in the earlier week, the ratio is noise: going from
+#: ten minutes to twenty is a 100% jump and means nothing at all.
+RUN_JUMP_FLOOR = 60
+
+#: Consecutive days with a logged run, above which the absence of a rest day
+#: is worth saying out loud. Bone does its repairing on the days off.
+RUN_STREAK_DAYS = 10
+
 #: Above this share of the ceiling, say something before it is reached rather
 #: than after.
 THROW_CEILING_WARN = 0.80
@@ -129,6 +155,10 @@ class DayLoad:
     load: float = 0.0
     throws: int = 0
     sessions: int = 0
+    #: Minutes of running the athlete logged for this day. Self-reported, and
+    #: kept separate from `load` on the way in so the advisory can say how much
+    #: of the total came from a number nobody measured.
+    run_minutes: int = 0
 
 
 @dataclass
@@ -152,6 +182,13 @@ class LoadState:
     #: that nothing downstream may assume it.
     throws_today: int = 0
     throw_ceiling: int | None = None
+
+    #: Running the athlete logged, this week and last. None for the earlier
+    #: week when there is not enough of it to compare against.
+    weekly_run_minutes: int = 0
+    run_change: float | None = None
+    #: Consecutive days ending today with a logged run and no rest day.
+    run_streak: int = 0
 
     consecutive_days: int = 0
     days_since_training: int | None = None
@@ -181,6 +218,10 @@ class LoadState:
             "history_days": self.history_days,
             "tightened": self.tightened,
             "history_note": self.history_note,
+            "weekly_run_minutes": self.weekly_run_minutes,
+            "run_change": (round(self.run_change, 2)
+                           if self.run_change is not None else None),
+            "run_streak": self.run_streak,
             "weekly_throws": self.weekly_throws,
             "throws_today": self.throws_today,
             "throw_ceiling": self.throw_ceiling,
@@ -275,6 +316,20 @@ def analyze(
     state.throws_today = sum(
         d.throws for d in acute_window if d.day == max(x.day for x in acute_window)
     ) if acute_window else 0
+
+    # --- Running, which until now the model could not see at all ------------
+    state.weekly_run_minutes = sum(d.run_minutes for d in acute_window)
+    previous_week = window[-(cfg.acute_days * 2):-cfg.acute_days]
+    prior_minutes = sum(d.run_minutes for d in previous_week)
+    if prior_minutes >= RUN_JUMP_FLOOR:
+        state.run_change = (
+            (state.weekly_run_minutes - prior_minutes) / prior_minutes
+        )
+    # Days ending today with a run and no rest day between them.
+    for day in reversed(window):
+        if day.run_minutes <= 0:
+            break
+        state.run_streak += 1
 
     # --- Ratio, only where there is enough history to mean anything ---
     if state.history_days >= cfg.min_history_days and state.chronic > 0:
@@ -477,6 +532,42 @@ def _add_advisories(
                 "Young shoulders and elbows tolerate gradual increases far "
                 "better than sudden ones.",
                 f"{state.weekly_throws} throws this week.",
+            )
+        )
+
+    # --- Running volume ------------------------------------------------------
+    # The advisory always says how much of this the app actually saw, for the
+    # same reason the throwing one does: a number that looks complete and is
+    # not is worse than no number.
+    if state.run_change is not None and state.run_change >= RUN_JUMP_SHARE:
+        state.advisories.append(
+            Advisory(
+                "caution",
+                "run_jump",
+                f"Running is up {state.run_change:.0%} on last week. Bone "
+                "takes longer to catch up than muscle does, and it is the "
+                "part that does not warn you first.",
+                f"{state.weekly_run_minutes} minutes logged this week -- and "
+                "only what was logged, not what was run.",
+            )
+        )
+
+    # Only when the general rest-day advisory has NOT already fired. The two
+    # overlap for anybody who runs every day and does nothing else, and telling
+    # a fourteen-year-old the same thing twice in two different wordings is how
+    # advisories stop being read. What this adds is the case the general one
+    # misses: an athlete who takes rest days from *training* and never one from
+    # running, because the lifting day still had eight miles in it.
+    already_said = any(a.code == "no_rest_day" for a in state.advisories)
+    if state.run_streak >= RUN_STREAK_DAYS and not already_said:
+        state.advisories.append(
+            Advisory(
+                "caution",
+                "run_streak",
+                f"{state.run_streak} days running without one off. A cross "
+                "training day is not a rest day for the part of you that keeps "
+                "hitting the ground.",
+                "Counted from logged runs only.",
             )
         )
 

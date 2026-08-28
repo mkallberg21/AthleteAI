@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3598 tests
+python -m pytest tests/ -q          # 3655 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 230 tests
+  node --test tests/js/*.test.mjs   # 231 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1292,11 +1292,12 @@ sessions.
 
 ### The drill catalog, and what is deliberately missing
 
-Eighty-five drills: twenty-three bodyweight movements that work for any sport —
+Eighty-seven drills: twenty-five bodyweight movements that work for any sport —
 squats, lunges, glute bridges, push-ups, pull-ups, planks, side planks, hollow
 holds, wall sits, dead bugs, mountain climbers, burpees, squat jumps, tuck
-jumps, lateral bounds, skater bounds, pogo hops, high knees, jumping jacks,
-sit-ups, calf raises, wall handstands, dead hangs — and skill work for the nine sports built out so far:
+jumps, lateral bounds, skater bounds, pogo hops, high knees, butt kicks,
+knee drive holds, jumping jacks, sit-ups, calf raises, wall handstands, dead
+hangs — and skill work for the nine sports built out so far:
 lacrosse (11), basketball (9), soccer, volleyball and tennis (7 each), hockey
 (6), football (5), rugby (3), and baseball and softball (7 between them,
 sharing everything except the mound).
@@ -1345,10 +1346,19 @@ scrummaging and lineout lifting all need another person, none of them belong to
 a child alone in a garden, and they are taught on film rather than approximated
 by something a camera could count.
 
-The remaining three — track, cross country and swimming — get positions,
-benchmarks, load monitoring and the bodyweight catalogue, and are honest about
-having no skill drills rather than being handed another sport's with the labels
-changed.
+**Track and cross country have no drills of their own, and that is the finding.**
+Running mechanics belong to running, not to track — a soccer player doing butt
+kicks is doing the same drill — so everything those two sports need is general.
+What they needed instead was a **run log**: the load model could not see running
+at all, so a fifty-mile week and a five-mile week produced the same
+acute:chronic ratio. A logged run is self-reported and earns nothing — no XP, no
+streak, no leaderboard, no session row — which is exactly why an unverified
+number is admissible there and nowhere else: there is no direction in which
+lying about it pays.
+
+Swimming is the last sport with no skill drills. It gets positions, benchmarks,
+load monitoring and the bodyweight catalogue, and is honest about the rest
+rather than being handed another sport's drills with the labels changed.
 
 ### Position benchmarks
 

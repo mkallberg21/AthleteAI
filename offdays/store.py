@@ -1835,6 +1835,66 @@ class Store:
             set_by=set_by, set_by_name=set_by_name, note=note,
         )
 
+    def log_run(
+        self,
+        athlete_id: int,
+        *,
+        minutes: int,
+        day: date | None = None,
+        note: str = "",
+    ) -> dict[str, Any]:
+        """Record running the camera will never see.
+
+        Unverifiable, and admissible anyway because of what it is wired to.
+        **A logged run earns nothing.** No XP, no streak, no leaderboard, no
+        badge, no session row. It reaches the load model and stops there, and
+        the load model only ever produces cautions.
+
+        That is the whole integrity argument, and it is worth stating in one
+        line: there is no direction in which lying about this pays. Inflate it
+        and the app tells you to rest; hide it and the app stays quiet when it
+        should not. Everywhere else in this product an unverified number would
+        be a way around the integrity layer, because everywhere else numbers
+        buy something.
+
+        One row per day, replaced rather than added to. Somebody correcting
+        yesterday's entry is the common case; two rows for one run would count
+        it twice.
+        """
+        if minutes <= 0 or minutes > 600:
+            raise StoreError("minutes must be between 1 and 600")
+        day = day or _now().date()
+        if day > _now().date():
+            raise StoreError("cannot log a run in the future")
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "INSERT INTO run_log(athlete_id, day, minutes, note, created_at) "
+                "VALUES (?,?,?,?,?) "
+                "ON CONFLICT(athlete_id, day) DO UPDATE SET "
+                "  minutes = excluded.minutes, note = excluded.note, "
+                "  created_at = excluded.created_at",
+                (athlete_id, day.isoformat(), int(minutes), note.strip()[:200],
+                 _iso(_now())),
+            )
+        return {
+            "day": day.isoformat(),
+            "minutes": int(minutes),
+            "xp_awarded": 0,
+            "counts_toward": "training load only",
+        }
+
+    def run_log(self, athlete_id: int, days: int = 28) -> list[dict[str, Any]]:
+        """What the athlete has logged, most recent first."""
+        since = (_now().date() - timedelta(days=days)).isoformat()
+        return [
+            {"day": r["day"], "minutes": int(r["minutes"]), "note": r["note"]}
+            for r in self.conn.execute(
+                "SELECT day, minutes, note FROM run_log "
+                "WHERE athlete_id = ? AND day >= ? ORDER BY day DESC",
+                (athlete_id, since),
+            )
+        ]
+
     def log_self_reported(
         self,
         athlete_id: int,
@@ -3000,6 +3060,21 @@ class Store:
             entry.load += units
             entry.throws += throws
             entry.sessions += 1
+
+        # Logged running, which no session row will ever carry. Added to the
+        # same load figure the ratio is computed from -- the whole point is
+        # that a runner's acute:chronic stops being a ratio of their warm-up.
+        since = (_now().date() - timedelta(days=days)).isoformat()
+        for row in self.conn.execute(
+            "SELECT day, minutes FROM run_log "
+            "WHERE athlete_id = ? AND day >= ? ORDER BY day",
+            (athlete_id, since),
+        ):
+            entry = by_day.setdefault(
+                row["day"], load_mod.DayLoad(day=date.fromisoformat(row["day"]))
+            )
+            entry.run_minutes += int(row["minutes"])
+            entry.load += int(row["minutes"]) * load_mod.RUN_LOAD_PER_MINUTE
         return sorted(by_day.values(), key=lambda d: d.day)
 
     def load_state(self, athlete_id: int) -> load_mod.LoadState:

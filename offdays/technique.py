@@ -708,6 +708,29 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when you start standing up out of your stance.",
             "an upright defender has already lost the route"),
     ),
+    "gen_butt_kick": (
+        Cue("depth", "Heel all the way up to level with your knee. Halfway is "
+                     "a jog with extra steps.",
+            "the fold is the whole drill and it is the first thing to go"),
+        Cue("tempo", "Quick. If you can count them individually you are doing "
+                     "them too slowly to be practising running.",
+            "a slow butt kick is a hamstring stretch, which is a different day"),
+        Cue("consistency", "Stay tall and stay in one place. Leaning forward "
+                           "makes it easier and stops it being the drill.",
+            "the lean is your hips giving up, and it shows in a race too"),
+        Cue("endurance", "Stop when your heels start coming up short rather "
+                         "than when your legs burn.",
+            "short folds at the end teach your legs the short version"),
+    ),
+    "gen_knee_drive_hold": (
+        Cue("position", "One straight line from your back ankle through your "
+                        "hip to your head, and the knee above the hip. Do not "
+                        "let your backside stick out behind you.",
+            "the line is what makes it sprint position rather than a stretch"),
+        Cue("endurance", "Come down when the knee starts drifting, not when it "
+                         "has dropped. Swap legs and go again.",
+            "the drift is the hip flexor going, and holding past it teaches sag"),
+    ),
     "gen_pogo": (
         Cue("tempo", "As fast as you can get off the floor again. Think about "
                      "the ground being hot rather than about getting high.",

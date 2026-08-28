@@ -1437,6 +1437,131 @@ GEN_SIDE_PLANK = DrillSpec(
 # push-up is distinguished from an ordinary one by airtime that a side-on view
 # does not see.
 # --------------------------------------------------------------------------
+# Running mechanics
+#
+# Two drills, and the smallest sport-facing addition in the catalogue, because
+# the honest finding for track and cross country is that their solo work was
+# almost entirely built already: high knees, pogo hops, calf raises, lunges,
+# glute bridges, skater bounds and single-leg strength all arrived through
+# other sports. What was genuinely missing was the back half of the running
+# cycle and the position a sprinter holds while producing it.
+#
+# The rest of what these two sports need is not a drill at all. See the run log
+# in store.py -- the load model could not see running, which for these athletes
+# is the only thing that hurts them.
+# --------------------------------------------------------------------------
+
+GEN_BUTT_KICK = DrillSpec(
+    key="gen_butt_kick",
+    name="Butt Kicks",
+    sport="general",
+    category=Category.SPEED,
+    stimulus=Stimulus.QUICKNESS,
+    metric=Metric.REPS,
+    description=(
+        "Heels snapping up towards your backside, quickly, staying tall. The "
+        "front half of a running stride has a drill and the back half did not "
+        "-- this is the back half."
+    ),
+    signal=SignalSpec(
+        # The heel against the knee on the same leg. High knees measure the
+        # knee against the hip, which is the recovery of the leg in FRONT; this
+        # measures the heel folding up behind, which nothing else here sees.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_ankle",
+        reference="left_knee",
+        smoothing=0.55,
+    ),
+    counter=CounterSpec(
+        # Standing puts the ankle roughly two thirds of a torso below the knee;
+        # a real butt kick brings it up level with it or higher.
+        down_threshold=-0.45,
+        up_threshold=0.05,
+        min_rep_ms=180,
+        max_rep_ms=1_500,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=0.3,
+        daily_rep_cap=700,
+        diminishing_after_reps=300,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=5.0, min_reps_per_second=1.20,
+        min_reps=30, min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Phone side-on at about knee height so it can see your heel come up "
+        "behind you. Square to you it cannot see the fold at all."
+    ),
+    quality=QualitySpec(
+        # Measured, not guessed. Standing puts the ankle about 0.68 torso
+        # lengths below the knee and a real fold takes it slightly above, so a
+        # textbook rep covers 0.8. The 0.55 I first wrote would have paid full
+        # depth for a fold that stopped at mid-calf -- which is exactly what a
+        # tired butt kick turns into.
+        target_rom=0.80,
+        consistency_target=0.10,
+        consistency_ceiling=0.30,
+        tempo_min_ms=180,
+        tempo_max_ms=700,
+        # Tempo and range together: a slow butt kick is a hamstring stretch.
+        w_consistency=0.25,
+        w_depth=0.30,
+        w_tempo=0.30,
+        w_endurance=0.15,
+        min_reps=30,
+    ),
+    load=LoadSpec(load_per_rep=0.08, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+GEN_KNEE_DRIVE_HOLD = DrillSpec(
+    key="gen_knee_drive_hold",
+    name="Knee Drive Hold",
+    sport="general",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Hands on a wall, body in a straight line, one knee driven up and "
+        "held there. The clock runs only while the knee is actually up -- "
+        "letting it drift down stops it."
+    ),
+    signal=SignalSpec(
+        # The driven knee against its own hip. The same measurement high knees
+        # cycles through, held still instead: sprint position is a shape you
+        # have to be strong enough to hold, and holding it is the drill.
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_knee",
+        reference="left_hip",
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        # Above the hip and not so high that the athlete is sitting down into
+        # it. A high-knee rep passes through this band; a hold lives in it.
+        down_threshold=0.06,
+        up_threshold=0.48,
+        min_rep_ms=400,
+        max_rep_ms=60_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=32.0, daily_rep_cap=1_000),
+    validation=ValidationSpec(
+        max_reps_per_second=1.0, min_reps=0, min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Phone side-on, far enough back to see your whole body and the wall. "
+        "Lean in until you are a straight line from your ankle to your head, "
+        "then drive one knee up and keep it there."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=3.0, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=False,
+)
+
+
+# --------------------------------------------------------------------------
 
 GEN_POGO = DrillSpec(
     key="gen_pogo",
@@ -4294,6 +4419,8 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     GEN_WALL_SIT,
     GEN_HOLLOW_HOLD,
     GEN_SIDE_PLANK,
+    GEN_BUTT_KICK,
+    GEN_KNEE_DRIVE_HOLD,
     GEN_POGO,
     GEN_SKATER_BOUND,
     GEN_CALF_RAISE,

@@ -107,6 +107,8 @@ const SWEEP = {
   gen_calf_raise:    { lo: 0.00,  hi: 0.16, kind: 'heel' },
   // A tiny dip high up: the hips barely move, which is the whole drill.
   gen_pogo:          { lo: 0.86,  hi: 1.06, kind: 'body' },
+  // Heel folding up behind the knee -- the back half of a running stride.
+  gen_butt_kick:     { lo: -0.68, hi: 0.16, kind: 'heelfold' },
   // The lateral bound's measurement, opened right up.
   gen_skater_bound:  { lo: -0.42, hi: 0.42, kind: 'ankles' },
   // The throwing hand against the shoulder on the same side. Three drills,
@@ -193,6 +195,10 @@ function frame(kind, v) {
   } else if (kind === 'kick') {
     // Kicking foot swinging from the floor up past the hip.
     pts[IDX.right_ankle] = { x: 0.58, y: 0.60 - v * TORSO, z: 0, visibility: 0.95 };
+  } else if (kind === 'heelfold') {
+    // Knee pinned, ankle folding up towards it.
+    pts[IDX.left_knee] = { x: 0.46, y: 0.78, z: 0, visibility: 0.95 };
+    pts[IDX.left_ankle] = { x: 0.44, y: 0.78 - v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'heel') {
     // Toe pinned to the floor, heel rising off it. The whole movement is a
     // couple of centimetres of real life, so the fixture is deliberately at

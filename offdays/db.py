@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -413,6 +413,37 @@ CREATE TABLE IF NOT EXISTS rep_events (
     flare       REAL
 );
 CREATE INDEX IF NOT EXISTS idx_rep_events_session ON rep_events(session_id);
+
+-- Running an athlete did that no camera saw.
+--
+-- The load model was blind to the single thing that hurts distance runners.
+-- Every other sport's training load arrives through a counted session; a
+-- runner's arrives through their feet, on a road, miles from a phone. So a
+-- fifty-mile week and a five-mile week produced the SAME acute:chronic ratio,
+-- and the app would cheerfully suggest more.
+--
+-- This is self-reported and therefore unverifiable, which is normally the end
+-- of the conversation in this codebase. It is admissible here because of what
+-- it is wired to: **a logged run earns nothing at all.** No XP, no streak, no
+-- leaderboard, no badge. It feeds the load model and nothing else, and the
+-- load model only ever produces cautions. Over-reporting buys an athlete a
+-- warning they did not need; under-reporting buys them silence they do not
+-- want. There is no direction in which lying pays, which is what makes an
+-- unverifiable number safe to accept here and nowhere else.
+--
+-- One row per athlete per day, replaced on re-entry rather than accumulated:
+-- somebody correcting yesterday's number is the common case, and two rows for
+-- one run would double it.
+CREATE TABLE IF NOT EXISTS run_log (
+    id          INTEGER PRIMARY KEY,
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day         TEXT NOT NULL,          -- YYYY-MM-DD, athlete-local
+    minutes     INTEGER NOT NULL,
+    note        TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    UNIQUE(athlete_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_run_log_athlete ON run_log(athlete_id, day);
 
 -- Append-only XP record. Every leaderboard and streak is derived from this,
 -- so a scoring bug can be audited and recomputed rather than guessed at.
