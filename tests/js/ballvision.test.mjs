@@ -265,10 +265,16 @@ test('each preset separates its own balls from every distractor', () => {
     white: [[238, 240, 235], [180, 182, 178], [242, 244, 240]],
     basketball: [[205, 110, 45], [180, 95, 40], [225, 125, 60], [160, 85, 35]],
     optic: [[222, 232, 58], [205, 220, 70], [180, 200, 55], [230, 240, 90]],
+    lime: [[200, 240, 40], [180, 255, 30], [140, 175, 45], [165, 200, 55],
+           [210, 235, 60], [150, 190, 40]],
   };
   const distractors = [
     [60, 120, 50], [210, 160, 130], [40, 60, 200], [200, 40, 40],
     [150, 150, 150], [150, 80, 60], [150, 190, 235], [90, 90, 95],
+    // Grass, in four lights. It is the surface lacrosse is played on and the
+    // nearest thing in the world to a lime ball, so it is the distractor that
+    // decides whether that preset may exist at all.
+    [90, 140, 55], [60, 100, 45], [70, 160, 70], [120, 180, 70],
   ];
   for (const [name, profile] of Object.entries(PRESETS)) {
     for (const ball of balls[name]) {
@@ -280,15 +286,28 @@ test('each preset separates its own balls from every distractor', () => {
   }
 });
 
-test('every ball drill names a preset and a diameter that exist', () => {
+test('every ball drill names presets and a diameter that exist', () => {
   for (const drill of SPECS.filter((d) => d.ball && d.ball.detector === 'vision')) {
-    assert.ok(PRESETS[drill.ball.colour], `${drill.key} -> ${drill.ball.colour}`);
+    assert.ok(drill.ball.colours.length, `${drill.key} names no colour`);
+    for (const name of drill.ball.colours) {
+      assert.ok(PRESETS[name], `${drill.key} -> ${name}`);
+    }
+    // The first is the best guess and the one the rest of the product uses.
+    assert.equal(drill.ball.colour, drill.ball.colours[0], drill.key);
     assert.ok(drill.ball.diameter_cm > 5, drill.key);
     const known = BALLS[drill.sport];
     if (known) {
       assert.equal(drill.ball.diameter_cm, known.diameterCm, drill.key);
-      assert.equal(drill.ball.colour, known.colour, drill.key);
+      assert.equal(drill.ball.colours[0], known.colour, drill.key);
     }
+  }
+});
+
+test('a lacrosse drill looks for all three colours it is sold in', () => {
+  const lax = SPECS.filter((d) => d.sport === 'lacrosse' && d.ball);
+  assert.ok(lax.length >= 8, 'expected the wall-ball family');
+  for (const drill of lax) {
+    assert.deepEqual(drill.ball.colours, ['white', 'yellow', 'lime'], drill.key);
   }
 });
 
@@ -401,4 +420,99 @@ test('the remembered scale is blended, so one bad frame cannot move it', () => {
   memory.update(0.02, 0);
   const after = memory.update(0.20, 100);
   assert.ok(after < 0.07, `one wild reading moved it to ${after}`);
+});
+
+
+// ---------------------------------------------------------------------------
+// Picking the colour, because a lacrosse ball has three.
+//
+// White is still the common case, but yellow and neon lime are ordinary now
+// and which one an athlete owns is whatever their club bought. Naming only
+// white meant a child with a lime ball got a drill that corroborated nothing
+// and never said why.
+// ---------------------------------------------------------------------------
+
+const LIME = [195, 238, 45];
+const laxProfiles = () => [PRESETS.white, PRESETS.yellow, PRESETS.lime];
+
+/** Play `n` frames of one ball moving, so the motion gate has real history. */
+function playBall(vision, colour, n, opts = {}) {
+  let last = null;
+  for (let i = 0; i < n; i += 1) {
+    last = vision.detect(
+      frame({ discs: [{ x: 40 + i * 2, y: 40, r: 4, colour }] }), opts,
+    );
+  }
+  return last;
+}
+
+test('a lacrosse session with a lime ball settles on lime', () => {
+  const vision = new BallVision({ profiles: laxProfiles(), settleFrames: 20 });
+  playBall(vision, LIME, 24);
+  assert.equal(vision.chosen.name, 'lime');
+  assert.ok(vision.chosen.locked, 'the choice was never made');
+});
+
+test('and one with a yellow ball settles on yellow', () => {
+  const vision = new BallVision({ profiles: laxProfiles(), settleFrames: 20 });
+  playBall(vision, YELLOW, 24);
+  assert.equal(vision.chosen.name, 'yellow');
+});
+
+test('once locked it stops trying the others', () => {
+  // The reason the competition is time-boxed at all: running three presets on
+  // every frame triples the cost of the most expensive stage in the pipeline,
+  // on the cheapest phone in the room.
+  const vision = new BallVision({ profiles: laxProfiles(), settleFrames: 10 });
+  playBall(vision, LIME, 12);
+  const calls = [];
+  const real = vision._detectOnce.bind(vision);
+  vision._detectOnce = (...args) => { calls.push(vision.profile); return real(...args); };
+  playBall(vision, LIME, 3);
+  assert.equal(new Set(calls).size, 1, 'more than one profile ran after locking');
+});
+
+test('every candidate is judged against the same motion history', () => {
+  // The bug this guards: detect() consumes the previous frame, so a second
+  // candidate run on the same frame would compare it against itself, find no
+  // motion, and lose a contest it should have won. Lime is last in the list,
+  // so it only wins if the restore works.
+  const vision = new BallVision({ profiles: laxProfiles(), settleFrames: 12 });
+  playBall(vision, LIME, 14);
+  assert.equal(vision.chosen.name, 'lime');
+});
+
+test('one lucky frame does not decide the session', () => {
+  // The winner is whichever preset found the ball most often, not first.
+  const vision = new BallVision({ profiles: laxProfiles(), settleFrames: 30 });
+  vision.detect(frame({ discs: [{ x: 60, y: 40, r: 4, colour: WHITE }] }));
+  playBall(vision, LIME, 34);
+  assert.equal(vision.chosen.name, 'lime');
+});
+
+test('finding nothing keeps the drill\'s first guess rather than inventing one', () => {
+  const vision = new BallVision({ profiles: laxProfiles(), settleFrames: 8 });
+  for (let i = 0; i < 10; i += 1) vision.detect(frame({ discs: [] }));
+  assert.equal(vision.chosen.name, 'white', 'drifted off the primary preset');
+  assert.ok(vision.chosen.locked);
+});
+
+test('a single-colour drill never enters a competition at all', () => {
+  const vision = new BallVision({ profile: PRESETS.basketball });
+  assert.ok(vision.locked, 'a one-colour ball should be settled from the start');
+  assert.equal(vision.chosen.name, 'basketball');
+});
+
+test('calibrating on the real ball overrides whatever was picked', () => {
+  // Two seconds pointed at the actual ball beats every preset in the table,
+  // and that has to hold after the competition as well as before it.
+  const vision = new BallVision({ profiles: laxProfiles(), settleFrames: 6 });
+  playBall(vision, LIME, 8);
+  const learned = calibrate(
+    frame({ discs: [{ x: 60, y: 40, r: 8, colour: [255, 140, 20] }] }),
+    { x: 52, y: 32, w: 16, h: 16 },
+  );
+  vision.setProfile(learned);
+  assert.equal(vision.profile, learned);
+  assert.ok(vision.locked);
 });

@@ -157,6 +157,22 @@ export const PRESETS = {
   // Tennis and softball optic yellow, which is greener than a yellow lacrosse
   // ball and needs its own centroid rather than a widened one.
   optic: { kind: 'chroma', nr: 0.418, ng: 0.446, tol: 0.050, minLuma: 55 },
+  // Neon lime, which lacrosse balls are increasingly sold in.
+  //
+  // The tightest fit in this table after basketball, and for a worse reason:
+  // its nearest distractor is GRASS, which is the surface the sport is played
+  // on. Sunlit grass sits 0.101 away and the tolerance is half of that, which
+  // leaves exactly 0.002 of slack over the most neon ball sampled. The centre
+  // was solved for rather than eyeballed -- moved off the sample mean towards
+  // yellow-green until every ball fitted inside half the grass distance.
+  //
+  // minLuma does the second half of the work. Shaded grass reads about 82 and
+  // a lime ball in shade about 150, so the brightness floor rejects the dark
+  // green a chroma match would otherwise argue about.
+  //
+  // A ball this close to its distractor is exactly the case calibration exists
+  // for: two seconds pointed at the actual ball beats any preset here.
+  lime: { kind: 'chroma', nr: 0.422, ng: 0.514, tol: 0.050, minLuma: 95 },
 };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -313,17 +329,79 @@ export class ScaleMemory {
  */
 export class BallVision {
   constructor(options = {}) {
-    this.profile = options.profile || PRESETS.yellow;
+    // Most balls come in one colour and this is a list of one. A lacrosse ball
+    // is sold in white, yellow and lime, and which one an athlete owns is
+    // whatever their club bought -- so the drill names every plausible preset
+    // and the first seconds of the session decide between them.
+    this.candidates = (options.profiles && options.profiles.length)
+      ? [...options.profiles]
+      : [options.profile || PRESETS.yellow];
+    this.profile = this.candidates[0];
     this.useMotion = options.useMotion !== false;
     this.motionThreshold = options.motionThreshold ?? 18;
     this.previous = null;
     /** Gated match score per pixel, reused between frames to avoid churn. */
     this.mask = null;
+    // Trying every candidate on every frame would multiply the cost of the
+    // most expensive stage in the pipeline on the cheapest phone, and a ball
+    // does not change colour mid-session. So candidates compete over an
+    // opening window and the winner is locked for the rest of it.
+    this.locked = this.candidates.length === 1;
+    this.trials = new Map(this.candidates.map((p) => [p, 0]));
+    this.settleFrames = options.settleFrames ?? 45;
+    this.seen = 0;
   }
 
   setProfile(profile) {
     this.profile = profile;
+    this.candidates = [profile];
+    this.locked = true;
     this.previous = null;
+  }
+
+  /**
+   * Which preset is winning, and whether the choice has been made. Surfaced
+   * so the capture screen can say "looking for a white ball" and then say
+   * which one it settled on, rather than silently picking.
+   */
+  get chosen() {
+    const name = Object.keys(PRESETS).find((k) => PRESETS[k] === this.profile);
+    return { profile: this.profile, name: name || 'custom', locked: this.locked };
+  }
+
+  /**
+   * Score one frame against every candidate still in the running.
+   *
+   * Called by detect() while unlocked. The winner is the preset that found the
+   * ball most often, not the one that found it first: a single lucky frame on
+   * the wrong preset would otherwise decide the whole session.
+   */
+  _compete(detectWith) {
+    let best = null;
+    for (const candidate of this.candidates) {
+      const found = detectWith(candidate);
+      if (!found) continue;
+      this.trials.set(candidate, this.trials.get(candidate) + 1);
+      if (!best || this.trials.get(candidate) > this.trials.get(best.profile)) {
+        best = { profile: candidate, found };
+      }
+    }
+    this.seen += 1;
+    // Set explicitly in every branch rather than left wherever the loop above
+    // finished. The loop assigns `this.profile` per candidate as it goes, so
+    // without this a frame where nothing was found leaves the last candidate
+    // tried standing -- which is how "no ball anywhere" quietly became "this
+    // drill is looking for a lime one now".
+    if (this.seen >= this.settleFrames) {
+      const ranked = [...this.trials.entries()].sort((a, b) => b[1] - a[1]);
+      // Nothing found anything: keep the drill's first guess rather than
+      // locking onto a preset that never worked.
+      this.profile = ranked[0][1] > 0 ? ranked[0][0] : this.candidates[0];
+      this.locked = true;
+    } else {
+      this.profile = best ? best.profile : this.candidates[0];
+    }
+    return best ? best.found : null;
   }
 
   /**
@@ -388,7 +466,26 @@ export class BallVision {
    * the ball is, which narrows the search to a window and makes a false
    * positive across the room impossible.
    */
-  detect(image, { expectedRadius = null, near = null } = {}) {
+  /**
+   * Find the ball. Runs the chosen preset once the choice is made, and every
+   * candidate until then.
+   *
+   * Each candidate has to see the same motion history, so the previous frame
+   * is restored before each attempt -- without that the second candidate
+   * compares this frame against itself, finds no motion, and loses a contest
+   * it should have won.
+   */
+  detect(image, options = {}) {
+    if (this.locked) return this._detectOnce(image, options);
+    const baseline = this.previous;
+    return this._compete((candidate) => {
+      this.previous = baseline;
+      this.profile = candidate;
+      return this._detectOnce(image, options);
+    });
+  }
+
+  _detectOnce(image, { expectedRadius = null, near = null } = {}) {
     const { data, width, height } = image;
     if (this.tooSmall(expectedRadius, height)) {
       this.previous = null;

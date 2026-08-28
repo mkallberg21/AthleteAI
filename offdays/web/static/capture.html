@@ -1267,7 +1267,13 @@ async function openCapture(drill) {
   ballCounter = drill.ball ? new BallRepCounter(drill) : null;
   ballConfirms = Boolean(drill.ball && drill.ball.mode === 'confirm');
   ballVision = drill.ball && drill.ball.detector === 'vision'
-    ? new BallVision({ profile: PRESETS[drill.ball.colour] || PRESETS.white })
+    // Every colour the drill says this ball is sold in. One for most sports;
+    // a lacrosse ball is white, yellow or lime depending on what the club
+    // bought, and the opening seconds decide which.
+    ? new BallVision({
+        profiles: (drill.ball.colours || [drill.ball.colour])
+          .map((name) => PRESETS[name]).filter(Boolean),
+      })
     : null;
   ballScale = new ScaleMemory();
   $('ball-calibrate').classList.toggle('hidden', !ballVision);

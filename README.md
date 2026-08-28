@@ -91,7 +91,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 python -m pytest tests/ -q          # 3805 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 240 tests
+  node --test tests/js/*.test.mjs   # 249 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1624,6 +1624,32 @@ checks body landmarks before the floor, so a ball bouncing at ankle height is a
 juggle if a foot is next to it and a dribble if nothing is. There is a test
 driving the same trajectory into both drills and asserting each counts it — and
 that a foot placed elsewhere counts nothing.
+
+### A lacrosse ball is not always white
+
+It used to be, and the detector was told so. They are sold in neon lime and
+yellow now, and which one an athlete owns is whatever their club had in stock —
+so a child with a lime ball got a drill that corroborated nothing and never
+explained why.
+
+A drill now names **every colour its ball is sold in**, best guess first, and
+the opening seconds of a session decide between them: each candidate competes
+over ~45 frames and the winner — whichever found the ball most often, not
+first — is locked for the rest of the session. Trying all three on every frame
+would triple the cost of the most expensive stage in the pipeline on the
+cheapest phone in the room, and a ball does not change colour mid-session.
+
+The lime preset is the tightest fit in the table after basketball, and for a
+worse reason: its nearest distractor is **grass**, which is the surface the
+sport is played on. Sunlit grass sits 0.101 away in normalised chroma and the
+tolerance is half of that, which leaves 0.002 of slack over the most neon ball
+sampled. The centre was solved for rather than picked by eye. A brightness
+floor does the second half of the work, because shaded grass reads about 82 and
+a lime ball in shade about 150.
+
+That is close enough that calibration — two seconds pointed at the actual ball
+— remains the better answer for an unusual one, and it still overrides whatever
+the competition picked.
 
 ### The purpose-built detector
 

@@ -434,9 +434,20 @@ class BallSpec:
     #:             uses the athlete's own torso to know how big the ball
     #:             should be -- which the general model cannot do.
     detector: str = "model"
-    #: Default colour preset when the athlete has not calibrated. Only
-    #: meaningful for the vision detector.
-    colour: str = "white"
+    #: Colour presets to try, best guess first, when the athlete has not
+    #: calibrated. Only meaningful for the vision detector.
+    #:
+    #: A tuple rather than one name because most balls come in one colour and
+    #: a lacrosse ball does not: white is still the common case, but yellow and
+    #: neon lime are ordinary now, and which one an athlete owns is whatever
+    #: their club bought. Naming only white meant a child with a lime ball got
+    #: a drill that never corroborated a single rep and no explanation why.
+    #:
+    #: The client tries each over the opening seconds and locks the winner --
+    #: trying all of them on every frame would multiply the cost of the most
+    #: expensive stage in the pipeline, and a ball does not change colour
+    #: mid-session.
+    colours: tuple[str, ...] = ("white",)
     #: Regulated diameter in centimetres. With the athlete's torso in the same
     #: frame this makes the ball's size in pixels a computed quantity rather
     #: than a guess, which is the single strongest filter the vision detector
@@ -462,6 +473,11 @@ class BallSpec:
     def confirms(self) -> bool:
         return self.mode == "confirm"
 
+    @property
+    def colour(self) -> str:
+        """The best guess, which is what a single-colour ball has anyway."""
+        return self.colours[0]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "mode": self.mode,
@@ -474,6 +490,7 @@ class BallSpec:
             "min_track_quality": self.min_track_quality,
             "detector": self.detector,
             "colour": self.colour,
+            "colours": list(self.colours),
             "diameter_cm": self.diameter_cm,
             "alternation": self.alternation,
             "hands": self.hands,

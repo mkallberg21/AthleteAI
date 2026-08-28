@@ -69,7 +69,11 @@ LACROSSE_BALL = BallSpec(
     # ball is not in the general model's vocabulary, and this one runs every
     # frame instead of every fourth, which matters at this speed.
     detector="vision",
-    colour="white",
+    # White is still the common case and stays first, but these are sold in
+    # yellow and neon lime too and a club buys whichever was in stock. Naming
+    # only white meant a child with a lime ball got a drill that corroborated
+    # nothing and never said why.
+    colours=("white", "yellow", "lime"),
     diameter_cm=6.35,
 )
 
@@ -1845,7 +1849,7 @@ SOCCER = BallSpec(
     min_speed=0.22,
     attribute_side=True,
     detector="vision",
-    colour="white",
+    colours=("white",),
     diameter_cm=20.5,
 )
 
@@ -1882,7 +1886,7 @@ SOC_JUGGLE = DrillSpec(
         min_speed=0.22,
         attribute_side=True,
         detector="vision",
-        colour="white",
+        colours=("white",),
         diameter_cm=20.5,
     ),
     scoring=ScoringSpec(xp_per_rep=0.9, daily_rep_cap=600, diminishing_after_reps=200),
@@ -2130,7 +2134,7 @@ BASKETBALL = BallSpec(
     min_speed=0.30,
     attribute_side=True,
     detector="vision",
-    colour="basketball",
+    colours=("basketball",),
     diameter_cm=23.0,
 )
 
@@ -2527,7 +2531,7 @@ VOLLEYBALL = BallSpec(
     min_speed=0.28,
     attribute_side=False,
     detector="vision",
-    colour="white",
+    colours=("white",),
     diameter_cm=21.0,
 )
 
@@ -2883,7 +2887,7 @@ BASEBALL_BALL = BallSpec(
     min_speed=0.35,
     attribute_side=True,
     detector="vision",
-    colour="white",
+    colours=("white",),
     # A baseball. Softball's is larger, but every drill sharing this spec is
     # one both sports do with a baseball-sized ball -- the windmill, which is
     # the genuinely softball-specific motion, is counted from the arm and needs
@@ -3231,7 +3235,7 @@ TENNIS = BallSpec(
     min_speed=0.45,
     attribute_side=True,
     detector="vision",
-    colour="optic",
+    colours=("optic",),
     diameter_cm=6.7,
 )
 
