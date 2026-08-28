@@ -176,6 +176,7 @@ $('run').addEventListener('click', async () => {
     source: $('source').value, band: $('band').value, conditions: $('conds').value,
     truth: Number.isFinite(truth) ? truth : null,
     counted, frames, lost_frames: lost,
+    too_fast: counter.tooFast, too_slow: counter.tooSlow,
     mean_confidence: Math.round(conf * 1000) / 1000,
     median_rom: measured === null ? null : Math.round(measured * 1000) / 1000,
     target_rom: target,
@@ -183,6 +184,12 @@ $('run').addEventListener('click', async () => {
   };
 
   const recall = lastRun.truth ? counted / lastRun.truth : null;
+  const movements = counted + counter.tooFast + counter.tooSlow;
+  // A shortfall the counter can account for is a fact about the clip, not
+  // about the drill. Most drill footage on the internet is published sped up.
+  const suspect = lastRun.truth && counted < lastRun.truth
+    && (counter.tooFast + counter.tooSlow) > 0
+    && movements >= lastRun.truth * 0.95;
   const cls = (v, lo, hi) => (v === null ? '' : (v >= lo && v <= hi ? 'ok' : (v >= lo * 0.8 && v <= hi * 1.2 ? 'warn' : 'bad')));
   $('out').innerHTML = `
 <table>
@@ -193,6 +200,10 @@ $('run').addEventListener('click', async () => {
     <td>against a declared target of ${target ?? 'none — this drill is not form-scored'}</td></tr>
 <tr><td>Ratio to target_rom</td><td>${lastRun.ratio ?? '—'}</td>
     <td class="verdict ${cls(lastRun.ratio, 0.85, 1.2)}">${lastRun.ratio === null ? '—' : (lastRun.ratio > 1.2 ? 'target is set too LOW — honest reps score full depth early' : lastRun.ratio < 0.85 ? 'target is set too HIGH — honest reps score short' : 'in band')}</td></tr>
+<tr><td>Movements turned away</td><td>${counter.tooFast} too fast · ${counter.tooSlow} too slow</td>
+    <td class="verdict ${suspect ? 'warn' : ''}">${suspect
+      ? 'the movements were there and were refused — this clip looks sped up or stitched, and the counter is not the problem'
+      : (counter.tooFast + counter.tooSlow ? 'some movement outside the drill\'s tempo band' : 'none')}</td></tr>
 <tr><td>Frames with no pose</td><td>${lost} of ${frames}</td>
     <td class="verdict ${cls(1 - lost / Math.max(frames, 1), 0.9, 1)}">${((1 - lost / Math.max(frames, 1)) * 100).toFixed(0)}% of frames had a body in them</td></tr>
 <tr><td>Mean landmark confidence</td><td>${lastRun.mean_confidence}</td><td>the drill's own landmarks only</td></tr>

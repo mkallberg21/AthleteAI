@@ -464,6 +464,13 @@ export class RepCounter {
     this.lastRepAt = -Infinity;
     this.armedAt = null;
     this.reps = [];
+    // Movements that reached the firing threshold and were turned away: too
+    // fast for the refractory window, or too slow to still be one rep. A
+    // dropped rep and an absent rep are different facts and used to look the
+    // same from outside.
+    this.tooFast = 0;
+    this.tooSlow = 0;
+    this.blockedThisCycle = false;
     this.confidenceSum = 0;
     this.confidenceFrames = 0;
     this.holdMs = 0;
@@ -642,6 +649,7 @@ export class RepCounter {
       if (reachedArm) {
         this.armed = true;
         this.armedAt = tMs;
+        this.blockedThisCycle = false;
         this.peakValue = s;
         // The excursion restarts here, which is also what finalizes the
         // previous rep's measurement.
@@ -703,9 +711,25 @@ export class RepCounter {
 
     // A cycle that has taken too long is a pause, not a rep.
     if (tMs - this.armedAt > max_rep_ms) {
+      this.tooSlow += 1;
       this.armed = false;
       this.armedAt = null;
       return null;
+    }
+
+    // A movement that reached the firing threshold and was turned away by the
+    // refractory window. Counted once per cycle, not once per frame.
+    //
+    // These two tallies exist because a dropped rep and an absent rep are
+    // completely different facts and used to look identical from outside. In
+    // the app that is the difference between "you are going too fast to be
+    // counted" and "the camera cannot see you". On the calibration bench it is
+    // the difference between a broken counter and a clip somebody sped up
+    // before uploading it -- which is most drill footage on the internet, and
+    // would otherwise read as the counter missing half the reps.
+    if (reachedFire && tMs - this.lastRepAt < min_rep_ms && !this.blockedThisCycle) {
+      this.blockedThisCycle = true;
+      this.tooFast += 1;
     }
 
     if (reachedFire && tMs - this.lastRepAt >= min_rep_ms) {

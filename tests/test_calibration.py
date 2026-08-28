@@ -94,6 +94,63 @@ class TestWhatBorrowedFootageIsGoodFor:
         assert C.verdict(mixed, "gen_squat")["status"] == "counting_problem"
 
 
+class TestASpedUpClipIsNotABrokenCounter:
+    """The failure this whole exercise found.
+
+    Most drill footage on the internet is published sped up, because a
+    three-minute set is a thirty-second clip. A sped-up clip produces exactly
+    the shortfall a broken counter does -- and pointing an engineer at the
+    counter because somebody's editor doubled the playback rate is a day spent
+    fixing code that is correct.
+    """
+
+    def test_a_shortfall_the_counter_can_account_for_is_not_a_counting_problem(self):
+        sped = [
+            C.Clip(drill="gen_squat", source="third_party_demo",
+                   conditions="studio", counted=6, truth=12, too_fast=6,
+                   clip=f"demo{i}.mp4")
+            for i in range(4)
+        ]
+        verdict = C.verdict(sped, "gen_squat")
+        assert verdict["status"] == "playback_suspect"
+        assert "double speed" in verdict["why"]
+        assert len(verdict["suspect_clips"]) == 4
+
+    def test_a_shortfall_it_cannot_account_for_still_is(self):
+        # Same numbers, no refusals recorded: the movements were never seen.
+        broken = [
+            C.Clip(drill="gen_squat", source="third_party_demo",
+                   conditions="studio", counted=6, truth=12)
+            for _ in range(4)
+        ]
+        assert C.verdict(broken, "gen_squat")["status"] == "counting_problem"
+
+    def test_a_real_counting_problem_outranks_a_suspect_clip(self):
+        # If some clips are genuinely miscounted, that is the finding, and a
+        # sped-up clip alongside them must not bury it.
+        mixed = (
+            [C.Clip(drill="gen_squat", source="third_party_demo",
+                    conditions="studio", counted=6, truth=12, too_fast=6)] * 3
+            + [C.Clip(drill="gen_squat", source="own_youth",
+                      conditions="realistic", counted=5, truth=12)] * 3
+        )
+        assert C.verdict(mixed, "gen_squat")["status"] == "counting_problem"
+
+    def test_partial_refusals_do_not_excuse_a_big_miss(self):
+        # Two refusals do not explain eight missing reps.
+        clips = [
+            C.Clip(drill="gen_squat", source="own_youth", conditions="realistic",
+                   counted=4, truth=12, too_fast=2)
+            for _ in range(6)
+        ]
+        assert C.verdict(clips, "gen_squat")["status"] == "counting_problem"
+
+    def test_a_full_count_is_never_suspect(self):
+        clip = C.Clip(drill="gen_squat", source="own_youth",
+                      conditions="realistic", counted=12, truth=12, too_slow=3)
+        assert clip.playback_suspect is False
+
+
 class TestItNeverAveragesAcrossProvenance:
     def test_strata_are_kept_apart(self):
         mixed = (clips(6, source="third_party_demo", conditions="studio", median_rom=0.95)

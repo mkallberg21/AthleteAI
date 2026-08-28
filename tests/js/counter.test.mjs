@@ -1063,3 +1063,109 @@ test('calf raises: a half raise does not count', () => {
   }
   assert.equal(counter.count, 0);
 });
+
+
+// ---------------------------------------------------------------------------
+// What real footage does to the counter.
+//
+// The synthetic sweeps drive a clean athlete at a natural pace. Calibration
+// footage is not that: it is cut, sped up, zoomed, and starts with somebody
+// talking. These pin what survives and what does not, so a calibration run
+// against borrowed video reports the right diagnosis rather than a confident
+// wrong number.
+// ---------------------------------------------------------------------------
+
+function squatFrame(deg, { scale = 1, dx = 0 } = {}) {
+  const pts = baseSkeleton();
+  const at = (x, y) => ({ x: 0.5 + dx + (x - 0.5) * scale,
+                          y: 0.5 + (y - 0.5) * scale, z: 0, visibility: 0.95 });
+  pts[IDX.left_shoulder] = at(0.45, 0.35);
+  pts[IDX.right_shoulder] = at(0.55, 0.35);
+  pts[IDX.left_hip] = at(0.46, 0.60);
+  pts[IDX.right_hip] = at(0.54, 0.60);
+  const hip = at(0.46, 0.60), knee = at(0.46, 0.78);
+  const t = Math.atan2(hip.y - knee.y, hip.x - knee.x) - (deg * Math.PI) / 180;
+  pts[IDX.left_knee] = knee;
+  pts[IDX.left_ankle] = { x: knee.x + 0.17 * scale * Math.cos(t),
+                          y: knee.y + 0.17 * scale * Math.sin(t),
+                          z: 0, visibility: 0.95 };
+  return pts;
+}
+
+/** `reps` textbook squats, played back at `speed`, with optional dirt. */
+function playClip(drill, { reps = 12, speed = 1, cutEvery = 0, zoomAt = -1,
+                           leadInFrames = 0, fps = 30 } = {}) {
+  const counter = new RepCounter(drill);
+  let t = 0, scale = 1, dx = 0;
+  for (let i = 0; i < leadInFrames; i += 1) t += 1000 / fps;
+  for (let r = 0; r < reps; r += 1) {
+    if (cutEvery && r > 0 && r % cutEvery === 0) dx += 0.18;
+    if (zoomAt >= 0 && r === zoomAt) scale = 1.35;
+    for (let f = 0; f < 30; f += 1) {
+      counter.push(squatFrame(128.5 - 43.5 * Math.cos((2 * Math.PI * f) / 30),
+                              { scale, dx }), t);
+      t += 1000 / (fps * speed);
+    }
+  }
+  return counter;
+}
+
+test('footage: a clean clip counts every rep', () => {
+  assert.equal(playClip(spec('gen_squat')).count, 12);
+});
+
+test('footage: a hard cut mid-clip does not invent reps', () => {
+  // The subject jumps across the frame between takes. Nothing about that is a
+  // squat, and a spurious rep here would inflate every borrowed clip.
+  const counter = playClip(spec('gen_squat'), { cutEvery: 4 });
+  assert.equal(counter.count, 12);
+});
+
+test('footage: a camera push-in changes nothing', () => {
+  // The payoff for normalising every threshold by torso length. A zoom
+  // changes every pixel distance and no torso-relative one.
+  assert.equal(playClip(spec('gen_squat'), { zoomAt: 6 }).count, 12);
+});
+
+test('footage: three seconds of talking head before the drill', () => {
+  assert.equal(playClip(spec('gen_squat'), { leadInFrames: 90 }).count, 12);
+});
+
+test('footage: slow motion still counts every rep', () => {
+  assert.equal(playClip(spec('gen_squat'), { speed: 0.5 }).count, 12);
+});
+
+test('footage: a sped-up clip is short, and says why it is short', () => {
+  // The one that breaks, and the most common thing in drill footage online.
+  // What matters is not that it under-counts -- refusing reps that arrive
+  // faster than a human does them is correct -- but that the shortfall is
+  // attributable, so nobody spends a day fixing a counter that is right.
+  const counter = playClip(spec('gen_squat'), { speed: 2 });
+  assert.ok(counter.count < 12, `counted ${counter.count}`);
+  assert.ok(counter.tooFast > 0, 'the refusals were not recorded');
+  assert.ok(counter.count + counter.tooFast >= 12,
+    `${counter.count} counted + ${counter.tooFast} refused does not account for 12`);
+});
+
+test('footage: long pauses between reps are recorded as too slow', () => {
+  const drill = spec('gen_squat');
+  const counter = new RepCounter(drill);
+  let t = 0;
+  for (let r = 0; r < 12; r += 1) {
+    for (let f = 0; f < 30; f += 1) {
+      counter.push(squatFrame(128.5 - 43.5 * Math.cos((2 * Math.PI * f) / 30)), t);
+      t += 1000 / 30;
+    }
+    t += drill.counter.max_rep_ms * 2;
+  }
+  assert.equal(counter.count, 12);
+  assert.ok(counter.tooSlow > 0);
+});
+
+test('a clean session records no refusals at all', () => {
+  // The tallies must stay quiet in ordinary use, or they are noise on every
+  // real athlete's result rather than a signal about a clip.
+  const counter = playClip(spec('gen_squat'));
+  assert.equal(counter.tooFast, 0);
+  assert.equal(counter.tooSlow, 0);
+});

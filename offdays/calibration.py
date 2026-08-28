@@ -75,6 +75,12 @@ class Clip:
     conditions: str
     counted: int
     truth: int | None = None
+    #: Movements that reached the firing threshold and were turned away --
+    #: faster than the refractory window allows, or slower than one rep can
+    #: be. Without these a sped-up clip is indistinguishable from a broken
+    #: counter, and most drill footage on the internet is sped up.
+    too_fast: int = 0
+    too_slow: int = 0
     median_rom: float | None = None
     target_rom: float | None = None
     band: str = ""
@@ -98,6 +104,25 @@ class Clip:
     def certifying(self) -> bool:
         return (self.source in CERTIFYING_SOURCES
                 and self.conditions in CERTIFYING_CONDITIONS)
+
+    @property
+    def movements(self) -> int:
+        """Everything the counter saw, including what it turned away."""
+        return self.counted + self.too_fast + self.too_slow
+
+    @property
+    def playback_suspect(self) -> bool:
+        """Whether a shortfall is explained by rejections rather than by
+        missed movement.
+
+        A clip sped up before it was published produces exactly the shortfall a
+        broken counter does. The difference is that the movements were seen and
+        refused, which is a fact about the clip and not about the drill.
+        """
+        if not self.truth or self.counted >= self.truth:
+            return False
+        rejected = self.too_fast + self.too_slow
+        return rejected > 0 and self.movements >= self.truth * RECALL_BAND[0]
 
 
 @dataclass
@@ -173,10 +198,33 @@ def verdict(clips: list[Clip], drill_key: str) -> dict[str, Any]:
     groups = strata(mine)
     certifying = [s for s in groups if s.certifying and s.n >= MIN_CLIPS]
 
+    # A clip whose shortfall is explained by rejected movements is a clip
+    # somebody sped up, not a counter that missed anything. Separating the two
+    # matters: pointing an engineer at the counter because a demo video was
+    # published at 2x is a day spent fixing code that is correct.
+    suspect = [c for c in mine if c.playback_suspect]
+    genuine = [c for c in mine if not c.playback_suspect]
+
     counting_problem = [
-        s.to_dict() for s in groups
+        s.to_dict() for s in strata(genuine)
         if s.recall is not None and not (RECALL_BAND[0] <= s.recall <= RECALL_BAND[1])
     ]
+
+    if suspect and not counting_problem:
+        return {
+            "drill": drill_key,
+            "status": "playback_suspect",
+            "why": (
+                f"{len(suspect)} clip(s) are short on counted reps, but the "
+                "movements were seen and turned away rather than missed -- "
+                "faster or slower than this drill allows. That is what a clip "
+                "published at double speed looks like, which most drill "
+                "footage on the internet is. Re-encode at natural speed or "
+                "use a different clip; the counter is not the problem."
+            ),
+            "strata": [s.to_dict() for s in groups],
+            "suspect_clips": [c.clip or c.drill for c in suspect],
+        }
 
     if counting_problem:
         return {

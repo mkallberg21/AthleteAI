@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3800 tests
+python -m pytest tests/ -q          # 3805 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 232 tests
+  node --test tests/js/*.test.mjs   # 240 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -4118,6 +4118,16 @@ contact with a real driveway:
    demonstration footage can prove a counter is broken, and cannot settle a
    depth target, because a demo clip is an adult's best rep and a target set
    against it marks an honest child short.
+
+   Stressing the counter against what borrowed footage actually looks like
+   found one real failure and confirmed three non-failures. Hard cuts, camera
+   push-ins and a talking-head intro all survive — the zoom result is the
+   payoff for normalising every threshold by torso length. **Sped-up playback
+   does not**, and most drill footage online is sped up. The counter now tallies
+   movements it turned away as too fast or too slow, so a shortfall is
+   attributable: `6 counted, 6 refused` is a clip somebody doubled the speed of,
+   and `6 counted, 0 refused` is a counter that missed six reps. Those used to
+   look identical from outside.
    The calibration harness makes every drill self-consistent — a textbook rep
    counts and measures what its spec claims — but "textbook" is still a
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
