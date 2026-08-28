@@ -34,12 +34,28 @@ from offdays.positions import ALL_POSITIONS
 #: at zero, not that everybody looks the same.
 MIN_EXPLOSIVE_SHARE = 0.10
 
+#: And a floor on EACH of the two, because the combined one was satisfiable by
+#: either alone -- which twenty of the sixty-three plans duly did.
+#:
+#: A volleyball middle blocker sat at 57% power and no quickness at all, which
+#: is a plan for somebody who jumps and never moves sideways. Three distance
+#: plans were the mirror image. Both halves are worth training and they are
+#: trained differently: power is one maximal effort with a long rest, quickness
+#: is many small ones with almost none.
+MIN_POWER_SHARE = 0.05
+MIN_QUICKNESS_SHARE = 0.05
 
-def explosive_share(position) -> float:
+
+def share_of(position, *stimuli: Stimulus) -> float:
+    wanted = set(stimuli)
     return sum(
         v for k, v in position.emphasis.items()
-        if DRILLS_BY_KEY[k].stimulus in EXPLOSIVE
+        if DRILLS_BY_KEY[k].stimulus in wanted
     )
+
+
+def explosive_share(position) -> float:
+    return share_of(position, *EXPLOSIVE)
 
 
 class TestEveryPlanBuildsExplosiveness:
@@ -51,6 +67,26 @@ class TestEveryPlanBuildsExplosiveness:
         assert share >= MIN_EXPLOSIVE_SHARE, (
             f"{position.sport}/{position.key} gives {share:.1%} to power or "
             "quickness"
+        )
+
+    @pytest.mark.parametrize(
+        "position", ALL_POSITIONS, ids=lambda p: f"{p.sport}-{p.key}"
+    )
+    def test_it_trains_both_halves(self, position):
+        """Power and quickness are different qualities, trained differently.
+
+        The combined floor could be cleared by either one alone, and twenty
+        plans did exactly that -- a volleyball middle at 57% power and no
+        quickness, three distance plans the other way round. Neither is a
+        complete athlete.
+        """
+        power = share_of(position, Stimulus.POWER)
+        quick = share_of(position, Stimulus.QUICKNESS)
+        assert power >= MIN_POWER_SHARE, (
+            f"{position.sport}/{position.key} gives {power:.1%} to power"
+        )
+        assert quick >= MIN_QUICKNESS_SHARE, (
+            f"{position.sport}/{position.key} gives {quick:.1%} to quickness"
         )
 
     def test_the_floor_is_a_floor_and_not_a_template(self):
@@ -77,6 +113,24 @@ class TestEveryPlanBuildsExplosiveness:
                         if p.sport == sport and p.key == "pitcher")
             assert "gen_squat_jump" in plan.emphasis
             assert explosive_share(plan) >= MIN_EXPLOSIVE_SHARE
+
+    def test_the_blocker_who_never_moved_sideways_now_does(self):
+        # 57% power, 0% quickness. The clearest single case for splitting the
+        # floor in two: blocking is lateral movement along a net, and the plan
+        # trained the jump and nothing that got her to it.
+        plan = next(p for p in ALL_POSITIONS
+                    if p.sport == "volleyball" and p.key == "middle")
+        assert share_of(plan, Stimulus.QUICKNESS) >= MIN_QUICKNESS_SHARE
+
+    def test_the_distance_runners_now_have_power_too(self):
+        # The mirror image, and the more surprising one: plyometrics are among
+        # the best-supported things a distance runner can do, and all three
+        # distance plans had none.
+        for sport, key in (("track", "distance"), ("track", "middle_distance"),
+                           ("cross_country", "distance")):
+            plan = next(p for p in ALL_POSITIONS
+                        if p.sport == sport and p.key == key)
+            assert share_of(plan, Stimulus.POWER) >= MIN_POWER_SHARE, key
 
     def test_a_thrower_is_not_short_of_power(self):
         plan = next(p for p in ALL_POSITIONS

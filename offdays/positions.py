@@ -98,26 +98,32 @@ def mix(**weights: float) -> dict[str, float]:
     return {key: value / total for key, value in weights.items()}
 
 
+# The last six hand-balanced dicts in the file, now expressed as weights like
+# every other sport. They were decimals summing to 1.0 by hand, which is exactly
+# the thing `mix()` exists to stop -- one typo and a plan quietly adds up to
+# 0.97 and nobody notices. The ratios are unchanged; the weights below are the
+# old percentages.
 LACROSSE: tuple[Position, ...] = (
     Position(
         key="attack", label="Attack", sport="lacrosse", group="offense",
         aliases=("attack", "attackman", "attackmen", "attacker", "att", "a",
                  "offense", "offence", "forward"),
-        emphasis={
-            # Ground balls sit at the same 16% for every position on the
-            # field. They are the one part of lacrosse that belongs to
-            # nobody in particular, and a plan that gave an attacker a
-            # third of a defender's share was quietly teaching that
-            # picking the ball up is somebody else's job.
-            # Dodging is the job, so the split-dodge pattern earns real weight
-            # here and nowhere else on the field gets as much of it.
-            "lax_ground_ball": 0.16, "lax_wall_ball": 0.13,
-            "lax_wall_ball_offhand": 0.13, "lax_wall_ball_split": 0.11,
-            "lax_quick_stick": 0.11, "gen_lateral_bound": 0.09,
-            "lax_wall_ball_one_hand": 0.07, "gen_squat": 0.07,
-            "gen_squat_jump": 0.05, "gen_plank": 0.04,
-            "gen_push_up": 0.04,
-        },
+        # Ground balls sit at the same 16 for every position on the field.
+        # They are the one part of lacrosse that belongs to nobody in
+        # particular, and a plan that gave an attacker a third of a defender's
+        # share was quietly teaching that picking the ball up is somebody
+        # else's job.
+        #
+        # Dodging is the job, so the split-dodge pattern earns real weight here
+        # and nowhere else on the field gets as much of it -- and a dodge is a
+        # change of direction before it is anything, which is why the high
+        # knees are here rather than only the jumps.
+        emphasis=mix(
+            lax_ground_ball=16, lax_wall_ball=13, lax_wall_ball_offhand=13,
+            lax_wall_ball_split=11, lax_quick_stick=11, gen_lateral_bound=9,
+            lax_wall_ball_one_hand=6, gen_high_knees=6, gen_squat=5,
+            gen_squat_jump=4, gen_plank=3, gen_push_up=3,
+        ),
         plural_label="attackers",
         focus="Hands and tight-space quickness. Most of your time is stick work.",
     ),
@@ -125,19 +131,12 @@ LACROSSE: tuple[Position, ...] = (
         key="midfield", label="Midfield", sport="lacrosse", group="offense",
         aliases=("midfield", "midfielder", "midfielders", "middie", "middy",
                  "mid", "mids", "m", "mf", "midi"),
-        emphasis={
-            # Ground balls sit at the same 16% for every position on the
-            # field. They are the one part of lacrosse that belongs to
-            # nobody in particular, and a plan that gave an attacker a
-            # third of a defender's share was quietly teaching that
-            # picking the ball up is somebody else's job.
-            "lax_ground_ball": 0.16, "lax_wall_ball": 0.14,
-            "lax_wall_ball_offhand": 0.11, "lax_wall_ball_split": 0.09,
-            "gen_high_knees": 0.09, "lax_wall_ball_cross": 0.07,
-            "gen_squat_jump": 0.07, "gen_lateral_bound": 0.06,
-            "gen_squat": 0.06, "lax_quick_stick": 0.05,
-            "gen_burpee": 0.05, "gen_plank": 0.03, "gen_push_up": 0.02,
-        },
+        emphasis=mix(
+            lax_ground_ball=16, lax_wall_ball=14, lax_wall_ball_offhand=11,
+            lax_wall_ball_split=9, gen_high_knees=9, lax_wall_ball_cross=7,
+            gen_squat_jump=7, gen_lateral_bound=6, gen_squat=6,
+            lax_quick_stick=5, gen_burpee=5, gen_plank=3, gen_push_up=2,
+        ),
         plural_label="midfielders",
         focus="You cover more ground than anyone. Stick work plus an engine.",
     ),
@@ -146,39 +145,27 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("defense", "defence", "defender", "defenders", "defenseman",
                  "defencemen", "defensemen", "d", "def", "close d",
                  "close defense", "close defence", "pole", "dpole", "d pole"),
-        emphasis={
-            # Ground balls sit at the same 16% for every position on the
-            # field. They are the one part of lacrosse that belongs to
-            # nobody in particular, and a plan that gave an attacker a
-            # third of a defender's share was quietly teaching that
-            # picking the ball up is somebody else's job.
-            "gen_lateral_bound": 0.16, "lax_ground_ball": 0.16,
-            "lax_wall_ball": 0.12, "lax_wall_ball_offhand": 0.12,
-            "gen_squat": 0.12, "gen_high_knees": 0.08,
-            "lax_wall_ball_one_hand": 0.06, "gen_push_up": 0.06,
-            "gen_plank": 0.06, "gen_pull_up": 0.06,
-        },
+        emphasis=mix(
+            gen_lateral_bound=16, lax_ground_ball=16, lax_wall_ball=12,
+            lax_wall_ball_offhand=12, gen_squat=12, gen_high_knees=8,
+            lax_wall_ball_one_hand=6, gen_push_up=6, gen_plank=6,
+            gen_pull_up=6,
+        ),
         plural_label="defenders",
         focus="Footwork and strength first, but a defender still needs hands.",
     ),
     Position(
         key="lsm", label="Long-Stick Midfield", sport="lacrosse", group="defense",
         aliases=("lsm", "long stick midfield", "long stick midfielder",
-                 "long stick middie", "longstick", "long pole", "long pole midfield",
-                 "d mid", "dmid", "d midfield", "defensive midfield",
-                 "defensive midfielder"),
-        emphasis={
-            # Ground balls sit at the same 16% for every position on the
-            # field. They are the one part of lacrosse that belongs to
-            # nobody in particular, and a plan that gave an attacker a
-            # third of a defender's share was quietly teaching that
-            # picking the ball up is somebody else's job.
-            "gen_lateral_bound": 0.16, "lax_ground_ball": 0.16,
-            "lax_wall_ball": 0.13, "lax_wall_ball_offhand": 0.10,
-            "gen_high_knees": 0.10, "gen_squat": 0.10, "gen_burpee": 0.08,
-            "gen_squat_jump": 0.07, "lax_wall_ball_one_hand": 0.05,
-            "gen_plank": 0.03, "gen_push_up": 0.02,
-        },
+                 "long stick middie", "longstick", "long pole",
+                 "long pole midfield", "d mid", "dmid", "d midfield",
+                 "defensive midfield", "defensive midfielder"),
+        emphasis=mix(
+            gen_lateral_bound=16, lax_ground_ball=16, lax_wall_ball=13,
+            lax_wall_ball_offhand=10, gen_high_knees=10, gen_squat=10,
+            gen_burpee=8, gen_squat_jump=7, lax_wall_ball_one_hand=5,
+            gen_plank=3, gen_push_up=2,
+        ),
         plural_label="long-stick midfielders",
         focus="A defender's job at a midfielder's pace. Ground balls and legs.",
     ),
@@ -186,19 +173,15 @@ LACROSSE: tuple[Position, ...] = (
         key="fogo", label="Face-Off", sport="lacrosse", group="specialist",
         aliases=("fogo", "faceoff", "face off", "face-off", "faceoff specialist",
                  "fo", "fogos", "draw", "draw specialist", "draw control"),
-        emphasis={
-            # Ground balls sit at the same 16% for every position on the
-            # field. They are the one part of lacrosse that belongs to
-            # nobody in particular, and a plan that gave an attacker a
-            # third of a defender's share was quietly teaching that
-            # picking the ball up is somebody else's job.
-            "lax_faceoff_clamp": 0.26, "lax_ground_ball": 0.16,
-            "lax_quick_stick": 0.10, "gen_squat_jump": 0.09,
-            "lax_wall_ball_one_hand": 0.08, "gen_plank": 0.07,
-            "lax_wall_ball": 0.06, "gen_pull_up": 0.06,
-            "lax_wall_ball_offhand": 0.04, "gen_push_up": 0.04,
-            "gen_burpee": 0.02, "gen_lateral_bound": 0.02,
-        },
+        # The fastest hands and feet in the sport, decided inside a second --
+        # so the plan needed something training the feet, not only the clamp.
+        emphasis=mix(
+            lax_faceoff_clamp=26, lax_ground_ball=16, lax_quick_stick=10,
+            gen_squat_jump=8, lax_wall_ball_one_hand=7, gen_high_knees=6,
+            lax_wall_ball=6, gen_pull_up=5, gen_plank=5,
+            lax_wall_ball_offhand=4, gen_push_up=3,
+            gen_burpee=2, gen_lateral_bound=2,
+        ),
         plural_label="face-off specialists",
         focus="One explosive move, repeated. Grip, core and a fast first step.",
     ),
@@ -206,31 +189,26 @@ LACROSSE: tuple[Position, ...] = (
         key="goalie", label="Goalie", sport="lacrosse", group="goalie",
         aliases=("goalie", "goalies", "goal", "goalkeeper", "goaltender",
                  "keeper", "gk", "g", "netminder", "net"),
-        emphasis={
-            # Ground balls sit at the same 16% for every position on the
-            # field. They are the one part of lacrosse that belongs to
-            # nobody in particular, and a plan that gave an attacker a
-            # third of a defender's share was quietly teaching that
-            # picking the ball up is somebody else's job.
-            # Save positions lead. Until that drill existed this mix was
-            # entirely made of substitutes -- stick work and lateral jumps
-            # standing in for a position whose actual job the app could not
-            # see -- so a goalie was the one athlete here being handed
-            # somebody else's practice.
-            #
-            # Off-hand work is prescribed here like everywhere else. The old
-            # reasoning was that a goalie's hands do not swap on the stick,
-            # which is true of the grip and false of the job: a save is made
-            # with both hands, the outlet that follows it is a real throw,
-            # and a keeper who can only clear to one side is a keeper the
-            # ride aims at.
-            "lax_goalie_saves": 0.23, "lax_ground_ball": 0.16,
-            "lax_quick_stick": 0.13, "gen_lateral_bound": 0.11,
-            "lax_wall_ball_offhand": 0.08, "lax_wall_ball": 0.07,
-            "gen_plank": 0.07, "lax_wall_ball_one_hand": 0.05,
-            "gen_squat_jump": 0.05, "gen_squat": 0.03,
-            "gen_push_up": 0.02,
-        },
+        # Save positions lead. Until that drill existed this mix was entirely
+        # made of substitutes -- stick work and lateral jumps standing in for a
+        # position whose actual job the app could not see -- so a goalie was
+        # the one athlete here being handed somebody else's practice.
+        #
+        # Off-hand work is prescribed here like everywhere else. The old
+        # reasoning was that a goalie's hands do not swap on the stick, which
+        # is true of the grip and false of the job: a save is made with both
+        # hands, the outlet that follows it is a real throw, and a keeper who
+        # can only clear to one side is a keeper the ride aims at.
+        #
+        # The pogo hops are the last piece. A goalie's feet are reactive before
+        # the hands are anything, and this plan had jumps in it but nothing
+        # that asked a foot to leave the floor quickly.
+        emphasis=mix(
+            lax_goalie_saves=23, lax_ground_ball=16, lax_quick_stick=12,
+            gen_lateral_bound=10, lax_wall_ball_offhand=8, gen_pogo=6,
+            lax_wall_ball=6, gen_plank=5, lax_wall_ball_one_hand=5,
+            gen_squat_jump=4, gen_squat=3, gen_push_up=2,
+        ),
         plural_label="goalies",
         focus="Both hands, reactions and a hard first step sideways.",
     ),
@@ -332,9 +310,10 @@ BASKETBALL: tuple[Position, ...] = (
 SOCCER: tuple[Position, ...] = (
     _pos("goalkeeper", "Goalkeeper", "soccer", "goalie",
          ("goalkeeper", "keeper", "gk", "goalie", "goal", "1"),
-         mix(soc_wall_pass=5, soc_juggle=3, soc_juggle_weak=2, soc_toe_taps=2,
-             gen_lateral_bound=4, gen_squat_jump=3, gen_push_up=2, gen_lunge=2,
-             gen_side_plank=2, gen_plank=2, gen_burpee=1),
+         # The set step before a shot is a keeper's whole first move.
+         mix(soc_wall_pass=5, soc_juggle=3, gen_lateral_bound=3, gen_pogo=3,
+             gen_squat_jump=3, soc_juggle_weak=2, soc_toe_taps=2,
+             gen_push_up=2, gen_lunge=2, gen_side_plank=2, gen_plank=1),
          "Explode sideways off one foot, then get straight back up.",
          "goalkeepers"),
     _pos("defender", "Defender", "soccer", "defence",
@@ -347,10 +326,11 @@ SOCCER: tuple[Position, ...] = (
          "defenders"),
     _pos("midfielder", "Midfielder", "soccer", "midfield",
          ("midfielder", "midfield", "mid", "cm", "cdm", "cam", "m", "8", "6", "10"),
+         # Midfielders jump for headers and sprint to close down.
          mix(soc_wall_pass=5, soc_juggle_alt=4, soc_juggle=3, soc_toe_taps=3,
              soc_juggle_weak=3, soc_thigh=2, soc_shuffle=2,
              gen_high_knees=3, gen_burpee=2, gen_lunge=2, gen_glute_bridge=2,
-             gen_squat=1, gen_plank=1),
+             gen_squat=1, gen_plank=1, gen_squat_jump=3),
          "You run further than anyone on the pitch. Build the engine.",
          "midfielders"),
     _pos("forward", "Forward", "soccer", "attack",
@@ -370,9 +350,10 @@ SOCCER: tuple[Position, ...] = (
 VOLLEYBALL: tuple[Position, ...] = (
     _pos("setter", "Setter", "volleyball", "back",
          ("setter", "s", "set"),
+         # A setter chases every second ball on the court.
          mix(vb_set=6, vb_set_wall=4, vb_pass=3, vb_serve=2, vb_block_jump=2,
              gen_lateral_bound=3, gen_squat_jump=2, gen_plank=2, gen_lunge=2,
-             gen_push_up=2, gen_side_plank=1, gen_dead_bug=1),
+             gen_push_up=2, gen_side_plank=1, gen_dead_bug=1, gen_high_knees=3, gen_pogo=2),
          "Get to the ball early and be balanced when you arrive.",
          "setters"),
     _pos("hitter", "Hitter", "volleyball", "front",
@@ -381,16 +362,18 @@ VOLLEYBALL: tuple[Position, ...] = (
          # The approach carries the most weight and the most load in the whole
          # catalogue, which is the honest shape of this position: jumper's knee
          # is what this sport hands teenagers.
+         # Blocking is repeated small jumps along a net.
          mix(vb_approach=5, vb_arm_swing=4, vb_pass=3, vb_serve=2, vb_set=2,
              gen_tuck_jump=3, gen_squat_jump=2, gen_squat=2, gen_lunge=2,
-             gen_hollow_hold=2, gen_glute_bridge=2, gen_side_plank=1),
+             gen_hollow_hold=2, gen_glute_bridge=2, gen_side_plank=1, gen_pogo=3),
          "Jump high, land safe, do it forty more times.",
          "hitters"),
     _pos("middle", "Middle Blocker", "volleyball", "front",
          ("middle", "middle blocker", "mb", "middle hitter", "blocker"),
+         # The busiest feet on the court, and this plan trained none of them.
          mix(vb_block_jump=5, vb_approach=4, vb_arm_swing=3, vb_pass=2, vb_serve=2,
              gen_lateral_bound=3, gen_tuck_jump=3, gen_squat=2, gen_squat_jump=2,
-             gen_glute_bridge=2, gen_side_plank=1, gen_plank=1),
+             gen_glute_bridge=2, gen_side_plank=1, gen_plank=1, gen_pogo=4, gen_high_knees=2),
          "Sideways along the net, then straight up. Both, every rally.",
          "middle blockers"),
     _pos("libero", "Libero", "volleyball", "back",
@@ -512,9 +495,10 @@ CHEER: tuple[Position, ...] = (
          "backspots"),
     _pos("tumbler", "Tumbler", "cheer", "tumbling",
          ("tumbler", "tumbling", "tumble"),
+         # A round-off is reactive feet before it is anything else.
          mix(gen_hollow_hold=4, gen_tuck_jump=4, gen_handstand_hold=3,
              gen_squat_jump=3, gen_calf_raise=3, gen_push_up=3, gen_dead_bug=2,
-             gen_lunge=2, gen_glute_bridge=2, gen_side_plank=2),
+             gen_lunge=2, gen_glute_bridge=2, gen_side_plank=2, gen_pogo=3),
          "Pop off the floor, hold a shape in the air, land on ankles that hold.",
          "tumblers"),
 )
@@ -551,9 +535,10 @@ DANCE: tuple[Position, ...] = (
          "hip hop dancers"),
     _pos("pom", "Pom & Team", "dance", "power",
          ("pom", "poms", "dance team", "kickline", "drill team"),
+         # Sharp is a foot speed problem, not a power problem.
          mix(gen_tuck_jump=4, gen_calf_raise=4, gen_lunge=3, gen_hollow_hold=3,
              gen_squat_jump=3, gen_glute_bridge=3, gen_dead_bug=2,
-             gen_side_plank=2, gen_squat=1),
+             gen_side_plank=2, gen_squat=1, gen_high_knees=3, gen_pogo=2),
          "Sharp, high, and still sharp in the fourth minute.",
          "pom dancers"),
 )
@@ -611,17 +596,19 @@ TRACK: tuple[Position, ...] = (
          "sprinters"),
     _pos("middle_distance", "Middle Distance", "track", "endurance",
          ("middle distance", "mid distance", "800", "1500", "mile", "1600"),
+         # An 800 finishes with a sprint, and this plan had no power in it.
          mix(gen_high_knees=4, gen_lunge=4, gen_glute_bridge=3, gen_butt_kick=3,
              gen_pogo=2, gen_burpee=2, gen_plank=2, gen_side_plank=2,
-             gen_dead_bug=2, gen_squat=2, gen_calf_raise=2),
+             gen_dead_bug=2, gen_squat=2, gen_calf_raise=2, gen_skater_bound=2, gen_squat_jump=2),
          "Form that holds when it hurts, and legs that hold you up on one foot.",
          "middle distance runners"),
     _pos("distance", "Distance", "track", "endurance",
          ("distance", "3200", "5000", "10000", "3k", "5k", "10k", "steeple"),
          # Same omission as the cross country plan, and the same fix.
+         # Single-leg power is what running economy is made of.
          mix(gen_lunge=4, gen_glute_bridge=4, gen_pogo=3, gen_side_plank=3,
              gen_dead_bug=3, gen_calf_raise=3, gen_butt_kick=2, gen_plank=2,
-             gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
+             gen_high_knees=2, gen_squat=2, gen_wall_sit=1, gen_skater_bound=2),
          "Single-leg strength, hip control, and feet that leave the ground.",
          "distance runners"),
     _pos("jumps", "Jumps", "track", "power",
@@ -638,9 +625,10 @@ TRACK: tuple[Position, ...] = (
           "hammer"),
          # A throw IS power, and this plan being short of it was the worst
          # single miss the stimulus audit turned up anywhere.
+         # A glide or a spin is fast feet under a slow implement.
          mix(gen_squat=5, gen_squat_jump=5, gen_side_plank=4, gen_skater_bound=4,
              gen_push_up=3, gen_glute_bridge=3, gen_dead_bug=3, gen_tuck_jump=3,
-             gen_lunge=2, gen_pull_up=2),
+             gen_lunge=2, gen_pull_up=2, gen_high_knees=3),
          "Legs and rotation. The arm is the last thing that happens.",
          "throwers"),
 )
@@ -677,9 +665,10 @@ FOOTBALL: tuple[Position, ...] = (
          # slide -- a tackle's kick-slide and a defensive back's mirror are the
          # same feet doing the same job, and the camera could not tell them
          # apart even if we wanted two drills, so there is one.
+         # A get-off is power even though the camera cannot see it directly.
          mix(gen_squat=5, gen_push_up=4, fb_shuffle=3, gen_lunge=3,
              gen_wall_sit=3, gen_glute_bridge=3, gen_dead_hang=2,
-             gen_side_plank=2, gen_plank=2, gen_calf_raise=2, gen_burpee=1),
+             gen_side_plank=2, gen_plank=2, gen_calf_raise=2, gen_burpee=1, gen_squat_jump=3),
          "Low, strong, and still strong in the fourth quarter.",
          "linemen"),
     _pos("linebacker", "Linebacker", "football", "front_seven",
@@ -703,9 +692,10 @@ FOOTBALL: tuple[Position, ...] = (
          # The only position in the sport whose season is spent alone with a
          # ball and a net, and the only one whose volume nobody has ever
          # counted. The swing leads and the hip work backs it up.
+         # The approach is three steps and they decide the kick.
          mix(fb_kick=6, gen_lunge=4, gen_glute_bridge=4, gen_side_plank=3,
              gen_dead_bug=3, gen_calf_raise=3, gen_squat=2, gen_plank=2,
-             gen_lateral_bound=2, gen_squat_jump=1),
+             gen_lateral_bound=2, gen_squat_jump=1, gen_high_knees=3),
          "Same swing every time, and a hip that will still be there in November.",
          "specialists"),
 )
@@ -714,9 +704,10 @@ GYMNASTICS: tuple[Position, ...] = (
     _pos("all_around", "All Around", "gymnastics", "all",
          ("all around", "all-around", "aa", "gymnast", "level 4", "level 5",
           "level 6", "level 7", "level 8"),
+         # Every tumbling pass starts with feet that leave the floor fast.
          mix(gen_pull_up=5, gen_hollow_hold=5, gen_handstand_hold=4,
              gen_push_up=3, gen_tuck_jump=3, gen_calf_raise=3, gen_dead_hang=2,
-             gen_side_plank=2, gen_dead_bug=2, gen_lunge=2, gen_squat_jump=2),
+             gen_side_plank=2, gen_dead_bug=2, gen_lunge=2, gen_squat_jump=2, gen_pogo=3),
          "Everything at once. Hollow shape, pulling strength, and a pop off the floor.",
          "all-arounders"),
     _pos("bars", "Bars & Rings", "gymnastics", "upper",
@@ -733,9 +724,10 @@ GYMNASTICS: tuple[Position, ...] = (
          "bars gymnasts"),
     _pos("floor_vault", "Floor & Vault", "gymnastics", "power",
          ("floor", "vault", "tumbling", "fx", "vt"),
+         # The vault run-up is a sprint, and it was untrained here.
          mix(gen_tuck_jump=5, gen_squat_jump=4, gen_calf_raise=4,
              gen_hollow_hold=3, gen_handstand_hold=3, gen_lunge=3, gen_push_up=2,
-             gen_glute_bridge=2, gen_dead_bug=2, gen_side_plank=1),
+             gen_glute_bridge=2, gen_dead_bug=2, gen_side_plank=1, gen_high_knees=3, gen_pogo=2),
          "Speed into power, a shape held tight in the air, and a landing that holds.",
          "floor gymnasts"),
     _pos("beam", "Beam", "gymnastics", "balance",
@@ -780,9 +772,10 @@ CROSS_COUNTRY: tuple[Position, ...] = (
          # Plyometrics buy running economy, and distance runners are the
          # group most likely to skip them entirely. Calf and ankle work is
          # here for the same reason: it is where a runner's season ends.
+         # Single-leg power is what running economy is made of.
          mix(gen_lunge=4, gen_glute_bridge=4, gen_pogo=3, gen_calf_raise=3,
              gen_side_plank=3, gen_dead_bug=3, gen_butt_kick=2, gen_plank=2,
-             gen_high_knees=2, gen_squat=2, gen_wall_sit=1),
+             gen_high_knees=2, gen_squat=2, gen_wall_sit=1, gen_skater_bound=2),
          "Hills, single-leg strength, and feet that leave the ground quickly.",
          "distance runners"),
 )
@@ -810,9 +803,10 @@ HOCKEY: tuple[Position, ...] = (
     _pos("winger", "Winger", "hockey", "skaters",
          ("winger", "wing", "lw", "rw", "left wing", "right wing", "w", "forward", "f"),
          # The shot leads. A winger's job on most shifts ends with one.
+         # Quickness sat just under the floor rather than at zero.
          mix(hoc_shot=5, hoc_stickhandle=3, hoc_wide_handles=3, hoc_stance=2,
              hoc_shuffle=1, gen_lateral_bound=4, gen_squat_jump=3, gen_squat=2,
-             gen_lunge=2, gen_glute_bridge=2, gen_side_plank=1),
+             gen_lunge=2, gen_glute_bridge=2, gen_side_plank=1, gen_high_knees=2),
          "Get open, and be ready to shoot the first time it arrives.",
          "wingers"),
     _pos("defence", "Defence", "hockey", "skaters",
@@ -851,10 +845,11 @@ RUGBY: tuple[Position, ...] = (
          # a scrum asks everything of. The passing is real but short.
          # A prop still has to get off the floor and across the pitch, and
          # this plan was the only one in the sport with nothing explosive in it.
+         # A prop still has to get to the next breakdown.
          mix(gen_squat=5, gen_push_up=4, gen_squat_jump=3, gen_dead_hang=3,
              gen_wall_sit=3, gen_glute_bridge=3, gen_side_plank=3,
              gen_skater_bound=2, rug_quick_hands=2, gen_lunge=2, gen_plank=2,
-             gen_calf_raise=1),
+             gen_calf_raise=1, gen_high_knees=3),
          "Scrummaging is a squat against another person. Legs, back, neck.",
          "front rowers"),
     _pos("second_row", "Second & Back Row", "rugby", "forwards",

@@ -88,7 +88,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3717 tests
+python -m pytest tests/ -q          # 3782 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 232 tests
@@ -1306,12 +1306,16 @@ except the mound).
 drill declares what it *develops* — power, quickness, strength, endurance or
 skill — which is not what its category says: a burpee is filed under
 conditioning, a lateral bound under agility, a squat jump under speed. Asked
-properly, six plans turned out to contain none at all — a cheer base, a
-backspot, a ballet dancer, a bars gymnast, a rugby prop and a distance swimmer —
-and eighteen of the sixty-three sat under 10%, including both pitchers and a
-track thrower. Every plan now gives at least 10% of its time to power or
-quickness, and the spread runs from 10% for a lineman to 57% for a defensive
-back — a floor, not a template.
+properly, six plans turned out to contain none at all, and eighteen of the
+sixty-three sat under 10% — including both pitchers and a track thrower.
+
+**And the two qualities are floored separately**, because a combined floor is
+satisfiable by either alone and twenty plans duly did that: a volleyball middle
+blocker at 57% power and no quickness at all, three distance-running plans the
+mirror image. Power is one maximal effort with a long rest; quickness is many
+small ones with almost none. Every plan now gives at least 5% to each and at
+least 10% combined, and the spread runs from 12% to 64% — a floor, not a
+template.
 
 **A drill only pays for what the camera can confirm.** Every skill drill has an
 unambiguous pose signal, and where several drills share one signal their
