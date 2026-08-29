@@ -1849,7 +1849,13 @@ SOCCER = BallSpec(
     min_speed=0.22,
     attribute_side=True,
     detector="vision",
-    colours=("white",),
+    # White covers both the plain ball and the classic black-and-white one,
+    # which is about three quarters white panel and clears the fill gate on
+    # that alone. Yellow and orange are the winter balls -- hi-vis yellow for
+    # dusk, orange for snow -- and between them the yellow centroid also
+    # reaches the fluorescent yellow-green a modern match ball is often sold
+    # in, which sits 0.044 from it against a tolerance of 0.055.
+    colours=("white", "yellow", "orange"),
     diameter_cm=20.5,
 )
 
@@ -1886,7 +1892,11 @@ SOC_JUGGLE = DrillSpec(
         min_speed=0.22,
         attribute_side=True,
         detector="vision",
-        colours=("white",),
+        # Kept in step with SOCCER above, where the reasoning lives. A test
+        # asserts every drill in a sport names the same colours, because an
+        # athlete whose yellow winter ball counts in one drill and not the
+        # next reads that as the app being broken.
+        colours=("white", "yellow", "orange"),
         diameter_cm=20.5,
     ),
     scoring=ScoringSpec(xp_per_rep=0.9, daily_rep_cap=600, diminishing_after_reps=200),
@@ -2531,7 +2541,14 @@ VOLLEYBALL = BallSpec(
     min_speed=0.28,
     attribute_side=False,
     detector="vision",
-    colours=("white",),
+    # The competition ball is panelled blue, yellow and white in roughly equal
+    # thirds, and no single colour covers enough of it to clear the fill gate.
+    # The "volleyball" preset is a union of white and yellow rather than a new
+    # centroid -- see ballvision.js for why the blue panels are left out.
+    #
+    # Plain white first, because that is still what most youth balls are and
+    # it is the more selective of the two.
+    colours=("white", "volleyball"),
     diameter_cm=21.0,
 )
 
@@ -2887,7 +2904,11 @@ BASEBALL_BALL = BallSpec(
     min_speed=0.35,
     attribute_side=True,
     detector="vision",
-    colours=("white",),
+    # Baseball is the one sport here where the ball really is almost always
+    # one colour, so this list is short on purpose rather than padded out to
+    # match the others. Optic is for the safety and machine-pitch balls, which
+    # are the same yellow as a softball.
+    colours=("white", "optic"),
     # A baseball. Softball's is larger, but every drill sharing this spec is
     # one both sports do with a baseball-sized ball -- the windmill, which is
     # the genuinely softball-specific motion, is counted from the arm and needs

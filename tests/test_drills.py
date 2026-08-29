@@ -204,3 +204,41 @@ class TestNoDrillOutEarnsOneItCannotBeToldApartFrom:
         for drill in ALL_DRILLS:
             if drill.signal.kind is SignalKind.WALL_BALL_CYCLE:
                 assert drill.tracks_handedness, drill.key
+
+
+def test_a_sport_looks_for_one_agreed_set_of_ball_colours():
+    """Every drill in a sport must name the same colours, in the same order.
+
+    Otherwise an athlete with a yellow winter football finds that the drill
+    they did on Tuesday counts and the one on Wednesday does not, which reads
+    as the app being broken rather than as a colour list being incomplete.
+    """
+    by_sport: dict[str, set[tuple[str, ...]]] = {}
+    for drill in ALL_DRILLS:
+        if drill.ball and drill.ball.detector == "vision":
+            by_sport.setdefault(drill.sport, set()).add(drill.ball.colours)
+    assert by_sport, "no vision-detected ball drills at all"
+    for sport, sets in sorted(by_sport.items()):
+        assert len(sets) == 1, f"{sport} disagrees with itself: {sorted(sets)}"
+
+
+def test_every_ball_colour_list_leads_with_the_plainest_ball():
+    """The first colour is what the coach view, the setup hint and the
+    calibration default all use, so it has to be the common case rather than
+    whichever variant was added most recently.
+    """
+    expected_first = {
+        "lacrosse": "white",
+        "soccer": "white",
+        "volleyball": "white",
+        "baseball": "white",
+        "basketball": "basketball",
+        "tennis": "optic",
+    }
+    for drill in ALL_DRILLS:
+        if not (drill.ball and drill.ball.detector == "vision"):
+            continue
+        assert drill.ball.colours, drill.key
+        assert drill.ball.colour == drill.ball.colours[0], drill.key
+        if drill.sport in expected_first:
+            assert drill.ball.colours[0] == expected_first[drill.sport], drill.key

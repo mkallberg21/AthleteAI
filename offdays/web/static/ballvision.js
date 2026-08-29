@@ -175,7 +175,32 @@ export const PRESETS = {
   lime: { kind: 'chroma', nr: 0.422, ng: 0.514, tol: 0.050, minLuma: 95 },
 };
 
+// Panelled balls, which are a union of the presets above rather than a new
+// centroid. These are declared after the table because they refer into it.
+//
+// The competition volleyball -- blue, yellow and white in roughly equal
+// thirds -- is the case that forced this. Nothing above finds it: each colour
+// covers about a third of the ball and the fill gate wants 45%, so a
+// single-centroid match measures a wedge, fails, and the ball is invisible.
+//
+// White and yellow alone come to two thirds, which clears the gate with room,
+// so the blue panels are deliberately left out. Adding blue would buy nothing
+// and cost a lot: indoor courts are very often blue, as are mats and half the
+// jerseys in the gym, and a blue centroid would sit on all of them.
+PRESETS.volleyball = { kind: 'panel', of: [PRESETS.white, PRESETS.yellow] };
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * Whether a profile needs the directional motion test, which exists for
+ * colourless balls that a plain magnitude test loses against a pale wall.
+ * A panel profile qualifies only if every member is colourless -- one
+ * chroma panel is enough signal to use the ordinary test.
+ */
+export function isBright(profile) {
+  if (profile.kind === 'panel') return profile.of.every(isBright);
+  return profile.kind === 'bright';
+}
 
 /** How well one pixel matches a profile. 0 is no match, 1 is exact. */
 export function matchPixel(r, g, b, profile) {
@@ -183,6 +208,20 @@ export function matchPixel(r, g, b, profile) {
   if (sum <= 0) return 0;
   const luma = 0.299 * r + 0.587 * g + 0.114 * b;
   if (luma < (profile.minLuma ?? 0)) return 0;
+
+  if (profile.kind === 'panel') {
+    // A panelled ball is not one colour tried in turn -- that is what the
+    // candidate competition below is for -- but several colours at once. A
+    // competition-pattern volleyball is roughly equal thirds, so *no* single
+    // centroid covers 45% of it and the fill gate rejects the ball outright.
+    // Matching the union makes it one blob again.
+    let best = 0;
+    for (const member of profile.of) {
+      const score = matchPixel(r, g, b, member);
+      if (score > best) best = score;
+    }
+    return best;
+  }
 
   if (profile.kind === 'bright') {
     // White: bright, and all three channels close together.
@@ -205,7 +244,19 @@ export function matchPixel(r, g, b, profile) {
  * in this light, in this gym. A yellow ball under sodium floodlights is not
  * the yellow in a rulebook.
  */
-export function calibrate(image, box) {
+/**
+ * Above this mean chroma deviation a sample is more than one colour, and
+ * averaging it produces a centroid that matches none of it.
+ *
+ * A ball with seams, shading and a logo sits well under this -- a basketball's
+ * black seams come to about 0.016, and a black-and-white football to almost
+ * nothing, because black and white have the *same* chroma and differ only in
+ * brightness. A blue, yellow and white volleyball comes to about 0.14.
+ */
+export const MAX_SAMPLE_DEVIATION = 0.05;
+
+/** Mean colour of a box, and how far its pixels sit from that mean. */
+export function sampleColour(image, box) {
   const { data, width } = image;
   const x0 = Math.max(0, Math.floor(box.x));
   const y0 = Math.max(0, Math.floor(box.y));
@@ -225,20 +276,56 @@ export function calibrate(image, box) {
   const r = sr / n, g = sg / n, b = sb / n;
   const sum = r + g + b || 1;
   const nr = r / sum, ng = g / sum, nb = b / sum;
-  const spread = Math.max(nr, ng, nb) - Math.min(nr, ng, nb);
-  const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+
+  // Second pass for the spread. Chroma rather than RGB, so that a ball half
+  // in shadow -- which is every ball outdoors -- does not read as two colours.
+  let deviation = 0;
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const i = (y * width + x) * 4;
+      const total = data[i] + data[i + 1] + data[i + 2] || 1;
+      deviation += Math.hypot(data[i] / total - nr, data[i + 1] / total - ng);
+    }
+  }
+
+  return {
+    r, g, b, nr, ng, nb, n,
+    deviation: deviation / n,
+    spread: Math.max(nr, ng, nb) - Math.min(nr, ng, nb),
+    luma: 0.299 * r + 0.587 * g + 0.114 * b,
+  };
+}
+
+/**
+ * Build a profile from a sample of the athlete's actual ball.
+ *
+ * Returns null when the sample cannot honestly be reduced to one colour --
+ * either the box was empty, or the ball is panelled. Averaging a panelled
+ * ball is worse than useless: a blue, yellow and white volleyball averages to
+ * a muddy olive that matches no part of the ball and plenty of the floor, and
+ * calibration *locks*, so it would replace a preset that works with one that
+ * never will. The caller falls back to the presets, which is the right answer.
+ */
+export function calibrate(image, box) {
+  const sample = sampleColour(image, box);
+  if (!sample) return null;
+  if (sample.deviation > MAX_SAMPLE_DEVIATION) return null;
 
   // A ball with no colour to speak of is a white one, and gets the brightness
   // profile rather than a chroma centroid that would match every grey thing
   // in the frame.
-  if (spread < 0.045) {
-    return { kind: 'bright', minLuma: Math.max(120, luma * 0.72), maxSpread: 0.06 };
+  if (sample.spread < 0.045) {
+    return {
+      kind: 'bright',
+      minLuma: Math.max(120, sample.luma * 0.72),
+      maxSpread: 0.06,
+    };
   }
   return {
     kind: 'chroma',
-    nr, ng,
+    nr: sample.nr, ng: sample.ng,
     tol: 0.07,
-    minLuma: Math.max(40, luma * 0.45),
+    minLuma: Math.max(40, sample.luma * 0.45),
     source: 'calibrated',
   };
 }
@@ -543,7 +630,7 @@ export class BallVision {
         if (previous && this.useMotion) {
           // A ball is moving. A painted line of the same colour is not, and
           // this is the only thing separating them for a white ball.
-          if (this.profile.kind === 'bright') {
+          if (isBright(this.profile)) {
             // Directional, because a plain magnitude test lights up the place
             // the ball *left* as brightly as where it arrived -- and against a
             // pale wall the vacated spot still matches the profile, so the

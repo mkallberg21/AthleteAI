@@ -88,10 +88,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3805 tests
+python -m pytest tests/ -q          # 3807 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 249 tests
+  node --test tests/js/*.test.mjs   # 259 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1686,8 +1686,8 @@ percent, which the radius tolerance absorbs several times over. A basketball is
 nearly four times a lacrosse ball across, so using one number for everything
 would have made the size gate useless.
 
-**Its colour is regulated too.** Five profiles — white, yellow, orange,
-basketball and optic — with centroids measured from real ball colours in sun and
+**Its colour is regulated too.** Six profiles — white, yellow, orange,
+basketball, optic and lime — with centroids measured from real ball colours in sun and
 shade, in illumination-normalised chroma so a ball in shadow lands on the same
 point as one in sun. Tolerances come from the distance to the nearest thing that
 is *not* a ball, and a test asserts every ball matches its profile while no
@@ -1708,6 +1708,44 @@ purple soccer ball or anything else the presets do not anticipate.
 
 **It is a solid disc**, so matched pixels must fill the circle they imply. A
 yellow jacket sleeve matches on every pixel and is rejected for being a streak.
+
+#### The ball that is three colours at once
+
+That fill rule is also what made a competition volleyball invisible, and it is
+a different problem from the lacrosse one. Lacrosse is *one of* three colours;
+a volleyball is blue, yellow and white **at the same time**, in roughly equal
+thirds. Every single-centroid preset therefore matched about a third of the
+ball, failed a 45% fill, and reported nothing — not a bad measurement, no ball
+at all. Trying more colours in turn cannot fix that, because each one is
+individually too small.
+
+So a profile can now be a **union** of others. The volleyball preset matches
+white *or* yellow, which comes to two thirds of the ball and clears the gate
+with room. The blue panels are deliberately left out: white and yellow already
+make the fill, and a blue centroid would have to live alongside blue courts,
+blue mats and half the jerseys in the gym. A panel may only union profiles that
+are already in the table, so it inherits their separation rather than
+introducing a looser centroid by the back door — there is a test for that.
+
+The same change exposed a real bug in calibration. "Show the app your ball"
+averages the sample into one centroid, and the average of blue, yellow and
+white is a muddy olive matching no part of the ball and a fair amount of the
+floor. Calibration *locks*, so that confident wrong answer would have replaced
+a working preset for the rest of the session. Calibration now measures how far
+the sample's pixels sit from their own mean and refuses when it is more than
+one colour, telling the athlete that nothing is wrong and the preset already
+handles it. Chroma, not brightness, is what is measured — so a ball half in
+shadow still reads as one colour, and so does a black-and-white football, since
+black and white sit on the same chroma point and differ only in luma. The worst
+legitimate case is a basketball's black seams at 0.016 against a threshold of
+0.05; a tri-colour volleyball reads 0.14.
+
+**What each sport looks for.** Soccer adds hi-vis yellow and orange for the
+winter balls, and the yellow centroid also reaches the fluorescent yellow-green
+a modern match ball is often sold in. Baseball gets a deliberately short list —
+white, plus optic for safety and machine-pitch balls — because a baseball
+really is almost always white, and padding that list to match the others would
+be inventing variety the sport does not have.
 
 **It flies ballistically**, which the tracker already checks.
 

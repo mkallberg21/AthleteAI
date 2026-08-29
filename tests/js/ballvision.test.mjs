@@ -12,12 +12,35 @@ import { test } from 'node:test';
 import {
   BallVision, PRESETS, BALLS, calibrate, matchPixel, radiusFromPose,
   workSize, ScaleMemory, WORK_PIXELS,
-  BALL_TO_TORSO, TORSO_CM, RADIUS_TOLERANCE,
+  BALL_TO_TORSO, TORSO_CM, RADIUS_TOLERANCE, isBright,
+  sampleColour, MAX_SAMPLE_DEVIATION,
 } from '../../offdays/web/static/ballvision.js';
 import { LANDMARK_INDEX } from '../../offdays/web/static/ball.js';
 
 const W = 192, H = 108;
 const SPECS = JSON.parse(process.env.DRILL_SPECS);
+
+/**
+ * A disc cut into wedges of different colours, for the panelled balls. The
+ * wedges are equal, which is close to how a competition volleyball's three
+ * colours actually divide up its surface.
+ */
+function panelledFrame({ x, y, r, panels, bg = [70, 90, 70] }) {
+  const data = new Uint8ClampedArray(W * H * 4);
+  for (let py = 0; py < H; py += 1) {
+    for (let px = 0; px < W; px += 1) {
+      const i = (py * W + px) * 4;
+      let colour = bg;
+      if (Math.hypot(px - x, py - y) <= r) {
+        const angle = (Math.atan2(py - y, px - x) + Math.PI) / (2 * Math.PI);
+        colour = panels[Math.floor(angle * panels.length) % panels.length];
+      }
+      data[i] = colour[0]; data[i + 1] = colour[1];
+      data[i + 2] = colour[2]; data[i + 3] = 255;
+    }
+  }
+  return { data, width: W, height: H };
+}
 
 /** A frame: flat background, optional discs, optional noise. */
 function frame({ bg = [70, 90, 70], discs = [], noise = 0, seed = 1 } = {}) {
@@ -267,6 +290,10 @@ test('each preset separates its own balls from every distractor', () => {
     optic: [[222, 232, 58], [205, 220, 70], [180, 200, 55], [230, 240, 90]],
     lime: [[200, 240, 40], [180, 255, 30], [140, 175, 45], [165, 200, 55],
            [210, 235, 60], [150, 190, 40]],
+    // The panels a competition volleyball is matched on. Its blue panels are
+    // deliberately not here -- the preset does not claim them, and the blue
+    // distractor below asserts it still does not match them.
+    volleyball: [[248, 250, 246], [245, 215, 40], [225, 228, 222], [230, 205, 55]],
   };
   const distractors = [
     [60, 120, 50], [210, 160, 130], [40, 60, 200], [200, 40, 40],
@@ -515,4 +542,148 @@ test('calibrating on the real ball overrides whatever was picked', () => {
   vision.setProfile(learned);
   assert.equal(vision.profile, learned);
   assert.ok(vision.locked);
+});
+
+test('a panel preset only unions presets that already passed separation', () => {
+  // A panel profile is exempt from nothing: it is built from members of this
+  // same table, so the separation test above covers it by construction. This
+  // asserts that stays true and a panel cannot smuggle in a loose centroid.
+  const named = new Set(Object.values(PRESETS));
+  for (const [name, profile] of Object.entries(PRESETS)) {
+    if (profile.kind !== 'panel') continue;
+    assert.ok(profile.of.length >= 2, `${name} unions nothing`);
+    for (const member of profile.of) {
+      assert.ok(named.has(member), `${name} unions an unnamed profile`);
+      assert.notEqual(member.kind, 'panel', `${name} nests a panel`);
+    }
+  }
+});
+
+test('a panelled volleyball is invisible to any single centroid', () => {
+  // The reason the panel kind exists. A competition ball is roughly equal
+  // thirds, so each colour covers about 33% of it against a 45% fill gate --
+  // every single-centroid preset measures a wedge and rejects it. If this
+  // test ever passes for a single preset the panel machinery is dead weight.
+  const WHITE = [248, 250, 246], BLUE = [30, 70, 160], YELLOW = [245, 215, 40];
+  const tricolour = [WHITE, BLUE, YELLOW, WHITE, BLUE, YELLOW];
+  for (const [name, profile] of Object.entries(PRESETS)) {
+    if (profile.kind === 'panel') continue;
+    const found = new BallVision({ profile, useMotion: false })
+      .detect(panelledFrame({ x: 96, y: 54, r: 7, panels: tricolour }));
+    assert.equal(found, null, `${name} should not have found a tri-colour ball`);
+  }
+});
+
+test('the volleyball preset finds a panelled ball at its true size', () => {
+  const WHITE = [248, 250, 246], BLUE = [30, 70, 160], YELLOW = [245, 215, 40];
+  const vision = new BallVision({ profile: PRESETS.volleyball, useMotion: false });
+  const found = vision.detect(panelledFrame({
+    x: 96, y: 54, r: 7, panels: [WHITE, BLUE, YELLOW, WHITE, BLUE, YELLOW],
+  }));
+  assert.ok(found, 'panel preset missed the ball it exists for');
+  // Two thirds of the disc matches, so the radius must still come back close
+  // to the true 7px rather than shrinking towards the matched area.
+  const radiusPx = found.r * 108;
+  assert.ok(radiusPx > 5.5 && radiusPx < 9, `radius was ${radiusPx}`);
+});
+
+test('the volleyball preset still finds a plain white ball', () => {
+  // Most youth volleyballs are plain, and the panel must not cost that case.
+  const found = new BallVision({ profile: PRESETS.volleyball, useMotion: false })
+    .detect(panelledFrame({ x: 96, y: 54, r: 7, panels: [[248, 250, 246]] }));
+  assert.ok(found, 'panel preset missed a plain white ball');
+});
+
+test('a panel counts as bright only when every member is', () => {
+  // The directional motion test exists for colourless balls. A volleyball has
+  // a yellow third, which is plenty of signal for the ordinary magnitude test.
+  assert.equal(isBright(PRESETS.white), true);
+  assert.equal(isBright(PRESETS.yellow), false);
+  assert.equal(isBright(PRESETS.volleyball), false);
+  assert.equal(isBright({ kind: 'panel', of: [PRESETS.white, PRESETS.white] }), true);
+});
+
+test('soccer, volleyball and baseball look for the colours they are sold in', () => {
+  const expected = {
+    soccer: ['white', 'yellow', 'orange'],
+    volleyball: ['white', 'volleyball'],
+    // Short on purpose. A baseball really is almost always white, and padding
+    // this list to match the others would be inventing variety.
+    baseball: ['white', 'optic'],
+  };
+  for (const [sport, colours] of Object.entries(expected)) {
+    const drills = SPECS.filter((d) => d.sport === sport && d.ball
+      && d.ball.detector === 'vision');
+    assert.ok(drills.length, `no ball drills for ${sport}`);
+    for (const drill of drills) {
+      assert.deepEqual(drill.ball.colours, colours, drill.key);
+    }
+  }
+});
+
+test('every ball drill leads with its most selective colour', () => {
+  // The candidate competition settles on whichever preset detects most, so a
+  // loose profile listed first would win ties on frames where both fit. White
+  // and the panels that contain it are the loose ones, so nothing may list a
+  // panel ahead of the plain preset it is built from.
+  for (const drill of SPECS.filter((d) => d.ball && d.ball.detector === 'vision')) {
+    const profiles = drill.ball.colours.map((n) => PRESETS[n]);
+    profiles.forEach((profile, i) => {
+      if (profile.kind !== 'panel') return;
+      for (const member of profile.of) {
+        const at = profiles.indexOf(member);
+        assert.ok(at === -1 || at < i,
+          `${drill.key} lists a panel before the preset it contains`);
+      }
+    });
+  }
+});
+
+test('calibration refuses a ball that is more than one colour', () => {
+  // Averaging a panelled ball gives a centroid matching no part of it, and
+  // calibration locks -- so a confident wrong answer here would permanently
+  // replace a preset that works. Refusing sends the caller back to the preset.
+  const WHITE = [248, 250, 246], BLUE = [30, 70, 160], YELLOW = [245, 215, 40];
+  const frame = panelledFrame({
+    x: 96, y: 54, r: 40, panels: [WHITE, BLUE, YELLOW],
+  });
+  const box = { x: 66, y: 24, w: 60, h: 60 };
+  assert.ok(sampleColour(frame, box).deviation > MAX_SAMPLE_DEVIATION);
+  assert.equal(calibrate(frame, box), null);
+});
+
+test('calibration still accepts the balls that are one colour', () => {
+  // Seams, a logo and half the ball in shadow must all still calibrate. The
+  // margin matters more than the pass: these are what the threshold is set
+  // against, so the test reports how close each one runs.
+  const box = { x: 66, y: 24, w: 60, h: 60 };
+  const cases = {
+    // Chroma, not brightness, is what is measured -- so a ball half in shadow
+    // reads as one colour, and so does a black-and-white football, because
+    // black and white sit on the same point and differ only in luma.
+    'plain white': [[248, 250, 246]],
+    'white in patchy sun': [[248, 250, 246], [150, 152, 148]],
+    'black-and-white football': [[248, 250, 246], [25, 25, 28],
+                                 [248, 250, 246], [248, 250, 246]],
+    'optic tennis': [[222, 232, 58]],
+    'basketball with seams': [[205, 110, 45], [25, 25, 28], [205, 110, 45],
+                              [205, 110, 45], [205, 110, 45], [205, 110, 45],
+                              [205, 110, 45], [205, 110, 45]],
+  };
+  for (const [name, panels] of Object.entries(cases)) {
+    const frame = panelledFrame({ x: 96, y: 54, r: 40, panels });
+    const { deviation } = sampleColour(frame, box);
+    assert.ok(deviation < MAX_SAMPLE_DEVIATION,
+      `${name} read as multi-coloured at ${deviation.toFixed(4)}`);
+    assert.ok(calibrate(frame, box), `${name} was refused`);
+  }
+});
+
+test('an empty sample and a mixed one are different answers', () => {
+  // The banner says different things for these, so they must be tellable
+  // apart: no pixels at all is null from sampleColour, a mixed ball is a
+  // sample with a high deviation.
+  const frame = panelledFrame({ x: 96, y: 54, r: 7, panels: [[248, 250, 246]] });
+  assert.equal(sampleColour(frame, { x: 10, y: 10, w: 0, h: 0 }), null);
+  assert.ok(sampleColour(frame, { x: 80, y: 40, w: 30, h: 30 }));
 });
