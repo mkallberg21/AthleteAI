@@ -23,6 +23,8 @@
  * time the athlete drags the timeline.
  */
 
+import { accent } from './api.js';
+
 /** Landmarks worth drawing. Faces are not, and not storing them is the point. */
 const TRACKED = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 
@@ -316,8 +318,8 @@ export function drawPose(ctx, frame, width, height) {
   };
 
   ctx.lineWidth = Math.max(2, width / 220);
-  ctx.strokeStyle = 'rgba(57,217,138,.85)';
-  ctx.fillStyle = 'rgba(57,217,138,.95)';
+  ctx.strokeStyle = accent(0.85);
+  ctx.fillStyle = accent(0.95);
 
   for (const [a, b] of BONES) {
     const from = point(a);

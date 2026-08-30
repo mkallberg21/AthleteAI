@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="topbar">
-  <div class="brand">0FF<span>DAYS</span></div>
+  <div class="brand"><span>0FF</span>DAYS</div>
   <button class="secondary inline" onclick="location.href='capture.html'">Back</button>
 </div>
 
@@ -34,7 +34,7 @@
 </div>
 
 <script type="module">
-import { api, esc, getToken } from './api.js';
+import { accent, api, esc, getToken } from './api.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -82,7 +82,7 @@ async function load() {
 
     $('rows').innerHTML = data.rows.length ? data.rows.map((r) => {
       const isMe = r.athlete_id === myId;
-      return `<tr${isMe ? ' style="background:rgba(57,217,138,.08)"' : ''}>
+      return `<tr${isMe ? ` style="background:${accent(0.08)}"` : ''}>
         <td class="rank ${r.rank <= 3 ? 'top' : ''}" style="width:44px">${MEDALS[r.rank] || r.rank}</td>
         <td><b>${esc(r.display_name)}</b>${isMe ? ' <span class="pill ok">you</span>' : ''}
             <br><span class="small muted">${esc(r.team_name)} &middot; Lvl ${r.level}${r.detail ? ` &middot; ${esc(r.detail)}` : ''}</span></td>

@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v1';
+const CACHE = 'offdays-shell-v2';
 
 const SHELL = [
   './',
@@ -17,6 +17,16 @@ const SHELL = [
   'parent.html',
   'leaderboard.html',
   'styles.css',
+  // The typefaces are part of the shell. Without them a capture screen
+  // opened with no connection falls back to a system face, which is a
+  // different-looking app at exactly the moment it is least reassuring.
+  'fonts/fonts.css',
+  'fonts/inter-400-latin.woff2',
+  'fonts/inter-500-latin.woff2',
+  'fonts/inter-600-latin.woff2',
+  'fonts/barlow-condensed-600-latin.woff2',
+  'fonts/barlow-condensed-700-latin.woff2',
+  'fonts/jetbrains-mono-400-latin.woff2',
   'api.js',
   'counter.js',
   'review.js',

@@ -72,8 +72,7 @@ flattery: the sticky header, which renders over the panel being photographed,
 and the first-week onboarding checklist, which is scaffolding for a coach
 setting up rather than part of what a director is being shown.
 
-**Known mismatch.** The app still renders in its original green accent, while
-these documents follow the brand kit's Electric Blue. The screenshots are
-therefore accurate and off-palette at the same time. Fixing it belongs in the
-app rather than here — re-skinning `offdays/web/static/styles.css` onto
-`tokens.css` would settle it for the product and these captures together.
+The app itself is on the brand kit now, so these captures and the documents
+around them are the same palette. `tests/test_branding.py` holds that: it
+asserts the brand values are used unchanged, that every foreground clears
+4.5:1 on every surface, and that no legacy colour creeps back.

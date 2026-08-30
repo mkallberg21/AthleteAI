@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>0FFDAYS &mdash; Parent</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0b0f14">
+<meta name="theme-color" content="#0A0A0B">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="topbar">
-  <div class="brand">0FF<span>DAYS</span> <span class="small muted" style="font-weight:400">Parent</span></div>
+  <div class="brand"><span>0FF</span>DAYS <span class="small muted" style="font-weight:400">Parent</span></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="small muted" id="whoami"></span>
     <select id="lang" class="inline" aria-label="Language / Idioma"></select>
@@ -588,7 +588,7 @@ function wire() {
         if (win) {
           win.document.write(
             '<pre style="white-space:pre-wrap;font:13px ui-monospace,monospace;'
-            + 'background:#0b0f14;color:#e8eef5;padding:20px;margin:0">'
+            + 'background:#0A0A0B;color:#E8EFF6;padding:20px;margin:0">'
             + esc(JSON.stringify(data, null, 2)) + '</pre>'
           );
           win.document.close();

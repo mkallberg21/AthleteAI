@@ -83,3 +83,23 @@ export function fmtDate(iso) {
   if (days < 7) return `${days}d ago`;
   return d.toLocaleDateString();
 }
+
+
+/**
+ * The brand accent, read from the stylesheet rather than repeated in code.
+ *
+ * Canvas and inline styles take a colour string, not a custom property, so
+ * every overlay used to carry its own copy of the accent hex. That is how the
+ * pose overlay, the review overlay and the leaderboard's "this is you" row
+ * each stayed green after the app had been re-skinned -- three copies, none of
+ * which the stylesheet could reach.
+ */
+export function accent(alpha = 1) {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue('--accent').trim() || '#008BFD';
+  if (alpha >= 1) return value;
+  const hex = value.replace('#', '');
+  const n = parseInt(hex.length === 3
+    ? hex.split('').map((c) => c + c).join('') : hex, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}

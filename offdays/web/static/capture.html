@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>0FFDAYS &mdash; Train</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0b0f14">
+<meta name="theme-color" content="#0A0A0B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="topbar">
-  <div class="brand">0FF<span>DAYS</span></div>
+  <div class="brand"><span>0FF</span>DAYS</div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="small muted" id="whoami"></span>
     <button class="bell" id="bell">Alerts<span class="dot hidden" id="bell-dot">0</span></button>
@@ -346,7 +346,7 @@
 </div>
 
 <script type="module">
-import { api, esc, fmtDate, getToken, logout } from './api.js';
+import { accent, api, esc, fmtDate, getToken, logout } from './api.js';
 import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
 import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
          sampleColour, MIN_SAMPLE_SHARE }
@@ -1587,7 +1587,7 @@ function drawBall(ctx, ball, width, height) {
   ctx.beginPath();
   ctx.arc(ball.x * width, ball.y * height,
           Math.max(8, ball.r * height), 0, Math.PI * 2);
-  ctx.strokeStyle = '#39d98a';
+  ctx.strokeStyle = accent();
   ctx.lineWidth = 3;
   ctx.stroke();
 }
@@ -1668,8 +1668,8 @@ window.addEventListener('resize', describeOrientation);
 
 function drawSkeleton(ctx, lms, w, h) {
   ctx.lineWidth = Math.max(2, w / 220);
-  ctx.strokeStyle = 'rgba(57,217,138,.85)';
-  ctx.fillStyle = 'rgba(57,217,138,.95)';
+  ctx.strokeStyle = accent(0.85);
+  ctx.fillStyle = accent(0.95);
   for (const [a, b] of BONES) {
     const p = lms[a], q = lms[b];
     if (!p || !q || (p.visibility ?? 1) < 0.5 || (q.visibility ?? 1) < 0.5) continue;
