@@ -72,6 +72,7 @@ def enqueue(
     from_name: str = "",
     about_athlete_id: int | None = None,
     mirror: bool = True,
+    variant: int | None = None,
 ) -> int | None:
     """Record a notification. Returns its id, or None if it was a duplicate.
 
@@ -95,9 +96,10 @@ def enqueue(
     try:
         cur = conn.execute(
             "INSERT INTO notifications(user_id, kind, title, body, link, created_at, "
-            "dedupe_key, about_athlete_id, is_copy, from_name) "
-            "VALUES (?,?,?,?,?,?,?,?,0,?)",
-            (user_id, kind, title, body, link, _iso(_now()), key, about, from_name),
+            "dedupe_key, about_athlete_id, is_copy, from_name, variant) "
+            "VALUES (?,?,?,?,?,?,?,?,0,?,?)",
+            (user_id, kind, title, body, link, _iso(_now()), key, about,
+             from_name, variant),
         )
         made = int(cur.lastrowid)
     except sqlite3.IntegrityError:

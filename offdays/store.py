@@ -8,6 +8,7 @@ contained change.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -53,6 +54,16 @@ from .scoring import (
     level_progress,
     score_session,
 )
+
+log = logging.getLogger(__name__)
+
+#: A squad bigger than this is not a squad. Generous, because the whole point
+#: is that a coach can outrun their own roster size.
+MAX_WORDINGS = 60
+
+#: One recognition message, on a phone, read by a child. Longer than this and
+#: it is a letter.
+MAX_WORDING_CHARS = 320
 
 
 def _now() -> datetime:
@@ -1231,6 +1242,10 @@ class Store:
         child hears the difference.
         """
         kind = "family" if self.is_family(org_id) else "program"
+        squad = int(self.conn.execute(
+            "SELECT COUNT(*) FROM users WHERE org_id = ? AND role = 'athlete' "
+            "AND active = 1", (org_id,)
+        ).fetchone()[0])
         rows = {
             r["milestone"]: r for r in self.conn.execute(
                 "SELECT * FROM recognition_templates WHERE org_id = ?", (org_id,)
@@ -1246,6 +1261,17 @@ class Store:
                 kind=kind,
             )
             entry["enabled"] = bool(row["enabled"]) if row else True
+            # How many different ways this milestone can be said, against how
+            # many athletes could cross it. A coach who cannot see this number
+            # finds out about it from two parents in a car park.
+            pool = (recognition.variants(row["body"]) if row
+                    else milestone.pool(kind))
+            # The whole pool, so the box a coach edits contains every wording
+            # rather than the first of twelve. Saving what is shown used to
+            # collapse the pool to one message without saying so.
+            entry["bodies"] = list(pool)
+            entry["wordings"] = len(pool)
+            entry["short_by"] = max(0, squad - len(pool))
             out.append(entry)
         return out
 
@@ -1260,6 +1286,20 @@ class Store:
         text = (body or "").strip()
         if enabled and not text:
             raise StoreError("a message needs some words, or turn the milestone off")
+        # One message per paragraph. Checked here rather than at the edge
+        # because this is where the splitting rule lives, and a limit on the
+        # whole box would let one enormous message through and reject forty
+        # good short ones.
+        wordings = recognition.variants(text)
+        if len(wordings) > MAX_WORDINGS:
+            raise StoreError(
+                f"that is {len(wordings)} wordings; {MAX_WORDINGS} is the most "
+                "this holds")
+        for one in wordings:
+            if len(one) > MAX_WORDING_CHARS:
+                raise StoreError(
+                    f"one of these runs to {len(one)} characters; keep each "
+                    f"under {MAX_WORDING_CHARS} so it reads on a phone")
         with transaction(self.conn) as conn:
             conn.execute(
                 "INSERT INTO recognition_templates(org_id, milestone, body, enabled, "
@@ -1460,15 +1500,50 @@ class Store:
                 sender = coach_name
                 title = ""
 
+            # Which wording, out of the several this milestone has.
+            #
+            # Two athletes on one squad opening the same sentence in the same
+            # week is the failure this guards against: the whole value of
+            # "coach noticed" is that it reads as written to you, and it
+            # survives exactly as long as it takes two of them to hold their
+            # phones side by side.
+            kind = ("family" if self.is_family(int(athlete["org_id"]))
+                    else "program")
+            # `customised` rather than a truthy body: the template dict always
+            # carries a body, because it falls back to the shipped default for
+            # display. Reading that as "the coach wrote one wording" made the
+            # pool one deep and sent an entire squad the same sentence, which
+            # is the exact failure this whole mechanism exists to prevent.
+            own = (recognition.variants(template.get("body", ""))
+                   if template.get("customised") else ())
+            pool = own or milestone.pool(kind)
+
+            chosen, collision = recognition.pick_variant(
+                pool_size=len(pool),
+                athlete_id=athlete_id,
+                used_by_athlete=self._variants_used_by(athlete_id, key),
+                used_recently=self._variants_used_recently(
+                    int(athlete["org_id"]), milestone.key),
+            )
+            chosen_body = pool[chosen]
+
+            # A translated program takes the translation over the variety.
+            # Reading a message in your own language matters more than reading
+            # a different one from your team-mate, and only the first wording
+            # of each milestone is translated so far. A Spanish-reading squad
+            # therefore gets one wording until somebody writes more, which is
+            # what the coach view's count is for.
+            if not own:
+                translated = milestone.body_for(kind, self.locale_for(athlete_id))
+                if translated != milestone.pool(kind)[0]:
+                    chosen_body = translated
+
             # The athlete's language, because the message is written to them.
             # A guardian gets this copy as sent rather than a re-translation:
             # showing a parent different words from the ones their child read
             # would make one message look like two.
             body = recognition.render(
-                template.get("body") or milestone.body_for(
-                    "family" if self.is_family(int(athlete["org_id"])) else "program",
-                    self.locale_for(athlete_id),
-                ),
+                chosen_body,
                 first_name=first_name, streak=streak.current,
                 coach=sender, team=team,
             )
@@ -1481,10 +1556,52 @@ class Store:
                 link="/",
                 dedupe_key=f"recognition:{key}",
                 from_name=sender,
+                variant=chosen,
             )
             if made:
                 sent.append(milestone.key)
+                if collision:
+                    log.info(
+                        "recognition wording repeated (%s) for athlete %s on %s: "
+                        "the pool has %d wordings",
+                        collision, athlete_id, milestone.key, len(pool),
+                    )
         return sent
+
+    def _variants_used_by(self, athlete_id: int, dedupe_stem: str) -> set[int]:
+        """Wordings this athlete has already had for this milestone.
+
+        Keyed on the milestone rather than the run, so an athlete who builds a
+        ten-day streak twice in a season is congratulated twice and never in
+        the same words.
+        """
+        stem = dedupe_stem.split(":")[0]
+        rows = self.conn.execute(
+            "SELECT variant FROM notifications "
+            "WHERE about_athlete_id = ? AND kind = ? AND is_copy = 0 "
+            "AND variant IS NOT NULL AND dedupe_key LIKE ?",
+            (athlete_id, notifications.Kind.RECOGNITION, f"recognition:{stem}%"),
+        ).fetchall()
+        return {int(r["variant"]) for r in rows}
+
+    def _variants_used_recently(self, org_id: int, milestone_key: str) -> set[int]:
+        """Wordings anybody in this program has had inside the window.
+
+        The window is what makes two families comparing notes at a tournament
+        find two different messages rather than one.
+        """
+        cutoff = (_now() - timedelta(days=recognition.WINDOW_DAYS)).isoformat(
+            timespec="seconds")
+        rows = self.conn.execute(
+            "SELECT n.variant FROM notifications n "
+            "JOIN users u ON u.id = n.about_athlete_id "
+            "WHERE u.org_id = ? AND n.kind = ? AND n.is_copy = 0 "
+            "AND n.variant IS NOT NULL AND n.created_at >= ? "
+            "AND n.dedupe_key LIKE ?",
+            (org_id, notifications.Kind.RECOGNITION, cutoff,
+             f"recognition:{milestone_key}%"),
+        ).fetchall()
+        return {int(r["variant"]) for r in rows}
 
     # ------------------------------------------------------------------
     # Clips an athlete chooses to send a coach

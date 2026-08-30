@@ -367,10 +367,20 @@ class TestAFamilyWritesItDifferently:
                 assert word not in lowered, (milestone.key, word)
 
     def test_the_sent_message_uses_the_family_wording(self, household):
+        """One of the family wordings, not one specific one.
+
+        This named the exact sentence, which was right while a milestone had
+        exactly one. A household now draws from the family pool like anybody
+        else, so what matters is that the words came from that pool rather
+        than the coach's -- a parent telling their own child "see you at
+        practice" is the thing this guards against.
+        """
         store = household["store"]
         store.award_recognition(household["child"]["id"], sessions_before=0)
         body = sent_to(store, household["child"]["id"])[0]["body"]
-        assert "Starting is the hard bit" in body
+        family = R.BY_KEY["first_session"].family_bodies
+        rendered = {b.replace("{first_name}", "Jordan") for b in family}
+        assert body in rendered, body
 
     def test_a_parent_who_writes_their_own_still_wins(self, household):
         store = household["store"]

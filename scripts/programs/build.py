@@ -12,6 +12,7 @@ import base64, html, json, pathlib, subprocess, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from offdays import demo as demo_mod  # noqa: E402
+from offdays import recognition  # noqa: E402
 
 HERE = pathlib.Path(__file__).parent
 CHROME = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
@@ -349,6 +350,12 @@ def page(data, copy, logo, has_logo):
                'still counts on a dark evening.</p>'
                if d["ball_optional"] else ''))
 
+    # The real range, not the minimum. Six is true of the hundred-day
+    # milestone and would undersell the ones an athlete actually meets; the
+    # largest alone would oversell the rare one.
+    _pools = sorted(len(m.bodies) for m in recognition.MILESTONES)
+    wordings = (f"{_pools[0]} to {_pools[-1]}" if _pools[0] != _pools[-1]
+                else str(_pools[0]))
     shot_top = data_uri(SHOTS / "dashboard.png")
     shot_nudge = data_uri(SHOTS / "nudge.png")
     shot_recog = data_uri(SHOTS / "recognition.png")
@@ -568,13 +575,19 @@ def page(data, copy, logo, has_logo):
       <h3>When they put the work in</h3>
       <p>Six moments trigger a message: their first ever session, then three,
       five, ten, thirty and a hundred days in a row.</p>
+      <p><strong>No two athletes get the same sentence.</strong> Every
+      milestone holds {e(wordings)} different wordings, and the same one is
+      never sent twice inside a month. The first thing two children do is
+      hold their phones side by side, and "your coach noticed" survives
+      exactly as long as that comparison does.</p>
       <p><strong>It comes from you, by name.</strong> "Coach Rivera noticed"
-      lands; "the system detected" does not. You write the words once and they
-      arrive at the moment they mean something.</p>
+      lands; "the system detected" does not. You write the words once — one
+      per paragraph, as many as you like — and they arrive at the moment they
+      mean something.</p>
       <p><strong>It fires once per streak, not once per day.</strong> Ten days
       is worth saying something about. Saying it again on day eleven is how a
       child learns to ignore the app. Break a streak and rebuild it and they
-      are congratulated again — doing it twice is harder than once.</p>
+      are congratulated again, in words they have not had before.</p>
       <p>A senior name can be reserved for the long streaks only, so a note
       from your director of player development still means something when it
       arrives.</p>
@@ -603,9 +616,12 @@ def page(data, copy, logo, has_logo):
   a problem.</figcaption></figure>
 
   <figure class="shot half"><img src="{shot_recog}" alt="Recognition settings">
-  <figcaption>Every milestone ships with wording you are meant to replace. The
-  defaults are deliberately plain, so a coach reading them thinks "I would say
-  that differently" — which is the point.</figcaption></figure>
+  <figcaption>Every milestone ships with wordings you are meant to replace,
+  one per paragraph. The defaults are deliberately plain, so a coach reading
+  them thinks "I would say that differently" — which is the point. The count
+  beside each box is checked against your squad, so if you have more athletes
+  than ways of saying it, the screen tells you rather than two parents finding
+  out in a car park.</figcaption></figure>
 </section>
 
 <footer>

@@ -2317,7 +2317,10 @@ def plan_history(
 
 class RecognitionTemplate(BaseModel):
     milestone: str
-    body: str = Field(default="", max_length=600)
+    # Several wordings, one per paragraph, so the limit is on the whole pool
+    # rather than on one message. The per-message cap lives in the store,
+    # where the splitting happens.
+    body: str = Field(default="", max_length=8000)
     enabled: bool = True
     from_voice: Literal["coach", "voice"] = "coach"
 
@@ -2515,18 +2518,27 @@ def recognition_templates(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """The milestones, with whatever words this program has written for them."""
+    """The milestones, with whatever words this program has written for them.
+
+    Each carries how many wordings it has and how far short of the squad that
+    falls. No two athletes get the same sentence for the same milestone inside
+    a month -- but that promise can only be kept while there are wordings
+    left, and the coach is the only person who can write more.
+    """
+    milestones = store.recognition_templates(principal.org_id)
     return {
-        "milestones": store.recognition_templates(principal.org_id),
+        "milestones": milestones,
         "tokens": list(recognition_mod.TOKENS),
         "voice": store.program_voice(principal.org_id),
         "voices": list(recognition_mod.Voice.ALL),
         "is_family": store.is_family(principal.org_id),
+        "window_days": recognition_mod.WINDOW_DAYS,
+        "short_by": max((m["short_by"] for m in milestones), default=0),
     }
 
 
 class RecognitionPreview(BaseModel):
-    body: str = Field(default="", max_length=600)
+    body: str = Field(default="", max_length=8000)
     athlete_id: int | None = None
 
 

@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -595,6 +595,10 @@ CREATE TABLE IF NOT EXISTS notifications (
     -- mirrored to their guardians, and the copy says so rather than reading
     -- as a message addressed to the parent.
     is_copy     INTEGER NOT NULL DEFAULT 0,
+    -- Which wording of a recognition message went out, so the next athlete
+    -- to cross the same milestone can be given a different one. Null on
+    -- every other kind of notification.
+    variant     INTEGER,
     -- Who it is from, when it is from a person. Recognition messages carry a
     -- coach's name because being noticed by a person is the point.
     from_name   TEXT NOT NULL DEFAULT '',
@@ -954,6 +958,11 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("kind", "TEXT NOT NULL DEFAULT 'program'"),
         ("sibling_compare", "INTEGER NOT NULL DEFAULT 0"),
         ("season_phase", "TEXT NOT NULL DEFAULT 'preseason'"),
+    ],
+    "notifications": [
+        # Which wording went out, so the next athlete can be given a
+        # different one. Null on everything that is not recognition.
+        ("variant", "INTEGER"),
     ],
     "recognition_templates": [
         ("from_voice", "TEXT NOT NULL DEFAULT 'coach'"),

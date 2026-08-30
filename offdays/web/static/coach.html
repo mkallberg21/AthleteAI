@@ -1308,7 +1308,10 @@ async function loadRecognition() {
     : 'When an athlete logs a session at home, these go out in your name, on the '
       + 'day. Write them once in your own voice &mdash; the shipped wording is a '
       + 'placeholder, and it will read like one. Use <code>{first_name}</code>, '
-      + '<code>{streak}</code>, <code>{coach}</code> or <code>{team}</code>.';
+      + '<code>{streak}</code>, <code>{coach}</code> or <code>{team}</code>.'
+      + `<br><br>Each milestone holds several wordings and no two athletes get
+         the same one inside ${data.window_days} days, because the first thing
+         two of them do is compare phones. Keep one per paragraph.`;
 
   $('voice-name').value = data.voice.name || '';
   $('voice-title').value = data.voice.title || '';
@@ -1322,7 +1325,13 @@ async function loadRecognition() {
         <b>${esc(m.label)}</b>
         ${m.customised ? '' : '<span class="small muted">&middot; default wording</span>'}
       </label>
-      <textarea rows="2" data-recog-body>${esc(m.body)}</textarea>
+      <textarea rows="4" data-recog-body>${esc((m.bodies || [m.body]).join('\n\n'))}</textarea>
+      <div class="small muted">${m.wordings} way${m.wordings === 1 ? '' : 's'}
+        of saying it${m.short_by
+          ? ` &mdash; <b>${m.short_by} short</b> of your squad, so that many
+             athletes will hear one they have heard before. One message per
+             paragraph; add more below.`
+          : '. One message per paragraph.'}</div>
       ${data.is_family ? '' : `<label class="small muted"
         style="display:flex;gap:6px;align-items:center;margin-top:4px">
         <input type="checkbox" data-recog-voice ${
