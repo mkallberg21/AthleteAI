@@ -35,26 +35,29 @@ COLOUR_WORDS = {
 }
 
 
-def logo_block():
-    """The user's logo if it is here, the wordmark if it is not.
+#: Which lockup goes on which background, from the kit's asset index.
+KIT = pathlib.Path(__file__).parent / "brandkit" / "OffDays-Brand-Kit"
+LOCKUP_DARK = KIT / "logos" / "offdays-primary-on-dark-transparent.png"
+LOCKUP_LIGHT = KIT / "logos" / "offdays-primary-on-light-transparent.png"
+MARK = KIT / "icons" / "icon-mark-transparent-512.png"
 
-    Dropping logo.svg or logo.png into this directory is the whole install.
+
+def data_uri(path: pathlib.Path) -> str:
+    kind = "svg+xml" if path.suffix == ".svg" else path.suffix.lstrip(".")
+    return f"data:image/{kind};base64,{base64.b64encode(path.read_bytes()).decode()}"
+
+
+def logo_block():
+    """The primary lockup, or the wordmark if the kit is not installed.
+
+    Sized in inches rather than pixels because the guidelines set a print
+    minimum of 1.25in and the cover runs it at 1.9in. The source raster is
+    1307px wide, so that lands around 690dpi -- comfortably inside native
+    resolution, which matters because these assets do not scale past it.
     """
-    for name in ("logo.svg", "logo.png", "logo.jpg", "logo.webp"):
-        path = HERE / name
-        if not path.exists():
-            continue
-        if name.endswith(".svg"):
-            mime = "image/svg+xml"
-        elif name.endswith(".png"):
-            mime = "image/png"
-        elif name.endswith(".webp"):
-            mime = "image/webp"
-        else:
-            mime = "image/jpeg"
-        b64 = base64.b64encode(path.read_bytes()).decode()
-        return (f'<img class="logo-img" alt="0FFDAYS" '
-                f'src="data:{mime};base64,{b64}">'), True
+    if LOCKUP_DARK.exists():
+        return (f'<img class="lockup" alt="OFFDAYS" src="{data_uri(LOCKUP_DARK)}">',
+                True)
     return '<div class="wordmark">0FFDAYS</div>', False
 
 
@@ -62,164 +65,173 @@ CSS = """
 @page { size: Letter; margin: 0.62in 0.6in 0.72in; }
 @page :first { margin: 0 0 0.72in; }
 * { box-sizing: border-box; }
+/* OffDays design tokens, verbatim from the brand kit's tokens.css. */
 :root {
-  --ground:#F9F6F2; --surface:#FFFFFF; --surface-sunk:#F1EBE3;
-  --ink:#1E1712; --ink-soft:#5A4E44; --ink-faint:#8A7D71;
-  --rule:#E3DAD0; --rule-strong:#C7B9AB;
-  --accent:#8A4A1C; --accent-ink:#65330F; --accent-wash:#F5E4D4;
-  --gold:#8A6118; --gold-wash:#F2E9D6;
-  --go:#2C6449; --go-wash:#E4EFE8;
-  --warn:#8E5A11; --stop:#97301F; --stop-wash:#F7E6E2;
+  --blue:#008BFD; --blue-deep:#0063C4; --blue-wash:#E6F3FF;
+  --ink:#0B1B2B; --slate:#4A5A6B; --mist:#E4E9EF;
+  --paper:#F7F9FC; --court:#0A0A0B;
+  --go:#12A150; --caution:#C77700; --stop:#C6362C;
+  --go-wash:#E7F5EE; --caution-wash:#FBF0DF; --stop-wash:#FAEAE8;
+  --radius:10px; --radius-lg:16px;
 }
-html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 body {
-  margin:0; background:var(--ground); color:var(--ink);
-  font-family:"Source Serif 4", Georgia, serif; font-size:10.1pt; line-height:1.52;
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Inter", system-ui, -apple-system, sans-serif;
+  font-size:9.7pt; line-height:1.55;
 }
-h1,h2,h3,h4,.num,.eyebrow,.wordmark,th,.tile-n,.pill {
-  font-family:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+/* Tabular figures on the numbers, and deliberately NOT on the body.
+   Inter's tnum feature also swaps the hyphen for a tabular-width minus, so
+   setting this document-wide put a visible gap inside every hyphenated word
+   -- "off-hand" and "hi-vis" came out spaced. The guidelines ask for tabular
+   figures on counts and load figures, which is what these are. */
+.tile-n, .pos .top, .metric, td.name, .num { font-variant-numeric:tabular-nums; }
+h1,h2,h3,h4,.tile-n,.claim q,.step h4,.pos h4,.wordmark {
+  font-family:"Barlow Condensed", system-ui, sans-serif;
 }
-.mono,code,.metric { font-family:"IBM Plex Mono",monospace; }
+/* Restricted to claim codes and athlete identifiers by the guidelines, so it
+   appears nowhere in these documents. Declared for anything added later. */
+.code { font-family:"JetBrains Mono", ui-monospace, monospace; }
 
 /* ---------- cover ---------- */
-.cover { background:#171310; color:#F4EDE6; padding:0.8in 0.6in 0.5in;
+.cover { background:var(--court); color:#FFF; padding:0.8in 0.6in 0.5in;
   position:relative; overflow:hidden;
-  /* Owns page one outright. Without the break the first section flows up
-     underneath the cover art, and @page:first has no side margins for it. */
   min-height:10.2in; break-after:page;
   display:flex; flex-direction:column; }
 .cover::after { content:""; position:absolute; inset:0;
-  background:linear-gradient(104deg,#8A4A1C 0%,#B4692C 42%,#8A6118 100%);
-  opacity:.30;
-  -webkit-mask-image:linear-gradient(104deg,transparent 40%,#000 100%);
-          mask-image:linear-gradient(104deg,transparent 40%,#000 100%); }
+  background:linear-gradient(104deg,#008BFD 0%,#0063C4 48%,#0B1B2B 100%);
+  opacity:.5;
+  -webkit-mask-image:linear-gradient(112deg,transparent 30%,#000 108%);
+          mask-image:linear-gradient(112deg,transparent 30%,#000 108%); }
 .cover > * { position:relative; z-index:1; }
-.wordmark { font-weight:800; font-size:23pt; letter-spacing:-.045em; color:#FFF; }
-.logo-img { height:46px; width:auto; display:block; }
+/* 1.9in against a 1.25in print minimum. The clear-space rule is the height of
+   the mark on every side, which the cover padding and this margin satisfy. */
+.lockup { width:1.9in; height:auto; display:block; margin:0 0.5in 0 0; }
+.wordmark { font-weight:700; font-size:26pt; letter-spacing:-.02em;
+  font-style:italic; color:#FFF; }
 .cover-head { display:flex; justify-content:space-between; align-items:flex-start;
-  border-bottom:1px solid rgba(255,255,255,.17); padding-bottom:14px; }
-.cover-head .meta { text-align:right; font-size:8pt; color:#C9B9A9;
-  font-family:"IBM Plex Mono",monospace; line-height:1.7; }
-.cover h1 { font-size:41pt; line-height:.98; margin:30px 0 0;
-  letter-spacing:-.032em; font-weight:800; color:#FFF; }
-.cover .kicker { font-size:9pt; letter-spacing:.17em; text-transform:uppercase;
-  color:#E8BE93; font-weight:600;
-  font-family:"Bricolage Grotesque",sans-serif; }
-.cover .thesis { font-size:14.6pt; line-height:1.4; color:#EADFD4;
-  margin:16px 0 0; max-width:6.7in; text-wrap:pretty; }
-.cover .thesis strong { color:#FFF; font-weight:600; }
+  border-bottom:1px solid rgba(255,255,255,.18); padding-bottom:16px; }
+.cover-head .meta { text-align:right; font-size:8.2pt; color:#9FB4C8;
+  line-height:1.7; letter-spacing:.04em; white-space:nowrap; }
+.cover-head .meta strong { color:#FFF; font-weight:600; letter-spacing:.09em; }
+.cover .kicker { font-size:9pt; letter-spacing:.19em; text-transform:uppercase;
+  color:var(--blue); font-weight:600;
+  font-family:"Barlow Condensed",sans-serif; }
+.cover h1 { font-size:52pt; line-height:.92; margin:14px 0 0;
+  letter-spacing:-.01em; font-weight:700; color:#FFF; text-transform:uppercase; }
+.cover .thesis { font-size:13.4pt; line-height:1.42; color:#D7E3EE;
+  margin:14px 0 0; max-width:6.4in; text-wrap:pretty; }
 .tiles { display:grid; grid-template-columns:repeat(4,1fr); gap:9px;
-  margin-top:30px; }
-.tile { background:rgba(255,255,255,.075); border:1px solid rgba(255,255,255,.14);
-  border-radius:9px; padding:11px 12px 12px; }
-.tile-n { font-size:21pt; font-weight:800; color:#FFF; letter-spacing:-.03em;
-  line-height:1; }
-.tile-l { font-size:7.6pt; color:#C7B5A4; margin-top:5px; line-height:1.35;
-  text-transform:uppercase; letter-spacing:.055em;
-  font-family:"Bricolage Grotesque",sans-serif; font-weight:500; }
+  margin-top:28px; }
+.tile { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15);
+  border-radius:var(--radius); padding:12px 13px 13px; }
+.tile-n { font-size:27pt; font-weight:700; color:#FFF; line-height:.95;
+  letter-spacing:-.01em; }
+.tile-l { font-size:7.4pt; color:#9FB4C8; margin-top:6px; line-height:1.35;
+  text-transform:uppercase; letter-spacing:.075em; font-weight:500; }
 .claim { margin:auto 0; padding:26px 0 6px; }
-.claim q { quotes:none; display:block; font-family:"Bricolage Grotesque",sans-serif;
-  font-size:27pt; font-weight:800; letter-spacing:-.028em; line-height:1.1;
-  color:#FFF; max-width:6.6in; }
-.claim q em { font-style:normal; color:#E8BE93; }
-.claim .sub { margin-top:11px; font-size:9.6pt; color:#B7A697; max-width:5.4in; }
-.steps { padding-top:34px; display:grid;
-  grid-template-columns:repeat(3,1fr); gap:16px; }
-.step { border-top:2px solid rgba(232,190,147,.5); padding-top:11px; }
-.step .n { font-family:"IBM Plex Mono",monospace; font-size:8pt;
-  color:#E8BE93; letter-spacing:.1em; }
-.step h4 { font-family:"Bricolage Grotesque",sans-serif; font-size:11.2pt;
-  margin:5px 0 4px; color:#FFF; font-weight:700; letter-spacing:-.012em; }
-.step p { font-size:9.1pt; color:#BCAB9C; margin:0; line-height:1.42; }
+.claim q { quotes:none; display:block; font-size:34pt; font-weight:700;
+  line-height:1.02; color:#FFF; max-width:6.6in; text-transform:uppercase;
+  letter-spacing:-.005em; }
+.claim q em { font-style:normal; color:var(--blue); }
+.claim .sub { margin-top:12px; font-size:9.4pt; color:#9FB4C8; max-width:5.2in; }
+.steps { padding-top:34px; display:grid; grid-template-columns:repeat(3,1fr);
+  gap:16px; }
+.step { border-top:2px solid var(--blue); padding-top:11px; }
+.step .n { font-size:8pt; color:var(--blue); letter-spacing:.12em;
+  font-weight:600; }
+.step h4 { font-size:13pt; margin:4px 0 4px; color:#FFF; font-weight:600;
+  text-transform:uppercase; letter-spacing:.005em; }
+.step p { font-size:8.9pt; color:#A9BCCC; margin:0; line-height:1.45; }
 .roster { margin-top:28px; padding-top:15px;
-  border-top:1px solid rgba(255,255,255,.17); }
-.roster .lbl { font-size:7.6pt; letter-spacing:.15em; text-transform:uppercase;
-  color:#9C8B7C; font-family:"Bricolage Grotesque",sans-serif; font-weight:600; }
-.chips { margin-top:8px; }
-.chip { display:inline-block; font-size:8.6pt; color:#E4D7CA;
-  border:1px solid rgba(255,255,255,.22); border-radius:20px;
-  padding:2.5px 10px; margin:0 5px 5px 0;
-  font-family:"Bricolage Grotesque",sans-serif; }
+  border-top:1px solid rgba(255,255,255,.18); }
+.roster .lbl { font-size:7.6pt; letter-spacing:.16em; text-transform:uppercase;
+  color:#7E93A6; font-weight:600; }
+.chips { margin-top:9px; }
+.chip { display:inline-block; font-size:8.4pt; color:#DCE8F2;
+  border:1px solid rgba(255,255,255,.24); border-radius:20px;
+  padding:2.5px 11px; margin:0 5px 5px 0; font-weight:500; }
 .cover-foot { margin-top:20px; padding-top:13px;
-  border-top:1px solid rgba(255,255,255,.17); font-size:8.6pt;
-  color:#B7A697; }
+  border-top:1px solid rgba(255,255,255,.18); font-size:8.4pt;
+  color:#7E93A6; }
 
 /* ---------- structure ---------- */
 section { margin:0 0 20px; }
-.eyebrow { font-size:7.8pt; letter-spacing:.16em; text-transform:uppercase;
-  color:var(--accent-ink); font-weight:600; margin:0 0 5px; }
-h2 { font-size:17.5pt; letter-spacing:-.022em; margin:0 0 9px; font-weight:800;
-  line-height:1.14; }
-h3 { font-size:11.4pt; margin:16px 0 5px; font-weight:700; letter-spacing:-.01em; }
+/* Electric Blue is 3.4:1 on white and fails at body size, so every small blue
+   element on light uses Blue Deep. Blue itself is kept for the cover (5.1:1
+   on Court), rules and fills. */
+.eyebrow { font-size:7.8pt; letter-spacing:.17em; text-transform:uppercase;
+  color:var(--blue-deep); font-weight:600; margin:0 0 5px; }
+h2 { font-size:25pt; letter-spacing:-.003em; margin:0 0 9px; font-weight:700;
+  line-height:1.06; }
+h3 { font-size:14pt; margin:16px 0 5px; font-weight:600; line-height:1.15;
+  text-transform:uppercase; letter-spacing:.005em; }
 p { margin:0 0 8px; }
-.lead { font-size:11.6pt; line-height:1.5; color:var(--ink-soft); }
+.lead { font-size:11pt; line-height:1.5; color:var(--slate); }
 .lead strong { color:var(--ink); font-weight:600; }
-a { color:var(--accent-ink); }
+a { color:var(--blue-deep); }
 
 .two { display:grid; grid-template-columns:1fr 1fr; gap:17px; }
 .three { display:grid; grid-template-columns:repeat(3,1fr); gap:11px; }
 
-.card { background:var(--surface); border:1px solid var(--rule);
-  border-radius:10px; padding:13px 15px; }
-.card h4 { margin:0 0 5px; font-size:10pt; font-weight:700; }
-.card p { margin:0; font-size:9.3pt; color:var(--ink-soft); }
+.card { background:#FFF; border:1px solid var(--mist);
+  border-radius:var(--radius); padding:13px 15px; }
+.card h4 { margin:0 0 5px; font-size:12pt; font-weight:600;
+  text-transform:uppercase; }
+.card p { margin:0; font-size:9pt; color:var(--slate); }
 
-.panel { border-radius:11px; padding:15px 17px; }
-.panel.dark { background:#1D1815; color:#EFE8E1; }
+.panel { border-radius:var(--radius-lg); padding:16px 18px; }
+.panel.dark { background:var(--ink); color:#E8EFF6; }
 .panel.dark h3 { color:#FFF; margin-top:0; }
-.panel.dark p { color:#C4B7AB; }
-.panel.dark strong { color:#F3D9BE; font-weight:600; }
-.panel.go { background:var(--go-wash); border:1px solid #BFD6C9; }
-.panel.gold { background:var(--gold-wash); border:1px solid #DECDA8; }
-.panel.stop { background:var(--stop-wash); border:1px solid #E4C2B9; }
+.panel.dark p { color:#B4C4D2; }
+.panel.dark strong { color:var(--blue); font-weight:600; }
+.panel.gold { background:var(--caution-wash); border:1px solid #EBD5AE; }
 .panel h3 { margin-top:0; }
 .panel p:last-child { margin-bottom:0; }
 
-table { width:100%; border-collapse:collapse; font-size:8.9pt; }
+table { width:100%; border-collapse:collapse; font-size:8.7pt; }
 th { text-align:left; font-size:7.4pt; text-transform:uppercase;
-  letter-spacing:.085em; color:var(--ink-faint); font-weight:600;
-  padding:0 8px 5px 0; border-bottom:1.5px solid var(--rule-strong); }
-td { padding:6px 8px 6px 0; border-bottom:1px solid var(--rule);
+  letter-spacing:.09em; color:var(--slate); font-weight:600;
+  padding:0 8px 5px 0; border-bottom:1.5px solid var(--ink); }
+td { padding:6px 8px 6px 0; border-bottom:1px solid var(--mist);
   vertical-align:top; }
-/* A drill's description must not be cut in half by a page break. */
 tr { break-inside:avoid; }
 thead { display:table-header-group; }
-td.name { font-weight:600; font-family:"Bricolage Grotesque",sans-serif;
-  white-space:nowrap; }
-td.desc { color:var(--ink-soft); }
-.metric { font-size:8pt; color:var(--accent-ink); white-space:nowrap; }
-tr.gen td.name { font-weight:500; color:var(--ink-soft); }
+td.name { font-weight:600; white-space:nowrap; }
+td.desc { color:var(--slate); }
+.metric { font-size:8pt; color:var(--blue-deep); white-space:nowrap;
+  font-weight:500; }
+tr.gen td.name { font-weight:400; color:var(--slate); }
 
-.pill { display:inline-block; font-size:7pt; font-weight:600; padding:1.5px 6px;
-  border-radius:20px; letter-spacing:.045em; text-transform:uppercase;
+.pill { display:inline-block; font-size:7pt; font-weight:600; padding:2px 7px;
+  border-radius:20px; letter-spacing:.05em; text-transform:uppercase;
   white-space:nowrap; }
-.p-power { background:var(--accent-wash); color:var(--accent-ink); }
-.p-quickness { background:var(--gold-wash); color:var(--gold); }
-.p-strength { background:#E7E2F0; color:#4A3E6B; }
+.p-power { background:var(--blue-wash); color:var(--blue-deep); }
+.p-quickness { background:var(--caution-wash); color:var(--caution); }
+.p-strength { background:var(--mist); color:var(--ink); }
 .p-endurance { background:var(--go-wash); color:var(--go); }
-.p-skill { background:var(--surface-sunk); color:var(--ink-soft); }
+.p-skill { background:#EEF1F5; color:var(--slate); }
 
-.pos { border-left:2.5px solid var(--accent); padding:2px 0 2px 11px;
+.pos { border-left:3px solid var(--blue); padding:2px 0 2px 12px;
   margin-bottom:11px; break-inside:avoid; }
-.pos h4 { margin:0 0 2px; font-size:10.2pt; font-weight:700;
-  font-family:"Bricolage Grotesque",sans-serif; }
-.pos .focus { font-size:9.2pt; color:var(--ink-soft); margin:0 0 4px; }
-.pos .top { font-size:8pt; color:var(--ink-faint);
-  font-family:"IBM Plex Mono",monospace; }
+.pos h4 { margin:0 0 2px; font-size:13pt; font-weight:600;
+  text-transform:uppercase; }
+.pos .focus { font-size:9.1pt; color:var(--slate); margin:0 0 4px; }
+.pos .top { font-size:8pt; color:var(--slate); font-weight:500; }
 
 ul { margin:0 0 8px; padding-left:17px; }
 li { margin-bottom:4px; }
 .check { list-style:none; padding-left:0; }
 .check li { padding-left:19px; position:relative; }
-.check li::before { content:""; position:absolute; left:2px; top:.44em;
+.check li::before { content:""; position:absolute; left:2px; top:.42em;
   width:8px; height:8px; border-radius:2px; background:var(--go); }
 .cross li::before { background:var(--stop); }
 
-.rule { height:1px; background:var(--rule); margin:17px 0; border:0; }
+.rule { height:1px; background:var(--mist); margin:17px 0; border:0; }
 .break { break-before:page; }
 .avoid { break-inside:avoid; }
-footer { margin-top:20px; padding-top:9px; border-top:1px solid var(--rule);
-  font-size:7.9pt; color:var(--ink-faint); display:flex;
+footer { margin-top:20px; padding-top:9px; border-top:1px solid var(--mist);
+  font-size:7.9pt; color:var(--slate); display:flex;
   justify-content:space-between; }
 """
 

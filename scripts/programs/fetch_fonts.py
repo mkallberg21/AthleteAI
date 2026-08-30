@@ -13,10 +13,13 @@ HERE = pathlib.Path(__file__).parent
 OUT = HERE / "fonts-inline.css"
 CA = "/root/.ccr/ca-bundle.crt"
 
+# The three families named in the brand guidelines. Barlow Condensed carries
+# headings and KPI numbers, Inter carries body and UI, JetBrains Mono is
+# restricted to claim codes and athlete identifiers.
 FAMILIES = [
-    "Bricolage+Grotesque:wght@400;600;800",
-    "Source+Serif+4:ital,wght@0,400;0,600;1,400",
-    "IBM+Plex+Mono:wght@400;500",
+    "Barlow+Condensed:wght@500;600;700",
+    "Inter:ital,wght@0,400;0,500;0,600;0,700;1,400",
+    "JetBrains+Mono:wght@400;500",
 ]
 # A browser UA, because the Google Fonts CSS API serves woff2 only to browsers
 # it recognises and a legacy TTF payload to everything else.

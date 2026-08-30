@@ -1,0 +1,29 @@
+/* OffDays design tokens */
+:root {
+  --od-blue:        #008BFD;  /* primary: logo, CTAs, active, progress */
+  --od-blue-deep:   #0063C4;  /* hover/pressed; links at body size on light */
+  --od-blue-wash:   #E6F3FF;  /* selected rows, info banners, chart fills */
+
+  --od-ink:         #0B1B2B;  /* primary text on light; logo on light bg */
+  --od-slate:       #4A5A6B;  /* secondary text, labels, axes */
+  --od-mist:        #E4E9EF;  /* borders, dividers, disabled */
+  --od-paper:       #F7F9FC;  /* app background, light */
+  --od-court:       #0A0A0B;  /* app background, dark */
+
+  --od-go:          #12A150;  /* counted, cleared, on track */
+  --od-caution:     #C77700;  /* load advisory, held for review */
+  --od-stop:        #C6362C;  /* rejected session, injury escalation */
+
+  --od-font-head:   "Barlow Condensed", system-ui, sans-serif;
+  --od-font-body:   "Inter", system-ui, -apple-system, sans-serif;
+  --od-font-mono:   "JetBrains Mono", ui-monospace, monospace;
+
+  --od-radius:      10px;
+  --od-radius-lg:   16px;
+}
+
+/* Counters must not shift width as they tick. */
+.od-numeral { font-variant-numeric: tabular-nums; }
+
+/* Blue is 3.4:1 on white — large text and UI only. */
+a { color: var(--od-blue-deep); }

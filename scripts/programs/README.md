@@ -14,12 +14,42 @@ read out of `offdays/` by `extract.py`. Nothing is typed twice, so a document
 cannot claim a drill the product does not have. The only hand-written content
 is the per-sport prose in `sportcopy.py` and the template in `build.py`.
 
-## The logo
+## Brand
 
-Drop `logo.svg` (or `.png`, `.jpg`, `.webp`) into this directory and rebuild.
-It replaces the wordmark on every cover, at 46px tall, with no other change.
-If no file is present the build falls back to the `0FFDAYS` wordmark and says
-so in its output.
+`brandkit/` is the supplied OffDays kit and is the source of truth. The build
+reads three things out of it and nothing is duplicated by hand:
+
+* the primary lockup, transparent-on-dark, for the cover
+* the colour tokens from `tokens.css`
+* the typefaces named in the guidelines — Barlow Condensed, Inter, JetBrains
+  Mono — fetched by `fetch_fonts.py`
+
+If `brandkit/` is missing the build falls back to a text wordmark and says so
+in its output, so a fallback can never ship unnoticed.
+
+### Rules being honoured, and where
+
+| Rule | How |
+|---|---|
+| Print minimum 1.25in wide | Cover runs the lockup at 1.9in (688dpi, inside the 1307px native raster) |
+| Clear space ≥ the mark's height | 0.44in required; cover padding is 0.6–0.8in with a 0.5in gutter to the meta block |
+| No recolour, stretch, skew or rotation | `width` set, `height:auto`, no transforms or filters |
+| Full-colour lockup off mid-tone/busy grounds | Cover is flat Court with a masked gradient; the on-dark transparent asset is used |
+| Electric Blue fails at body size on light | Small blue text on light uses Blue Deep. Electric Blue appears on light only as rules, fills and pills; on Ink it is used for text, where it reaches 5.1:1 |
+| Tabular figures on counts | Scoped to the stat tiles, plan percentages and table figures |
+| JetBrains Mono for codes and IDs only | Declared as `.code`, used nowhere in these documents |
+
+**Do not set `font-variant-numeric: tabular-nums` on `body`.** Inter's `tnum`
+feature also swaps the hyphen for a tabular-width minus, which puts a visible
+gap inside every hyphenated word — "off-hand" and "hi-vis" came out spaced
+across all sixteen documents before this was caught.
+
+### Known limitation, from the kit's own guidelines
+
+The lockup is a raster derived from an AI-generated image and does not scale
+past 1307px. At the cover's 1.9in that is 688dpi and fine. Anything larger —
+a banner, signage, a cover at full-bleed — needs the vector redraw the
+guidelines call for.
 
 ## Why the fonts are inlined
 
