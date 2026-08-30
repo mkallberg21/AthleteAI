@@ -363,11 +363,19 @@ class TestEverySportsOwnDrillIsReachable:
     100% general fitness for every sport except lacrosse.
     """
 
-    #: Lacrosse patterns that are deliberately choosable but not prescribed:
-    #: strong-hand-only duplicates what an athlete does by default, and
-    #: behind-the-back is a trick before it is a skill. Listed rather than
-    #: inferred, so a genuinely stranded drill still fails below.
-    ON_THE_MENU_ONLY = {"lax_wall_ball_strong", "lax_wall_ball_btb"}
+    #: Nothing is choosable-but-unprescribed any more.
+    #:
+    #: This held the two lacrosse wall-ball patterns for a while, on the
+    #: reasoning that strong-hand-only duplicates what an athlete does by
+    #: default and behind-the-back is a trick before it is a skill. Both are
+    #: now in plans. The strong hand is the baseline the off-hand comparison
+    #: is measured against, and prescribing the comparison without the
+    #: baseline was the odd half of that; behind the back is hand control for
+    #: the two positions whose job is hands.
+    #:
+    #: Kept as a set rather than deleted, so the next drill that wants this
+    #: exemption has to be named and argued for rather than quietly added.
+    ON_THE_MENU_ONLY: set[str] = set()
 
     def test_no_sport_drill_is_stranded(self):
         stranded = {
@@ -376,6 +384,25 @@ class TestEverySportsOwnDrillIsReachable:
             and not any(d.key in p.emphasis for p in ALL_POSITIONS)
         }
         assert stranded == self.ON_THE_MENU_ONLY, stranded
+
+    def test_the_strong_hand_is_prescribed_wherever_the_off_hand_is(self):
+        """A comparison needs the thing it compares against.
+
+        Every lacrosse plan asks for off-hand wall ball and is scored on
+        left/right balance. Prescribing the harder half without the baseline
+        left the athlete to infer the other one.
+        """
+        for pos in (p for p in ALL_POSITIONS if p.sport == "lacrosse"):
+            if pos.emphasis.get("lax_wall_ball_offhand"):
+                assert pos.emphasis.get("lax_wall_ball_strong"), pos.key
+
+    def test_the_dominant_hand_never_outweighs_the_weak_one(self):
+        """The off-hand work exists to correct an imbalance, so adding an
+        explicit strong-hand pattern must not out-prescribe it."""
+        for pos in (p for p in ALL_POSITIONS if p.sport == "lacrosse"):
+            strong = pos.emphasis.get("lax_wall_ball_strong", 0)
+            weak = pos.emphasis.get("lax_wall_ball_offhand", 0)
+            assert strong <= weak, f"{pos.key}: strong {strong} > off {weak}"
 
     def test_every_sport_with_a_drill_prescribes_it_somewhere(self):
         sports = {d.sport for d in ALL_DRILLS if d.sport != "general"}

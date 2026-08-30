@@ -104,6 +104,20 @@ def mix(**weights: float) -> dict[str, float]:
 # 0.97 and nobody notices. The ratios are unchanged; the weights below are the
 # old percentages.
 LACROSSE: tuple[Position, ...] = (
+    # Two lacrosse drills sat in the catalog for a long time without being in
+    # any position's plan: the strong-hand wall ball and the behind-the-back
+    # one. They were reachable if an athlete went looking and invisible if
+    # they did not, which is a strange half-existence for a drill.
+    #
+    # The strong hand is now in every plan, because it is the baseline the
+    # off-hand comparison is measured against and prescribing the comparison
+    # without the baseline was always the odd part. Behind the back is in
+    # attack and midfield only -- it is hand control for the positions whose
+    # job is hands, and a defender has better uses for the time.
+    #
+    # The weight came out of the generic wall ball in each plan, which is the
+    # drill the strong hand is a more specific version of, so no plan trains
+    # less stick work than it did.
     Position(
         key="attack", label="Attack", sport="lacrosse", group="offense",
         aliases=("attack", "attackman", "attackmen", "attacker", "att", "a",
@@ -119,10 +133,11 @@ LACROSSE: tuple[Position, ...] = (
         # change of direction before it is anything, which is why the high
         # knees are here rather than only the jumps.
         emphasis=mix(
-            lax_ground_ball=16, lax_wall_ball=13, lax_wall_ball_offhand=13,
-            lax_wall_ball_split=11, lax_quick_stick=11, gen_lateral_bound=9,
+            lax_ground_ball=16, lax_wall_ball_offhand=13, lax_quick_stick=10,
+            lax_wall_ball_split=9, gen_lateral_bound=9, lax_wall_ball=8,
             lax_wall_ball_one_hand=6, gen_high_knees=6, gen_squat=5,
-            gen_squat_jump=4, gen_plank=3, gen_push_up=3,
+            lax_wall_ball_strong=5, gen_squat_jump=4, gen_plank=3,
+            gen_push_up=3, lax_wall_ball_btb=3,
         ),
         plural_label="attackers",
         focus="Hands and tight-space quickness. Most of your time is stick work.",
@@ -132,10 +147,11 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("midfield", "midfielder", "midfielders", "middie", "middy",
                  "mid", "mids", "m", "mf", "midi"),
         emphasis=mix(
-            lax_ground_ball=16, lax_wall_ball=14, lax_wall_ball_offhand=11,
-            lax_wall_ball_split=9, gen_high_knees=9, lax_wall_ball_cross=7,
-            gen_squat_jump=7, gen_lateral_bound=6, gen_squat=6,
-            lax_quick_stick=5, gen_burpee=5, gen_plank=3, gen_push_up=2,
+            lax_ground_ball=16, lax_wall_ball_offhand=11, gen_high_knees=9,
+            lax_wall_ball=9, lax_wall_ball_split=8, gen_squat_jump=7,
+            lax_wall_ball_cross=6, gen_lateral_bound=6, gen_squat=6,
+            lax_quick_stick=5, gen_burpee=5, lax_wall_ball_strong=5,
+            gen_plank=3, gen_push_up=2, lax_wall_ball_btb=2,
         ),
         plural_label="midfielders",
         focus="You cover more ground than anyone. Stick work plus an engine.",
@@ -146,10 +162,10 @@ LACROSSE: tuple[Position, ...] = (
                  "defencemen", "defensemen", "d", "def", "close d",
                  "close defense", "close defence", "pole", "dpole", "d pole"),
         emphasis=mix(
-            gen_lateral_bound=16, lax_ground_ball=16, lax_wall_ball=12,
+            gen_lateral_bound=16, lax_ground_ball=16,
             lax_wall_ball_offhand=12, gen_squat=12, gen_high_knees=8,
-            lax_wall_ball_one_hand=6, gen_push_up=6, gen_plank=6,
-            gen_pull_up=6,
+            lax_wall_ball=7, lax_wall_ball_one_hand=6, gen_push_up=6,
+            gen_plank=6, gen_pull_up=6, lax_wall_ball_strong=5,
         ),
         plural_label="defenders",
         focus="Footwork and strength first, but a defender still needs hands.",
@@ -161,10 +177,11 @@ LACROSSE: tuple[Position, ...] = (
                  "long pole midfield", "d mid", "dmid", "d midfield",
                  "defensive midfield", "defensive midfielder"),
         emphasis=mix(
-            gen_lateral_bound=16, lax_ground_ball=16, lax_wall_ball=13,
+            gen_lateral_bound=16, lax_ground_ball=16,
             lax_wall_ball_offhand=10, gen_high_knees=10, gen_squat=10,
-            gen_burpee=8, gen_squat_jump=7, lax_wall_ball_one_hand=5,
-            gen_plank=3, gen_push_up=2,
+            lax_wall_ball=9, gen_burpee=8, gen_squat_jump=7,
+            lax_wall_ball_one_hand=5, lax_wall_ball_strong=4, gen_plank=3,
+            gen_push_up=2,
         ),
         plural_label="long-stick midfielders",
         focus="A defender's job at a midfielder's pace. Ground balls and legs.",
@@ -178,8 +195,8 @@ LACROSSE: tuple[Position, ...] = (
         emphasis=mix(
             lax_faceoff_clamp=26, lax_ground_ball=16, lax_quick_stick=10,
             gen_squat_jump=8, lax_wall_ball_one_hand=7, gen_high_knees=6,
-            lax_wall_ball=6, gen_pull_up=5, gen_plank=5,
-            lax_wall_ball_offhand=4, gen_push_up=3,
+            gen_pull_up=5, gen_plank=5, lax_wall_ball_offhand=4,
+            lax_wall_ball=3, lax_wall_ball_strong=3, gen_push_up=3,
             gen_burpee=2, gen_lateral_bound=2,
         ),
         plural_label="face-off specialists",
@@ -204,10 +221,11 @@ LACROSSE: tuple[Position, ...] = (
         # the hands are anything, and this plan had jumps in it but nothing
         # that asked a foot to leave the floor quickly.
         emphasis=mix(
-            lax_goalie_saves=23, lax_ground_ball=16, lax_quick_stick=12,
+            lax_goalie_saves=23, lax_ground_ball=16, lax_quick_stick=10,
             gen_lateral_bound=10, lax_wall_ball_offhand=8, gen_pogo=6,
-            lax_wall_ball=6, gen_plank=5, lax_wall_ball_one_hand=5,
-            gen_squat_jump=4, gen_squat=3, gen_push_up=2,
+            gen_plank=5, lax_wall_ball_one_hand=5, lax_wall_ball=4,
+            lax_wall_ball_strong=4, gen_squat_jump=4, gen_squat=3,
+            gen_push_up=2,
         ),
         plural_label="goalies",
         focus="Both hands, reactions and a hard first step sideways.",
