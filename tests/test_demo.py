@@ -119,6 +119,41 @@ def test_no_pose_was_lost_from_the_shared_library():
         "raise this deliberately when adding one, never to make a loss pass")
 
 
+def test_lacrosse_has_an_answer_for_every_drill():
+    """The sport the product started with, and the first implement sport."""
+    lax = [d.key for d in ALL_DRILLS if d.sport == "lacrosse"]
+    stranded = sorted(k for k in lax
+                      if k not in demo.DEMOS and k not in demo.NEEDS_FILM)
+    assert not stranded, f"lacrosse drills with no answer: {stranded}"
+
+
+def test_a_stick_sport_actually_draws_a_stick():
+    """A lacrosse figure without one is a person standing near a wall."""
+    for key in (k for k in demo.DEMOS if k.startswith("lax_")):
+        for i, frame in enumerate(demo.DEMOS[key].frames):
+            assert "stick_butt" in frame, f"{key} frame {i} has no stick"
+
+
+def test_drills_that_share_a_picture_do_not_share_a_caption():
+    """Sharing frames is allowed -- wall ball and its hand-order variants are
+    genuinely the same shape. Sharing the words as well would leave an athlete
+    with no way to tell which drill they had opened."""
+    seen: dict[tuple, str] = {}
+    for key, spec in demo.DEMOS.items():
+        signature = tuple(tuple(sorted(f.items())) for f in spec.frames)
+        if signature in seen:
+            assert spec.caption != demo.DEMOS[seen[signature]].caption, (
+                f"{key} and {seen[signature]} share frames and caption")
+        else:
+            seen[signature] = key
+
+
+def test_an_optional_joint_is_never_half_placed():
+    for key, spec in demo.DEMOS.items():
+        for frame in spec.frames:
+            assert ("stick_butt" in frame) == ("stick_head" in frame), key
+
+
 @pytest.mark.parametrize("sport", ["gymnastics", "cheer", "dance"])
 def test_conditioning_sports_have_an_answer_for_every_drill(sport):
     """The sports that lean entirely on the shared library.
