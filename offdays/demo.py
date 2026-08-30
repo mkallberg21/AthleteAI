@@ -667,6 +667,160 @@ DEMOS: dict[str, Demo] = {
                   stick_butt=(64, 50), stick_head=(70, 28)),
         ),
     ),
+    "bkb_dribble": Demo(
+        caption='Bounce the ball at about waist height, pushing it down rather than patting it. Every bounce counts, either hand.',
+        frames=(
+            _pose(head=(52, 20), neck=(52, 31), hip=(53, 56),
+                  elbow_near=(60, 44), wrist_near=(66, 56),
+                  elbow_far=(47, 44), wrist_far=(46, 57),
+                  knee_near=(51, 73), ankle_near=(51, 90), toe_near=(57, 90),
+                  knee_far=(55, 73), ankle_far=(55, 90), toe_far=(61, 90),
+                  ball=(67, 80)),
+            _pose(head=(52, 20), neck=(52, 31), hip=(53, 56),
+                  elbow_near=(60, 44), wrist_near=(66, 56),
+                  elbow_far=(47, 44), wrist_far=(46, 57),
+                  knee_near=(51, 73), ankle_near=(51, 90), toe_near=(57, 90),
+                  knee_far=(55, 73), ankle_far=(55, 90), toe_far=(61, 90),
+                  ball=(67, 64)),
+        ),
+    ),
+    "bkb_pound_low": Demo(
+        caption='Wide base, chest up, ball below your knee. Drive it into the floor as hard and as fast as you can keep it.',
+        view="front",
+        frames=(
+            _pose(head=(50, 20), neck=(50, 31), hip=(50, 54),
+                  elbow_near=(60, 44), wrist_near=(64, 60),
+                  elbow_far=(40, 44), wrist_far=(36, 58),
+                  knee_near=(36, 68), ankle_near=(30, 90), toe_near=(25, 90),
+                  knee_far=(64, 68), ankle_far=(70, 90), toe_far=(75, 90),
+                  ball=(66, 78)),
+            _pose(head=(50, 20), neck=(50, 31), hip=(50, 54),
+                  elbow_near=(60, 44), wrist_near=(64, 60),
+                  elbow_far=(40, 44), wrist_far=(36, 58),
+                  knee_near=(36, 68), ankle_near=(30, 90), toe_near=(25, 90),
+                  knee_far=(64, 68), ankle_far=(70, 90), toe_far=(75, 90),
+                  ball=(66, 66)),
+        ),
+    ),
+    "bkb_pound_weak": Demo(
+        caption='The same hard low pound, on your weaker hand only. The other hand stays off the ball entirely.',
+        view="front",
+        frames=(
+            _pose(head=(50, 20), neck=(50, 31), hip=(50, 54),
+                  elbow_near=(60, 44), wrist_near=(64, 60),
+                  elbow_far=(36, 40), wrist_far=(26, 36),
+                  knee_near=(36, 68), ankle_near=(30, 90), toe_near=(25, 90),
+                  knee_far=(64, 68), ankle_far=(70, 90), toe_far=(75, 90),
+                  ball=(66, 78)),
+            _pose(head=(50, 20), neck=(50, 31), hip=(50, 54),
+                  elbow_near=(60, 44), wrist_near=(64, 60),
+                  elbow_far=(36, 40), wrist_far=(26, 36),
+                  knee_near=(36, 68), ankle_near=(30, 90), toe_near=(25, 90),
+                  knee_far=(64, 68), ankle_far=(70, 90), toe_far=(75, 90),
+                  ball=(66, 66)),
+        ),
+    ),
+    "bkb_crossover": Demo(
+        caption='Stay low and push the ball hard from one hand to the other, in front of you and below your knees.',
+        view="front",
+        frames=(
+            _pose(head=(50, 16), neck=(50, 27), hip=(50, 52),
+                  elbow_near=(60, 44), wrist_near=(65, 62),
+                  elbow_far=(40, 42), wrist_far=(37, 56),
+                  knee_near=(42, 68), ankle_near=(38, 90), toe_near=(33, 90),
+                  knee_far=(58, 68), ankle_far=(62, 90), toe_far=(67, 90),
+                  ball=(66, 74)),
+            _pose(head=(50, 16), neck=(50, 27), hip=(50, 52),
+                  elbow_near=(40, 44), wrist_near=(35, 62),
+                  elbow_far=(60, 42), wrist_far=(63, 56),
+                  knee_near=(42, 68), ankle_near=(38, 90), toe_near=(33, 90),
+                  knee_far=(58, 68), ankle_far=(62, 90), toe_far=(67, 90),
+                  ball=(34, 74)),
+        ),
+    ),
+    "bkb_between_legs": Demo(
+        caption='The same change of hands, but the ball goes through your legs as your foot steps forward — not while you are standing still.',
+        view="front",
+        frames=(
+            _pose(head=(50, 16), neck=(50, 27), hip=(50, 52),
+                  elbow_near=(60, 40), wrist_near=(64, 60),
+                  elbow_far=(40, 42), wrist_far=(44, 62),
+                  knee_near=(40, 66), ankle_near=(34, 90), toe_near=(29, 90),
+                  knee_far=(60, 66), ankle_far=(66, 90), toe_far=(71, 90),
+                  ball=(66, 74)),
+            _pose(head=(50, 16), neck=(50, 27), hip=(50, 52),
+                  elbow_near=(58, 42), wrist_near=(54, 62),
+                  elbow_far=(40, 42), wrist_far=(44, 62),
+                  knee_near=(40, 66), ankle_near=(34, 90), toe_near=(29, 90),
+                  knee_far=(60, 66), ankle_far=(66, 90), toe_far=(71, 90),
+                  ball=(50, 78)),
+        ),
+    ),
+    "bkb_wall_pass": Demo(
+        caption='Two metres off a solid wall. Step into a two-hand chest pass and catch it clean coming back.',
+        scenery='wall',
+        frames=(
+            _pose(head=(54, 22), neck=(52, 32), hip=(54, 56),
+                  elbow_near=(44, 38), wrist_near=(42, 44),
+                  elbow_far=(45, 39), wrist_far=(43, 45),
+                  knee_near=(52, 72), ankle_near=(52, 90), toe_near=(46, 90),
+                  knee_far=(56, 72), ankle_far=(56, 90), toe_far=(50, 90),
+                  ball=(40, 42)),
+            _pose(head=(52, 22), neck=(50, 32), hip=(54, 56),
+                  elbow_near=(38, 34), wrist_near=(28, 32),
+                  elbow_far=(39, 35), wrist_far=(29, 33),
+                  knee_near=(50, 72), ankle_near=(51, 90), toe_near=(45, 90),
+                  knee_far=(56, 72), ankle_far=(57, 90), toe_far=(51, 90),
+                  ball=(16, 30)),
+        ),
+    ),
+    "bkb_stance": Demo(
+        caption='Feet wide, chest up, hands out, and your hips genuinely down. Hold it — standing up stops the clock.',
+        view="front",
+        mirror=False,
+        seconds=4.0,
+        frames=(
+            _pose(head=(50, 22), neck=(50, 33), hip=(50, 56),
+                  elbow_near=(36, 44), wrist_near=(28, 52),
+                  elbow_far=(64, 44), wrist_far=(72, 52),
+                  knee_near=(36, 68), ankle_near=(30, 90), toe_near=(25, 90),
+                  knee_far=(64, 68), ankle_far=(70, 90), toe_far=(75, 90),),
+        ),
+    ),
+    "bkb_slide": Demo(
+        caption='From your stance, push off the back foot and step out with the front, then slide the back foot in. One push is one rep.',
+        view="front",
+        frames=(
+            _pose(head=(44, 22), neck=(44, 33), hip=(45, 56),
+                  elbow_near=(32, 44), wrist_near=(25, 50),
+                  elbow_far=(58, 44), wrist_far=(65, 50),
+                  knee_near=(33, 68), ankle_near=(28, 90), toe_near=(23, 90),
+                  knee_far=(58, 68), ankle_far=(64, 90), toe_far=(69, 90),),
+            _pose(head=(56, 22), neck=(56, 33), hip=(55, 56),
+                  elbow_near=(68, 44), wrist_near=(75, 50),
+                  elbow_far=(42, 44), wrist_far=(35, 50),
+                  knee_near=(67, 68), ankle_near=(72, 90), toe_near=(77, 90),
+                  knee_far=(42, 68), ankle_far=(36, 90), toe_far=(31, 90),),
+        ),
+    ),
+    "bkb_form_shot": Demo(
+        caption='One hand under the ball, elbow in. Dip, rise, release, and hold the follow-through until the ball lands.',
+        view="front",
+        frames=(
+            _pose(head=(44, 18), neck=(45, 29), hip=(47, 54),
+                  elbow_near=(58, 45), wrist_near=(58, 33),
+                  elbow_far=(37, 43), wrist_far=(48, 32),
+                  knee_near=(45, 70), ankle_near=(43, 90), toe_near=(38, 90),
+                  knee_far=(51, 70), ankle_far=(53, 90), toe_far=(58, 90),
+                  ball=(59, 25)),
+            _pose(head=(44, 18), neck=(45, 29), hip=(47, 54),
+                  elbow_near=(59, 31), wrist_near=(61, 18),
+                  elbow_far=(37, 45), wrist_far=(44, 39),
+                  knee_near=(45, 70), ankle_near=(43, 90), toe_near=(38, 90),
+                  knee_far=(51, 70), ankle_far=(53, 90), toe_far=(58, 90),
+                  ball=(63, 7)),
+                ),
+    ),
 }
 
 #: Drills a drawn figure cannot teach, and why. Kept as data next to the
@@ -687,6 +841,11 @@ NEEDS_FILM: dict[str, str] = {
 DRILLS_BY_KEY = {d.key: d for d in ALL_DRILLS}
 
 
+#: No demonstration cycles faster than this, however fast the drill is. Below
+#: it the figure is a blur and teaches nothing.
+MIN_LEGIBLE_SECONDS = 1.2
+
+
 def seconds_for(drill_key: str) -> float:
     """One cycle, at the tempo the scorer actually rewards.
 
@@ -703,9 +862,15 @@ def seconds_for(drill_key: str) -> float:
         return demo.seconds
     drill = DRILLS_BY_KEY[drill_key]
     if drill.quality is None:
-        # No scored tempo band to borrow, so fall back to the refractory
-        # window, which at least cannot be faster than a countable rep.
-        return max(1.2, drill.counter.min_rep_ms * 1.5 / 1000)
+        # Some drills have no scored tempo band to borrow -- the ball-contact
+        # ones, where the app counts bounces and does not grade form, so there
+        # is nothing to fit a band to. The refractory window stands in.
+        #
+        # The 1.2s floor is a legibility decision, not a clamp that happened.
+        # A dribble is countable at 140ms and drawn at that speed it is a
+        # blur; a demonstration is a diagram of a movement, not a recording of
+        # one, and the caption carries the fact that it should be fast.
+        return max(MIN_LEGIBLE_SECONDS, drill.counter.min_rep_ms * 1.5 / 1000)
     return (drill.quality.tempo_min_ms + drill.quality.tempo_max_ms) // 2 / 1000
 
 

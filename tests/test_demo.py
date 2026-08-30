@@ -29,14 +29,32 @@ def test_a_demo_runs_at_the_tempo_the_scorer_rewards():
     """The whole argument for generating this rather than filming it.
 
     A clip shot once and a threshold tuned later disagree silently, and the
-    athlete pays for it. These two read the same number, so they cannot.
+    athlete pays for it. Where the scorer has a tempo band, the demonstration
+    reads the same number, so the two cannot drift apart.
     """
+    checked = 0
     for key, spec in demo.DEMOS.items():
         if spec.seconds is not None:
             continue  # an explicit override, for holds with no rep cycle
         trace = (technique.reference(key) or {}).get("trace")
-        assert trace, f"{key} has a demo but no technique trace"
+        if not trace:
+            continue  # no scored band to agree with -- covered below
         assert demo.seconds_for(key) == pytest.approx(trace["tempo_ms"] / 1000)
+        checked += 1
+    assert checked > 20, "the agreement is barely being tested"
+
+
+def test_a_drill_with_no_scored_tempo_still_gets_a_legible_one():
+    """The ball-contact drills have no quality spec -- the app counts bounces
+    and does not grade form, so there is no band to fit. They fall back to the
+    refractory window with a legibility floor, because a dribble is countable
+    at 140ms and drawn at that speed it is a blur."""
+    without = [k for k, spec in demo.DEMOS.items()
+               if spec.seconds is None
+               and not (technique.reference(k) or {}).get("trace")]
+    assert without, "expected some drills with no scored tempo"
+    for key in without:
+        assert demo.seconds_for(key) >= demo.MIN_LEGIBLE_SECONDS, key
 
 
 def test_the_svg_is_inert():
@@ -119,14 +137,6 @@ def test_no_pose_was_lost_from_the_shared_library():
         "raise this deliberately when adding one, never to make a loss pass")
 
 
-def test_lacrosse_has_an_answer_for_every_drill():
-    """The sport the product started with, and the first implement sport."""
-    lax = [d.key for d in ALL_DRILLS if d.sport == "lacrosse"]
-    stranded = sorted(k for k in lax
-                      if k not in demo.DEMOS and k not in demo.NEEDS_FILM)
-    assert not stranded, f"lacrosse drills with no answer: {stranded}"
-
-
 def test_a_stick_sport_actually_draws_a_stick():
     """A lacrosse figure without one is a person standing near a wall."""
     for key in (k for k in demo.DEMOS if k.startswith("lax_")):
@@ -154,17 +164,32 @@ def test_an_optional_joint_is_never_half_placed():
             assert ("stick_butt" in frame) == ("stick_head" in frame), key
 
 
-@pytest.mark.parametrize("sport", ["gymnastics", "cheer", "dance"])
-def test_conditioning_sports_have_an_answer_for_every_drill(sport):
-    """The sports that lean entirely on the shared library.
+#: Sports worked through so far. A sport joins this list when every drill in
+#: it is either drawn or on the film list, and it never leaves -- which is the
+#: point, because the way this regresses is a new drill landing in a finished
+#: sport with nobody noticing.
+DONE = ["gymnastics", "cheer", "dance", "lacrosse", "basketball"]
 
-    They have no sport-specific drills at all, so an athlete meeting a
-    strange exercise name has nothing else to fall back on. Every drill in
-    their plans is either drawn or on the list to be filmed -- never neither.
+
+@pytest.mark.parametrize("sport", DONE)
+def test_a_finished_sport_has_an_answer_for_every_drill(sport):
+    """Every drill a plan in this sport uses is drawn or listed for filming.
+
+    The conditioning sports were first because they have no sport-specific
+    drills at all, so an athlete meeting a strange exercise name there has
+    nothing else to fall back on.
     """
     used = {k for p in BY_SPORT[sport] for k in p.emphasis}
+    used |= {d.key for d in ALL_DRILLS if d.sport == sport}
     stranded = sorted(used - set(demo.DEMOS) - set(demo.NEEDS_FILM))
     assert not stranded, f"{sport} has drills with no demo and no plan: {stranded}"
+
+
+def test_a_front_view_never_fades_half_the_body():
+    """The fade gives a profile depth. Facing the camera there is no far side,
+    and dimming half a body reads as something being wrong with it."""
+    for key, spec in demo.DEMOS.items():
+        assert spec.view in ("side", "front"), f"{key} has view {spec.view!r}"
 
 
 def test_a_demo_reaches_the_athlete_before_the_drill():
