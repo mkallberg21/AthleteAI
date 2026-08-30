@@ -137,6 +137,12 @@ def test_no_pose_was_lost_from_the_shared_library():
         "raise this deliberately when adding one, never to make a loss pass")
 
 
+def test_the_whole_catalog_is_drawn_but_for_a_named_few():
+    """A count, so a silent loss fails instead of shrinking quietly."""
+    assert len(demo.DEMOS) == 85
+    assert len(demo.NEEDS_FILM) == 4
+
+
 def test_a_stick_sport_actually_draws_a_stick():
     """A lacrosse figure without one is a person standing near a wall."""
     for key in (k for k in demo.DEMOS if k.startswith("lax_")):
@@ -168,7 +174,11 @@ def test_an_optional_joint_is_never_half_placed():
 #: it is either drawn or on the film list, and it never leaves -- which is the
 #: point, because the way this regresses is a new drill landing in a finished
 #: sport with nobody noticing.
-DONE = ["gymnastics", "cheer", "dance", "lacrosse", "basketball"]
+#: Every sport with position plans. A sport joins when all its drills are
+#: drawn or on the film list and never leaves -- the way this regresses is a
+#: new drill landing in a finished sport with nobody noticing. The shared
+#: library is not here because it has its own test above.
+DONE = sorted(BY_SPORT)
 
 
 @pytest.mark.parametrize("sport", DONE)
@@ -183,6 +193,29 @@ def test_a_finished_sport_has_an_answer_for_every_drill(sport):
     used |= {d.key for d in ALL_DRILLS if d.sport == sport}
     stranded = sorted(used - set(demo.DEMOS) - set(demo.NEEDS_FILM))
     assert not stranded, f"{sport} has drills with no demo and no plan: {stranded}"
+
+
+def test_a_rep_drill_moves_and_a_hold_does_not():
+    """The shape of a demo has to match the shape of the drill.
+
+    A drill counted in reps drawn as a single frame is a still photograph of
+    an exercise, which teaches the position and not the movement -- dryland
+    pulls shipped that way for exactly as long as it took to render them. A
+    hold drawn with two frames teaches the opposite lie.
+    """
+    metric = {d.key: d.metric.name for d in ALL_DRILLS}
+    for key, spec in demo.DEMOS.items():
+        if metric[key] == "HOLD_SECONDS":
+            assert len(spec.frames) == 1, f"{key} is a hold but animates"
+        else:
+            assert len(spec.frames) > 1, f"{key} is counted in reps but is a still"
+
+
+def test_every_drill_in_the_product_is_accounted_for():
+    """The finish line. Every drill is drawn or named for filming."""
+    stranded = sorted(d.key for d in ALL_DRILLS
+                      if d.key not in demo.DEMOS and d.key not in demo.NEEDS_FILM)
+    assert not stranded, f"{len(stranded)} drills with no answer: {stranded}"
 
 
 def test_a_front_view_never_fades_half_the_body():
