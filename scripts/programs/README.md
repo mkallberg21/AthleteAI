@@ -9,6 +9,12 @@ python3 extract.py          # reads the shipped catalog -> sports.json
 python3 build.py            # sports.json + prose -> out/*.pdf
 ```
 
+The movement figures in the drill tables come from `offdays/demo.py` at build
+time — the same drawings the app shows an athlete before a drill, rendered as
+a filmstrip because a page cannot animate. A drill on the film list shows "on
+film" instead, so the gap is visible in the document rather than only in the
+code.
+
 Every count, percentage, drill name, position and colour in these documents is
 read out of `offdays/` by `extract.py`. Nothing is typed twice, so a document
 cannot claim a drill the product does not have. The only hand-written content

@@ -212,6 +212,25 @@ def _contrast(a: str, b: str) -> float:
 GROUNDS = ("#0B1B2B", "#FFFFFF")
 
 
+def test_a_filmstrip_holds_still_and_shows_every_frame():
+    """Print cannot animate. A single frame of a squat is a photograph of
+    somebody standing up, so the page gets the keyframes in a row instead."""
+    for key, spec in demo.DEMOS.items():
+        strip = demo.filmstrip(key)
+        assert "<animate" not in strip, f"{key}'s strip animates"
+        assert "<script" not in strip
+        width = int(re.search(r'viewBox="0 0 (\d+) 100"', strip).group(1))
+        assert width == 100 * len(spec.frames), key
+
+
+def test_both_renderings_share_one_palette():
+    """Two copies of the palette is how the stick came to be a colour that
+    vanished against the ground it was shown on."""
+    for key in ("hoc_shot", "gen_squat", "fb_kick"):
+        assert demo.STYLE in demo.svg(key)
+        assert demo.STYLE in demo.filmstrip(key)
+
+
 def test_the_equipment_is_visible_on_both_grounds():
     """The stick was the brand ink until that met the app's dark surface,
     where ink on ink is 1.0:1 and a hockey player was holding nothing."""

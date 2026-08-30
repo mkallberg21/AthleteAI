@@ -10,6 +10,9 @@ the shipped catalog. Nothing here is typed by hand except the prose.
 """
 import base64, html, json, pathlib, subprocess, sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+from offdays import demo as demo_mod  # noqa: E402
+
 HERE = pathlib.Path(__file__).parent
 CHROME = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
 _FONT_FILE = HERE / "fonts-inline.css"
@@ -213,6 +216,19 @@ td.desc { color:var(--slate); }
   font-weight:500; }
 tr.gen td.name { font-weight:400; color:var(--slate); }
 
+/* The movement itself, as keyframes. Sized so a two-frame strip is about an
+   inch across -- big enough that a knee bend is legible, small enough that
+   the description beside it is still the widest thing in the row. */
+td.figcell { padding-right:10px; }
+.fig { line-height:0; }
+.fig svg { width:100%; height:auto; display:block; }
+.fig.f1 svg { max-width:0.60in; }
+.fig.f2 svg { max-width:1.20in; }
+.fig.f3 svg { max-width:1.48in; }
+.fig.f4 svg { max-width:1.66in; }
+.fig.none { font-size:7.4pt; color:var(--slate); font-style:italic;
+  line-height:1.3; }
+
 .pill { display:inline-block; font-size:7pt; font-weight:600; padding:2px 7px;
   border-radius:20px; letter-spacing:.05em; text-transform:uppercase;
   white-space:nowrap; }
@@ -263,9 +279,19 @@ def drill_rows(rows, general=False):
         cls = ' class="gen"' if general else ""
         ball = ""
         if r["uses_ball"]:
-            ball = f' <span class="metric">· ball</span>'
+            ball = ' <span class="metric">· ball</span>'
+        # The keyframes, inline. A page cannot animate, so the strip does the
+        # work the loop does on a phone: a single frame of a squat is a
+        # photograph of somebody standing up.
+        if demo_mod.has_demo(r["key"]):
+            n = len(demo_mod.DEMOS[r["key"]].frames)
+            fig = (f'<div class="fig f{min(n, 4)}">'
+                   f'{demo_mod.filmstrip(r["key"])}</div>')
+        else:
+            fig = '<div class="fig none">on film</div>'
         out.append(
-            f'<tr{cls}><td class="name">{e(r["name"])}</td>'
+            f'<tr{cls}><td class="figcell">{fig}</td>'
+            f'<td class="name">{e(r["name"])}</td>'
             f'<td><span class="pill p-{r["stimulus"].lower()}">{e(r["stimulus"])}</span></td>'
             f'<td class="metric">{e(r["metric"])}{ball}</td>'
             f'<td class="desc">{e(r["description"])}</td></tr>')
@@ -344,8 +370,9 @@ def page(data, copy, logo, has_logo):
                 f'guessing.')
         skill_table = (
             '<table style="margin-top:11px"><thead><tr>'
-            '<th style="width:23%">Drill</th><th style="width:12%">Trains</th>'
-            '<th style="width:16%">Counted as</th><th>What it is</th>'
+            '<th style="width:16%">Movement</th><th style="width:18%">Drill</th>'
+            '<th style="width:11%">Trains</th>'
+            '<th style="width:14%">Counted as</th><th>What it is</th>'
             f'</tr></thead><tbody>{drill_rows(own)}</tbody></table>')
         athletic_heading = "From the shared athleticism library"
     else:
@@ -469,8 +496,8 @@ def page(data, copy, logo, has_logo):
   of explosive work — the thing that makes an athlete faster rather than just
   better at their sport.</p>
   <table>
-    <thead><tr><th style="width:23%">Drill</th><th style="width:12%">Trains</th>
-    <th style="width:16%">Counted as</th><th>What it is</th></tr></thead>
+    <thead><tr><th style="width:16%">Movement</th><th style="width:18%">Drill</th><th style="width:11%">Trains</th>
+    <th style="width:14%">Counted as</th><th>What it is</th></tr></thead>
     <tbody>{drill_rows(gen, True)}</tbody>
   </table>
   <p style="margin-top:11px;font-size:9pt">Across every {e(label.lower())}

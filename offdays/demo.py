@@ -159,6 +159,10 @@ class Demo:
     view: str = "side"
     #: Play the frames forward then back, which is what a rep does.
     mirror: bool = True
+
+    #: Set from the drill's sport when the catalog is loaded. A football is
+    #: oblong in every drill it appears in, so this is not a per-pose choice.
+    oval_ball: bool = False
     #: Seconds for one cycle. Filled from the drill's own tempo when absent.
     seconds: float | None = None
 
@@ -1635,6 +1639,11 @@ NEEDS_FILM: dict[str, str] = {
 
 DRILLS_BY_KEY = {d.key: d for d in ALL_DRILLS}
 
+# Stamp the ball shape onto each demo from its drill's sport, once, here.
+for _key, _spec in DEMOS.items():
+    if _key in DRILLS_BY_KEY and DRILLS_BY_KEY[_key].sport in OVAL_BALL_SPORTS:
+        object.__setattr__(_spec, "oval_ball", True)
+
 
 #: No demonstration cycles faster than this, however fast the drill is. Below
 #: it the figure is a blur and teaches nothing.
@@ -1686,6 +1695,71 @@ SCENERY = {
            '<line x1="4" y1="90" x2="96" y2="90" class="ground"/>',
     "none": "",
 }
+
+
+#: The drawing's palette. Shared by the animated and the printed rendering,
+#: because two copies is how the stick came to be a colour that vanished on
+#: the ground it was actually shown against.
+STYLE = (
+    ".fig{fill:none;stroke:#008BFD;stroke-width:3.4;stroke-linecap:round;"
+    "stroke-linejoin:round}"
+    ".head{fill:#008BFD}"
+    ".ground{stroke:#4A5A6B;stroke-width:1.4;stroke-linecap:round;opacity:.55}"
+    # The stick is drawn heavier than a limb and in a neutral: it is
+    # equipment, not part of the athlete, and a figure whose stick is the same
+    # weight and colour as its arms reads as having three arms.
+    #
+    # This grey sits at about 4:1 against both grounds the demonstration
+    # appears on. It was the brand ink until that was rendered on the app's
+    # own dark surface, where ink on ink is 1.0:1 and a hockey player was
+    # holding nothing at all.
+    ".stick{fill:none;stroke:#6E7C8C;stroke-width:2.6;stroke-linecap:round}"
+    ".ball{stroke:#7E8B99;stroke-width:0.8}"
+)
+
+
+def _still(demo: Demo, frame: dict[str, tuple[float, float]], fill: str) -> str:
+    """One frame, drawn without any animation."""
+    parts = [SCENERY.get(demo.scenery, "")]
+    for chain in CHAINS:
+        far = demo.view == "side" and any(j.endswith("_far") for j in chain)
+        fade = ' opacity=".42"' if far else ""
+        parts.append(f'<polyline class="fig"{fade} '
+                     f'points="{_points(frame, chain)}"/>')
+    if "stick_butt" in frame:
+        b, h = frame["stick_butt"], frame["stick_head"]
+        parts.append(f'<polyline class="stick" points="{b[0]:.1f},{b[1]:.1f} '
+                     f'{h[0]:.1f},{h[1]:.1f}"/>')
+    if "ball" in frame:
+        bx, by = frame["ball"]
+        if demo.oval_ball:
+            parts.append(f'<ellipse class="ball" cx="{bx:.1f}" cy="{by:.1f}" '
+                         f'rx="4.3" ry="2.5" fill="{fill}" '
+                         f'transform="rotate(-28 {bx:.1f} {by:.1f})"/>')
+        else:
+            parts.append(f'<circle class="ball" cx="{bx:.1f}" cy="{by:.1f}" '
+                         f'r="2.6" fill="{fill}"/>')
+    hx, hy = frame["head"]
+    parts.append(f'<circle class="head" cx="{hx:.1f}" cy="{hy:.1f}" r="5.6"/>')
+    return "".join(parts)
+
+
+def filmstrip(drill_key: str) -> str:
+    """The demonstration's keyframes side by side, for print.
+
+    A page cannot animate, and a single frame of a squat is a photograph of
+    somebody standing up. The keyframes in order say what the movement is, so
+    anywhere the drawing has to hold still it holds still as a strip.
+    """
+    demo = DEMOS[drill_key]
+    fill = ball_fill(drill_key) if any("ball" in f for f in demo.frames) else ""
+    n = len(demo.frames)
+    panels = "".join(
+        f'<g transform="translate({i * 100},0)">{_still(demo, f, fill)}</g>'
+        for i, f in enumerate(demo.frames))
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {n * 100} 100" '
+            f'role="img" aria-label="{demo.caption.replace(chr(34), "")}">'
+            f"<style>{STYLE}</style>{panels}</svg>")
 
 
 def svg(drill_key: str) -> str:
@@ -1755,7 +1829,7 @@ def svg(drill_key: str) -> str:
     if all("ball" in f for f in frames):
         b0 = frames[0]["ball"]
         fill = ball_fill(drill_key)
-        if DRILLS_BY_KEY[drill_key].sport in OVAL_BALL_SPORTS:
+        if demo.oval_ball:
             # An oblong ball is translated as a group rather than moved by its
             # own centre, so the tilt stays put instead of swinging the ball
             # around a fixed point as it travels.
