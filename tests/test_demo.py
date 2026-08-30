@@ -1,0 +1,83 @@
+"""The animated movement demonstrations.
+
+Unwired by design -- see the module docstring. These tests hold the parts that
+are settled, so the mechanism does not rot while the poses are being decided.
+"""
+import re
+
+import pytest
+
+from offdays import demo, technique
+from offdays.drills import ALL_DRILLS
+
+
+def test_every_pose_places_every_joint():
+    for key, spec in demo.DEMOS.items():
+        for i, frame in enumerate(spec.frames):
+            missing = [j for j in demo.JOINTS if j not in frame]
+            assert not missing, f"{key} frame {i} is missing {missing}"
+
+
+def test_every_chain_only_names_real_joints():
+    for chain in demo.CHAINS:
+        for joint in chain:
+            assert joint in demo.JOINTS, joint
+
+
+def test_a_demo_runs_at_the_tempo_the_scorer_rewards():
+    """The whole argument for generating this rather than filming it.
+
+    A clip shot once and a threshold tuned later disagree silently, and the
+    athlete pays for it. These two read the same number, so they cannot.
+    """
+    for key, spec in demo.DEMOS.items():
+        if spec.seconds is not None:
+            continue  # an explicit override, for holds with no rep cycle
+        trace = (technique.reference(key) or {}).get("trace")
+        assert trace, f"{key} has a demo but no technique trace"
+        assert demo.seconds_for(key) == pytest.approx(trace["tempo_ms"] / 1000)
+
+
+def test_the_svg_is_inert():
+    """It is served to children and may be inlined, so it carries no script."""
+    for key in demo.DEMOS:
+        svg = demo.svg(key)
+        assert svg.startswith("<svg") and svg.endswith("</svg>")
+        assert "<script" not in svg.lower()
+        assert "onload" not in svg.lower()
+        # The xmlns is a namespace identifier, not something fetched. Any
+        # other URL would be: an external reference in an offline drill view.
+        rest = svg.replace('xmlns="http://www.w3.org/2000/svg"', "")
+        assert "http" not in rest, key
+
+
+def test_a_demo_is_small_enough_to_inline():
+    # The point of SVG over video. If one of these ever approaches a clip's
+    # weight the argument for generating it has gone.
+    for key in demo.DEMOS:
+        assert len(demo.svg(key)) < 8_000, key
+
+
+def test_every_demo_names_a_real_drill():
+    keys = {d.key for d in ALL_DRILLS}
+    for key in demo.DEMOS:
+        assert key in keys, key
+
+
+def test_a_mirrored_demo_returns_to_where_it_started():
+    """A rep ends where it began, or the loop jumps."""
+    for key, spec in demo.DEMOS.items():
+        if not (spec.mirror and len(spec.frames) > 1):
+            continue
+        values = re.search(r'values="([^"]+)"', demo.svg(key)).group(1)
+        frames = values.split(";")
+        assert frames[0] == frames[-1], key
+
+
+def test_coverage_reports_the_gap_rather_than_hiding_it():
+    got = demo.coverage()
+    assert got["drills"] == len(ALL_DRILLS)
+    assert got["with_demo"] + len(got["without_demo"]) == got["drills"]
+    # This is a prototype. The day it claims full coverage, wire it in.
+    assert got["with_demo"] < got["drills"], (
+        "every drill now has a demo -- time to wire it into capture")
