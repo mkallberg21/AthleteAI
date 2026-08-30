@@ -92,6 +92,34 @@ CHAINS: tuple[tuple[str, ...], ...] = (
     ("hip", "knee_near", "ankle_near", "toe_near"),
 )
 
+#: What the ball looks like, keyed to the colour presets the detector uses,
+#: so the drawing and the thing that finds the ball at least agree about which
+#: colour they are talking about. These are display values for a diagram, not
+#: the detector's centroids -- those live in ballvision.js in chroma, which is
+#: not a thing you can fill an SVG with.
+BALL_FILL: dict[str, str] = {
+    "white": "#F2F5F8",
+    "yellow": "#F0CE3A",
+    "orange": "#F07A1E",
+    "optic": "#D8E63C",
+    "lime": "#B6E82C",
+    "basketball": "#E0822C",
+    # The panelled competition ball. Drawn as its primary white, because a
+    # three-colour ball three millimetres across is a muddy dot.
+    "volleyball": "#F2F5F8",
+}
+
+#: Sports the detector never looks for a ball in, so there is no preset to
+#: borrow. Named rather than defaulted: a black puck drawn orange is the kind
+#: of wrong a child notices immediately and an adult never does.
+BALL_FILL_BY_SPORT: dict[str, str] = {
+    "hockey": "#2B3038",    # a puck
+    "football": "#8B5A2B",
+    "rugby": "#F2F5F8",
+    "softball": "#D8E63C",
+    "baseball": "#F2F5F8",
+}
+
 #: Sports whose ball is not round. Taken from the drill's sport rather than
 #: set per pose, because a football is oblong in every drill it appears in and
 #: a per-pose flag is a per-pose chance to forget.
@@ -1684,11 +1712,16 @@ def svg(drill_key: str) -> str:
         ".head{fill:#008BFD}"
         ".ground{stroke:#4A5A6B;stroke-width:1.4;stroke-linecap:round;"
         "opacity:.55}"
-        # The stick is drawn heavier than a limb and in the ink colour: it is
+        # The stick is drawn heavier than a limb and in a neutral: it is
         # equipment, not part of the athlete, and a figure whose stick is the
-        # same weight as its arms reads as having three arms.
-        ".stick{fill:none;stroke:#0B1B2B;stroke-width:2.6;stroke-linecap:round}"
-        ".ball{fill:#F0A64A}"
+        # same weight and colour as its arms reads as having three arms.
+        #
+        # This grey is chosen to sit at about 4:1 against both grounds the
+        # demonstration appears on. It was the brand ink until that was
+        # rendered on the app's own dark surface, where ink on ink is 1.0:1
+        # and a hockey player was holding nothing at all.
+        ".stick{fill:none;stroke:#6E7C8C;stroke-width:2.6;stroke-linecap:round}"
+        ".ball{stroke:#7E8B99;stroke-width:0.8}"
         "</style>",
         SCENERY.get(demo.scenery, ""),
     ]
@@ -1721,6 +1754,7 @@ def svg(drill_key: str) -> str:
 
     if all("ball" in f for f in frames):
         b0 = frames[0]["ball"]
+        fill = ball_fill(drill_key)
         if DRILLS_BY_KEY[drill_key].sport in OVAL_BALL_SPORTS:
             # An oblong ball is translated as a group rather than moved by its
             # own centre, so the tilt stays put instead of swinging the ball
@@ -1732,12 +1766,13 @@ def svg(drill_key: str) -> str:
                 f'<animateTransform attributeName="transform" type="translate" '
                 f'dur="{dur}" repeatCount="indefinite" values="{path}"/>'
                 f'<ellipse class="ball" cx="0" cy="0" rx="4.3" ry="2.5" '
-                f'transform="rotate(-28)"/></g>')
+                f'fill="{fill}" transform="rotate(-28)"/></g>')
         else:
             bx = ";".join(f"{f['ball'][0]:.1f}" for f in frames)
             by = ";".join(f"{f['ball'][1]:.1f}" for f in frames)
             parts.append(
-                f'<circle class="ball" cx="{b0[0]:.1f}" cy="{b0[1]:.1f}" r="2.6">'
+                f'<circle class="ball" cx="{b0[0]:.1f}" cy="{b0[1]:.1f}" '
+                f'r="2.6" fill="{fill}">'
                 f'<animate attributeName="cx" dur="{dur}" '
                 f'repeatCount="indefinite" values="{bx}"/>'
                 f'<animate attributeName="cy" dur="{dur}" '
@@ -1754,6 +1789,18 @@ def svg(drill_key: str) -> str:
         f'values="{cy}"/></circle>')
     parts.append("</svg>")
     return "".join(parts)
+
+
+def ball_fill(drill_key: str) -> str:
+    """The colour to draw this drill's ball.
+
+    From the drill's own ball spec where it has one, so a soccer ball is white
+    and a tennis ball is optic without either being typed twice.
+    """
+    drill = DRILLS_BY_KEY[drill_key]
+    if drill.ball is not None:
+        return BALL_FILL[drill.ball.colour]
+    return BALL_FILL_BY_SPORT[drill.sport]
 
 
 def has_demo(drill_key: str) -> bool:

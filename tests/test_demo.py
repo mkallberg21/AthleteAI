@@ -195,6 +195,58 @@ def test_a_finished_sport_has_an_answer_for_every_drill(sport):
     assert not stranded, f"{sport} has drills with no demo and no plan: {stranded}"
 
 
+def _contrast(a: str, b: str) -> float:
+    def lum(h):
+        h = h.lstrip("#")
+        ch = []
+        for i in (0, 2, 4):
+            v = int(h[i:i + 2], 16) / 255
+            ch.append(v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+    la, lb = lum(a), lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+#: The two grounds a demonstration is seen on: the app's dark card, and a
+#: white page for anything printed or reviewed.
+GROUNDS = ("#0B1B2B", "#FFFFFF")
+
+
+def test_the_equipment_is_visible_on_both_grounds():
+    """The stick was the brand ink until that met the app's dark surface,
+    where ink on ink is 1.0:1 and a hockey player was holding nothing."""
+    stroke = re.search(r"\.stick\{[^}]*stroke:(#[0-9A-Fa-f]{6})",
+                       demo.svg("hoc_shot")).group(1)
+    for ground in GROUNDS:
+        assert _contrast(stroke, ground) >= 3.0, (
+            f"the stick is {_contrast(stroke, ground):.2f}:1 on {ground}")
+
+
+def test_every_ball_is_visible_on_both_grounds():
+    """A white ball needs an edge on a pale page and a puck needs one on the
+    dark card. One outline serves both, and it has to actually serve both."""
+    outline = re.search(r"\.ball\{[^}]*stroke:(#[0-9A-Fa-f]{6})",
+                        demo.svg("hoc_shot")).group(1)
+    for key in demo.DEMOS:
+        drill = demo.DRILLS_BY_KEY[key]
+        if not all("ball" in f for f in demo.DEMOS[key].frames):
+            continue
+        fill = demo.ball_fill(key)
+        for ground in GROUNDS:
+            assert max(_contrast(fill, ground), _contrast(outline, ground)) >= 3.0, (
+                f"{key}'s ball disappears on {ground}")
+
+
+def test_every_ball_colour_a_drill_names_has_a_fill():
+    """A new preset added to the catalog must not fall through to a default."""
+    for drill in ALL_DRILLS:
+        if drill.ball is None or drill.key not in demo.DEMOS:
+            continue
+        assert drill.ball.colour in demo.BALL_FILL, drill.ball.colour
+    for sport in demo.BALL_FILL_BY_SPORT:
+        assert sport in {d.sport for d in ALL_DRILLS}, sport
+
+
 def test_an_oblong_ball_is_drawn_oblong():
     """A football and a rugby ball are not round, and a diagram that says they
     are is teaching something false about the only object in the picture."""
