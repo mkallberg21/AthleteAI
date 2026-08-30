@@ -91,7 +91,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 python -m pytest tests/ -q          # 3807 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 259 tests
+  node --test tests/js/*.test.mjs   # 261 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -1728,17 +1728,23 @@ are already in the table, so it inherits their separation rather than
 introducing a looser centroid by the back door — there is a test for that.
 
 The same change exposed a real bug in calibration. "Show the app your ball"
-averages the sample into one centroid, and the average of blue, yellow and
+averaged the sample into one centroid, and the average of blue, yellow and
 white is a muddy olive matching no part of the ball and a fair amount of the
 floor. Calibration *locks*, so that confident wrong answer would have replaced
-a working preset for the rest of the session. Calibration now measures how far
-the sample's pixels sit from their own mean and refuses when it is more than
-one colour, telling the athlete that nothing is wrong and the preset already
-handles it. Chroma, not brightness, is what is measured — so a ball half in
-shadow still reads as one colour, and so does a black-and-white football, since
-black and white sit on the same chroma point and differ only in luma. The worst
-legitimate case is a basketball's black seams at 0.016 against a threshold of
-0.05; a tri-colour volleyball reads 0.14.
+a working preset for the rest of the session.
+
+Calibration now fits the **dominant** colour in the sample and refuses only
+when no colour covers enough of it to find the ball by — the same 45% as the
+fill gate, for the same reason. Clustering is in chroma, so a ball half in
+shadow is one colour rather than two, and a black-and-white football is too,
+since black and white sit on the same chroma point and differ only in luma.
+
+The first version of that rule measured how *varied* the sample was, and
+basketball proved it wrong. A two-tone Molten ball is about a third cream, so
+it read as multi-coloured and was refused — even though the basketball preset
+finds that ball perfectly and the other two thirds is a perfectly good orange
+to calibrate on. "Is there one colour big enough to work with" and "is this
+sample varied" are different questions, and only the first one is useful.
 
 **What each sport looks for.** Soccer adds hi-vis yellow and orange for the
 winter balls, and the yellow centroid also reaches the fluorescent yellow-green
@@ -1746,6 +1752,15 @@ a modern match ball is often sold in. Baseball gets a deliberately short list �
 white, plus optic for safety and machine-pitch balls — because a baseball
 really is almost always white, and padding that list to match the others would
 be inventing variety the sport does not have.
+
+**Basketball is left alone, and that is a finding rather than an omission.**
+The two-tone balls that actually exist — the Molten FIBA ball, the two-tone
+Wilson — are orange-dominant, and measured against the detector they are found
+at the same radius as a plain ball. The cream panels get no preset and must
+never get one: that colour sits 0.005 from sand, 0.02 from pale wood and 0.05
+from a hardwood court, which is to say it is the floor. It would be the
+worst-separated entry in the table by a wide margin, added to fix a ball that
+already works. A test asserts nothing in the table matches those surfaces.
 
 **It flies ballistically**, which the tracker already checks.
 

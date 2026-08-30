@@ -13,7 +13,7 @@ import {
   BallVision, PRESETS, BALLS, calibrate, matchPixel, radiusFromPose,
   workSize, ScaleMemory, WORK_PIXELS,
   BALL_TO_TORSO, TORSO_CM, RADIUS_TOLERANCE, isBright,
-  sampleColour, MAX_SAMPLE_DEVIATION,
+  sampleColour, MIN_SAMPLE_SHARE,
 } from '../../offdays/web/static/ballvision.js';
 import { LANDMARK_INDEX } from '../../offdays/web/static/ball.js';
 
@@ -639,17 +639,40 @@ test('every ball drill leads with its most selective colour', () => {
   }
 });
 
-test('calibration refuses a ball that is more than one colour', () => {
+test('calibration refuses a ball with no colour big enough to find it by', () => {
   // Averaging a panelled ball gives a centroid matching no part of it, and
   // calibration locks -- so a confident wrong answer here would permanently
   // replace a preset that works. Refusing sends the caller back to the preset.
   const WHITE = [248, 250, 246], BLUE = [30, 70, 160], YELLOW = [245, 215, 40];
-  const frame = panelledFrame({
-    x: 96, y: 54, r: 40, panels: [WHITE, BLUE, YELLOW],
-  });
+  const frame = panelledFrame({ x: 96, y: 54, r: 40, panels: [WHITE, BLUE, YELLOW] });
   const box = { x: 66, y: 24, w: 60, h: 60 };
-  assert.ok(sampleColour(frame, box).deviation > MAX_SAMPLE_DEVIATION);
+  assert.ok(sampleColour(frame, box).share < MIN_SAMPLE_SHARE);
   assert.equal(calibrate(frame, box), null);
+});
+
+test('calibration fits the dominant colour and ignores the rest', () => {
+  // The case that caught the first version of this rule. A two-tone Molten
+  // basketball is about a third cream, which read as "more than one colour"
+  // and was refused -- even though the basketball preset finds that ball
+  // perfectly and two thirds of it is a perfectly good orange to fit.
+  //
+  // Cream is not, and must never be, a colour anything matches: it sits 0.005
+  // from sand and 0.02 from pale wood. So the answer is to fit the orange.
+  const ORANGE = [222, 118, 40], CREAM = [226, 206, 164];
+  const box = { x: 66, y: 24, w: 60, h: 60 };
+  const frame = panelledFrame({
+    x: 96, y: 54, r: 40, panels: [ORANGE, ORANGE, CREAM, ORANGE, ORANGE, CREAM],
+  });
+  const sample = sampleColour(frame, box);
+  assert.ok(sample.share > MIN_SAMPLE_SHARE, `share was ${sample.share}`);
+  const profile = calibrate(frame, box);
+  assert.ok(profile, 'a two-tone basketball was refused');
+  assert.equal(profile.kind, 'chroma');
+  // It must land on the orange, not somewhere between orange and cream.
+  const total = ORANGE[0] + ORANGE[1] + ORANGE[2];
+  assert.ok(Math.hypot(profile.nr - ORANGE[0] / total,
+                       profile.ng - ORANGE[1] / total) < 0.01,
+    `fitted (${profile.nr}, ${profile.ng}), not the orange`);
 });
 
 test('calibration still accepts the balls that are one colour', () => {
@@ -658,8 +681,8 @@ test('calibration still accepts the balls that are one colour', () => {
   // against, so the test reports how close each one runs.
   const box = { x: 66, y: 24, w: 60, h: 60 };
   const cases = {
-    // Chroma, not brightness, is what is measured -- so a ball half in shadow
-    // reads as one colour, and so does a black-and-white football, because
+    // Chroma, not brightness, is what is clustered -- so a ball half in
+    // shadow is one colour, and so is a black-and-white football, because
     // black and white sit on the same point and differ only in luma.
     'plain white': [[248, 250, 246]],
     'white in patchy sun': [[248, 250, 246], [150, 152, 148]],
@@ -672,17 +695,34 @@ test('calibration still accepts the balls that are one colour', () => {
   };
   for (const [name, panels] of Object.entries(cases)) {
     const frame = panelledFrame({ x: 96, y: 54, r: 40, panels });
-    const { deviation } = sampleColour(frame, box);
-    assert.ok(deviation < MAX_SAMPLE_DEVIATION,
-      `${name} read as multi-coloured at ${deviation.toFixed(4)}`);
+    const { share } = sampleColour(frame, box);
+    assert.ok(share >= MIN_SAMPLE_SHARE,
+      `${name} read as multi-coloured at ${(share * 100).toFixed(0)}%`);
     assert.ok(calibrate(frame, box), `${name} was refused`);
   }
 });
 
-test('an empty sample and a mixed one are different answers', () => {
+test('no preset matches a gym floor, sand, or a cream ball panel', () => {
+  // A deliberate absence, recorded so it is not undone by accident. The
+  // two-tone basketball's cream panels have no preset and must not get one:
+  // that colour is 0.005 from sand, 0.02 from pale wood and 0.05 from a
+  // hardwood court -- the surfaces the sport is played on. The orange two
+  // thirds is what finds that ball, and it is enough.
+  const surfaces = [
+    [226, 206, 164], [200, 180, 140], [205, 175, 135], [190, 150, 100],
+  ];
+  for (const [name, profile] of Object.entries(PRESETS)) {
+    for (const surface of surfaces) {
+      assert.equal(matchPixel(...surface, profile), 0,
+        `${name} matched ${surface}`);
+    }
+  }
+});
+
+test('an empty sample and a refused one are different answers', () => {
   // The banner says different things for these, so they must be tellable
-  // apart: no pixels at all is null from sampleColour, a mixed ball is a
-  // sample with a high deviation.
+  // apart: no pixels at all is null, a ball with no dominant colour is a
+  // sample with a low share.
   const frame = panelledFrame({ x: 96, y: 54, r: 7, panels: [[248, 250, 246]] });
   assert.equal(sampleColour(frame, { x: 10, y: 10, w: 0, h: 0 }), null);
   assert.ok(sampleColour(frame, { x: 80, y: 40, w: 30, h: 30 }));

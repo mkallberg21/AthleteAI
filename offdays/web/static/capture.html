@@ -340,7 +340,7 @@
 import { api, esc, fmtDate, getToken, logout } from './api.js';
 import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
 import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
-         sampleColour, MAX_SAMPLE_DEVIATION }
+         sampleColour, MIN_SAMPLE_SHARE }
   from './ballvision.js';
 import { RepCounter } from './counter.js';
 import { cueAt, cueCount, label as cueLabel, sequence as cueSequenceFor } from './cues.js';
@@ -1563,7 +1563,7 @@ async function calibrateBall() {
       // the athlete: an empty box means point the camera at the ball, and a
       // panelled ball means there is nothing to do and nothing is wrong.
       const sample = sampleColour(image, box);
-      setBanner(sample && sample.deviation > MAX_SAMPLE_DEVIATION
+      setBanner(sample && sample.share < MIN_SAMPLE_SHARE
         ? 'That ball is more than one colour. The preset already handles it.'
         : 'Could not see it. The preset will do.', true);
     }

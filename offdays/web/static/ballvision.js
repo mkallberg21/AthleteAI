@@ -245,17 +245,32 @@ export function matchPixel(r, g, b, profile) {
  * the yellow in a rulebook.
  */
 /**
- * Above this mean chroma deviation a sample is more than one colour, and
- * averaging it produces a centroid that matches none of it.
+ * A calibration sample must have one colour covering at least this much of it.
  *
- * A ball with seams, shading and a logo sits well under this -- a basketball's
- * black seams come to about 0.016, and a black-and-white football to almost
- * nothing, because black and white have the *same* chroma and differ only in
- * brightness. A blue, yellow and white volleyball comes to about 0.14.
+ * The same number as the fill gate, for the same reason: a colour covering
+ * less of the ball than that cannot be used to find the ball. What is
+ * measured is the *dominant* colour's share, not how varied the sample is --
+ * those give different answers on the balls that matter. A two-tone Molten
+ * basketball is a third cream, but two thirds of it is orange and orange is a
+ * perfectly good thing to calibrate on. A blue, yellow and white volleyball
+ * has no colour above a third and there is nothing to fit.
  */
-export const MAX_SAMPLE_DEVIATION = 0.05;
+export const MIN_SAMPLE_SHARE = 0.45;
 
-/** Mean colour of a box, and how far its pixels sit from that mean. */
+/** Chroma bin width used to find the dominant colour in a sample. */
+const SAMPLE_BIN = 0.03;
+
+/** How far from the peak a pixel may sit and still count as the same colour. */
+const SAMPLE_CLUSTER = 0.05;
+
+/**
+ * The dominant colour of a box, and how much of the box it covers.
+ *
+ * Clusters in chroma rather than RGB, so a ball half in shadow is one colour
+ * and not two. Black and white land on the same chroma point and separate
+ * only by brightness, which is why a black-and-white football reads as a
+ * single cluster and calibrates on its white.
+ */
 export function sampleColour(image, box) {
   const { data, width } = image;
   const x0 = Math.max(0, Math.floor(box.x));
@@ -263,34 +278,47 @@ export function sampleColour(image, box) {
   const x1 = Math.min(width, Math.ceil(box.x + box.w));
   const y1 = Math.min(image.height, Math.ceil(box.y + box.h));
 
-  let sr = 0, sg = 0, sb = 0, n = 0;
+  const bins = new Map();
+  let n = 0;
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
       const i = (y * width + x) * 4;
-      sr += data[i]; sg += data[i + 1]; sb += data[i + 2];
+      const total = data[i] + data[i + 1] + data[i + 2] || 1;
+      const nr = data[i] / total, ng = data[i + 1] / total;
+      const key = `${Math.round(nr / SAMPLE_BIN)},${Math.round(ng / SAMPLE_BIN)}`;
+      const bin = bins.get(key);
+      if (bin) { bin.nr += nr; bin.ng += ng; bin.n += 1; }
+      else bins.set(key, { nr, ng, n: 1 });
       n += 1;
     }
   }
   if (!n) return null;
 
-  const r = sr / n, g = sg / n, b = sb / n;
-  const sum = r + g + b || 1;
-  const nr = r / sum, ng = g / sum, nb = b / sum;
+  let peak = null;
+  for (const bin of bins.values()) if (!peak || bin.n > peak.n) peak = bin;
+  const cnr = peak.nr / peak.n, cng = peak.ng / peak.n;
 
-  // Second pass for the spread. Chroma rather than RGB, so that a ball half
-  // in shadow -- which is every ball outdoors -- does not read as two colours.
-  let deviation = 0;
+  // Second pass: average the pixels that belong to the dominant colour. The
+  // peak bin alone is too coarse and its edges land arbitrarily, so members
+  // are gathered by distance from its centre instead.
+  let sr = 0, sg = 0, sb = 0, members = 0;
   for (let y = y0; y < y1; y += 1) {
     for (let x = x0; x < x1; x += 1) {
       const i = (y * width + x) * 4;
       const total = data[i] + data[i + 1] + data[i + 2] || 1;
-      deviation += Math.hypot(data[i] / total - nr, data[i + 1] / total - ng);
+      if (Math.hypot(data[i] / total - cnr, data[i + 1] / total - cng)
+          > SAMPLE_CLUSTER) continue;
+      sr += data[i]; sg += data[i + 1]; sb += data[i + 2];
+      members += 1;
     }
   }
 
+  const r = sr / members, g = sg / members, b = sb / members;
+  const sum = r + g + b || 1;
+  const nr = r / sum, ng = g / sum, nb = b / sum;
   return {
     r, g, b, nr, ng, nb, n,
-    deviation: deviation / n,
+    share: members / n,
     spread: Math.max(nr, ng, nb) - Math.min(nr, ng, nb),
     luma: 0.299 * r + 0.587 * g + 0.114 * b,
   };
@@ -299,17 +327,22 @@ export function sampleColour(image, box) {
 /**
  * Build a profile from a sample of the athlete's actual ball.
  *
- * Returns null when the sample cannot honestly be reduced to one colour --
- * either the box was empty, or the ball is panelled. Averaging a panelled
- * ball is worse than useless: a blue, yellow and white volleyball averages to
- * a muddy olive that matches no part of the ball and plenty of the floor, and
- * calibration *locks*, so it would replace a preset that works with one that
- * never will. The caller falls back to the presets, which is the right answer.
+ * Fits the sample's *dominant* colour, and returns null when no colour covers
+ * enough of the sample to find the ball by. Averaging the whole box instead
+ * would be worse than useless on a panelled ball: blue, yellow and white
+ * average to a muddy olive matching no part of the ball and plenty of the
+ * floor, and calibration *locks*, so that would replace a working preset for
+ * the rest of the session.
+ *
+ * Fitting the dominant colour rather than refusing outright is what lets a
+ * two-tone basketball calibrate on its orange and ignore its cream -- which
+ * is exactly what the basketball preset already does, and the cream is not a
+ * colour anything may match, sitting 0.005 from sand and 0.02 from pale wood.
  */
 export function calibrate(image, box) {
   const sample = sampleColour(image, box);
   if (!sample) return null;
-  if (sample.deviation > MAX_SAMPLE_DEVIATION) return null;
+  if (sample.share < MIN_SAMPLE_SHARE) return null;
 
   // A ball with no colour to speak of is a white one, and gets the brightness
   // profile rather than a chroma centroid that would match every grey thing
