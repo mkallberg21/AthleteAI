@@ -1,0 +1,5 @@
+# Generated. fetch_fonts.py rebuilds the faces, extract.py the data, build.py
+# the documents -- none of it belongs in the history.
+fonts-inline.css
+sports.json
+out/
