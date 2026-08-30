@@ -208,6 +208,15 @@
         </div>
       </div>
 
+      <!-- What the exercise IS, before anything about how well it went.
+           Expanded by default and above the hint on purpose: the athlete who
+           needs this most is the one who has never heard of the drill, and
+           they will not go looking for it behind a summary. -->
+      <div id="demo" class="demo hidden">
+        <div class="demo-fig" id="demo-fig"></div>
+        <div class="demo-cap" id="demo-cap"></div>
+      </div>
+
       <div class="small muted" id="hint" style="margin-top:10px"></div>
 
       <!-- Diagnostics. Hidden unless ?debug=1, because an athlete should
@@ -2180,6 +2189,18 @@ async function loadTechnique(drillKey) {
     } else {
       $('technique-trace').classList.add('hidden');
       $('technique-scale').textContent = '';
+    }
+
+    const demo = $('demo');
+    if (ref.demo) {
+      // Inlined rather than an <img src>, so it paints with the rest of the
+      // page and needs no second request on a phone in a garden. The SVG
+      // carries no script -- there is a test asserting that.
+      $('demo-fig').innerHTML = ref.demo.svg;
+      $('demo-cap').textContent = ref.demo.caption;
+      demo.classList.remove('hidden');
+    } else {
+      demo.classList.add('hidden');
     }
 
     $('technique-cues').innerHTML = ref.cues

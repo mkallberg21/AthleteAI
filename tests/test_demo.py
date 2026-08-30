@@ -9,6 +9,7 @@ import pytest
 
 from offdays import demo, technique
 from offdays.drills import ALL_DRILLS
+from offdays.positions import BY_SPORT
 
 
 def test_every_pose_places_every_joint():
@@ -74,10 +75,45 @@ def test_a_mirrored_demo_returns_to_where_it_started():
         assert frames[0] == frames[-1], key
 
 
-def test_coverage_reports_the_gap_rather_than_hiding_it():
+def test_coverage_accounts_for_every_drill():
     got = demo.coverage()
     assert got["drills"] == len(ALL_DRILLS)
     assert got["with_demo"] + len(got["without_demo"]) == got["drills"]
-    # This is a prototype. The day it claims full coverage, wire it in.
-    assert got["with_demo"] < got["drills"], (
-        "every drill now has a demo -- time to wire it into capture")
+    assert len(got["needs_film"]) + len(got["undecided"]) == len(got["without_demo"])
+
+
+def test_a_drill_is_drawn_or_filmed_but_never_both():
+    """The two halves of the hybrid must not disagree about a drill."""
+    both = set(demo.DEMOS) & set(demo.NEEDS_FILM)
+    assert not both, both
+
+
+def test_the_film_backlog_says_why():
+    """A bare list of keys becomes noise nobody acts on."""
+    for key, reason in demo.NEEDS_FILM.items():
+        assert len(reason) > 40, f"{key}: {reason!r}"
+        assert key in {d.key for d in ALL_DRILLS}, key
+
+
+@pytest.mark.parametrize("sport", ["gymnastics", "cheer", "dance"])
+def test_conditioning_sports_have_an_answer_for_every_drill(sport):
+    """The sports that lean entirely on the shared library.
+
+    They have no sport-specific drills at all, so an athlete meeting a
+    strange exercise name has nothing else to fall back on. Every drill in
+    their plans is either drawn or on the list to be filmed -- never neither.
+    """
+    used = {k for p in BY_SPORT[sport] for k in p.emphasis}
+    stranded = sorted(used - set(demo.DEMOS) - set(demo.NEEDS_FILM))
+    assert not stranded, f"{sport} has drills with no demo and no plan: {stranded}"
+
+
+def test_a_demo_reaches_the_athlete_before_the_drill():
+    """It is served with the reference, not behind a second request.
+
+    The thing it answers -- what even is this exercise -- is needed before
+    anything else on that screen can be acted on.
+    """
+    for key in list(demo.DEMOS)[:3]:
+        ref = technique.reference(key)
+        assert ref, key
