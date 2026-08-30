@@ -92,6 +92,11 @@ CHAINS: tuple[tuple[str, ...], ...] = (
     ("hip", "knee_near", "ankle_near", "toe_near"),
 )
 
+#: Sports whose ball is not round. Taken from the drill's sport rather than
+#: set per pose, because a football is oblong in every drill it appears in and
+#: a per-pose flag is a per-pose chance to forget.
+OVAL_BALL_SPORTS: frozenset[str] = frozenset({"football", "rugby"})
+
 #: Joints a pose may place but need not. A stick is the difference between a
 #: figure doing something and a figure standing there, and for a sport played
 #: with one it carries more of the meaning than the body does. The ball is
@@ -1715,15 +1720,28 @@ def svg(drill_key: str) -> str:
             f'repeatCount="indefinite" values="{values}"/></polyline>')
 
     if all("ball" in f for f in frames):
-        bx = ";".join(f"{f['ball'][0]:.1f}" for f in frames)
-        by = ";".join(f"{f['ball'][1]:.1f}" for f in frames)
         b0 = frames[0]["ball"]
-        parts.append(
-            f'<circle class="ball" cx="{b0[0]:.1f}" cy="{b0[1]:.1f}" r="2.6">'
-            f'<animate attributeName="cx" dur="{dur}" '
-            f'repeatCount="indefinite" values="{bx}"/>'
-            f'<animate attributeName="cy" dur="{dur}" '
-            f'repeatCount="indefinite" values="{by}"/></circle>')
+        if DRILLS_BY_KEY[drill_key].sport in OVAL_BALL_SPORTS:
+            # An oblong ball is translated as a group rather than moved by its
+            # own centre, so the tilt stays put instead of swinging the ball
+            # around a fixed point as it travels.
+            path = ";".join(f"{f['ball'][0]:.1f},{f['ball'][1]:.1f}"
+                            for f in frames)
+            parts.append(
+                f'<g transform="translate({b0[0]:.1f},{b0[1]:.1f})">'
+                f'<animateTransform attributeName="transform" type="translate" '
+                f'dur="{dur}" repeatCount="indefinite" values="{path}"/>'
+                f'<ellipse class="ball" cx="0" cy="0" rx="4.3" ry="2.5" '
+                f'transform="rotate(-28)"/></g>')
+        else:
+            bx = ";".join(f"{f['ball'][0]:.1f}" for f in frames)
+            by = ";".join(f"{f['ball'][1]:.1f}" for f in frames)
+            parts.append(
+                f'<circle class="ball" cx="{b0[0]:.1f}" cy="{b0[1]:.1f}" r="2.6">'
+                f'<animate attributeName="cx" dur="{dur}" '
+                f'repeatCount="indefinite" values="{bx}"/>'
+                f'<animate attributeName="cy" dur="{dur}" '
+                f'repeatCount="indefinite" values="{by}"/></circle>')
 
     cx = ";".join(f"{f['head'][0]:.1f}" for f in frames)
     cy = ";".join(f"{f['head'][1]:.1f}" for f in frames)

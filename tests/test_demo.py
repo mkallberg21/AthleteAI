@@ -195,6 +195,26 @@ def test_a_finished_sport_has_an_answer_for_every_drill(sport):
     assert not stranded, f"{sport} has drills with no demo and no plan: {stranded}"
 
 
+def test_an_oblong_ball_is_drawn_oblong():
+    """A football and a rugby ball are not round, and a diagram that says they
+    are is teaching something false about the only object in the picture."""
+    sport = {d.key: d.sport for d in ALL_DRILLS}
+    for key, spec in demo.DEMOS.items():
+        if not all("ball" in f for f in spec.frames):
+            continue
+        svg = demo.svg(key)
+        if sport[key] in demo.OVAL_BALL_SPORTS:
+            assert "<ellipse" in svg, f"{key} draws a round ball"
+        else:
+            assert "<ellipse" not in svg, f"{key} draws an oblong ball"
+
+
+def test_the_oval_sports_are_the_ones_with_oval_balls():
+    assert demo.OVAL_BALL_SPORTS == {"football", "rugby"}
+    known = {d.sport for d in ALL_DRILLS}
+    assert demo.OVAL_BALL_SPORTS <= known, "names a sport that does not exist"
+
+
 def test_a_rep_drill_moves_and_a_hold_does_not():
     """The shape of a demo has to match the shape of the drill.
 
