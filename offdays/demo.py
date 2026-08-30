@@ -85,6 +85,10 @@ class Demo:
     caption: str
     #: Ground, wall or bar to draw behind the figure, for orientation.
     scenery: str = "floor"
+    #: "side" fades the far limbs so a profile reads as a body rather than a
+    #: tangle of identical sticks. "front" does not: facing the camera there
+    #: is no far side, and dimming half of one reads as something wrong.
+    view: str = "side"
     #: Play the frames forward then back, which is what a rep does.
     mirror: bool = True
     #: Seconds for one cycle. Filled from the drill's own tempo when absent.
@@ -146,7 +150,7 @@ DEMOS: dict[str, Demo] = {
                   elbow_far=(55, 31), wrist_far=(58, 42),
                   knee_near=(38, 38), ankle_near=(43, 54), toe_near=(49, 58),
                   knee_far=(43, 40), ankle_far=(48, 56), toe_far=(54, 60)),
-                ),
+        ),
     ),
     "gen_pogo": Demo(
         caption='Small fast bounces off the balls of your feet, knees almost straight. Spend as little time on the floor as you can.',
@@ -161,7 +165,7 @@ DEMOS: dict[str, Demo] = {
                   elbow_far=(55, 31), wrist_far=(55, 44),
                   knee_near=(49, 60), ankle_near=(49, 72), toe_near=(55, 77),
                   knee_far=(53, 60), ankle_far=(53, 72), toe_far=(59, 77)),
-                ),
+        ),
     ),
     "gen_lunge": Demo(
         caption='Step forward and drop the back knee towards the floor, then drive back to standing. Alternate legs.',
@@ -302,7 +306,7 @@ DEMOS: dict[str, Demo] = {
                   elbow_far=(30, 74), wrist_far=(17, 88),
                   knee_near=(70, 80), ankle_near=(85, 86), toe_near=(91, 90),
                   knee_far=(71, 81), ankle_far=(86, 87), toe_far=(92, 90)),
-                ),
+        ),
     ),
     "gen_mountain_climber": Demo(
         caption='Hold a push-up position and drive one knee at a time in towards your chest, quickly.',
@@ -356,6 +360,86 @@ DEMOS: dict[str, Demo] = {
                   elbow_far=(29, 79), wrist_far=(31, 90),
                   knee_near=(16, 27), ankle_near=(13, 12), toe_near=(19, 10),
                   knee_far=(17, 28), ankle_far=(14, 13), toe_far=(20, 11)),
+        ),
+    ),
+    "gen_butt_kick": Demo(
+        caption="Run on the spot snapping your heels up towards your "
+                "backside, staying tall. Do not lean forward.",
+        frames=(
+            _pose(head=(48, 13), neck=(48, 25), hip=(49, 53),
+                  elbow_near=(56, 38), wrist_near=(60, 48),
+                  elbow_far=(41, 38), wrist_far=(37, 48),
+                  knee_near=(50, 72), ankle_near=(42, 62), toe_near=(37, 65),
+                  knee_far=(49, 71), ankle_far=(49, 90), toe_far=(55, 90)),
+            _pose(head=(48, 13), neck=(48, 25), hip=(49, 53),
+                  elbow_near=(41, 38), wrist_near=(37, 48),
+                  elbow_far=(56, 38), wrist_far=(60, 48),
+                  knee_near=(49, 71), ankle_near=(49, 90), toe_near=(55, 90),
+                  knee_far=(50, 72), ankle_far=(42, 62), toe_far=(37, 65)),
+        ),
+    ),
+    "gen_knee_drive_hold": Demo(
+        caption="Hands on a wall, body in one straight line from head to "
+                "heel, one knee driven up and held there.",
+        scenery="wall",
+        mirror=False,
+        seconds=4.0,
+        frames=(
+            _pose(head=(30, 20), neck=(32, 31), hip=(38, 58),
+                  elbow_near=(22, 32), wrist_near=(10, 30),
+                  elbow_far=(23, 33), wrist_far=(11, 31),
+                  knee_near=(25, 48), ankle_near=(31, 62), toe_near=(37, 65),
+                  knee_far=(45, 74), ankle_far=(51, 88), toe_far=(57, 90)),
+        ),
+    ),
+    "gen_sit_up": Demo(
+        caption="Lie back with your knees bent, curl all the way up until "
+                "your chest is near your thighs, then lower back down.",
+        frames=(
+            _pose(head=(18, 84), neck=(26, 86), hip=(52, 88),
+                  elbow_near=(22, 78), wrist_near=(16, 82),
+                  elbow_far=(23, 79), wrist_far=(17, 83),
+                  knee_near=(66, 72), ankle_near=(74, 86), toe_near=(80, 90),
+                  knee_far=(67, 73), ankle_far=(75, 87), toe_far=(81, 90)),
+            _pose(head=(44, 54), neck=(43, 64), hip=(52, 88),
+                  elbow_near=(36, 60), wrist_near=(40, 52),
+                  elbow_far=(37, 61), wrist_far=(41, 53),
+                  knee_near=(66, 72), ankle_near=(74, 86), toe_near=(80, 90),
+                  knee_far=(67, 73), ankle_far=(75, 87), toe_far=(81, 90)),
+        ),
+    ),
+    "gen_jumping_jack": Demo(
+        caption="Jump your feet apart and your hands above your head at the "
+                "same time, then back together.",
+        view="front",
+        frames=(
+            _pose(head=(50, 12), neck=(50, 24), hip=(50, 52),
+                  elbow_near=(44, 38), wrist_near=(42, 52),
+                  elbow_far=(56, 38), wrist_far=(58, 52),
+                  knee_near=(48, 71), ankle_near=(48, 90), toe_near=(43, 90),
+                  knee_far=(53, 71), ankle_far=(53, 90), toe_far=(58, 90)),
+            _pose(head=(50, 12), neck=(50, 24), hip=(50, 52),
+                  elbow_near=(38, 30), wrist_near=(32, 16),
+                  elbow_far=(62, 30), wrist_far=(68, 16),
+                  knee_near=(40, 70), ankle_near=(34, 90), toe_near=(29, 90),
+                  knee_far=(60, 70), ankle_far=(66, 90), toe_far=(71, 90)),
+        ),
+    ),
+    "gen_lateral_bound": Demo(
+        caption="Quick side-to-side bounds, landing on one leg each time. "
+                "Smaller and faster than a skater bound.",
+        view="front",
+        frames=(
+            _pose(head=(42, 14), neck=(42, 25), hip=(44, 52),
+                  elbow_near=(49, 38), wrist_near=(54, 44),
+                  elbow_far=(36, 40), wrist_far=(31, 48),
+                  knee_near=(43, 70), ankle_near=(42, 90), toe_near=(37, 90),
+                  knee_far=(54, 66), ankle_far=(60, 74), toe_far=(65, 77)),
+            _pose(head=(58, 14), neck=(58, 25), hip=(56, 52),
+                  elbow_near=(51, 38), wrist_near=(46, 44),
+                  elbow_far=(64, 40), wrist_far=(69, 48),
+                  knee_near=(57, 70), ankle_near=(58, 90), toe_near=(63, 90),
+                  knee_far=(46, 66), ankle_far=(40, 74), toe_far=(35, 77)),
         ),
     ),
 }
@@ -447,7 +531,7 @@ def svg(drill_key: str) -> str:
     # The far-side limbs are drawn first and faded, so a side-on figure reads
     # as a body rather than a tangle of identical sticks.
     for chain in CHAINS:
-        far = any(j.endswith("_far") for j in chain)
+        far = demo.view == "side" and any(j.endswith("_far") for j in chain)
         values = ";".join(_points(f, chain) for f in frames)
         fade = ' opacity=".42"' if far else ""
         parts.append(

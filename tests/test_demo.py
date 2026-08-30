@@ -95,6 +95,30 @@ def test_the_film_backlog_says_why():
         assert key in {d.key for d in ALL_DRILLS}, key
 
 
+def test_the_whole_shared_library_is_accounted_for():
+    """Every general drill is drawn or on the list to be filmed.
+
+    The shared athleticism library is the widest reach in the product: every
+    sport draws on it, so one missing pose is missing from sixteen sports at
+    once. This exists because a pose really was silently deleted while an
+    adjacent one was being edited, and nothing failed.
+    """
+    general = [d.key for d in ALL_DRILLS if d.sport == "general"]
+    assert general, "no shared library to check"
+    stranded = sorted(k for k in general
+                      if k not in demo.DEMOS and k not in demo.NEEDS_FILM)
+    assert not stranded, f"shared library drills with no answer: {stranded}"
+
+
+def test_no_pose_was_lost_from_the_shared_library():
+    """A count, so a deletion fails loudly rather than shrinking quietly."""
+    drawn = [d.key for d in ALL_DRILLS
+             if d.sport == "general" and d.key in demo.DEMOS]
+    assert len(drawn) == 22, (
+        f"expected 22 drawn general drills, found {len(drawn)}: "
+        "raise this deliberately when adding one, never to make a loss pass")
+
+
 @pytest.mark.parametrize("sport", ["gymnastics", "cheer", "dance"])
 def test_conditioning_sports_have_an_answer_for_every_drill(sport):
     """The sports that lean entirely on the shared library.
