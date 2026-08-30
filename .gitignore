@@ -14,3 +14,6 @@ data/
 
 # Node
 node_modules/
+
+# Playwright, needed only by scripts/programs/capture_dashboard.py
+node_modules/

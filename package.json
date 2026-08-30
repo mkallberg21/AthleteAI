@@ -1,0 +1,8 @@
+{
+  "name": "offdays-tooling",
+  "private": true,
+  "description": "Playwright, used only by scripts/programs/capture_dashboard.py to screenshot the running coach dashboard for the program summaries. The product itself ships no JS dependencies.",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

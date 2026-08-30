@@ -56,3 +56,24 @@ guidelines call for.
 Chromium renders these with no network access. A linked stylesheet falls back
 to DejaVu silently, which looks almost right and is the sort of thing you
 notice only after printing. `fetch_fonts.py` embeds every face as base64.
+
+## The dashboard screenshots
+
+`shots/` holds real captures of the running coach dashboard, not a mock.
+
+```bash
+python3 ../seed_demo.py --db /tmp/demo.db
+OFFDAYS_DB_PATH=/tmp/demo.db python3 -m uvicorn offdays.api:app --port 8811 &
+python3 capture_dashboard.py --token <the director token the seeder printed>
+```
+
+Two things are removed before capturing, both honest edits rather than
+flattery: the sticky header, which renders over the panel being photographed,
+and the first-week onboarding checklist, which is scaffolding for a coach
+setting up rather than part of what a director is being shown.
+
+**Known mismatch.** The app still renders in its original green accent, while
+these documents follow the brand kit's Electric Blue. The screenshots are
+therefore accurate and off-palette at the same time. Fixing it belongs in the
+app rather than here — re-skinning `offdays/web/static/styles.css` onto
+`tokens.css` would settle it for the product and these captures together.

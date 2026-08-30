@@ -41,6 +41,12 @@ LOCKUP_DARK = KIT / "logos" / "offdays-primary-on-dark-transparent.png"
 LOCKUP_LIGHT = KIT / "logos" / "offdays-primary-on-light-transparent.png"
 MARK = KIT / "icons" / "icon-mark-transparent-512.png"
 
+#: Captures of the running coach dashboard, taken against the demo seed by
+#: scripts/capture_dashboard.py. Real screenshots rather than a drawn mock:
+#: a picture of a product a director has not seen yet is a promise, and the
+#: honest version of that promise is the software itself.
+SHOTS = pathlib.Path(__file__).parent / "shots"
+
 
 def data_uri(path: pathlib.Path) -> str:
     kind = "svg+xml" if path.suffix == ".svg" else path.suffix.lstrip(".")
@@ -94,10 +100,14 @@ h1,h2,h3,h4,.tile-n,.claim q,.step h4,.pos h4,.wordmark {
 .code { font-family:"JetBrains Mono", ui-monospace, monospace; }
 
 /* ---------- cover ---------- */
-.cover { background:var(--court); color:#FFF; padding:0.8in 0.6in 0.5in;
+.cover { background:var(--court); color:#FFF; padding:0.7in 0.6in 0.34in;
   position:relative; overflow:hidden;
-  min-height:10.2in; break-after:page;
-  display:flex; flex-direction:column; }
+  /* Block flow with explicit spacing, not a flex column with auto margins:
+     that distributed the spare height nicely on screen and then let the last
+     child overflow the print box. Sized against the ordinary page box too --
+     Chrome's print path does not apply the @page :first margins here, so the
+     real budget is 11in less 0.62in and 0.72in, not 10.28in. */
+  break-after:page; }
 .cover::after { content:""; position:absolute; inset:0;
   background:linear-gradient(104deg,#008BFD 0%,#0063C4 48%,#0B1B2B 100%);
   opacity:.5;
@@ -129,13 +139,13 @@ h1,h2,h3,h4,.tile-n,.claim q,.step h4,.pos h4,.wordmark {
   letter-spacing:-.01em; }
 .tile-l { font-size:7.4pt; color:#9FB4C8; margin-top:6px; line-height:1.35;
   text-transform:uppercase; letter-spacing:.075em; font-weight:500; }
-.claim { margin:auto 0; padding:26px 0 6px; }
+.claim { margin:0; padding:26px 0 20px; }
 .claim q { quotes:none; display:block; font-size:34pt; font-weight:700;
   line-height:1.02; color:#FFF; max-width:6.6in; text-transform:uppercase;
   letter-spacing:-.005em; }
 .claim q em { font-style:normal; color:var(--blue); }
 .claim .sub { margin-top:12px; font-size:9.4pt; color:#9FB4C8; max-width:5.2in; }
-.steps { padding-top:34px; display:grid; grid-template-columns:repeat(3,1fr);
+.steps { padding-top:8px; display:grid; grid-template-columns:repeat(3,1fr);
   gap:16px; }
 .step { border-top:2px solid var(--blue); padding-top:11px; }
 .step .n { font-size:8pt; color:var(--blue); letter-spacing:.12em;
@@ -143,7 +153,7 @@ h1,h2,h3,h4,.tile-n,.claim q,.step h4,.pos h4,.wordmark {
 .step h4 { font-size:13pt; margin:4px 0 4px; color:#FFF; font-weight:600;
   text-transform:uppercase; letter-spacing:.005em; }
 .step p { font-size:8.9pt; color:#A9BCCC; margin:0; line-height:1.45; }
-.roster { margin-top:28px; padding-top:15px;
+.roster { margin-top:20px; padding-top:13px;
   border-top:1px solid rgba(255,255,255,.18); }
 .roster .lbl { font-size:7.6pt; letter-spacing:.16em; text-transform:uppercase;
   color:#7E93A6; font-weight:600; }
@@ -151,7 +161,7 @@ h1,h2,h3,h4,.tile-n,.claim q,.step h4,.pos h4,.wordmark {
 .chip { display:inline-block; font-size:8.4pt; color:#DCE8F2;
   border:1px solid rgba(255,255,255,.24); border-radius:20px;
   padding:2.5px 11px; margin:0 5px 5px 0; font-weight:500; }
-.cover-foot { margin-top:20px; padding-top:13px;
+.cover-foot { margin-top:18px; padding-top:11px;
   border-top:1px solid rgba(255,255,255,.18); font-size:8.4pt;
   color:#7E93A6; }
 
@@ -230,6 +240,12 @@ li { margin-bottom:4px; }
 .rule { height:1px; background:var(--mist); margin:17px 0; border:0; }
 .break { break-before:page; }
 .avoid { break-inside:avoid; }
+figure.shot { margin:14px 0 0; break-inside:avoid; }
+figure.shot img { width:100%; border-radius:var(--radius);
+  border:1px solid var(--mist); display:block; }
+figure.shot.half img { max-width:100%; }
+figure.shot figcaption { font-size:8.6pt; color:var(--slate); margin-top:7px;
+  max-width:6.1in; line-height:1.45; }
 footer { margin-top:20px; padding-top:9px; border-top:1px solid var(--mist);
   font-size:7.9pt; color:var(--slate); display:flex;
   justify-content:space-between; }
@@ -263,7 +279,7 @@ def top_line(position):
 
 def page(data, copy, logo, has_logo):
     d = data
-    thesis, reality, worry = copy
+    thesis, reality, worry, sport_work = copy
     label = d["label"]
     n_pos = len(d["positions"])
     own, gen = d["own_drills"], d["general_drills"]
@@ -307,6 +323,9 @@ def page(data, copy, logo, has_logo):
                'still counts on a dark evening.</p>'
                if d["ball_optional"] else ''))
 
+    shot_top = data_uri(SHOTS / "dashboard.png")
+    shot_nudge = data_uri(SHOTS / "nudge.png")
+    shot_recog = data_uri(SHOTS / "recognition.png")
     chips = "".join(f'<span class="chip">{e(p["label"])}</span>'
                     for p in d["positions"])
     # Five sports here have no skill drills at all, and that is the product's
@@ -493,34 +512,73 @@ def page(data, copy, logo, has_logo):
   </div>
 </section>
 
-<section class="break avoid">
-  <p class="eyebrow">Honest limits</p>
-  <h2>What this cannot do yet</h2>
-  <p class="lead">You are going to ask a version of this question, so here it is
-  before you have to.</p>
-  <div class="two" style="margin-top:12px">
+<section class="break">
+  <p class="eyebrow">The coach's view</p>
+  <h2>What you see on a Monday morning</h2>
+  <p class="lead">One screen, and the first thing on it is who to talk to
+  today. Not a wall of charts to interpret — the dashboard does the reading
+  and hands you names.</p>
+  <figure class="shot"><img src="{shot_top}" alt="The coach dashboard">
+  <figcaption>The real screen, filled with demonstration data. The line under
+  the filters is on the dashboard itself, not just in this document: there is
+  no video here, because there is no video anywhere.</figcaption></figure>
+  <p>Note what the top of that screen is. Not participation, not a
+  leaderboard — <strong>two athletes to keep an eye on</strong>, one whose
+  throwing volume jumped 172% in a week and one who has trained seventeen days
+  without a rest day. The numbers are underneath, where numbers belong.</p>
+</section>
+
+<section class="break">
+  <p class="eyebrow">Messages that go out on their own</p>
+  <h2>Someone notices, on the day, without you having to be there</h2>
+  <p class="lead">A child who does {e(sport_work)} on a Tuesday evening
+  currently gets a number on a dashboard you might open on Friday.
+  What they wanted was for somebody to notice. Two automatic messages close
+  that gap, and both are written by you, once, in advance.</p>
+
+  <div class="two" style="margin-top:14px">
     <div>
-      <h3>Not yet calibrated on real footage</h3>
-      <p>The counters are verified against synthetic movement and a large test
-      suite. They have not yet been tuned against a few dozen real athletes of
-      different sizes in real garages. That is the next piece of work, and it
-      needs a program willing to film a calibration set.</p>
-      <h3>The film library has no films</h3>
-      <p>There are {e(str(d["film_topics"]))} {e(label.lower())} teaching topics
-      structured and ready. The clips that hang on them have to come from you or
-      from a rights holder — we are not going to scrape somebody's game footage.</p>
+      <h3>When they put the work in</h3>
+      <p>Six moments trigger a message: their first ever session, then three,
+      five, ten, thirty and a hundred days in a row.</p>
+      <p><strong>It comes from you, by name.</strong> "Coach Rivera noticed"
+      lands; "the system detected" does not. You write the words once and they
+      arrive at the moment they mean something.</p>
+      <p><strong>It fires once per streak, not once per day.</strong> Ten days
+      is worth saying something about. Saying it again on day eleven is how a
+      child learns to ignore the app. Break a streak and rebuild it and they
+      are congratulated again — doing it twice is harder than once.</p>
+      <p>A senior name can be reserved for the long streaks only, so a note
+      from your director of player development still means something when it
+      arrives.</p>
     </div>
     <div>
-      <h3>It counts work, not quality</h3>
-      <p>The app can tell you an athlete did 300 repetitions with a full range of
-      motion. It cannot tell you their technique was good. A coach still coaches;
-      this just means they stop having to guess about volume.</p>
-      <h3>Some things are deliberately absent</h3>
-      <p>There is no drill here that asks an athlete to do something unsafe alone.
-      Where a movement needs a spotter, a partner or supervision, it is not in the
-      product — and that is a decision, not a backlog item.</p>
+      <h3>When they go quiet</h3>
+      <p>An athlete who has not trained for over a week gets one message —
+      <em>"Your team is still putting in work. It's been over 7 days. Ten
+      minutes counts."</em></p>
+      <p><strong>Weekly, never daily.</strong> A long absence produces one
+      nudge a week, not seven. And a booked holiday produces none at all:
+      nudging a family through a holiday they told you about is how the app
+      gets deleted.</p>
+      <p>Assignments get exactly two reminders — one with two days left and
+      one on the day. Anything more trains people to ignore the app.</p>
+      <p><strong>You get told too, but only when it is worth acting on.</strong>
+      If under a third of the squad has finished an assignment by its halfway
+      point, that comes to you while there is still time to change it.</p>
     </div>
   </div>
+
+  <figure class="shot half"><img src="{shot_nudge}" alt="The nudge list">
+  <figcaption>The same list carries "needs a rest day" alongside "quiet 10+
+  days". An athlete training too much and one training too little are both
+  athletes to speak to, and the product will not pretend only one of those is
+  a problem.</figcaption></figure>
+
+  <figure class="shot half"><img src="{shot_recog}" alt="Recognition settings">
+  <figcaption>Every milestone ships with wording you are meant to replace. The
+  defaults are deliberately plain, so a coach reading them thinks "I would say
+  that differently" — which is the point.</figcaption></figure>
 </section>
 
 <footer>
