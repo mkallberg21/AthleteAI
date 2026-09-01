@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><span>0FF</span>DAYS</div>
+  <div id="masthead"></div>
   <button class="secondary inline" onclick="location.href='capture.html'">Back</button>
 </div>
 
@@ -34,7 +34,7 @@
 </div>
 
 <script type="module">
-import { accent, api, esc, getToken } from './api.js';
+import { accent, api, esc, getToken, renderBranding } from './api.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -109,6 +109,9 @@ async function load() {
   renderTabs();
   await load();
 })();
+
+// The club's badge first, before anything else loads.
+renderBranding("masthead", "Leaderboard");
 </script>
 </body>
 </html>

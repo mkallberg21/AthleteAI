@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 96" width="300" height="96">
+  <rect x="2" y="2" width="296" height="92" rx="12" fill="#F2F4F7"
+        stroke="#9E2B2B" stroke-width="4"/>
+  <text x="150" y="36" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, sans-serif"
+        font-size="19" font-weight="600" letter-spacing="4" fill="#2C4A7C">NASHVILLE</text>
+  <text x="150" y="72" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, sans-serif"
+        font-size="38" font-weight="700" letter-spacing="1" fill="#2C4A7C">DOGS</text>
+</svg>

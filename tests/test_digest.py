@@ -16,9 +16,19 @@ from offdays import digest as D
 from offdays.db import connect
 from offdays.store import Store
 
-# A Monday, so "last complete week" is unambiguous.
-TODAY = date(2026, 8, 24)
-LAST_WEEK_START = date(2026, 8, 17)
+# A Monday, so "last complete week" is unambiguous -- and derived from the
+# real date rather than pinned to one.
+#
+# These were fixed calendar dates, and the suite went red on a morning nobody
+# had touched it. Sessions here are backdated into the reported week, and the
+# store refuses a backdate older than OFFLINE_BACKDATE_LIMIT_DAYS: beyond that
+# the claim is unverifiable, so it credits the session to today instead. Once
+# real time drifted past the limit the backdating silently stopped working and
+# every athlete looked inactive. Anchoring to this week keeps the fixture
+# inside the window the product actually honours.
+_THIS_MONDAY = date.today() - timedelta(days=date.today().weekday())
+TODAY = _THIS_MONDAY
+LAST_WEEK_START = _THIS_MONDAY - timedelta(days=7)
 
 
 @pytest.fixture
@@ -76,7 +86,7 @@ class TestWeekArithmetic:
         """A digest sent Monday reports the finished week, not this one."""
         start, end = D.last_complete_week(TODAY)
         assert start == LAST_WEEK_START
-        assert end == date(2026, 8, 23)
+        assert end == LAST_WEEK_START + timedelta(days=6)
         assert end < TODAY
 
     def test_weeks_run_monday_to_sunday(self):

@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -27,6 +27,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL,
     sport       TEXT NOT NULL DEFAULT 'lacrosse',
+    -- A club's own badge, as a filename under web/static/teams/. A path
+    -- rather than a blob: a logo is served to every screen on every load,
+    -- and a database is the wrong place to read an image from all day.
+    logo_file   TEXT,
     -- Age at which position-specific training guidance switches on. Below it,
     -- every athlete gets the general-athlete drill mix regardless of the
     -- position on their jersey.
@@ -963,6 +967,13 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # Which wording went out, so the next athlete can be given a
         # different one. Null on everything that is not recognition.
         ("variant", "INTEGER"),
+    ],
+    "organizations": [
+        # A club's own badge. The file lives under web/static/teams/ and this
+        # is its name -- a path rather than a blob, because a logo is served
+        # to every screen on every load and a database is the wrong place to
+        # read an image from a thousand times a day.
+        ("logo_file", "TEXT"),
     ],
     "recognition_templates": [
         ("from_voice", "TEXT NOT NULL DEFAULT 'coach'"),

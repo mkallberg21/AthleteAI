@@ -465,6 +465,19 @@ def submit_session(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/branding")
+def branding(
+    principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The club's name and badge for the header.
+
+    Public to anybody signed in to the program, because it is on every screen
+    they already see. It carries no athlete data.
+    """
+    return store.org_branding(principal.org_id)
+
+
 @app.get("/api/me")
 def me(
     principal: Principal = Depends(_principal),

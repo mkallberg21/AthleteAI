@@ -140,7 +140,11 @@ def main() -> int:
     rng = random.Random(args.seed)
     store = Store(connect(db_path))
 
-    org_id = store.create_org("Northshore Lacrosse Club")
+    org_id = store.create_org("Nashville Dogs")
+    # A club badge, so the demo shows what a program actually sees: their own
+    # mark at the top of every screen. Drop a real one in web/static/teams/
+    # and point this at it.
+    store.set_org_logo(org_id, "placeholder-nashville.svg")
     director = store.create_user(org_id, "director", "Coach Rivera", email="coach@example.com")
     varsity = store.create_team(org_id, "Varsity", "2026")
     jv = store.create_team(org_id, "JV", "2026")

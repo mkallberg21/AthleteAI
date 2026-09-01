@@ -10,7 +10,7 @@
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><span>0FF</span>DAYS <span class="small muted" style="font-weight:400">Parent</span></div>
+  <div id="masthead"></div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="small muted" id="whoami"></span>
     <select id="lang" class="inline" aria-label="Language / Idioma"></select>
@@ -82,7 +82,7 @@
 </div>
 
 <script type="module">
-import { api, esc, getToken, logout } from './api.js';
+import { api, esc, getToken, logout, renderBranding } from './api.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -651,6 +651,9 @@ $('signout').addEventListener('click', logout);
 loadLanguage()
   .then(load)
   .catch((e) => showError(e.message));
+
+// The club's badge first, before anything else loads.
+renderBranding("masthead", "Parent");
 </script>
 </body>
 </html>

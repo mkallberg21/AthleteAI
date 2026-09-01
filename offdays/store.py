@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import pathlib
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -56,6 +57,9 @@ from .scoring import (
 )
 
 log = logging.getLogger(__name__)
+
+#: Where a club's badge lives. Served as a static file like any other asset.
+TEAM_LOGOS = pathlib.Path(__file__).parent / "web" / "static" / "teams"
 
 #: A squad bigger than this is not a squad. Generous, because the whole point
 #: is that a coach can outrun their own roster size.
@@ -1233,6 +1237,37 @@ class Store:
     # ------------------------------------------------------------------
     # Coach recognition
     # ------------------------------------------------------------------
+
+    def org_branding(self, org_id: int) -> dict[str, str]:
+        """The club's name and badge, for the top of every screen.
+
+        An athlete opens this app to train for *their* club, not for us. The
+        program's mark leads and the 0FFDAYS one sits behind it -- a child
+        should see their own badge first, and a director handing this to
+        parents should see their program rather than a vendor.
+        """
+        row = self.conn.execute(
+            "SELECT name, logo_file FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        if row is None:
+            return {"name": "", "logo": ""}
+        logo = (row["logo_file"] or "").strip()
+        # Only serve a file that is actually there. A broken image in the
+        # header is worse than no image at all.
+        if logo and not (TEAM_LOGOS / logo).exists():
+            logo = ""
+        return {"name": row["name"], "logo": f"teams/{logo}" if logo else ""}
+
+    def set_org_logo(self, org_id: int, filename: str) -> dict[str, str]:
+        name = (filename or "").strip()
+        if name and ("/" in name or "\\" in name or name.startswith(".")):
+            raise StoreError("a logo is a file name, not a path")
+        if name and not (TEAM_LOGOS / name).exists():
+            raise StoreError(f"no such logo: {name}")
+        with transaction(self.conn) as conn:
+            conn.execute("UPDATE organizations SET logo_file = ? WHERE id = ?",
+                         (name or None, org_id))
+        return self.org_branding(org_id)
 
     def recognition_templates(self, org_id: int) -> list[dict[str, Any]]:
         """Every milestone, with the writer's own words where they wrote any.

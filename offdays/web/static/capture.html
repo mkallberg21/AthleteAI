@@ -12,7 +12,7 @@
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><span>0FF</span>DAYS</div>
+  <div id="masthead"></div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="small muted" id="whoami"></span>
     <button class="bell" id="bell">Alerts<span class="dot hidden" id="bell-dot">0</span></button>
@@ -346,7 +346,7 @@
 </div>
 
 <script type="module">
-import { accent, api, esc, fmtDate, getToken, logout } from './api.js';
+import { accent, api, esc, fmtDate, getToken, logout, renderBranding } from './api.js';
 import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
 import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
          sampleColour, MIN_SAMPLE_SHARE }
@@ -2614,6 +2614,9 @@ window.addEventListener('pagehide', () => {
     document.body.innerHTML = `<div class="wrap"><div class="card"><h2>Could not load</h2><p>${esc(e.message)}</p><a href="index.html">Sign in again</a></div></div>`;
   }
 })();
+
+// The club's badge first, before anything else loads.
+renderBranding("masthead");
 </script>
 </body>
 </html>

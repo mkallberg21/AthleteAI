@@ -103,3 +103,29 @@ export function accent(alpha = 1) {
     ? hex.split('').map((c) => c + c).join('') : hex, 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
+
+
+/**
+ * Put the club's badge at the top of the page, with ours behind it.
+ *
+ * Called by every screen with a topbar. A program that has not uploaded a
+ * badge still gets its name in the same place, so the header never looks
+ * broken and never looks like it belongs to us.
+ */
+export async function renderBranding(slot, subtitle = "") {
+  const el = typeof slot === "string" ? document.getElementById(slot) : slot;
+  if (!el) return null;
+  let brand = { name: "", logo: "" };
+  try { brand = await api("/api/branding"); } catch { /* header is not worth failing over */ }
+  const badge = brand.logo
+    ? `<img class="club-badge" src="${brand.logo}" alt="${brand.name}">` : "";
+  const name = brand.logo ? "" : `<div class="club-name">${esc(brand.name)}</div>`;
+  // The bare mark rather than the lockup. The brand guidelines set a 120px
+  // minimum on the full wordmark and say to use the mark alone below it, and
+  // a credit line beside somebody else's badge is well below it.
+  el.innerHTML = `<div class="masthead">${badge}<div class="stack">${name}
+    <div class="by-offdays"><img class="offdays-mark" src="offdays-mark.png"
+      alt="0FFDAYS">${subtitle ? `<span>${esc(subtitle)}</span>` : ""}</div>
+    </div></div>`;
+  return brand;
+}

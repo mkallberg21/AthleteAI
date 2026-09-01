@@ -773,3 +773,31 @@ tbody tr:hover { background: var(--surface-2); }
 @media (min-width: 520px) {
   .demo-fig, .demo-fig svg { flex-basis: 118px; width: 118px; height: 118px; }
 }
+
+/* ---------- club branding ----------
+   An athlete opens this app to train for their club, not for us. Their badge
+   leads at a size you would call a logo; ours sits behind it at a size you
+   would call a credit. */
+.masthead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.club-badge {
+  height: 44px; width: auto; max-width: 190px; display: block; flex: 0 0 auto;
+}
+.club-name {
+  font-family: var(--font-head); font-weight: 600; font-size: 1.18rem;
+  letter-spacing: .005em; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+}
+.by-offdays {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap;
+}
+/* The bare mark, per the brand guidelines: the full lockup has a 120px
+   minimum and this is a credit beside a club's own badge, not a masthead. */
+.offdays-mark { height: 17px; width: auto; display: block; opacity: .95; }
+/* Stacked under the club name so the two marks never compete on a phone. */
+.masthead .stack { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+@media (max-width: 460px) {
+  .club-badge { height: 34px; max-width: 130px; }
+  .club-name { font-size: 1rem; }
+}

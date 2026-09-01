@@ -8,7 +8,7 @@
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><span>0FF</span>DAYS <span class="small muted" style="font-weight:400">Coach</span></div>
+  <div id="masthead"></div>
   <div style="display:flex;gap:8px;align-items:center">
     <select class="org-switch hidden" id="org-switch"></select>
     <span class="small muted" id="whoami"></span>
@@ -607,7 +607,7 @@
 </div>
 
 <script type="module">
-import { api, esc, fmtDate, getToken, logout, setOrg } from './api.js';
+import { api, esc, fmtDate, getToken, logout, renderBranding, setOrg } from './api.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -2406,6 +2406,9 @@ $('signout').addEventListener('click', logout);
     await loadAll();
   } catch (e) { showError(e.message); }
 })();
+
+// The club's badge first, before anything else loads.
+renderBranding("masthead", "Coach");
 </script>
 </body>
 </html>
