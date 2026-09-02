@@ -13,3 +13,11 @@ tall, with the 0FFDAYS mark behind it as a credit line.
 A club opens this app to train for *their* club. Their badge leads; ours sits
 behind it. A program with no badge uploaded gets its name in the same place,
 so the header is never empty and never looks like it belongs to us.
+
+## nashville-dogs.svg
+
+A **reconstruction**, not the club's file. It matches the original's
+composition, palette and layout — Tennessee outline in red on grey, navy
+`NASHVILLE` upper right, navy script `Dogs` across the middle — but the state
+silhouette is stylised and the script is Yellowtail rather than the club's own
+lettering. Replace it with the real asset when that exists as a file.

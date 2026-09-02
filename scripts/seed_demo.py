@@ -35,17 +35,25 @@ from offdays.store import Store  # noqa: E402
 #   decay           -- how much range they keep by the end of a session
 #   offhand_deficit -- how much shorter the weak hand's range is
 ROSTER = [
-    ("Jordan Pierce",   "right", 6.0, 0.48, 0,  dict(rom_cv=0.06, rom_scale=1.00, decay=0.97, offhand_deficit=0.05)),
-    ("Sam Rivera",      "left",  5.0, 0.42, 0,  dict(rom_cv=0.08, rom_scale=0.98, decay=0.94, offhand_deficit=0.10)),
+    # Six athletes, each carrying a behaviour the dashboard is meant to catch.
+    # The names are the program's; the profiles are what make the demo worth
+    # looking at, so they are described here rather than left to be inferred
+    # from the numbers.
+    #
+    # Trains hard and never takes a day off -- the workload warning.
+    ("Scott Anderson",  "right", 6.0, 0.48, 0,  dict(rom_cv=0.06, rom_scale=1.00, decay=0.97, offhand_deficit=0.05)),
+    # The one doing it right: steady, balanced, a long streak.
+    ("Ryder Kallberg",  "left",  5.0, 0.42, 0,  dict(rom_cv=0.08, rom_scale=0.98, decay=0.94, offhand_deficit=0.10)),
     # Grinds out volume with a badly neglected weak hand -- the case the
     # off-hand detector exists for.
-    ("Alex Kowalczyk",  "right", 4.0, 0.15, 0,  dict(rom_cv=0.11, rom_scale=0.95, decay=0.90, offhand_deficit=0.34)),
-    ("Bailey Nguyen",   "right", 3.0, 0.30, 1,  dict(rom_cv=0.10, rom_scale=0.92, decay=0.93, offhand_deficit=0.14)),
-    ("Casey Donnelly",  "left",  2.0, 0.22, 12, dict(rom_cv=0.14, rom_scale=0.86, decay=0.88, offhand_deficit=0.18)),
-    ("Drew Halloran",   "right", 5.5, 0.45, 0,  dict(rom_cv=0.07, rom_scale=1.00, decay=0.96, offhand_deficit=0.06)),
-    # Half reps and form that falls apart -- volume without quality.
-    ("Emerson Vance",   "right", 1.0, 0.10, 21, dict(rom_cv=0.22, rom_scale=0.62, decay=0.74, offhand_deficit=0.22)),
-    ("Frankie Osei",    "right", 4.5, 0.38, 0,  dict(rom_cv=0.09, rom_scale=0.96, decay=0.92, offhand_deficit=0.12)),
+    ("Gray Freeman",    "right", 4.0, 0.15, 0,  dict(rom_cv=0.11, rom_scale=0.95, decay=0.90, offhand_deficit=0.34)),
+    # A sharp jump in throwing volume, which is the load advisory.
+    ("Dane Early",      "right", 3.0, 0.30, 1,  dict(rom_cv=0.10, rom_scale=0.92, decay=0.93, offhand_deficit=0.14)),
+    # Gone quiet for a fortnight -- the nudge list.
+    ("Finn Cannan",     "left",  2.0, 0.22, 12, dict(rom_cv=0.14, rom_scale=0.86, decay=0.88, offhand_deficit=0.18)),
+    # Half reps and form that falls apart, then three weeks of nothing --
+    # volume without quality, and then no volume either.
+    ("Dano Otis",       "right", 1.0, 0.10, 21, dict(rom_cv=0.22, rom_scale=0.62, decay=0.74, offhand_deficit=0.22)),
 ]
 
 DRILL_MIX = [
@@ -144,10 +152,20 @@ def main() -> int:
     # A club badge, so the demo shows what a program actually sees: their own
     # mark at the top of every screen. Drop a real one in web/static/teams/
     # and point this at it.
-    store.set_org_logo(org_id, "placeholder-nashville.svg")
-    director = store.create_user(org_id, "director", "Coach Rivera", email="coach@example.com")
+    store.set_org_logo(org_id, "nashville-dogs.svg")
+    director = store.create_user(org_id, "director", "Joel White", email="director@example.com")
     varsity = store.create_team(org_id, "Varsity", "2026")
     jv = store.create_team(org_id, "JV", "2026")
+
+    # A director sees the program; a coach sees their own team. Seeding real
+    # coaches rather than only a director is what makes that difference
+    # visible -- signing in as Coach Matt shows JV and nothing else.
+    coach_tokens = []
+    for coach_name, team in (("Coach Tommy", varsity), ("Coach Matt", jv),
+                             ("Coach Mike", varsity)):
+        coach = store.create_user(org_id, "coach", coach_name)
+        store.assign_staff_to_team(coach["id"], team["id"])
+        coach_tokens.append((coach_name, coach["token"]))
 
     now = datetime.now(timezone.utc)
     athletes = []
@@ -160,7 +178,7 @@ def main() -> int:
             dominant_hand=hand,
             # One athlete deliberately left without consent so the leaderboard's
             # name-masking is visible in the demo.
-            guardian_consent=(name != "Alex Kowalczyk"),
+            guardian_consent=(name != "Gray Freeman"),
         )
         store.join_team(team["join_code"], athlete["id"], jersey=str(10 + i), position="Midfield")
         athletes.append((athlete, name, hand, per_week, offhand, quiet_days, form))
@@ -168,7 +186,7 @@ def main() -> int:
     total_sessions = 0
     for athlete, name, hand, per_week, offhand, quiet_days, form in athletes:
         # Alex trains hard but frames badly -- populates the review queue.
-        sloppy_athlete = name == "Alex Kowalczyk"
+        sloppy_athlete = name == "Gray Freeman"
 
         for day_offset in range(args.weeks * 7, quiet_days, -1):
             if rng.random() > per_week / 7.0:
@@ -242,7 +260,7 @@ def main() -> int:
         store.conn, first_athlete["id"], director["id"], email="parent@example.com"
     )
     guardian = guardians_mod.redeem_invite(
-        store.conn, invite["code"], "Dana Pierce", "parent@example.com"
+        store.conn, invite["code"], "Erin Anderson", "parent@example.com"
     )
     for scope in (guardians_mod.Scope.PARTICIPATION, guardians_mod.Scope.DATA_RETENTION):
         guardians_mod.set_consent(
@@ -272,8 +290,10 @@ def main() -> int:
     print(f"\n  Join codes: Varsity={varsity['join_code']}  JV={jv['join_code']}")
     print(f"\n  Guardian invite (unredeemed, for {athletes[1][1]}): {pending['code']}")
     print("\n  Sign-in tokens")
-    print(f"    {'Coach Rivera (director)':<26} {director['token']}")
-    print(f"    {'Dana Pierce (parent)':<26} {guardian['token']}")
+    print(f"    {'Joel White (director)':<26} {director['token']}")
+    print(f"    {'Erin Anderson (parent)':<26} {guardian['token']}")
+    for coach, token in coach_tokens:
+        print(f"    {coach + ' (coach)':<26} {token}")
     for athlete, name, *_ in athletes:
         print(f"    {name:<26} {athlete['token']}")
     print(f"\n  Run:  OFFDAYS_DB_PATH={db_path} uvicorn offdays.api:app --reload")
