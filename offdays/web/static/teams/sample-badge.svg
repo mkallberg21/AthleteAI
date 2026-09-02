@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 96" width="240" height="96">
+  <rect x="3" y="3" width="234" height="90" rx="10" fill="#E7EAEE" stroke="#8894A2" stroke-width="3"/>
+  <text x="120" y="58" text-anchor="middle" font-family="system-ui, sans-serif"
+        font-size="20" font-weight="600" letter-spacing="2" fill="#5A6675">CLUB BADGE</text>
+</svg>

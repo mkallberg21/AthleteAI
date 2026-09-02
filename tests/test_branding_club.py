@@ -24,6 +24,10 @@ def org(store):
 
 
 class TestABadgeIsOptional:
+    def test_the_fixture_badge_exists(self):
+        """The tests need one file present; the demo ships with none."""
+        assert (TEAM_LOGOS / "sample-badge.svg").exists()
+
     def test_a_program_with_no_badge_still_has_a_header(self, store, org):
         """The name stands in, so the bar is never empty and never ours."""
         assert store.org_branding(org) == {"name": "Nashville Dogs", "logo": ""}
@@ -39,8 +43,8 @@ class TestABadgeIsOptional:
 
 class TestSettingABadge:
     def test_a_real_file_is_accepted_and_served_from_teams(self, store, org):
-        name = next(f.name for f in TEAM_LOGOS.iterdir() if f.suffix in {".svg", ".png"})
-        assert store.set_org_logo(org, name)["logo"] == f"teams/{name}"
+        assert store.set_org_logo(org, "sample-badge.svg")["logo"] == \
+            "teams/sample-badge.svg"
 
     def test_a_file_that_is_not_there_is_refused(self, store, org):
         with pytest.raises(StoreError):
@@ -55,8 +59,7 @@ class TestSettingABadge:
             store.set_org_logo(org, bad)
 
     def test_clearing_it_is_allowed(self, store, org):
-        name = next(f.name for f in TEAM_LOGOS.iterdir() if f.suffix in {".svg", ".png"})
-        store.set_org_logo(org, name)
+        store.set_org_logo(org, "sample-badge.svg")
         assert store.set_org_logo(org, "")["logo"] == ""
 
 

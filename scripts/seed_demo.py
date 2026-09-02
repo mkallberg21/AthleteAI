@@ -149,10 +149,13 @@ def main() -> int:
     store = Store(connect(db_path))
 
     org_id = store.create_org("Nashville Dogs")
-    # A club badge, so the demo shows what a program actually sees: their own
-    # mark at the top of every screen. Drop a real one in web/static/teams/
-    # and point this at it.
-    store.set_org_logo(org_id, "nashville-dogs.svg")
+    # No badge on purpose. A program that has not uploaded one gets its name
+    # in the same slot, which is the fallback worth showing until a club's
+    # real crest exists as a file -- an approximate drawing of somebody's
+    # actual logo is worse than their name set properly.
+    #
+    # Drop the real file in web/static/teams/ and point this at it:
+    #     store.set_org_logo(org_id, "nashville-dogs.png")
     director = store.create_user(org_id, "director", "Joel White", email="director@example.com")
     # Age-group squads rather than Varsity/JV: a 2031 birth-year group split
     # into a Red and a Blue side, which is how most youth clubs actually name
