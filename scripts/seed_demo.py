@@ -149,13 +149,11 @@ def main() -> int:
     store = Store(connect(db_path))
 
     org_id = store.create_org("Nashville Dogs")
-    # No badge on purpose. A program that has not uploaded one gets its name
-    # in the same slot, which is the fallback worth showing until a club's
-    # real crest exists as a file -- an approximate drawing of somebody's
-    # actual logo is worse than their name set properly.
-    #
-    # Drop the real file in web/static/teams/ and point this at it:
-    #     store.set_org_logo(org_id, "nashville-dogs.png")
+    # The club's own crest, as supplied by the club. It leads the header on
+    # every screen this program sees; ours sits behind it as a credit line.
+    # A program that has uploaded nothing gets its name in the same slot --
+    # see teams/README.md for why there is no drawn stand-in.
+    store.set_org_logo(org_id, "nashville-dogs.png")
     director = store.create_user(org_id, "director", "Joel White", email="director@example.com")
     # Age-group squads rather than Varsity/JV: a 2031 birth-year group split
     # into a Red and a Blue side, which is how most youth clubs actually name

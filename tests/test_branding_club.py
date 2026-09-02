@@ -6,6 +6,7 @@ first, and a director handing this to parents should see their program rather
 than a vendor.
 """
 import pathlib
+import struct
 
 import pytest
 
@@ -121,11 +122,54 @@ class TestTheHeaderIsOnEveryScreen:
             re.search(r"\.club-badge \{[^}]*height:\s*([\d.]+)px", css).group(1))
         ours = float(
             re.search(r"\.offdays-lockup \{[^}]*width:\s*([\d.]+)px", css).group(1))
-        # The club mark in the demo is 768x246; a badge is wider than it is
-        # tall, and this is the aspect the header is designed around.
-        badge_w = badge_h * (768 / 246)
+        # Measured from the badge actually shipped, not from a remembered
+        # aspect. Hard-coding one is how the header first came to be sized
+        # for a crest 11% wider than the club's real one.
+        badge = TEAM_LOGOS / "nashville-dogs.png"
+        head = badge.read_bytes()[16:24]
+        px_w, px_h = struct.unpack(">II", head)
+        badge_w = badge_h * (px_w / px_h)
         assert badge_w >= ours * 1.5, (
-            f"club badge renders {badge_w:.0f}px wide against our {ours:.0f}px")
+            f"club badge renders {badge_w:.0f}px wide against our {ours:.0f}px; "
+            f"raise .club-badge height for a {px_w / px_h:.2f}:1 crest")
+        # ... and it must still fit the slot it is given.
+        cap = float(
+            re.search(r"\.club-badge \{[^}]*max-width:\s*([\d.]+)px", css).group(1))
+        assert badge_w <= cap, (
+            f"badge wants {badge_w:.0f}px but max-width caps it at {cap:.0f}px, "
+            "which silently shrinks it below the height set here")
+
+    def test_the_club_badge_sits_in_the_centre_of_the_bar(self):
+        """Ours at the far left, theirs in the middle -- and centred on the
+        whole bar, not on the branding block, which is the difference a
+        three-column grid makes and a flex row cannot.
+        """
+        import re
+        css = (self.STATIC / "styles.css").read_text()
+        bar = re.search(r"\.topbar \{(.*?)\n\}", css, re.S).group(1)
+        cols = re.search(r"grid-template-columns:\s*([^;]+);", bar).group(1)
+        assert cols.count("1fr") == 2 and "auto" in cols, cols
+        # Outer columns must be able to shrink under their content, or a wide
+        # sign-out block shoves the centre column off the middle.
+        assert "minmax(0, 1fr)" in cols, (
+            f"outer columns are {cols!r}; plain 1fr will not stay centred")
+        # The slot lays out nothing itself, so its children are bar columns.
+        assert re.search(r"#masthead \{[^}]*display:\s*contents", css)
+
+        js = (self.STATIC / "api.js").read_text()
+        body = js[js.index("export async function renderBranding"):]
+        body = body[:body.index("\n}")]
+        assert body.index("mast-left") < body.index("${centre}"), (
+            "our wordmark must be emitted before the club's mark, so it takes "
+            "the left column and the club's takes the centre")
+
+    def test_a_phone_drops_the_viewer_name_rather_than_the_badge(self):
+        """Something has to give at 414px. It is not the club's crest."""
+        import re
+        css = (self.STATIC / "styles.css").read_text()
+        narrow = re.search(r"@media \(max-width: \d+px\) \{(.*?)\n\}", css, re.S).group(1)
+        assert re.search(r"#whoami \{[^}]*display:\s*none", narrow), narrow
+        assert "club-badge { display: none" not in narrow
 
     def test_the_signed_out_page_carries_only_our_mark(self):
         """There is no club yet at sign-in, so there is nothing to lead with."""

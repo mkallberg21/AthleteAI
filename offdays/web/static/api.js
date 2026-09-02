@@ -117,9 +117,13 @@ export async function renderBranding(slot, subtitle = "") {
   if (!el) return null;
   let brand = { name: "", logo: "" };
   try { brand = await api("/api/branding"); } catch { /* header is not worth failing over */ }
-  const badge = brand.logo
-    ? `<img class="club-badge" src="${brand.logo}" alt="${brand.name}">` : "";
-  const name = brand.logo ? "" : `<div class="club-name">${esc(brand.name)}</div>`;
+  // The club's mark sits in the centre of the bar and ours at the far left:
+  // the eye lands mid-header first, so the middle is the strongest slot to
+  // give a program, and our wordmark reads as the masthead of the tool it
+  // arrived in. A program with no badge puts its name in the same centre.
+  const centre = brand.logo
+    ? `<img class="club-badge" src="${brand.logo}" alt="${brand.name}">`
+    : `<div class="club-name">${esc(brand.name)}</div>`;
   // The full lockup at exactly the 120px the brand guidelines set as its
   // minimum -- below that they say to use the bare mark instead, and this is
   // the smallest the wordmark is allowed to be. The club's badge is sized
@@ -128,10 +132,13 @@ export async function renderBranding(slot, subtitle = "") {
   // its 120px minimum, the bare glyph where there is not. The guidelines are
   // explicit that the answer to a narrow header is the mark, never a smaller
   // lockup, so a phone gets the glyph rather than a squeezed wordmark.
-  el.innerHTML = `<div class="masthead">${badge}<div class="stack">
+  // Two siblings, not one wrapper: the slot is display:contents so these
+  // become columns of the top bar itself, which is what lets the badge be
+  // centred on the whole header rather than on the branding block.
+  el.innerHTML = `<div class="mast-left"><div class="stack">
     <img class="offdays-lockup" src="offdays-lockup.png" alt="0FFDAYS">
     <img class="offdays-mark" src="offdays-mark.png" alt="0FFDAYS">
-    ${name}${subtitle ? `<div class="role">${esc(subtitle)}</div>` : ""}
-    </div></div>`;
+    ${subtitle ? `<div class="role">${esc(subtitle)}</div>` : ""}
+    </div></div>${centre}`;
   return brand;
 }

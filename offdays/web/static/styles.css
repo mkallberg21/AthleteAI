@@ -93,8 +93,12 @@ p { line-height: 1.55; color: var(--muted); }
 a { color: var(--accent); }
 
 .topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 14px 16px;
+  /* Three columns so the club's badge is centred on the bar itself. The
+     outer two are minmax(0, 1fr) rather than 1fr: equal-width columns that
+     may shrink under their content, so a wide sign-out block on the right
+     cannot push the centre off-centre or overflow the bar on a phone. */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center; gap: 12px; padding: 14px 16px;
   background: var(--surface); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 20;
 }
@@ -779,8 +783,16 @@ tbody tr:hover { background: var(--surface-2); }
    leads at a size you would call a logo; ours sits behind it at a size you
    would call a credit. */
 .masthead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* The slot itself lays out nothing: its two children become top-bar columns,
+   which is what puts the badge in the middle of the header. */
+#masthead { display: contents; }
+.mast-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* Whatever the page hangs on the right of the bar, held to the right edge. */
+.topbar > #masthead ~ div { justify-self: end; }
 .club-badge {
-  height: 62px; width: auto; max-width: 240px; display: block; flex: 0 0 auto;
+  /* Sized so the club's mark leads ours at its real aspect (2.80:1),
+     not the wider one the header was first mocked up around. */
+  height: 72px; width: auto; max-width: 240px; display: block; flex: 0 0 auto;
 }
 .club-name {
   font-family: var(--font-head); font-weight: 600; font-size: 1.18rem;
@@ -799,14 +811,17 @@ tbody tr:hover { background: var(--surface-2); }
   font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
   color: var(--muted); white-space: nowrap; margin-top: 2px;
 }
-/* Stacked under the club name so the two marks never compete on a phone. */
-.masthead .stack { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+/* The role label sits under our wordmark on the left of the bar. */
+.masthead .stack, .mast-left .stack { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 @media (max-width: 560px) {
-  .club-badge { height: 40px; max-width: 140px; }
+  .club-badge { height: 48px; max-width: 145px; }
   /* Never a shrunken lockup -- swap to the mark instead. */
   .offdays-lockup { display: none; }
   .offdays-mark { display: block; }
-  .masthead { gap: 9px; }
+  .masthead, .mast-left { gap: 9px; }
   .club-name { font-size: 1rem; }
   .role { display: none; }
+  /* An athlete knows their own name; the badge does not fit beside it on a
+     phone, and between the two the club's mark is the one worth the room. */
+  #whoami { display: none; }
 }
