@@ -16,11 +16,13 @@ from .catalog import (
     DRILLS_BY_KEY,
     SHARES_DRILLS_WITH,
     drill_sports,
+    for_sport,
     get_drill,
 )
 
 __all__ = [
     "drill_sports",
+    "for_sport",
     "SHARES_DRILLS_WITH",
     "ALL_DRILLS",
     "Category",

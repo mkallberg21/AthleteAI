@@ -62,7 +62,7 @@ from .team_goals import GoalError
 from .billing import BillingError
 from .guardians import GuardianError
 from .roster import RosterError
-from .drills import ALL_DRILLS, DRILLS_BY_KEY
+from .drills import ALL_DRILLS, DRILLS_BY_KEY, for_sport as drills_for_sport
 from .drills.base import CUE_CELLS, CUE_UNREADABLE
 from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError, transaction
@@ -230,12 +230,18 @@ def my_drills(
     principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """The catalog, with anything loading a sore area marked unavailable.
+    """This program's drills, with anything loading a sore area marked.
 
-    Held back rather than forbidden: the drill still appears and can still be
-    started. This app is not anyone's physio and should not pretend it can
-    stop a determined thirteen-year-old -- but it should not put a sore knee
-    on the home screen with a button next to it either.
+    Scoped to the sport, which the unauthenticated /api/drills deliberately is
+    not: that one is reference data, this one is a list a child chooses from.
+    A lacrosse player was being offered soccer juggling, because the whole
+    eighty-nine-drill catalog was going out to everybody -- fifty-three of them
+    belonging to somebody else's sport.
+
+    Held back rather than forbidden: a drill loading a sore area still appears
+    and can still be started. This app is not anyone's physio and should not
+    pretend it can stop a determined thirteen-year-old -- but it should not put
+    a sore knee on the home screen with a button next to it either.
     """
     sport = _org_sport(store, principal.org_id)
     status = store.wellness_status(principal.id)
@@ -247,7 +253,7 @@ def my_drills(
                 **transfer_mod.describe(d.key, sport),
                 **wellness_mod.drill_availability(status, d.key, d.load.tissue),
             }
-            for d in ALL_DRILLS
+            for d in drills_for_sport(sport)
         ],
         "wellness": status.to_dict(),
     }

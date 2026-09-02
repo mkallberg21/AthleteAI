@@ -4616,6 +4616,37 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
 DRILLS_BY_KEY: dict[str, DrillSpec] = {d.key: d for d in ALL_DRILLS}
 
 
+#: Drills belonging to no sport in particular. Every program gets these: a
+#: squat is a squat whatever the athlete plays.
+GENERAL = "general"
+
+
+def for_sport(sport: str | None) -> tuple[DrillSpec, ...]:
+    """The drills a program of this sport should actually be offered.
+
+    Its own sport's work, the work of any sport it shares drills with, and the
+    general conditioning everyone does. Nothing else: a lacrosse player has no
+    use for soccer juggling, and a list of eighty-nine drills where fifty-three
+    belong to other sports is a list nobody reads to the bottom of.
+
+    The sport's own work comes first and the general conditioning after it.
+    A lacrosse player opening "Pick a drill" should land on wall ball and
+    ground balls, not on glute bridges -- the catalog's own order puts the
+    general drills first, which is the wrong end for the person choosing.
+
+    An unknown or missing sport gets the general drills alone rather than the
+    whole catalog -- showing everything is what this function exists to stop,
+    and it should not be the fallback for the case where we know least.
+    """
+    if not sport:
+        return tuple(d for d in ALL_DRILLS if d.sport == GENERAL)
+    own = drill_sports(sport)
+    return (
+        tuple(d for d in ALL_DRILLS if d.sport in own)
+        + tuple(d for d in ALL_DRILLS if d.sport == GENERAL)
+    )
+
+
 def get_drill(key: str) -> DrillSpec:
     """Look up a drill, raising a clear error for an unknown key."""
     try:
