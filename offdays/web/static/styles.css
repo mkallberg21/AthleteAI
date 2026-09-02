@@ -320,6 +320,41 @@ tbody tr:hover { background: var(--surface-2); }
 .mark.met { color: var(--go); border: 1px solid var(--go); }
 .mark.unmet { color: var(--muted); border: 1px dashed var(--border); }
 
+/* ---- Film IQ coverage ---- */
+
+.iq-clip {
+  border: 1px solid var(--border); border-radius: 11px;
+  padding: 13px 14px; margin-bottom: 11px;
+}
+.iq-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; flex-wrap: wrap;
+}
+/* How far the clip has reached, at a glance, before any names are read. */
+.iq-bar {
+  height: 4px; border-radius: 2px; background: var(--border);
+  margin: 10px 0 12px; overflow: hidden;
+}
+.iq-bar span { display: block; height: 100%; background: var(--accent); }
+.who-row {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin-top: 7px;
+}
+.who-label {
+  font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); min-width: 62px;
+}
+/* Three states told apart by border and weight as well as colour, so the
+   grouping survives a printout and a coach who cannot separate the hues. */
+.who {
+  font-size: .76rem; padding: 2px 9px; border-radius: 999px;
+  white-space: nowrap; border: 1px solid transparent;
+}
+.who.done { color: var(--go); border-color: var(--go); }
+.who.part { color: var(--warn); border-color: var(--warn); border-style: dashed; }
+.who.none { color: var(--muted); border-color: var(--border); border-style: dotted; }
+.who .again { margin-left: 5px; opacity: .8; font-size: .9em; }
+
 /* ---- Form quality ---- */
 
 .quality {

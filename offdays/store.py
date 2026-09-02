@@ -108,6 +108,19 @@ def _parse(value: str | None) -> datetime | None:
 OFFLINE_BACKDATE_LIMIT_DAYS = 14
 
 
+#: Carried in the response and shown on the screen, the way `second_looks`
+#: carries its own. A grid of children's names with a column headed "not yet"
+#: will be read as a naughty list unless it says plainly that it is not one.
+_COVERAGE_NOTE = (
+    "Coverage, not compliance. This says which clips have reached the squad, "
+    "so you know what you can build on at practice and what still needs "
+    "showing. An athlete under \u201cnot yet\u201d has a clip left to watch, "
+    "which is a fact about the clip rather than about them."
+)
+
+
+
+
 class StoreError(Exception):
     """A request that is well-formed but not permissible."""
 
@@ -1094,6 +1107,111 @@ class Store:
                 {"day": r["day"], "title": r["title"], "verdict": r["verdict"]}
                 for r in rows[:20]
             ],
+        }
+
+    def clip_coverage(
+        self, org_id: int, athlete_ids: list[int], days: int = 28
+    ) -> dict[str, Any]:
+        """Who has seen each clip, and who has not.
+
+        The question a coach actually has before practice is "I want to talk
+        about the man-down slide -- has everyone seen it?". `team_film` cannot
+        answer it: it reports how many clips each athlete finished, never
+        which. So this is grouped by clip, the way `second_looks` is, and for
+        the same reason -- the same rows sorted athlete-first are a list of
+        who is behind, and would be read that way whatever the heading said.
+
+        Within a clip the names are alphabetical, never ordered by minutes or
+        by how much was seen. The buckets are coverage, not a mark: an athlete
+        appears under "not yet" because the clip is still to watch, which is a
+        fact about the clip's reach and not a judgement of the child.
+
+        Question results are reported per clip and never per athlete. Whether
+        nine of eleven got it right tells a coach if the point landed, which
+        is worth knowing; who got it wrong turns one comprehension question
+        into a grade book, which this module deliberately is not.
+        """
+        if not athlete_ids:
+            return {"days": days, "clips": [], "roster_count": 0,
+                    "how_to_read": _COVERAGE_NOTE}
+        start = (_now().date() - timedelta(days=days - 1)).isoformat()
+        marks = ",".join("?" for _ in athlete_ids)
+
+        clips = self.conn.execute(
+            "SELECT id, title, focus, question FROM clips "
+            "WHERE org_id = ? AND active = 1 ORDER BY id DESC",
+            (org_id,),
+        ).fetchall()
+        names = {
+            int(r["id"]): r["display_name"]
+            for r in self.conn.execute(
+                f"SELECT id, display_name FROM users WHERE id IN ({marks})",
+                tuple(athlete_ids),
+            ).fetchall()
+        }
+
+        # One pass over the watches rather than a query per clip: a roster of
+        # thirty and a shelf of forty clips is twelve hundred round trips the
+        # obvious way round.
+        watches: dict[int, dict[int, sqlite3.Row]] = {}
+        for r in self.conn.execute(
+            f"SELECT clip_id, athlete_id, verdict, looks, seen_json, answered, "
+            f"  answer_ok FROM clip_watches "
+            f"WHERE athlete_id IN ({marks}) AND day >= ?",
+            (*athlete_ids, start),
+        ).fetchall():
+            # An athlete may watch the same clip on more than one day. The
+            # best verdict wins: having watched it properly once is having
+            # watched it, and a later partial re-open does not undo that.
+            seen = watches.setdefault(int(r["clip_id"]), {})
+            prev = seen.get(int(r["athlete_id"]))
+            if prev is None or (
+                r["verdict"] == film.Verdict.WATCHED
+                and prev["verdict"] != film.Verdict.WATCHED
+            ):
+                seen[int(r["athlete_id"])] = r
+
+        out = []
+        for clip in clips:
+            rows = watches.get(int(clip["id"]), {})
+            watched, started, not_yet = [], [], []
+            asked = correct = 0
+            for athlete_id, name in names.items():
+                row = rows.get(athlete_id)
+                if row is None:
+                    not_yet.append({"athlete_id": athlete_id, "display_name": name})
+                    continue
+                if row["answered"] is not None:
+                    asked += 1
+                    correct += 1 if row["answer_ok"] else 0
+                entry = {
+                    "athlete_id": athlete_id,
+                    "display_name": name,
+                    "looks": int(row["looks"] or 1),
+                    "verdict": row["verdict"],
+                }
+                if row["verdict"] == film.Verdict.WATCHED:
+                    watched.append(entry)
+                else:
+                    started.append(entry)
+            key = lambda a: a["display_name"].lower()  # noqa: E731
+            out.append({
+                "clip_id": int(clip["id"]),
+                "title": clip["title"],
+                "focus": clip["focus"],
+                "has_question": bool(clip["question"]),
+                "watched": sorted(watched, key=key),
+                "started": sorted(started, key=key),
+                "not_yet": sorted(not_yet, key=key),
+                "watched_count": len(watched),
+                "answered_count": asked,
+                "answered_right": correct,
+            })
+        return {
+            "days": days,
+            "roster_count": len(names),
+            "clips": out,
+            "how_to_read": _COVERAGE_NOTE,
         }
 
     def team_film(

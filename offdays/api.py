@@ -1846,6 +1846,12 @@ def _org_sport(store: Store, org_id: int) -> str:
     return (row["sport"] if row else None) or "lacrosse"
 
 
+def _sport_label(store: Store, org_id: int) -> str:
+    """The program's sport as a coach would say it: "Lacrosse", not "lacrosse"."""
+    sport = sports_mod.BY_KEY.get(_org_sport(store, org_id))
+    return sport.label if sport else "Game"
+
+
 class SeasonPhaseSetting(BaseModel):
     phase: str = Field(min_length=1, max_length=40)
 
@@ -2069,6 +2075,36 @@ def team_film(
         store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
     )
     return store.team_film([a["athlete_id"] for a in athletes])
+
+
+@app.get("/api/coach/film/coverage")
+def film_coverage(
+    team_id: int | None = None,
+    days: int = Query(default=28, ge=1, le=180),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Who has watched each clip, and who has not.
+
+    The pre-practice question `/api/coach/film` cannot answer: it reports how
+    many clips each athlete finished, never which one. Grouped by clip, names
+    alphabetical inside each bucket, and question results reported per clip
+    rather than per athlete -- see `Store.clip_coverage`.
+    """
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    athletes = coach_roster(
+        store.conn, principal.org_id, team_id, "week", scope=principal.scope_filter()
+    )
+    return {
+        # Named for the program's sport: a lacrosse club calls this Lacrosse
+        # IQ and a hockey club calls it Hockey IQ, which is what coaches in
+        # both already say.
+        "label": f"{_sport_label(store, principal.org_id)} IQ",
+        **store.clip_coverage(
+            principal.org_id, [a["athlete_id"] for a in athletes], days=days
+        ),
+    }
 
 
 @app.get("/api/coach/film/second-looks")

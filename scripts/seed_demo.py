@@ -12,6 +12,7 @@ Prints the sign-in tokens at the end.
 from __future__ import annotations
 
 import argparse
+import json
 import random
 import sys
 from datetime import datetime, timedelta, timezone
@@ -34,6 +35,26 @@ from offdays.store import Store  # noqa: E402
 #   rom_scale       -- how much of full range they actually cover
 #   decay           -- how much range they keep by the end of a session
 #   offhand_deficit -- how much shorter the weak hand's range is
+#: The Lacrosse IQ shelf. Titles a coach would recognise, and a question on
+#: the two where a wrong answer is genuinely instructive.
+FILM_SHELF = [
+    ("Sliding from the crease", "Watch the first slide, not the ball. Who goes, and when.",
+     {"prompt": "The first slide comes from the crease. Who fills behind it?",
+      "options": ["Nobody -- the crease stays", "The adjacent defender",
+                  "The goalie steps out", "The nearest midfielder"],
+      "answer": 1,
+      "because": "Second slide fills the crease so the next pass has somebody home."}),
+    ("Man-down: the rotation", "Feet before the pass. The rotation starts as the ball leaves.",
+     {"prompt": "When does the rotation start?",
+      "options": ["When the ball arrives", "As the ball is released",
+                  "When the shooter winds up", "After the first shot"],
+      "answer": 1,
+      "because": "Moving on the catch is already a step late."}),
+    ("Clearing under pressure", "Where the outlet is before you have the ball.", None),
+    ("Riding as a unit", "Angles, not sprints. Watch how the two attackers share the field.", None),
+    ("Off-ball cutting", "The cut that opens the slide, two passes before the shot.", None),
+]
+
 ROSTER = [
     # Thirteen athletes on one squad, each carrying a behaviour the dashboard
     # is meant to catch. The names are the program's; the profiles are what
@@ -262,6 +283,60 @@ def main() -> int:
     # Badges are derived from history, so re-sync after backdating.
     for athlete, *_ in athletes:
         store._sync_badges(athlete["id"])
+
+    # Film study: a shelf of Lacrosse IQ clips, and an uneven spread of who
+    # has watched them. Uneven on purpose -- a coverage screen where everyone
+    # has seen everything demonstrates nothing.
+    #
+    # The `link` provider with a .invalid host rather than a YouTube id: an
+    # eleven-character id invented for a demo can collide with somebody's real
+    # video, and .invalid is reserved precisely so it never resolves.
+    clips = []
+    for title, focus, question in FILM_SHELF:
+        clips.append(store.create_clip(
+            org_id,
+            f"https://clips.example.invalid/{title.lower().replace(' ', '-')}",
+            title,
+            focus=focus,
+            provider="link",
+            end_s=110,
+            question=question,
+            created_by=director["id"],
+        ))
+
+    # Written straight in, the way the sessions above are: start_watch is
+    # gated by the daily film cap, which exists to stop a child bingeing and
+    # would otherwise mean seeding one clip per athlete per day.
+    for clip_index, clip in enumerate(clips):
+        # The newest clip has reached the fewest people, which is what a shelf
+        # actually looks like a few days after something is added.
+        reach = (len(athletes), 10, 7, 4, 2)[min(clip_index, 4)]
+        for i, (athlete, name, *_rest) in enumerate(athletes[:reach]):
+            watched = (i + clip_index) % 4 != 0
+            when = now - timedelta(days=clip_index + 1, hours=rng.uniform(0, 8))
+            seen = list(range(110)) if watched else list(range(38))
+            asked = clip["question"] is not None
+            store.conn.execute(
+                "INSERT OR IGNORE INTO clip_watches("
+                "  athlete_id, clip_id, day, position_s, watched_s, audible_s,"
+                "  focused_s, wall_s, seeks, max_rate, seen_json, verdict, looks,"
+                "  answered, answer_ok, xp_awarded, started_at, last_beat_at"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    athlete["id"], clip["id"], when.date().isoformat(),
+                    len(seen), float(len(seen)), float(len(seen)),
+                    float(len(seen)), float(len(seen)) + 4, 0, 1.0,
+                    json.dumps(seen),
+                    "watched" if watched else "partial",
+                    2 if watched and i % 5 == 0 else 1,
+                    1 if (asked and watched) else None,
+                    (1 if i % 6 else 0) if (asked and watched) else None,
+                    12 if watched else 0,
+                    when.isoformat(timespec="seconds"),
+                    when.isoformat(timespec="seconds"),
+                ),
+            )
+    store.conn.commit()
 
     # A live assignment per team, so the compliance view has something in it.
     today = now.date()

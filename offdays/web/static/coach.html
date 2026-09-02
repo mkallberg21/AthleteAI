@@ -274,6 +274,12 @@
     <div id="clip-list" style="margin-top:12px"></div>
   </div>
 
+  <div class="card" id="iq-card">
+    <h2 id="iq-title">Film IQ</h2>
+    <p class="small muted" id="iq-note"></p>
+    <div id="iq-coverage"></div>
+  </div>
+
   <div class="card hidden" id="wellness-card">
     <h2>Carrying something</h2>
     <p class="small muted">
@@ -1524,13 +1530,57 @@ function drillName(key) {
 
 async function loadFilm(teamId) {
   try {
-    const [watchers, catalog] = await Promise.all([
+    const [watchers, catalog, coverage] = await Promise.all([
       api(`/api/coach/film${teamId ? `?team_id=${teamId}` : ''}`),
       api('/api/coach/clips'),
+      api(`/api/coach/film/coverage${teamId ? `?team_id=${teamId}` : ''}`),
     ]);
     renderFilmWatchers(watchers);
     renderClipList(catalog.clips);
+    renderCoverage(coverage);
   } catch { /* no clips curated yet */ }
+}
+
+// Who has seen each clip. Grouped by clip, because the same rows grouped by
+// athlete are a list of who is behind, and get read that way whatever the
+// heading says. Names inside a bucket are alphabetical, never ordered by how
+// much was watched.
+function renderCoverage(data) {
+  document.getElementById('iq-title').textContent = data.label || 'Film IQ';
+  document.getElementById('iq-note').textContent = data.how_to_read || '';
+  const clips = data.clips || [];
+  if (!clips.length) {
+    $('iq-coverage').innerHTML =
+      '<p class="small muted">No clips on the shelf yet. Add one above and '
+      + 'this fills in as the squad watches.</p>';
+    return;
+  }
+  const chips = (people, cls) => people.map((a) => `
+    <span class="who ${cls}">${esc(a.display_name)}${
+      a.looks > 1 ? '<span class="again" title="Went back for another look">'
+        + '\u21bb' + a.looks + '</span>' : ''}</span>`).join('');
+
+  $('iq-coverage').innerHTML = clips.map((c) => {
+    const seen = c.watched_count, all = data.roster_count;
+    const pct = all ? Math.floor((seen / all) * 100) : 0;
+    const quiz = c.answered_count
+      ? `<span class="small muted">${c.answered_right}/${c.answered_count} answered the check correctly</span>`
+      : '';
+    return `<div class="iq-clip">
+      <div class="iq-head">
+        <div>
+          <b>${esc(c.title)}</b>
+          ${c.focus ? `<br><span class="small muted">${esc(c.focus)}</span>` : ''}
+        </div>
+        <span class="pill ${seen === all ? 'ok' : 'warn'}">${seen}/${all} watched</span>
+      </div>
+      <div class="iq-bar"><span style="width:${pct}%"></span></div>
+      ${seen ? `<div class="who-row"><span class="who-label">Watched</span>${chips(c.watched, 'done')}</div>` : ''}
+      ${c.started.length ? `<div class="who-row"><span class="who-label">Started</span>${chips(c.started, 'part')}</div>` : ''}
+      ${c.not_yet.length ? `<div class="who-row"><span class="who-label">Not yet</span>${chips(c.not_yet, 'none')}</div>` : ''}
+      ${quiz ? `<div style="margin-top:8px">${quiz}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function renderFilmWatchers(data) {
