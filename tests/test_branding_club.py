@@ -190,3 +190,52 @@ class TestTheHeaderIsOnEveryScreen:
     def test_the_signed_out_page_carries_only_our_mark(self):
         """There is no club yet at sign-in, so there is nothing to lead with."""
         assert 'id="masthead"' not in (self.STATIC / "index.html").read_text()
+
+
+class TestTheAssignmentTargetsAreReadable:
+    """A coach should not need a decoder ring for their own dashboard.
+
+    The compliance table showed three unlabelled letters -- S, R, O -- whose
+    only state cue was a colour difference. It did not survive a screenshot,
+    a printout, or a coach who cannot separate the two hues, and the person
+    who commissioned the product could not read it.
+    """
+
+    STATIC = pathlib.Path(__file__).resolve().parents[1] / "offdays" / "web" / "static"
+
+    def test_each_target_is_named_rather_than_lettered(self):
+        html = (self.STATIC / "coach.html").read_text()
+        assert "function targetMarks" in html
+        for label in ("'Sessions'", "'Reps'", "'Off-hand'"):
+            assert label in html, label
+        # The old single-character code, which is what made it unreadable.
+        assert "mark(p.sessions_met, 'S')" not in html
+        assert 'class="dots"' not in html
+
+    def test_the_column_says_what_was_met(self):
+        html = (self.STATIC / "coach.html").read_text()
+        assert "<th>Targets met</th>" in html
+
+    def test_met_and_unmet_differ_by_more_than_colour(self):
+        """Greyscale and colour-blindness both have to survive this."""
+        import re
+        css = (self.STATIC / "styles.css").read_text()
+        met = re.search(r"\.mark\.met \{([^}]*)\}", css).group(1)
+        unmet = re.search(r"\.mark\.unmet \{([^}]*)\}", css).group(1)
+        assert "solid" in met and "dashed" in unmet, (met, unmet)
+        html = (self.STATIC / "coach.html").read_text()
+        # A tick against a middot, so the glyph carries the state too.
+        assert "\\u2713" in html and "\\u00b7" in html
+
+    def test_the_percentage_shown_never_contradicts_the_tick(self):
+        """0.346 rounds up to "35%" against a 35% minimum, then shows as not
+        met -- the number and the state disagreeing in adjacent columns. The
+        displayed share is floored so that cannot happen."""
+        html = (self.STATIC / "coach.html").read_text()
+        assert "Math.floor(p.offhand_share * 100)" in html
+        assert "Math.round(p.offhand_share * 100)" not in html
+
+    def test_every_mark_carries_its_target_in_a_tooltip(self):
+        html = (self.STATIC / "coach.html").read_text()
+        assert 'title="${esc(label)}${esc(goal)}' in html
+        assert "'met' : 'not met yet'" in html

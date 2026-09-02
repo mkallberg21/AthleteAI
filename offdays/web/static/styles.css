@@ -309,9 +309,16 @@ tbody tr:hover { background: var(--surface-2); }
 
 .compliance { width: 100%; font-size: .85rem; }
 .compliance td { padding: 8px 6px; }
-.dots { font-family: ui-monospace, monospace; letter-spacing: .12em; }
-.dots .on { color: var(--accent); }
-.dots .off { color: var(--muted); opacity: .5; }
+/* Assignment targets: named, not coded, and distinguished by glyph and
+   border as well as colour so the column still reads in greyscale and to a
+   coach who cannot separate the two hues. */
+.marks { display: flex; gap: 5px; flex-wrap: wrap; }
+.mark {
+  font-size: .72rem; padding: 2px 8px; border-radius: 999px;
+  white-space: nowrap; line-height: 1.5;
+}
+.mark.met { color: var(--go); border: 1px solid var(--go); }
+.mark.unmet { color: var(--muted); border: 1px dashed var(--border); }
 
 /* ---- Form quality ---- */
 

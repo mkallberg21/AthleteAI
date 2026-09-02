@@ -887,9 +887,26 @@ $('digest-send').addEventListener('click', async () => {
 
 // ------------------------------------------------------------- assignments
 
-function dotRow(p) {
-  const mark = (on, ch) => `<span class="${on ? 'on' : 'off'}">${ch}</span>`;
-  return `<span class="dots">${mark(p.sessions_met, 'S')}${mark(p.reps_met, 'R')}${mark(p.offhand_met, 'O')}</span>`;
+// Which of the assignment's three targets this athlete has actually hit.
+//
+// This was three unlabelled letters -- S, R, O -- separated only by colour.
+// Nobody could read it without being told, it carried nothing in a printout
+// or a screenshot, and a colour-blind coach got three identical characters.
+// So each target is named, and met/not-met is a tick against a dot and a
+// solid border against a dashed one, which survives greyscale.
+function targetMarks(p, a) {
+  const mark = (on, label, target) => {
+    const goal = target ? ` (${target})` : '';
+    return `<span class="mark ${on ? 'met' : 'unmet'}"
+      title="${esc(label)}${esc(goal)}: ${on ? 'met' : 'not met yet'}"
+      >${on ? '\u2713' : '\u00b7'} ${esc(label)}</span>`;
+  };
+  return `<span class="marks">${
+    mark(p.sessions_met, 'Sessions', a.target_sessions)
+  }${mark(p.reps_met, 'Reps', a.target_reps)}${
+    mark(p.offhand_met, 'Off-hand',
+         a.min_offhand ? `${Math.round(a.min_offhand * 100)}%+` : '')
+  }</span>`;
 }
 
 async function loadAssignments() {
@@ -906,13 +923,19 @@ async function loadAssignments() {
         : `<span class="pill ok">${a.days_remaining}d left</span>`;
 
     const rows = a.athletes.map((p) => {
-      const share = p.offhand_share === null ? '&mdash;' : `${Math.round(p.offhand_share * 100)}%`;
+      // Floored, not rounded. An athlete on 0.346 rounds up to "35%" against
+      // a 35% minimum and is then marked not met, which reads as a bug in the
+      // column beside it. Flooring keeps the number and the tick agreeing at
+      // the boundary, and errs towards understating off-hand work rather than
+      // crediting work that did not happen.
+      const share = p.offhand_share === null
+        ? '&mdash;' : `${Math.floor(p.offhand_share * 100)}%`;
       return `<tr>
         <td>${esc(p.display_name)}</td>
         <td class="num">${p.sessions_done}/${a.target_sessions || '&mdash;'}</td>
         <td class="num">${p.reps_done}/${a.target_reps || '&mdash;'}</td>
         <td class="num">${share}</td>
-        <td>${dotRow(p)} ${p.complete ? '<span class="pill ok">done</span>' : ''}</td>
+        <td>${targetMarks(p, a)} ${p.complete ? '<span class="pill ok">done</span>' : ''}</td>
       </tr>`;
     }).join('');
 
@@ -933,7 +956,7 @@ async function loadAssignments() {
       <div style="overflow-x:auto;margin-top:10px">
         <table class="compliance">
           <thead><tr><th>Athlete</th><th class="num">Sess</th><th class="num">Reps</th>
-            <th class="num">Off-hand</th><th>Met</th></tr></thead>
+            <th class="num">Off-hand</th><th>Targets met</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
