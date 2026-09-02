@@ -1583,6 +1583,25 @@ function renderCoverage(data) {
   }).join('');
 }
 
+//: A coach and a director share this screen and do not share a job title.
+const ROLE_LABELS = { director: 'Director', coach: 'Coach', admin: 'Admin' };
+
+function setRole(role) {
+  const slot = document.querySelector('.mast-left .role');
+  const label = ROLE_LABELS[role]
+    || (role ? role.charAt(0).toUpperCase() + role.slice(1) : '');
+  if (slot) { slot.textContent = label; return; }
+  // renderBranding builds the masthead asynchronously, so the slot may not
+  // exist yet on a fast sign-in. Put it in when it does rather than dropping
+  // the label silently.
+  const stack = document.querySelector('.mast-left .stack');
+  if (!stack || !label) return;
+  const el = document.createElement('div');
+  el.className = 'role';
+  el.textContent = label;
+  stack.appendChild(el);
+}
+
 function renderFilmWatchers(data) {
   const rows = data.athletes || [];
   if (!rows.length) {
@@ -2443,8 +2462,14 @@ $('signout').addEventListener('click', logout);
 
 (async () => {
   try {
+    // Both start at once, but the role cannot be written until the masthead
+    // it lives in exists -- so the label waits on the badge rather than
+    // racing it and losing silently.
+    const brandingReady = renderBranding("masthead", "");
     const me = await api('/api/me');
     $('whoami').textContent = me.display_name;
+    await brandingReady;
+    setRole(me.role);
 
     const orgs = await api('/api/orgs/mine');
     if (orgs.memberships.length > 1) {
@@ -2480,8 +2505,11 @@ $('signout').addEventListener('click', logout);
   } catch (e) { showError(e.message); }
 })();
 
-// The club's badge first, before anything else loads.
-renderBranding("masthead", "Coach");
+// The badge and the role are rendered together at the top of the block
+// above. The role beneath our wordmark is whatever this person actually is:
+// it was hardcoded to "Coach", so a director signing in was told they were a
+// coach on every screen of their own program.
+
 </script>
 </body>
 </html>

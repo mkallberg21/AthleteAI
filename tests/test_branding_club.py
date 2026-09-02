@@ -239,3 +239,41 @@ class TestTheAssignmentTargetsAreReadable:
         html = (self.STATIC / "coach.html").read_text()
         assert 'title="${esc(label)}${esc(goal)}' in html
         assert "'met' : 'not met yet'" in html
+
+
+class TestTheHeaderSaysWhoYouActuallyAre:
+    """A coach and a director share the dashboard and not a job title.
+
+    The role beneath our wordmark was the literal string "Coach", so a
+    director signing in was told they were a coach on every screen of the
+    program they run.
+    """
+
+    STATIC = pathlib.Path(__file__).resolve().parents[1] / "offdays" / "web" / "static"
+
+    def test_the_label_is_not_hardcoded(self):
+        html = (self.STATIC / "coach.html").read_text()
+        assert 'renderBranding("masthead", "Coach")' not in html
+        assert "setRole(me.role)" in html
+
+    def test_both_roles_have_a_label(self):
+        html = (self.STATIC / "coach.html").read_text()
+        assert "director: 'Director'" in html
+        assert "coach: 'Coach'" in html
+
+    def test_the_label_waits_for_the_masthead_it_lives_in(self):
+        """renderBranding builds the header asynchronously. Writing the role
+        without waiting is a race that loses the label silently."""
+        html = (self.STATIC / "coach.html").read_text()
+        assert "await brandingReady;" in html
+        i = html.index("const brandingReady")
+        j = html.index("setRole(me.role)")
+        assert i < j, "the role is written before the branding is started"
+
+    def test_a_page_whose_label_is_the_page_keeps_it(self):
+        """parent.html and leaderboard.html name the view, not the viewer --
+        those are correct as they stand and should not be swept up."""
+        assert 'renderBranding("masthead", "Parent")' in (
+            self.STATIC / "parent.html").read_text()
+        assert 'renderBranding("masthead", "Leaderboard")' in (
+            self.STATIC / "leaderboard.html").read_text()
