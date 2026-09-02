@@ -128,16 +128,15 @@ export async function renderBranding(slot, subtitle = "") {
   // minimum -- below that they say to use the bare mark instead, and this is
   // the smallest the wordmark is allowed to be. The club's badge is sized
   // larger than it so the program still leads its own header.
-  // Both marks ship and CSS chooses: the lockup where there is room for it at
-  // its 120px minimum, the bare glyph where there is not. The guidelines are
-  // explicit that the answer to a narrow header is the mark, never a smaller
-  // lockup, so a phone gets the glyph rather than a squeezed wordmark.
+  // The full lockup on every screen, at every width. The guidelines' 120px
+  // minimum is honoured by never going below it -- a phone keeps the whole
+  // wordmark and the bar wraps to two rows instead, rather than falling back
+  // to the bare glyph, which read as an unfinished logo.
   // Two siblings, not one wrapper: the slot is display:contents so these
   // become columns of the top bar itself, which is what lets the badge be
   // centred on the whole header rather than on the branding block.
   el.innerHTML = `<div class="mast-left"><div class="stack">
     <img class="offdays-lockup" src="offdays-lockup.png" alt="0FFDAYS">
-    <img class="offdays-mark" src="offdays-mark.png" alt="0FFDAYS">
     ${subtitle ? `<div class="role">${esc(subtitle)}</div>` : ""}
     </div></div>${centre}`;
   return brand;

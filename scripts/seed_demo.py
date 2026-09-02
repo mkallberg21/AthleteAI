@@ -35,25 +35,47 @@ from offdays.store import Store  # noqa: E402
 #   decay           -- how much range they keep by the end of a session
 #   offhand_deficit -- how much shorter the weak hand's range is
 ROSTER = [
-    # Six athletes, each carrying a behaviour the dashboard is meant to catch.
-    # The names are the program's; the profiles are what make the demo worth
-    # looking at, so they are described here rather than left to be inferred
-    # from the numbers.
+    # Thirteen athletes on one squad, each carrying a behaviour the dashboard
+    # is meant to catch. The names are the program's; the profiles are what
+    # make the demo worth looking at, so they are described here rather than
+    # left to be inferred from the numbers.
+    #
+    # (name, position, hand, sessions/week, off-hand share, quiet days, form)
     #
     # Trains hard and never takes a day off -- the workload warning.
-    ("Scott Anderson",  "right", 6.0, 0.48, 0,  dict(rom_cv=0.06, rom_scale=1.00, decay=0.97, offhand_deficit=0.05)),
+    ("Scott Anderson",  "midfield", "right", 6.0, 0.48, 0,  dict(rom_cv=0.06, rom_scale=1.00, decay=0.97, offhand_deficit=0.05)),
     # The one doing it right: steady, balanced, a long streak.
-    ("Ryder Kallberg",  "left",  5.0, 0.42, 0,  dict(rom_cv=0.08, rom_scale=0.98, decay=0.94, offhand_deficit=0.10)),
+    ("Ryder Kallberg",  "attack",   "left",  5.0, 0.42, 0,  dict(rom_cv=0.08, rom_scale=0.98, decay=0.94, offhand_deficit=0.10)),
     # Grinds out volume with a badly neglected weak hand -- the case the
     # off-hand detector exists for.
-    ("Gray Freeman",    "right", 4.0, 0.15, 0,  dict(rom_cv=0.11, rom_scale=0.95, decay=0.90, offhand_deficit=0.34)),
+    ("Gray Freeman",    "midfield", "right", 4.0, 0.15, 0,  dict(rom_cv=0.11, rom_scale=0.95, decay=0.90, offhand_deficit=0.34)),
     # A sharp jump in throwing volume, which is the load advisory.
-    ("Dane Early",      "right", 3.0, 0.30, 1,  dict(rom_cv=0.10, rom_scale=0.92, decay=0.93, offhand_deficit=0.14)),
+    ("Dane Early",      "attack",   "right", 3.0, 0.30, 1,  dict(rom_cv=0.10, rom_scale=0.92, decay=0.93, offhand_deficit=0.14)),
     # Gone quiet for a fortnight -- the nudge list.
-    ("Finn Cannan",     "left",  2.0, 0.22, 12, dict(rom_cv=0.14, rom_scale=0.86, decay=0.88, offhand_deficit=0.18)),
+    ("Finn Cannan",     "defense",  "left",  2.0, 0.22, 12, dict(rom_cv=0.14, rom_scale=0.86, decay=0.88, offhand_deficit=0.18)),
     # Half reps and form that falls apart, then three weeks of nothing --
     # volume without quality, and then no volume either.
-    ("Dano Otis",       "right", 1.0, 0.10, 21, dict(rom_cv=0.22, rom_scale=0.62, decay=0.74, offhand_deficit=0.22)),
+    ("Parker Browne",   "midfield", "right", 1.0, 0.10, 21, dict(rom_cv=0.22, rom_scale=0.62, decay=0.74, offhand_deficit=0.22)),
+    # The best of the squad on both counts: volume and shape together, which
+    # is what the leaderboard is supposed to reward.
+    ("Tanner Dobyns",   "attack",   "right", 5.5, 0.45, 0,  dict(rom_cv=0.05, rom_scale=1.02, decay=0.98, offhand_deficit=0.04)),
+    # Trains only at weekends -- a real pattern, and not one to scold: the
+    # dashboard shows it rather than calling it a failure.
+    ("Rush Corn",       "defense",  "right", 2.0, 0.28, 2,  dict(rom_cv=0.12, rom_scale=0.93, decay=0.91, offhand_deficit=0.16)),
+    # Getting visibly better week on week -- the improvement the trend line
+    # exists to make visible to a coach who only sees game day.
+    ("Miles Herndon",   "lsm",      "right", 3.5, 0.34, 0,  dict(rom_cv=0.09, rom_scale=0.90, decay=0.95, offhand_deficit=0.12)),
+    # Bursts and gaps: four days on, ten off. Neither a problem athlete nor a
+    # consistent one, and the hardest kind for a coach to notice unaided.
+    ("Ben Amden",       "midfield", "left",  2.5, 0.31, 6,  dict(rom_cv=0.15, rom_scale=0.88, decay=0.89, offhand_deficit=0.20)),
+    # Brand new. Joined this week, so almost no history -- the state every
+    # roster has one of, and the one demos usually forget to show.
+    ("Fite Paine",      "fogo",     "right", 4.0, 0.36, 0,  dict(rom_cv=0.13, rom_scale=0.89, decay=0.92, offhand_deficit=0.15)),
+    # Goalie. Hands are quicker to one side than the other, which is a
+    # pattern to work on rather than a mark out of ten.
+    ("Warren Richards", "goalie",   "right", 4.5, 0.40, 0,  dict(rom_cv=0.10, rom_scale=0.96, decay=0.94, offhand_deficit=0.26)),
+    # The other goalie: fewer sessions, but even on both sides.
+    ("Cole Dretler",    "goalie",   "left",  3.0, 0.44, 3,  dict(rom_cv=0.08, rom_scale=0.94, decay=0.93, offhand_deficit=0.07)),
 ]
 
 DRILL_MIX = [
@@ -159,13 +181,15 @@ def main() -> int:
     # into a Red and a Blue side, which is how most youth clubs actually name
     # a roster.
     red = store.create_team(org_id, "2031 Red", "2026")
-    blue = store.create_team(org_id, "2031 Blue", "2026")
 
-    # A director sees the program; a coach sees their own team. Seeding real
-    # coaches rather than only a director is what makes that difference
-    # visible -- signing in as Coach Matt shows 2031 Blue and nothing else.
+    # A director sees the whole program; a coach sees only the teams they are
+    # assigned to. That difference is enforced on the Principal, not in the
+    # page: an assigned coach carries team_ids and every query is filtered by
+    # scope_filter(), while a director carries None and is filtered by nothing.
+    # Seeding real coaches rather than only a director is what makes it
+    # visible -- Coach Tommy's dashboard cannot reach a team he is not on.
     coach_tokens = []
-    for coach_name, team in (("Coach Tommy", red), ("Coach Matt", blue),
+    for coach_name, team in (("Coach Tommy", red), ("Coach Matt", red),
                              ("Coach Mike", red)):
         coach = store.create_user(org_id, "coach", coach_name)
         store.assign_staff_to_team(coach["id"], team["id"])
@@ -174,17 +198,20 @@ def main() -> int:
     now = datetime.now(timezone.utc)
     athletes = []
 
-    for i, (name, hand, per_week, offhand, quiet_days, form) in enumerate(ROSTER):
-        team = blue if name == "Dano Otis" else red
+    for i, (name, position, hand, per_week, offhand, quiet_days, form) in enumerate(ROSTER):
+        team = red
         athlete = store.create_user(
             org_id, "athlete", name,
-            birth_year=2009 + (i % 3),
+            # An age-group squad: "2031" is the graduation year, so the whole
+            # roster is the same school year rather than a spread of ages.
+            birth_year=2013,
             dominant_hand=hand,
             # One athlete deliberately left without consent so the leaderboard's
             # name-masking is visible in the demo.
             guardian_consent=(name != "Gray Freeman"),
         )
-        store.join_team(team["join_code"], athlete["id"], jersey=str(10 + i), position="Midfield")
+        store.join_team(team["join_code"], athlete["id"], jersey=str(10 + i),
+                        position=position)
         athletes.append((athlete, name, hand, per_week, offhand, quiet_days, form))
 
     total_sessions = 0
@@ -238,7 +265,7 @@ def main() -> int:
 
     # A live assignment per team, so the compliance view has something in it.
     today = now.date()
-    for team in (red, blue):
+    for team in (red,):
         assignments_mod.create(
             store.conn,
             org_id=org_id,
@@ -291,8 +318,7 @@ def main() -> int:
     print(f"  assignments: {len(assignments_mod.list_for_org(store.conn, org_id))}")
     print(f"  form-scored: {scored} sessions")
     print(f"  notifications: {sum(generated.values())} scheduled + new-assignment alerts")
-    print(f"\n  Join codes: 2031 Red={red['join_code']}  "
-          f"2031 Blue={blue['join_code']}")
+    print(f"\n  Join code: 2031 Red={red['join_code']}")
     print(f"\n  Guardian invite (unredeemed, for {athletes[1][1]}): {pending['code']}")
     print("\n  Sign-in tokens")
     print(f"    {'Joel White (director)':<26} {director['token']}")

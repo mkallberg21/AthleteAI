@@ -93,21 +93,37 @@ class TestTheHeaderIsOnEveryScreen:
             f"the lockup is set to {width}px, below the {self.LOCKUP_MIN_PX}px "
             "minimum -- use the bare mark instead of shrinking it")
 
-    def test_a_narrow_screen_swaps_to_the_mark_rather_than_shrinking(self):
-        """The guidelines' own instruction for a header with no room.
+    def test_the_whole_wordmark_shows_at_every_width(self):
+        """Never the bare glyph in the header, and never a shrunken lockup.
 
-        A media query that simply made the lockup smaller would put it below
-        the documented minimum, which is the one thing the rule forbids.
+        The guidelines allow swapping to the mark where the lockup will not
+        fit, but a half-logo reads as a broken one, so the bar wraps to two
+        rows instead. The 120px floor is still honoured -- by never going
+        under it, rather than by substituting something else.
         """
         import re
         css = (self.STATIC / "styles.css").read_text()
-        assert (self.STATIC / "offdays-mark.png").exists()
-        narrow = re.search(r"@media \(max-width: \d+px\) \{(.*?)\n\}", css, re.S).group(1)
-        assert ".offdays-lockup { display: none" in narrow
-        assert ".offdays-mark { display: block" in narrow
-        # And nowhere is the lockup given a width under the minimum.
+        js = (self.STATIC / "api.js").read_text()
+        assert "offdays-lockup.png" in js, "the header stopped rendering it"
+        assert 'class="offdays-mark"' not in js, (
+            "the header is emitting the bare glyph again")
+        # No breakpoint may hide the lockup or put it under the minimum.
+        for query in re.findall(r"@media[^{]*\{(.*?)\n\}", css, re.S):
+            assert ".offdays-lockup { display: none" not in query, query[:120]
         for width in re.findall(r"\.offdays-lockup \{[^}]*width:\s*([\d.]+)px", css):
             assert float(width) >= self.LOCKUP_MIN_PX, width
+
+    def test_the_bar_wraps_rather_than_squeezing_three_things_onto_one_row(self):
+        """Below ~430px a 120px lockup, a legible badge and a control do not
+        fit side by side. The badge keeps its own row instead of either logo
+        being shrunk to fit."""
+        import re
+        css = (self.STATIC / "styles.css").read_text()
+        wrap = re.search(r"@media \(max-width: 430px\) \{(.*?)\n\}", css, re.S)
+        assert wrap, "no wrapped-bar breakpoint"
+        assert 'grid-template-areas: "left right" "centre centre"' in wrap.group(1)
+        assert "justify-self: center" in wrap.group(1), (
+            "the badge must stay centred on its own row")
 
     def test_the_club_badge_still_leads(self):
         """"More prevalent" is a measurable claim, so it is measured.

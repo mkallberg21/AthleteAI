@@ -804,8 +804,8 @@ tbody tr:hover { background: var(--surface-2); }
    be. The club badge above is sized larger, because a program's own header
    should lead with the program. */
 .offdays-lockup { width: 120px; height: auto; display: block; }
-/* The narrow-screen answer, per the guidelines: the glyph, not a smaller
-   wordmark. Hidden wherever the lockup fits. */
+/* The bare glyph is still shipped -- app icons, the service worker -- but the
+   header never falls back to it: a half-logo reads as a broken one. */
 .offdays-mark { display: none; height: 22px; width: auto; }
 .role {
   font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
@@ -814,14 +814,29 @@ tbody tr:hover { background: var(--surface-2); }
 /* The role label sits under our wordmark on the left of the bar. */
 .masthead .stack, .mast-left .stack { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 @media (max-width: 560px) {
-  .club-badge { height: 48px; max-width: 145px; }
-  /* Never a shrunken lockup -- swap to the mark instead. */
-  .offdays-lockup { display: none; }
-  .offdays-mark { display: block; }
+  /* Three things must share the bar and the lockup cannot shrink below its
+     120px floor, so the badge takes what is left rather than the lockup
+     giving way. */
+  .club-badge { height: 44px; max-width: 124px; }
   .masthead, .mast-left { gap: 9px; }
   .club-name { font-size: 1rem; }
   .role { display: none; }
   /* An athlete knows their own name; the badge does not fit beside it on a
      phone, and between the two the club's mark is the one worth the room. */
   #whoami { display: none; }
+}
+/* Below about 430px a single row cannot hold a 120px lockup, a badge worth
+   looking at and a control, so the bar wraps: marks on the first row, the
+   club's badge centred across the second at a size that still reads. This
+   is the alternative to shrinking one of the two logos into illegibility. */
+@media (max-width: 430px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "left right" "centre centre";
+    row-gap: 6px; padding: 10px 14px;
+  }
+  .mast-left { grid-area: left; }
+  .club-badge, .club-name { grid-area: centre; justify-self: center; }
+  .topbar > #masthead ~ div { grid-area: right; }
+  .club-badge { height: 46px; max-width: 70vw; }
 }
