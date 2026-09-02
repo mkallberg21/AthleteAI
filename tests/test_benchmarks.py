@@ -20,7 +20,15 @@ from offdays.drills.catalog import DRILLS_BY_KEY
 from offdays.db import connect
 from offdays.store import Store
 
-TODAY = date(2026, 8, 24)
+# Anchored to the real date rather than pinned to one.
+#
+# These tests backdate sessions by up to a week, and the store refuses a
+# backdate older than OFFLINE_BACKDATE_LIMIT_DAYS -- beyond that the claim is
+# unverifiable, so it credits the session to today instead. With a fixed
+# TODAY the oldest session drifted past that limit as real time passed, and
+# the failure arrived by the hour: the limit is measured from `now`, not from
+# midnight, so the suite passed in the morning and failed after lunch.
+TODAY = date.today()
 
 
 @pytest.fixture

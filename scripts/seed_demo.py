@@ -154,15 +154,18 @@ def main() -> int:
     # and point this at it.
     store.set_org_logo(org_id, "nashville-dogs.svg")
     director = store.create_user(org_id, "director", "Joel White", email="director@example.com")
-    varsity = store.create_team(org_id, "Varsity", "2026")
-    jv = store.create_team(org_id, "JV", "2026")
+    # Age-group squads rather than Varsity/JV: a 2031 birth-year group split
+    # into a Red and a Blue side, which is how most youth clubs actually name
+    # a roster.
+    red = store.create_team(org_id, "2031 Red", "2026")
+    blue = store.create_team(org_id, "2031 Blue", "2026")
 
     # A director sees the program; a coach sees their own team. Seeding real
     # coaches rather than only a director is what makes that difference
-    # visible -- signing in as Coach Matt shows JV and nothing else.
+    # visible -- signing in as Coach Matt shows 2031 Blue and nothing else.
     coach_tokens = []
-    for coach_name, team in (("Coach Tommy", varsity), ("Coach Matt", jv),
-                             ("Coach Mike", varsity)):
+    for coach_name, team in (("Coach Tommy", red), ("Coach Matt", blue),
+                             ("Coach Mike", red)):
         coach = store.create_user(org_id, "coach", coach_name)
         store.assign_staff_to_team(coach["id"], team["id"])
         coach_tokens.append((coach_name, coach["token"]))
@@ -171,7 +174,7 @@ def main() -> int:
     athletes = []
 
     for i, (name, hand, per_week, offhand, quiet_days, form) in enumerate(ROSTER):
-        team = varsity if i < 4 else jv
+        team = blue if name == "Dano Otis" else red
         athlete = store.create_user(
             org_id, "athlete", name,
             birth_year=2009 + (i % 3),
@@ -234,7 +237,7 @@ def main() -> int:
 
     # A live assignment per team, so the compliance view has something in it.
     today = now.date()
-    for team in (varsity, jv):
+    for team in (red, blue):
         assignments_mod.create(
             store.conn,
             org_id=org_id,
@@ -260,7 +263,7 @@ def main() -> int:
         store.conn, first_athlete["id"], director["id"], email="parent@example.com"
     )
     guardian = guardians_mod.redeem_invite(
-        store.conn, invite["code"], "Erin Anderson", "parent@example.com"
+        store.conn, invite["code"], "Travis Anderson", "parent@example.com"
     )
     for scope in (guardians_mod.Scope.PARTICIPATION, guardians_mod.Scope.DATA_RETENTION):
         guardians_mod.set_consent(
@@ -287,11 +290,12 @@ def main() -> int:
     print(f"  assignments: {len(assignments_mod.list_for_org(store.conn, org_id))}")
     print(f"  form-scored: {scored} sessions")
     print(f"  notifications: {sum(generated.values())} scheduled + new-assignment alerts")
-    print(f"\n  Join codes: Varsity={varsity['join_code']}  JV={jv['join_code']}")
+    print(f"\n  Join codes: 2031 Red={red['join_code']}  "
+          f"2031 Blue={blue['join_code']}")
     print(f"\n  Guardian invite (unredeemed, for {athletes[1][1]}): {pending['code']}")
     print("\n  Sign-in tokens")
     print(f"    {'Joel White (director)':<26} {director['token']}")
-    print(f"    {'Erin Anderson (parent)':<26} {guardian['token']}")
+    print(f"    {'Travis Anderson (parent)':<26} {guardian['token']}")
     for coach, token in coach_tokens:
         print(f"    {coach + ' (coach)':<26} {token}")
     for athlete, name, *_ in athletes:

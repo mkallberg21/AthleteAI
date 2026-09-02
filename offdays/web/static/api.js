@@ -120,12 +120,18 @@ export async function renderBranding(slot, subtitle = "") {
   const badge = brand.logo
     ? `<img class="club-badge" src="${brand.logo}" alt="${brand.name}">` : "";
   const name = brand.logo ? "" : `<div class="club-name">${esc(brand.name)}</div>`;
-  // The bare mark rather than the lockup. The brand guidelines set a 120px
-  // minimum on the full wordmark and say to use the mark alone below it, and
-  // a credit line beside somebody else's badge is well below it.
-  el.innerHTML = `<div class="masthead">${badge}<div class="stack">${name}
-    <div class="by-offdays"><img class="offdays-mark" src="offdays-mark.png"
-      alt="0FFDAYS">${subtitle ? `<span>${esc(subtitle)}</span>` : ""}</div>
+  // The full lockup at exactly the 120px the brand guidelines set as its
+  // minimum -- below that they say to use the bare mark instead, and this is
+  // the smallest the wordmark is allowed to be. The club's badge is sized
+  // larger than it so the program still leads its own header.
+  // Both marks ship and CSS chooses: the lockup where there is room for it at
+  // its 120px minimum, the bare glyph where there is not. The guidelines are
+  // explicit that the answer to a narrow header is the mark, never a smaller
+  // lockup, so a phone gets the glyph rather than a squeezed wordmark.
+  el.innerHTML = `<div class="masthead">${badge}<div class="stack">
+    <img class="offdays-lockup" src="offdays-lockup.png" alt="0FFDAYS">
+    <img class="offdays-mark" src="offdays-mark.png" alt="0FFDAYS">
+    ${name}${subtitle ? `<div class="role">${esc(subtitle)}</div>` : ""}
     </div></div>`;
   return brand;
 }

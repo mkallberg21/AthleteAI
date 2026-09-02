@@ -27,7 +27,11 @@ from offdays.db import connect
 from offdays.store import Store
 from offdays.team_goals import GoalError
 
-TODAY = date(2026, 8, 20)
+# Anchored to the real date. A pinned anchor drifts out of the store's
+# backdate window -- it refuses a completion older than
+# OFFLINE_BACKDATE_LIMIT_DAYS and credits the session to today instead -- so
+# fixtures that log backdated sessions quietly stop testing what they claim.
+TODAY = date.today()
 START = TODAY - timedelta(days=6)
 
 

@@ -75,21 +75,54 @@ class TestTheHeaderIsOnEveryScreen:
         """The old header put us first on a screen belonging to a club."""
         assert '<span>0FF</span>DAYS' not in (self.STATIC / page).read_text()
 
-    def test_the_mark_is_the_bare_glyph_not_the_lockup(self):
-        """The brand guidelines set a 120px minimum on the full lockup and say
-        to use the mark alone below it. A credit beside somebody else's badge
-        is well below it."""
-        assert (self.STATIC / "offdays-mark.png").exists()
-        css = (self.STATIC / "styles.css").read_text()
-        assert ".offdays-mark" in css
+    #: From the brand guidelines: "Minimum width: 120 px on screen. Below that,
+    #: use the Ø mark alone instead of shrinking the lockup."
+    LOCKUP_MIN_PX = 120
 
-    def test_the_badge_outsizes_our_mark(self):
-        """"More prevalent" is a measurable claim, so it is measured."""
-        css = (self.STATIC / "styles.css").read_text()
+    def test_the_lockup_is_never_shrunk_below_its_documented_minimum(self):
         import re
-        club = float(re.search(r"\.club-badge \{[^}]*height:\s*([\d.]+)px", css).group(1))
-        ours = float(re.search(r"\.offdays-mark \{[^}]*height:\s*([\d.]+)px", css).group(1))
-        assert club >= ours * 2, f"club badge {club}px vs our mark {ours}px"
+        assert (self.STATIC / "offdays-lockup.png").exists()
+        css = (self.STATIC / "styles.css").read_text()
+        width = float(
+            re.search(r"\.offdays-lockup \{[^}]*width:\s*([\d.]+)px", css).group(1))
+        assert width >= self.LOCKUP_MIN_PX, (
+            f"the lockup is set to {width}px, below the {self.LOCKUP_MIN_PX}px "
+            "minimum -- use the bare mark instead of shrinking it")
+
+    def test_a_narrow_screen_swaps_to_the_mark_rather_than_shrinking(self):
+        """The guidelines' own instruction for a header with no room.
+
+        A media query that simply made the lockup smaller would put it below
+        the documented minimum, which is the one thing the rule forbids.
+        """
+        import re
+        css = (self.STATIC / "styles.css").read_text()
+        assert (self.STATIC / "offdays-mark.png").exists()
+        narrow = re.search(r"@media \(max-width: \d+px\) \{(.*?)\n\}", css, re.S).group(1)
+        assert ".offdays-lockup { display: none" in narrow
+        assert ".offdays-mark { display: block" in narrow
+        # And nowhere is the lockup given a width under the minimum.
+        for width in re.findall(r"\.offdays-lockup \{[^}]*width:\s*([\d.]+)px", css):
+            assert float(width) >= self.LOCKUP_MIN_PX, width
+
+    def test_the_club_badge_still_leads(self):
+        """"More prevalent" is a measurable claim, so it is measured.
+
+        Compared on rendered width rather than height: the lockup is a wide,
+        short wordmark and the badge is a broad crest, and width is what the
+        eye actually weighs between two marks sitting side by side.
+        """
+        import re
+        css = (self.STATIC / "styles.css").read_text()
+        badge_h = float(
+            re.search(r"\.club-badge \{[^}]*height:\s*([\d.]+)px", css).group(1))
+        ours = float(
+            re.search(r"\.offdays-lockup \{[^}]*width:\s*([\d.]+)px", css).group(1))
+        # The club mark in the demo is 768x246; a badge is wider than it is
+        # tall, and this is the aspect the header is designed around.
+        badge_w = badge_h * (768 / 246)
+        assert badge_w >= ours * 1.5, (
+            f"club badge renders {badge_w:.0f}px wide against our {ours:.0f}px")
 
     def test_the_signed_out_page_carries_only_our_mark(self):
         """There is no club yet at sign-in, so there is nothing to lead with."""

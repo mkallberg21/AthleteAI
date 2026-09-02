@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v3';
+const CACHE = 'offdays-shell-v5';
 
 const SHELL = [
   './',
@@ -17,6 +17,7 @@ const SHELL = [
   'parent.html',
   'leaderboard.html',
   'styles.css',
+  'offdays-lockup.png',
   'offdays-mark.png',
   // The typefaces are part of the shell. Without them a capture screen
   // opened with no connection falls back to a system face, which is a
