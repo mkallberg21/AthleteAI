@@ -55,6 +55,7 @@ from .scoring import (
     level_progress,
     score_session,
 )
+from . import week_plan
 
 log = logging.getLogger(__name__)
 
@@ -3346,6 +3347,19 @@ class Store:
             "badges": badges,
             "recent_sessions": recent,
         }
+
+    def week_plan(self, athlete_id: int) -> week_plan.WeekPlan:
+        """Compose the athlete's week plan from assignments, budget, and film."""
+        return week_plan.for_athlete(self, athlete_id)
+
+    def org_for_user(self, user_id: int) -> int:
+        """Return the org_id a user belongs to."""
+        row = self.conn.execute(
+            "SELECT org_id FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if row is None:
+            raise StoreError("unknown user")
+        return int(row["org_id"])
 
     def load_history(self, athlete_id: int, days: int = 28) -> list[load_mod.DayLoad]:
         """Daily training load, derived from counted sessions."""
