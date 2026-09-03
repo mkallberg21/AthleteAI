@@ -334,7 +334,7 @@ def backup_conn():
             pass
 
 
-def live_backup(target: Path | str, pagesize: int = 4096) -> dict[str, Any]:
+def live_backup(target: Path | str) -> dict[str, Any]:
     """Take a live backup of the current database to *target* without stopping
     the web server.
 
@@ -350,10 +350,7 @@ def live_backup(target: Path | str, pagesize: int = 4096) -> dict[str, Any]:
         with backup_conn() as src:
             bak = sqlite3.connect(str(target))
             try:
-                # Reset the target so it is a clean file, not appended to.
-                bak.execute("PRAGMA journal_mode = DELETE")
-                src.backup(bak, pagesize=pagesize)
-                bak.execute("PRAGMA journal_mode = WAL")
+                src.backup(bak)
                 bak.commit()
             finally:
                 bak.close()
