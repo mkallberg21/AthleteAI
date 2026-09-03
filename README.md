@@ -71,7 +71,8 @@ and the coach review queue exist — see below.
 ```bash
 pip install -r requirements.txt
 
-# Seed a demo program (2 teams, 8 athletes, 6 weeks of history)
+# Seed a demo program (one squad, 13 athletes, 6 weeks of history)
+# See docs/demo-program.md for who is on it and what each one demonstrates
 python scripts/seed_demo.py --db data/demo.db
 
 # Serve
@@ -88,7 +89,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3823 tests
+python -m pytest tests/ -q          # 3957 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 261 tests
@@ -107,7 +108,7 @@ offdays/
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
-    catalog.py      The 33 shipped drills
+    catalog.py      The 89 shipped drills, filtered per sport by for_sport()
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
