@@ -89,7 +89,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3957 tests
+python -m pytest tests/ -q          # 3960 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 261 tests
@@ -2675,11 +2675,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 24 modules across 371 call sites.
+SQL lives in 29 modules across 409 call sites.
 store.py holds 39% of them.
 
-866 occurrences are mechanical (search-and-replace with tests behind it).
-55 need judgement.
+925 occurrences are mechanical (search-and-replace with tests behind it).
+72 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...

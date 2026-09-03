@@ -23,6 +23,7 @@ server. The migration is scoped, not done, and the README says so.
 """
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -207,11 +208,77 @@ _STRINGS = re.compile(
 )
 
 
+#: The three methods that actually hand a string to SQLite.
+_EXECUTORS = {"execute", "executemany", "executescript"}
+
+
+def _literal_parts(node: ast.AST) -> list[str]:
+    """Every string literal inside an expression, f-strings included.
+
+    A query assembled as `f"SELECT ... IN ({marks})"` is still SQL; the
+    interpolated part is not a literal and is simply not counted, which is
+    the honest answer -- nobody can tell from here what it holds.
+    """
+    out = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Constant) and isinstance(child.value, str):
+            out.append(child.value)
+    return out
+
+
+def _executed_sql(src: str) -> str:
+    """The strings this module actually executes, joined together.
+
+    Previously this was every string literal containing a SQL keyword, which
+    counted prose. A log line reading "schedule a full PRAGMA integrity_check
+    from scripts/health_reap.py" was reported as api.py executing a PRAGMA --
+    a claim that would have gone into a migration estimate as fact.
+
+    Walking the syntax tree for arguments to execute/executemany/executescript
+    is the difference between "mentions SQL" and "runs SQL". A file that will
+    not parse falls back to the old text scan rather than silently reporting
+    nothing, since a zero is the one answer nobody would question.
+    """
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return "\n".join(
+            lit for lit in _STRINGS.findall(src) if _SQL_WORDS.search(lit)
+        )
+
+    # The schema is the largest piece of SQLite-specific DDL in the codebase
+    # and it reaches the database as executescript(SCHEMA) -- a name, not a
+    # literal. Resolving module-level string constants is what keeps thirty
+    # AUTOINCREMENT columns in the inventory instead of reporting none.
+    consts: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+            if isinstance(node.value.value, str):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        consts[target.id] = node.value.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.value, ast.Constant):
+            if isinstance(node.value.value, str) and isinstance(node.target, ast.Name):
+                consts[node.target.id] = node.value.value
+
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr in _EXECUTORS):
+            continue
+        for arg in node.args[:1]:
+            if isinstance(arg, ast.Name) and arg.id in consts:
+                out.append(consts[arg.id])
+            else:
+                out.extend(_literal_parts(arg))
+    return "\n".join(out)
+
+
 def _sql_text(src: str) -> str:
-    """Only the string literals that look like SQL, joined together."""
-    return "\n".join(
-        lit for lit in _STRINGS.findall(src) if _SQL_WORDS.search(lit)
-    )
+    """Kept as the name the rest of the module calls."""
+    return _executed_sql(src)
 
 def _sources() -> dict[str, str]:
     return {

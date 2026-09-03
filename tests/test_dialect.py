@@ -55,6 +55,31 @@ class TestTheClaimThatWasWrong:
         )
 
 
+    def test_the_readme_module_and_call_site_counts_match(self):
+        """The sentence this module exists to keep honest, kept honest.
+
+        Only store.py's percentage was pinned, so "24 modules across 371 call
+        sites" drifted the moment three modules with SQL in them arrived. A
+        figure nobody checks is a figure that goes stale and is quoted anyway
+        -- which is the exact failure that prompted writing dialect.py.
+        """
+        from pathlib import Path
+
+        readme = (Path(__file__).resolve().parent.parent / "README.md").read_text()
+        stated = re.search(
+            r"SQL lives in (\d+) modules across (\d+) call sites", readme
+        )
+        assert stated, "the README should state both counts"
+        modules = dialect.sql_modules()
+        assert int(stated.group(1)) == len(modules), (
+            f"README says {stated.group(1)} modules, code has {len(modules)}"
+        )
+        assert int(stated.group(2)) == sum(modules.values()), (
+            f"README says {stated.group(2)} call sites, "
+            f"code has {sum(modules.values())}"
+        )
+
+
 class TestTheInventoryIsAccurate:
     """An inventory that over-counts produces a confidently wrong estimate,
     which is what this module exists to replace."""
@@ -68,15 +93,60 @@ class TestTheInventoryIsAccurate:
             "leaking into the count"
         )
 
-    def test_the_connect_seam_is_a_single_call(self):
-        """It matched sqlite3.Connection type hints under IGNORECASE at first,
-        reporting 156 of what is genuinely one."""
-        finding = self._find("connect_call")
-        assert finding.total == 1
-        assert set(finding.counts) == {"db.py"}
+    #: Where SQLite is spoken directly, and why each one is allowed to.
+    #: Named rather than counted so a new site fails this test and has to
+    #: justify itself here -- which is the whole job of the guard. The
+    #: alternative, asserting "exactly one", stopped being true the moment
+    #: monitoring arrived and would only ever be made to pass by lying.
+    CONNECT_SITES = {
+        "db.py": "the application seam every request is served through",
+        # backup() needs a destination handle. Routing it through db.connect
+        # would apply WAL and foreign keys to a file that is about to be
+        # overwritten wholesale by the backup itself.
+        "health.py": "the destination handle for an online backup",
+    }
+    PRAGMA_SITES = {
+        "db.py": "foreign keys and WAL, set once per connection",
+        # wal_checkpoint and integrity_check are not implementation details
+        # of the health check, they are the health check. There is no
+        # portable spelling of them, which is precisely why they are counted.
+        "health.py": "wal_checkpoint and integrity_check probes",
+    }
 
-    def test_pragma_lives_only_where_the_schema_does(self):
-        assert set(self._find("pragma").counts) == {"db.py"}
+    def test_connect_happens_only_where_it_is_meant_to(self):
+        """It matched sqlite3.Connection type hints under IGNORECASE at first,
+        reporting 156 of what was then genuinely one."""
+        finding = self._find("connect_call")
+        assert set(finding.counts) == set(self.CONNECT_SITES), (
+            "a new sqlite3.connect() appeared; add it to CONNECT_SITES with a "
+            "reason, or route it through db.connect"
+        )
+        assert finding.counts["db.py"] == 1, "the app seam is still one call"
+
+    def test_pragma_lives_only_where_it_has_to(self):
+        assert set(self._find("pragma").counts) == set(self.PRAGMA_SITES), (
+            "a new PRAGMA appeared; add it to PRAGMA_SITES with a reason"
+        )
+
+    def test_prose_about_sql_is_not_counted_as_sql(self):
+        """A log line reading "schedule a full PRAGMA integrity_check from
+        scripts/health_reap.py" was reported as api.py executing a PRAGMA.
+
+        That is the failure this module exists to prevent, pointed at itself:
+        a number that looks measured, is not, and goes into an estimate as
+        fact. Only strings actually handed to execute() are counted now.
+        """
+        assert "api.py" not in self._find("pragma").counts
+        # The sentence is still there -- it is the counting that changed.
+        api = (dialect.PACKAGE / "api.py").read_text()
+        assert "PRAGMA integrity_check from scripts/health_reap.py" in api
+
+    def test_the_schema_is_still_inventoried(self):
+        """It reaches the database as executescript(SCHEMA) -- a name, not a
+        literal. Counting only inline strings reported zero AUTOINCREMENT
+        columns in a file that has thirty."""
+        finding = self._find("autoincrement_pk")
+        assert finding.counts.get("db.py", 0) >= 25, finding.counts
 
     def test_placeholder_counts_come_from_sql_strings_only(self):
         """A question mark in a docstring is not a bind parameter."""
