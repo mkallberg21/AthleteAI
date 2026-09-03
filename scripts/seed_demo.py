@@ -217,6 +217,14 @@ def main() -> int:
         coach_tokens.append((coach_name, coach["token"]))
 
     now = datetime.now(timezone.utc)
+    # Sessions are placed relative to the END of today rather than the moment
+    # the seeder runs. With a floating `now`, subtracting up to fourteen hours
+    # of jitter pushed a session into the previous day or not depending on the
+    # clock time of the run -- so the same seed produced a different number of
+    # active days, and the pre-practice card had three athletes flagged in the
+    # morning and none in the evening. The story a demo tells should not depend
+    # on the hour somebody generated it.
+    end_of_day = now.replace(hour=23, minute=30, second=0, microsecond=0)
     athletes = []
 
     for i, (name, position, hand, per_week, offhand, quiet_days, form) in enumerate(ROSTER):
@@ -243,7 +251,7 @@ def main() -> int:
         for day_offset in range(args.weeks * 7, quiet_days, -1):
             if rng.random() > per_week / 7.0:
                 continue
-            when = now - timedelta(days=day_offset, hours=rng.uniform(0, 14))
+            when = end_of_day - timedelta(days=day_offset, hours=rng.uniform(0, 14))
             drill_key = pick_drill(rng)
             sloppy = sloppy_athlete and rng.random() < 0.4
             reps, duration = synth_reps(
@@ -313,7 +321,7 @@ def main() -> int:
         reach = (len(athletes), 10, 7, 4, 2)[min(clip_index, 4)]
         for i, (athlete, name, *_rest) in enumerate(athletes[:reach]):
             watched = (i + clip_index) % 4 != 0
-            when = now - timedelta(days=clip_index + 1, hours=rng.uniform(0, 8))
+            when = end_of_day - timedelta(days=clip_index + 1, hours=rng.uniform(0, 8))
             seen = list(range(110)) if watched else list(range(38))
             asked = clip["question"] is not None
             store.conn.execute(
