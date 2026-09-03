@@ -128,6 +128,17 @@
       <div id="load-action"></div>
     </div>
 
+    <div class="card hidden" id="week-plan-card">
+      <div class="budget-head">
+        <b>This week</b>
+        <span class="small muted" id="week-plan-band"></span>
+      </div>
+      <p class="plan-line" id="week-plan-line"></p>
+      <div id="week-plan-assignments" style="margin-top:10px"></div>
+      <div id="week-plan-budget" style="margin-top:10px"></div>
+      <div id="week-plan-film" style="margin-top:10px"></div>
+    </div>
+
     <div class="card hidden" id="goal-card">
       <h2>Your squad</h2>
       <div id="goal-list"></div>
@@ -429,6 +440,7 @@ const BADGE_ICONS = {
 // XP and the streak after a session.
 async function loadHome(prefetched) {
   profile = prefetched || await api('/api/me');
+  const weekPlan = await loadWeekPlan();
   homeSport = profile.sport || null;
   $('whoami').textContent = profile.display_name;
   $('greeting').textContent = profile.streak > 0
@@ -1177,6 +1189,76 @@ async function loadNotifications() {
           <time>${fmtDate(n.created_at)}</time>
         </div>`).join('')
     : '<p class="small muted">Nothing yet.</p>';
+}
+
+// ------------------------------------------------------------ week plan
+
+async function loadWeekPlan() {
+  let data;
+  try { data = await api('/api/me/week-plan'); } catch { return; }
+  if (!data || !data.line) return;
+  const card = $('week-plan-card');
+  card.classList.remove('hidden');
+  $('week-plan-band').textContent =
+    data.budget && data.budget.band ? `${data.budget.band.label} · ${data.budget.band.weekly_target} min/week` : '';
+  const line = data.line;
+  $('week-plan-line').innerHTML = line.replace(
+    /(\d+ session\w*|^\d+ reps|\d+ clip\w*|about \d+ minutes|more than enough|enough this week|short of your week)/gi,
+    (m) => `<span class="highlight">${m}</span>`
+  );
+  $('week-plan-assignments').innerHTML = (data.assignments || []).length
+    ? data.assignments.map((a) => {
+        const p = a.progress || {};
+        const due = a.days_remaining < 0
+          ? `${-a.days_remaining}d overdue`
+          : a.days_remaining === 0 ? 'due today' : `${a.days_remaining}d left`;
+        return `<div class="wp-assign-row">
+          <span class="wp-name"><b>${esc(a.title)}</b> — ${esc(a.drill_name)}</span>
+          <span class="wp-progress">${p.reps_done || 0}/${a.target_reps || 0} reps · ${p.sessions_done || 0}/${a.target_sessions || 0} sessions · ${due}</span>
+          ${p.reps_met && p.sessions_met && p.offhand_met
+            ? '<span class="pill ok">done</span>'
+            : !p.complete && a.target_sessions > 0
+              ? '<button class="secondary inline wp-start" data-drill="' + esc(a.drill_key) + '">Start</button>'
+              : ''}
+        </div>`;
+      }).join('')
+    : '<p class="wp-empty">No open assignments this week.</p>';
+  $('week-plan-assignments').querySelectorAll('[data-drill]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const drill = (drills || []).find((d) => d.key === btn.dataset.drill);
+      if (drill) openCapture(drill);
+    });
+  });
+  if (data.budget && data.budget.band) {
+    const status = data.budget.status;
+    $('week-plan-budget').innerHTML = `
+      <div class="wp-budget-row">
+        <span class="wp-dot ${esc(status)}"></span>
+        <span class="wp-label">This week's time</span>
+        <span class="wp-n">${Math.round(data.budget.minutes || 0)} of ${data.budget.band.weekly_target} min</span>
+      </div>
+      <div class="wp-budget-row">
+        <span class="wp-dot ${esc(status)}"></span>
+        <span class="wp-label">${esc(data.budget.headline)}</span>
+      </div>`;
+  } else {
+    $('week-plan-budget').innerHTML = '';
+  }
+  if (data.film && data.film.day_state) {
+    const ds = data.film.day_state;
+    $('week-plan-film').innerHTML = `
+      <div class="wp-film-row">
+        <span class="wp-label">Film today</span>
+        <span class="wp-n">${ds.minutes_left ? Math.round(ds.minutes_left) + ' min left' : 'done for today'}</span>
+      </div>
+      <div class="wp-film-row">
+        <span class="wp-label">Clips left</span>
+        <span class="wp-n">${ds.clips_left != null ? ds.clips_left : '?'}</span>
+      </div>`;
+  } else {
+    $('week-plan-film').innerHTML = '';
+  }
+  return data;
 }
 
 // ------------------------------------------------------------ connectivity

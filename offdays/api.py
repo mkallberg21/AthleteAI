@@ -2524,7 +2524,7 @@ def parent_onboarding(
     not to set anything up, it is to make one decision that is genuinely
     theirs. Padding it with tasks would dress a consent screen up as a tour.
     """
-    return onboarding_mod.parent_progress(store.conn, principal.id)
+    return onboarding_mod.athlete_progress(store.conn, principal.id)
 
 
 @app.get("/api/me/onboarding")
@@ -2539,6 +2539,20 @@ def athlete_onboarding(
     and the one that matters is recording a session.
     """
     return onboarding_mod.athlete_progress(store.conn, principal.id)
+
+
+@app.get("/api/me/week-plan")
+def athlete_week_plan(
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The athlete's week in one glance: assignments, budget, film, and a plain
+    line that says what this week actually asks for.
+    """
+    return {
+        **store.week_plan(athlete_id=principal.id).to_dict(),
+        "age": _athlete_age(store.conn, principal.id),
+    }
 
 
 @app.get("/api/coach/onboarding")

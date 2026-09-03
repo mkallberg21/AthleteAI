@@ -4656,6 +4656,921 @@ SWM_IQ_TOPICS: tuple[Topic, ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Golf
+# ---------------------------------------------------------------------------
+# Individual sport; one syllabus for everyone. The ideas are the same across
+# the age range -- setup, short game, choosing targets, managing the course --
+# and the pieces that end more junior careers than anything else are backs and
+# overdoing it on the range. Under-11s only see the fundamentals clips.
+
+GOLF_ALL = ("player",)
+
+GOLF_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="golf_iq_setup_every_time",
+        title="How you stand every time beats how hard you swing",
+        focus="Setup",
+        positions=GOLF_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=60,
+        find=(
+            "Side-on footage of a golfer setting up to two different shots -- one "
+            "where the stance and grip are the same both times, one where they shift "
+            "between them. Short clip; the point is the feet, not the swing."
+        ),
+        ask=Ask(
+            prompt="Why do coaches care so much about how you stand before you swing?",
+            options=(
+                "The same setup is what lets you repeat a shot",
+                "It makes the club look longer",
+                "It is just a rule to follow",
+            ),
+            answer=0,
+            because=(
+                "A shot you only hit once because your feet move every time is a "
+                "guess. Repetition is the whole point of practice, and repetition "
+                "starts before the club moves."
+            ),
+        ),
+    ),
+    Topic(
+        key="golf_iq_most_shots_are_short",
+        title="Most of your shots are close to the hole",
+        focus="Short game",
+        positions=GOLF_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=65,
+        find=(
+            "A round where the short-game shots -- chips, pitches, putts -- are shown "
+            "with a visible count of how many there were. Youth or club footage works; "
+            "the point is the count, not the quality."
+        ),
+        ask=Ask(
+            prompt="Where do most of the shots in a round actually happen?",
+            options=(
+                "Close to the green and on it",
+                "From the tee",
+                "From the longest part of the course",
+            ),
+            answer=0,
+            because=(
+                "A full round has far more short shots than long ones, and that is "
+                "true even for good players. The shots that cost you the most are "
+                "the ones you do the most, so the ones near the hole are worth the "
+                "most practice."
+            ),
+        ),
+    ),
+)
+
+GOLF_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="golf_iq_small_target",
+        title="Pick a small target, not a big one",
+        focus="Course management",
+        positions=GOLF_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=110,
+        find=(
+            "Footage of a golfer picking a specific landing spot -- a tree, a bunker "
+            "edge, a patch of fairway -- rather than aiming vaguely at the hole. Two "
+            "versions: one with a target, one without."
+        ),
+        ask=Ask(
+            prompt="When you have a shot to hit, what should you aim at?",
+            options=(
+                "A specific, small target you can see",
+                "The hole, no matter how far away",
+                "Just somewhere in the fairway",
+            ),
+            answer=0,
+            because=(
+                "A big target is no target -- 'somewhere in the middle' is a guess "
+                "before you start. A small target gives you something real to judge "
+                "the shot against afterwards."
+            ),
+        ),
+    ),
+    Topic(
+        key="golf_iq_plan_for_the_miss",
+        title="Plan for the shot you will not hit",
+        focus="Course management",
+        positions=GOLF_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=115,
+        find=(
+            "A club-selection moment where the player has a safe place to miss -- a "
+            "wide side of the fairway, a putt rather than a bunker shot. Contrast "
+            "with one where the same distance leaves a hazard in play."
+        ),
+        ask=Ask(
+            prompt="Before you choose a club for a shot, what should you have already decided?",
+            options=(
+                "Where the ball goes if you do not hit it perfectly",
+                "The longest club you have in your bag",
+                "What your playing partners will think",
+            ),
+            answer=0,
+            because=(
+                "You will not hit every shot perfectly. The smart shot is the one "
+                "where the miss is still a manageable next shot -- not one that turns "
+                "a simple hole into two or three extra shots."
+            ),
+        ),
+    ),
+    Topic(
+        key="golf_iq_distance_first",
+        title="How far the ball goes matters more than how straight it goes",
+        focus="Club selection",
+        positions=GOLF_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=120,
+        find=(
+            "Footage or a demo of two shots -- one that goes the right distance but "
+            "curves a little, and one that is dead straight but the wrong distance. "
+            "The second one is the worse of the two."
+        ),
+        ask=Ask(
+            prompt="Which is usually the bigger problem on a real hole?",
+            options=(
+                "The ball going the wrong distance",
+                "The ball not going perfectly straight",
+                "Both are equally bad",
+            ),
+            answer=0,
+            because=(
+                "Golf holes are a series of distances you have to hit -- carry over "
+                "a bunker, reach a green, leave yourself a putt. A shot that is a "
+                "little offline is usually still in play; a shot that is ten yards "
+                "short or long often is not."
+            ),
+        ),
+    ),
+)
+
+GOLF_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="golf_iq_when_to_be_aggressive",
+        title="Knowing when to be aggressive and when not to be",
+        focus="Course management",
+        positions=GOLF_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=150,
+        find=(
+            "A decision point on a course -- a forced carry over water, a risky pin "
+            "attack, a lay-up on a par five. Two versions: one where the player takes "
+            "the shot, one where they play to a safer place."
+        ),
+        ask=Ask(
+            prompt="When should you try to hit a shot through a small gap?",
+            options=(
+                "When the reward is real and the penalty for missing is something you can recover from",
+                "Whenever you feel confident, no matter the risk",
+                "Never -- you should always play the safe shot",
+            ),
+            answer=0,
+            because=(
+                "Aggression is not a mood, it is a calculation. The right aggressive "
+                "shot is one where missing still leaves you a playable next shot -- "
+                "not one where a small mistake costs you the hole."
+            ),
+        ),
+    ),
+    Topic(
+        key="golf_iq_play_the_course",
+        title="Playing the course, not just the shot",
+        focus="Course management",
+        positions=GOLF_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=155,
+        find=(
+            "A full hole from tee to green with a smart route -- maybe laying up on a "
+            "par five, aiming away from a bad bunker, leaving an uphill putt. Wide "
+            "enough to show the shape of the hole, not just the swing."
+        ),
+        ask=Ask(
+            prompt="What is good course management?",
+            options=(
+                "Making each shot set up an easier next shot, even if it means a less exciting play now",
+                "Trying to hit every shot as close to the hole as possible",
+                "Always playing for the lowest score on the next shot only",
+            ),
+            answer=0,
+            because=(
+                "A golf hole is a sequence, not a single shot. The best shot is "
+                "often not the one that looks best right now -- it is the one that "
+                "leaves you an easier shot, or no penalty, on the next one."
+            ),
+        ),
+    ),
+    Topic(
+        key="golf_iq_up_and_down_first_shot",
+        title="Getting up and down starts with the first shot",
+        focus="Short game",
+        positions=GOLF_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=160,
+        find=(
+            "A sequence: a chip or pitch to a good position, then a makeable putt. "
+            "Contrast with one where the first shot leaves a bad angle or a long "
+            "putt. Two or three examples."
+        ),
+        ask=Ask(
+            prompt="What is the first job when your ball is off the green?",
+            options=(
+                "Get the ball on the green with the right speed, so the next shot is a putt you can make",
+                "Get it in the hole in one shot, no matter how risky",
+                "Hit it as hard as you can back toward the hole",
+            ),
+            answer=0,
+            because=(
+                "An up-and-down is two shots -- the chip or pitch, then the putt. "
+                "The chip is not about getting it close in one impossible shot; "
+                "it is about leaving a putt you can actually make. A simple chip to "
+                "a flat putt beats a heroic flop that leaves a three-footer every time."
+            ),
+        ),
+    ),
+)
+
+GOLF_IQ_TOPICS: tuple[Topic, ...] = (
+    GOLF_FUNDAMENTALS + GOLF_CORE + GOLF_ADVANCED
+)
+
+
+# ---------------------------------------------------------------------------
+# Martial arts
+# ---------------------------------------------------------------------------
+# One syllabus for the whole sport. The same ideas apply whether a kid trains
+# karate, taekwondo, judo, jiu-jitsu or something in between. This is a phone-in-
+# a-garden curriculum, so it stays on safety, respect, training sense and mindset
+# rather than any one style's technique.
+
+MA_ALL = ("practitioner",)
+
+MA_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="ma_iq_the_bow_is_a_habit",
+        title="The bow is a habit, not a rule for its own sake",
+        focus="Etiquette",
+        positions=MA_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=60,
+        find=(
+            "Footage of a class bowing in and out, ideally at the start and end of a "
+            "session. Youth or school footage is fine -- what matters is that the bow "
+            "is visible and repeated, not how fancy it is."
+        ),
+        ask=Ask(
+            prompt="Why does a martial arts class usually start and end with a bow?",
+            options=(
+                "It is a way of saying \"I am here to learn and to do it safely\"",
+                "It is a way of showing who is the best in the room",
+                "It is just a rule that has to be done",
+            ),
+            answer=0,
+            because=(
+                "The bow is not about rank or who wins -- it is about the agreement "
+                "a class makes: that everyone here is training, that they will look "
+                "out for each other, and that leaving the mat is leaving the room "
+                "you were just in."
+            ),
+        ),
+    ),
+    Topic(
+        key="ma_iq_tap_is_how_you_keep_training",
+        title="Tapping is how you stay training, not how you lose",
+        focus="Safety",
+        positions=MA_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=65,
+        find=(
+            "Ground-work footage where one person taps and the other lets go straight "
+            "away -- ideally two takes, one good and one where the release is a beat "
+            "late. The second one is the lesson."
+        ),
+        ask=Ask(
+            prompt="When you are caught and you tap, what should your partner do?",
+            options=(
+                "Let go immediately, every time",
+                "Hold on a little longer to teach you something",
+                "Ignore it and keep going",
+            ),
+            answer=0,
+            because=(
+                "A tap is a stop sign, and it goes both ways. The person applying "
+                "the hold is responsible for letting go, and the person tapping is "
+                "responsible for tapping early enough that it is still a choice -- not "
+                "an injury. Both sides of that are what let you come back next session."
+            ),
+        ),
+    ),
+    Topic(
+        key="ma_iq_gear_is_for_the_work_not_the_look",
+        title="The right gear is what lets you train hard safely",
+        focus="Staying safe",
+        positions=MA_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=70,
+        find=(
+            "A class where the gear is noticeably right for the activity -- mats, "
+            "mouthguards, gloves, protective cups -- next to one where it is casual. "
+            "Ideally the two are shown doing the same drill."
+        ),
+        ask=Ask(
+            prompt="Why do different martial arts need different gear?",
+            options=(
+                "Because each one asks your body to do different things, and the gear matches the things that can go wrong",
+                "Because it is a tradition and every school has to wear the same thing",
+                "Because the gear makes you hit harder",
+            ),
+            answer=0,
+            because=(
+                "The gear is not costume -- it is the answer to whatever the training "
+                "is about. Striking needs headgear and mouthguards; throwing needs mats "
+                "and a clear space; groundwork needs something for the skin. The right "
+                "gear is the one that matches the risk of the session."
+            ),
+        ),
+    ),
+    Topic(
+        key="ma_iq_getting_thrown_is_part_of_it",
+        title="Getting thrown or submitted is part of the lesson",
+        focus="Mindset",
+        positions=MA_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=72,
+        find=(
+            "Training footage where a practitioner gets countered or submitted and then "
+            "resets -- ideally with a brief exchange between partners. The point is the "
+            "reset, not the mistake."
+        ),
+        ask=Ask(
+            prompt="What should you take from a session where you got tapped a lot?",
+            options=(
+                "Which positions and techniques caught you, and what to ask about next time",
+                "That you are not good at the sport",
+                "That your partner is too strong for you",
+            ),
+            answer=0,
+            because=(
+                "Getting caught is not a verdict on you -- it is information. Every "
+                "tap or throw is a specific thing that happened in a specific position, "
+                "and the next session is a chance to ask about that one thing. The "
+                "feeling of being outclassed is temporary; the lesson is what stays."
+            ),
+        ),
+    ),
+)
+
+MA_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="ma_iq_training_looks_different_at_sixteen_than_at_eight",
+        title="A good training week looks different at sixteen than at eight",
+        focus="Training sense",
+        positions=MA_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=115,
+        find=(
+            "A coaching-education clip or a coach going over a training plan with a "
+            "class -- something about how often a young athlete should train, what they "
+            "should and should not be doing, and that more is not always better."
+        ),
+        ask=Ask(
+            prompt="Why does a training plan for a younger athlete look different from one for an older athlete?",
+            options=(
+                "Because younger bodies are still growing and need rest and variety, not just more training",
+                "Because younger athletes cannot learn the technique",
+                "Because the sport does not matter until you are older",
+            ),
+            answer=0,
+            because=(
+                "A growing body is not a small adult body -- it needs recovery, variety, "
+                "and time to develop. Training more is not automatically training better, "
+                "and overtraining a young athlete is how they stop enjoying it, or get "
+                "hurt, long before they have a chance to get good at it."
+            ),
+        ),
+    ),
+    Topic(
+        key="ma_iq_a_good_opponent_is_your_coach_in_the_room",
+        title="A good opponent is the best coach you have in the room",
+        focus="Mindset",
+        positions=MA_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=120,
+        find=(
+            "Sparring or randori footage where partners are clearly listening to each "
+            "other -- helping with a correction, resetting after a good exchange. The "
+            "point is the tone of the interaction, not the technique."
+        ),
+        ask=Ask(
+            prompt="When someone gives you a hard fight in training, what is the best way to think about it?",
+            options=(
+                "They just showed you something real about your game -- thank them for it",
+                "They are trying to beat you and you should try harder next time",
+                "It means you need a different partner",
+            ),
+            answer=0,
+            because=(
+                "A training partner who pushes you is giving you the closest thing to "
+                "real resistance you will get short of a competition. That is valuable "
+                "on its own, and it is also information -- about what works, what does "
+                "not, and what you need to work on. Treating it as a lesson rather than "
+                "a loss is what lets you come back better."
+            ),
+        ),
+    ),
+)
+
+MA_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="ma_iq_competition_is_a_whole_day_problem",
+        title="Competition day is a whole-day problem, not a fifteen-minute one",
+        focus="Competition sense",
+        positions=MA_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=155,
+        find=(
+            "A coaching-education or athlete-student clip about preparing for a "
+            "tournament or grading -- what to eat, how to warm up, what to bring, how "
+            "to handle being there. Something that treats the day as a day, not just "
+            "the match."
+        ),
+        ask=Ask(
+            prompt="What is the biggest mistake people make on a competition day?",
+            options=(
+                "Treating only the match as the day, and forgetting to eat, warm up, and pace themselves",
+                "Turning up too early",
+                "Trying too hard to win",
+            ),
+            answer=0,
+            because=(
+                "A competition is a long day in a strange place with your adrenaline "
+                "on. The people who do well are usually the ones who planned the whole "
+                "day -- food, warm-up, rest between fights or matches -- and not just "
+                "the ones who walked on cold and hoped."
+            ),
+        ),
+    ),
+    Topic(
+        key="ma_iq_good_at_this_is_a_years_thing",
+        title="Getting good at this is a years thing, not a months thing",
+        focus="Training sense",
+        positions=MA_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=145,
+        find=(
+            "A clip or short piece about how long it takes to develop real skill in a "
+            "martial art -- belt progressions, the idea that strength and speed come "
+            "later, or a coach talking about what they were like when they started."
+        ),
+        ask=Ask(
+            prompt="What is the most realistic way to think about getting good at a martial art?",
+            options=(
+                "It is a long path, and progress comes in seasons -- some fast, some slow -- not in a straight line",
+                "If you are not improving fast, you are doing it wrong",
+                "The goal is to get a belt as quickly as possible",
+            ),
+            answer=0,
+            because=(
+                "Real skill is built by showing up over a long time, with bad days and "
+                "plateaus and sudden jumps mixed together. Treat it like that and the "
+                "slow parts are not a failure -- they are the path. Treat it like a race "
+                "and you will probably end up somewhere else."
+            ),
+        ),
+    ),
+    Topic(
+        key="ma_iq_rest_is_part_of_training",
+        title="Rest is part of training, even in a sport that rewards showing up",
+        focus="Staying safe",
+        positions=MA_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=140,
+        find=(
+            "A coach or athlete talking about rest, recovery, or overtraining -- "
+            "ideally in a martial-arts context, but any sport where showing up is the "
+            "point works too. The idea is the part about recovery being part of it."
+        ),
+        ask=Ask(
+            prompt="Why is rest a real part of training, not the opposite of it?",
+            options=(
+                "Because the body gets stronger during recovery, and without it the work just stacks up as tiredness and injury",
+                "Because there are only so many hours in the day",
+                "Because coaches like to tell you to rest",
+            ),
+            answer=0,
+            because=(
+                "Training is the thing that asks your body to adapt; rest is the thing "
+                "that lets it. Without enough of both, you do not get fitter or better "
+                "-- you get tired, then hurt, then stopped. A martial artist who never "
+                "rests is not dedicated, they are borrowing against a withdrawal they will "
+                "have to make later."
+            ),
+        ),
+    ),
+    Topic(
+        key="ma_iq_other_sports_help_this_one",
+        title="Doing other sports helps you in this one too",
+        focus="Training sense",
+        positions=MA_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=142,
+        find=(
+            "A short piece -- coaching education, athlete interview, or similar -- about "
+            "how other kinds of movement (running, gymnastics, swimming, team sports) "
+            "help a martial artist. The point is the crossover, not any one sport."
+        ),
+        ask=Ask(
+            prompt="Why can doing another sport make you better at martial arts?",
+            options=(
+                "Because different sports build different parts of your body and your brain, and a more complete athlete is a better martial artist",
+                "Because it means you spend less time on martial arts and that is somehow good",
+                "Because coaches want you to do whatever you want",
+            ),
+            answer=0,
+            because=(
+                "Martial arts use your whole body and your whole attention -- balance, "
+                "stamina, coordination, timing. Other sports train pieces of that in "
+                "different ways, and a body and mind that are good at more than one thing "
+                "usually come into the mat better than one that only ever knows one thing."
+            ),
+        ),
+    ),
+)
+
+MA_IQ_TOPICS: tuple[Topic, ...] = (
+    MA_FUNDAMENTALS + MA_CORE + MA_ADVANCED
+)
+
+
+# ---------------------------------------------------------------------------
+# Rowing
+# ---------------------------------------------------------------------------
+# One syllabus for a sport whose two career-enders are backs and doing too much too
+# young. The same ideas apply across the age range -- clean blade work, sequencing,
+# pacing the piece, reading the water -- and the advanced band is where the back and
+# volume questions move from abstract to real.
+
+ROW_ALL = ("rower",)
+
+ROW_FUNDAMENTALS: tuple[Topic, ...] = (
+    Topic(
+        key="row_iq_the_handle_moves_the_boat",
+        title="The handle is what moves the boat, the blade is what lets it",
+        focus="Technique sense",
+        positions=ROW_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=65,
+        find=(
+            "Footage of a rower from the side -- ideally slow motion -- where the "
+            "blade goes in cleanly, pulls, and comes out cleanly, next to one where "
+            "it catches bad or checks out early. The first five strokes of a piece "
+            "are often the most readable."
+        ),
+        ask=Ask(
+            prompt="What is the job of the blade in the water?",
+            options=(
+                "To hold the water so the boat can move past it",
+                "To splash as much water as possible",
+                "To make the stroke look long",
+            ),
+            answer=0,
+            because=(
+                "A rowing stroke is the boat moving away from a blade that is not "
+                "moving through the water. A clean catch and a clean finish are what "
+                "make that work -- the middle is the part everyone watches, but the "
+                "two ends are what decide whether it was a good stroke."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_the_recovery_is_half_the_stroke",
+        title="The recovery is what makes the next stroke possible",
+        focus="Technique sense",
+        positions=ROW_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=68,
+        find=(
+            "Side-on footage of the recovery -- body coming forward before the catch, "
+            "sequencing from arms to body to slide. Contrast with a rower diving "
+            "head-first into the catch."
+        ),
+        ask=Ask(
+            prompt="What should happen during the recovery?",
+            options=(
+                "The body should move toward the catch in a controlled sequence, so the next stroke starts ready",
+                "You should rush to get back to the catch as fast as possible",
+                "Nothing -- the recovery is the easy part and does not matter",
+            ),
+            answer=0,
+            because=(
+                "A rushed or collapsed recovery gives away the run the drive just "
+                "earned and leaves you reaching at the catch. Good recovery is what "
+                "lets the drive be good too -- it is not rest, it is the other half "
+                "of the stroke."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_the_water_is_heavy",
+        title="The water is not something you push through lightly",
+        focus="Staying safe",
+        positions=ROW_ALL,
+        min_age=0,
+        max_age=200,
+        target_s=70,
+        find=(
+            "Coaching-education or safety-oriented footage about the physical reality "
+            "of the water -- capsize recovery, being aware of where you are, and the "
+            "difference between a training session on a buoyed stretch and open water."
+        ),
+        ask=Ask(
+            prompt="What is the first thing that changes when you go from a boated session on a river to open water?",
+            options=(
+                "The environment gets bigger and less forgiving, and the things that keep you safe change with it",
+                "Nothing changes if you are a good enough rower",
+                "Only the scenery changes",
+            ),
+            answer=0,
+            because=(
+                "A buoyed stretch is a controlled place to train. Open water is not -- "
+                "weather, traffic, and distance all matter more than they do on a "
+                "practice course, and the skills that keep you safe on one do not "
+                "automatically cover the other."
+            ),
+        ),
+    ),
+)
+
+ROW_CORE: tuple[Topic, ...] = (
+    Topic(
+        key="row_iq_power_is_the_wrong_order",
+        title="The power comes from the right order, not from pulling harder",
+        focus="Technique sense",
+        positions=ROW_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=120,
+        find=(
+            "Side-on slow motion of a strong clean drive -- legs, then body, then arms "
+            "in sequence -- next to one where the arms and back do too much too early. "
+            "Two or three strokes is enough."
+        ),
+        ask=Ask(
+            prompt="Where should the power in a rowing stroke start?",
+            options=(
+                "With the legs driving, then the body opening, then the arms drawing the handle in",
+                "With the arms pulling as hard as possible",
+                "With the back leaning back at the catch",
+            ),
+            answer=0,
+            because=(
+                "The legs are the biggest muscles and they do the biggest part of the "
+                "work first. When the arms or back start too early, the rest of the "
+                "stroke is starved of the run they should have had -- and the stroke is "
+                "slower and harder on the back for it."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_a_good_catch_is_a_quiet_one",
+        title="A good catch is a quiet one",
+        focus="Technique sense",
+        positions=ROW_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=125,
+        find=(
+            "Footage of a clean, quiet catch next to one where the blade checks the "
+            "boat or splashes. Slow motion is ideal -- the catch happens fast and the "
+            "difference is small."
+        ),
+        ask=Ask(
+            prompt="What does a bad catch look and feel like?",
+            options=(
+                "The blade hits the water hard, the boat checks, and the rower loses the run",
+                "The blade comes in too late and the stroke is short",
+                "A bad catch always splashes a lot",
+            ),
+            answer=0,
+            because=(
+                "A catch that is too hard or too early hits the water like a brake, "
+                "because the blade is still accelerating when it meets it. A good catch "
+                "is one where the blade gets in cleanly and starts working without "
+                "stopping the boat -- quiet is the sign of that."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_balance_is_part_of_the_speed",
+        title="Both sides of the boat have a job, and they are not the same one",
+        focus="Technique sense",
+        positions=ROW_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=115,
+        find=(
+            "Footage from a launch or a camera on the bank showing a four or an eight "
+            "where one side is clearly doing something different -- over-driving, "
+            "checking the boat, rushing -- and how it affects the run. A single sculler "
+            "works too if the point is about balance."
+        ),
+        ask=Ask(
+            prompt="Why does balance matter so much in rowing?",
+            options=(
+                "Because the boat runs on the line between the two sides, and anything that tilts it wastes the run",
+                "Because it looks better",
+                "Because coxes like it",
+            ),
+            answer=0,
+            because=(
+                "A rowing boat is a thin thing on a thin thing, and it runs on a line "
+                "that is easy to lose. A bad side, a late catch on one side, an uneven "
+                "finish -- all of it tilts the boat and slows it. Balance is not a "
+                "nice-to-have, it is part of the speed."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_the_first_stroke_is_not_the_fastest",
+        title="The first stroke is not the fastest one",
+        focus="Training sense",
+        positions=ROW_ALL,
+        min_age=13,
+        max_age=200,
+        target_s=118,
+        find=(
+            "A race or time-trial piece where the first ten strokes are clearly set "
+            "rather than thrown -- ideally with splits or rate visible. Contrast with "
+            "one where the rowers sprint at the start and pay for it."
+        ),
+        ask=Ask(
+            prompt="How should a piece usually start?",
+            options=(
+                "With a controlled build -- getting to race pace rather than starting there",
+                "As fast as possible from the first stroke",
+                "Slowly, then speeding up later",
+            ),
+            answer=0,
+            because=(
+                "The first strokes are where the boat is heaviest and the rowers are "
+                "cold. Starting at full speed burns the run you will need later and "
+                "usually ends as a sprint that dies. Building into the piece is what "
+                "lets the whole piece be fast."
+            ),
+        ),
+    ),
+)
+
+ROW_ADVANCED: tuple[Topic, ...] = (
+    Topic(
+        key="row_iq_the_back_you_keep_is_the_one_you_rowing_with",
+        title="The back that carries you through this sport is the one you keep for it",
+        focus="Staying safe",
+        positions=ROW_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=150,
+        find=(
+            "Coaching-education or sports-medicine footage about backs in rowing -- "
+            "core support, sequencing, how much is too much, and what overuse looks "
+            "like before it becomes an injury. Something aimed at young rowers."
+        ),
+        ask=Ask(
+            prompt="Why does a rower's back need more attention than most?",
+            options=(
+                "Because the sport asks the back to do a lot of work, over a lot of strokes, in a position where bad technique and too many hours both show up there first",
+                "Because rowers are more likely to have bad backs in general",
+                "Because the boat is heavy",
+            ),
+            answer=0,
+            because=(
+                "Rowing is a repeated extension under load, and a young rower who rows "
+                "too much, rows badly, or rows through the pain that should have been a "
+                "warning is the one who ends up stopped. Looking after the back -- technique, "
+                "core, and sensible volume -- is what lets a rowing career last long enough to "
+                "mean anything."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_volume_is_a_recipe_not_a_requirement",
+        title="Rowing rewards hours, but hours are what hurt you if you treat them badly",
+        focus="Training sense",
+        positions=ROW_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=155,
+        find=(
+            "A coach or sports-medicine clip about training volume in rowing -- how much "
+            "is appropriate for a young rower, what signs to watch for, and why more is "
+            "not automatically better. Ideally aimed at a developing athlete."
+        ),
+        ask=Ask(
+            prompt="What is the real risk of treating rowing like a sport where you just do more every week?",
+            options=(
+                "You build volume faster than your body can adapt, and the back and the rest of you start shutting down the parts you are overloading",
+                "You get better faster, so there is no real risk",
+                "The only risk is getting tired",
+            ),
+            answer=0,
+            because=(
+                "Rowing is one of the sports where volume is part of what you are training "
+                "for -- but volume without recovery and without good technique is how "
+                "overuse happens. A young rower who treats every week as a chance to add "
+                "more is one bad back or one overuse injury away from a season that is "
+                "gone."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_fast_water_is_not_fast_boat",
+        title="Fast water is not the same as fast boat",
+        focus="Technique sense",
+        positions=ROW_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=148,
+        find=(
+            "Side-on footage of a fast, smooth, well-connected stroke next to one that "
+            "looks rushed and hard but does not move the boat as well. Rate and split "
+            "visible if possible."
+        ),
+        ask=Ask(
+            prompt="What is the difference between rowing fast and rowing hard?",
+            options=(
+                "Rowing fast is the boat moving well; rowing hard is the rower working hard -- and they are not the same thing",
+                "They are the same thing",
+                "Rowing hard always makes the boat faster",
+            ),
+            answer=0,
+            because=(
+                "You can work very hard and still lose the run of the boat -- rushing the "
+                "recovery, checking at the catch, breaking the connection. Good rowing is "
+                "the thing that makes the boat go fast, not the thing that makes the rower "
+                "appear to be trying hardest."
+            ),
+        ),
+    ),
+    Topic(
+        key="row_iq_the_coxswain_steers_the_boat_and_the_attention",
+        title="The coxswain is steering the boat and the crew's attention",
+        focus="Team boats",
+        positions=ROW_ALL,
+        min_age=15,
+        max_age=200,
+        target_s=140,
+        find=(
+            "Footage from the coxswain's seat or from a launch following a boat -- "
+            "showing a cox calling a piece, making a correction, and steering. Ideally "
+            "something with a clear call and a clear response."
+        ),
+        ask=Ask(
+            prompt="What is the job of a coxswain in a race?",
+            options=(
+                "To steer the straightest line, call the race plan, and keep the crew organized and motivated -- all of it at once",
+                "To yell louder than anyone else",
+                "To sit at the back and watch",
+            ),
+            answer=0,
+            because=(
+                "A coxswain is not a mascot and not just a voice. A good one sets the "
+                "line, runs the race, reads the other boat, and keeps the crew doing the "
+                "thing they practiced -- all while the boat is moving under them. The "
+                "crew can only do their job if the cox is doing theirs."
+            ),
+        ),
+    ),
+)
+
+ROW_IQ_TOPICS: tuple[Topic, ...] = (
+    ROW_FUNDAMENTALS + ROW_CORE + ROW_ADVANCED
+)
+
+
 BY_SPORT.update({
     "lacrosse": TOPICS,
     "basketball": BKB_TOPICS,
@@ -4681,5 +5596,12 @@ BY_SPORT.update({
     "track": TRK_IQ_TOPICS,
     "cross_country": TRK_IQ_TOPICS,
     "swimming": SWM_IQ_TOPICS,
+    # Individual sports added after the first release. Same shape as the rest --
+    # age-banded, position-tagged, with a comprehension question whose answer is
+    # the point and a `find` note for the coach holding the scrub bar rather than
+    # a fabricated video id.
+    "golf": GOLF_IQ_TOPICS,
+    "martial_arts": MA_IQ_TOPICS,
+    "rowing": ROW_IQ_TOPICS,
 })
 BY_KEY = {t.key: t for topics in BY_SPORT.values() for t in topics}
