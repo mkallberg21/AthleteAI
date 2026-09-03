@@ -8,7 +8,8 @@ even if a future client tried to send it.
 from __future__ import annotations
 
 import base64
-
+import logging
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
@@ -55,6 +56,7 @@ from . import demo as demo_mod
 from . import technique as technique_mod
 from . import roster_sync
 from . import notifications as notify
+from . import health as health_mod
 from .assignments import AssignmentError
 from .absence import AbsenceError
 from .adaptive import AdaptiveError
@@ -67,6 +69,40 @@ from .drills.base import CUE_CELLS, CUE_UNREADABLE
 from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
 from .store import Principal, Store, StoreError, transaction
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Startup/shutdown hooks for a deployed instance.
+
+    Startup: run an integrity + migration pass so a restarted instance upgrades
+    a stale DB on its own. Shutdown: checkpoint the WAL so a clean exit does not
+    leave a growing -wal file behind. Both are best-effort: a failure here is
+    logged, not turned into a startup crash.
+    """
+    # ---- startup ----
+    logger.info("offdays startup: running DB integrity + migration pass")
+    mig = health_mod.migrate_if_needed()
+    integ = health_mod.run_integrity_check()
+    logger.info("offdays startup: migrate=%s integrity=%s", mig.get("migrate"), integ.get("integrity"))
+    if integ.get("integrity_ok") is False:
+        logger.warning(
+            "offdays startup: integrity_check returned %s — schedule a full "
+            "PRAGMA integrity_check from scripts/health_reap.py soon",
+            integ.get("integrity"),
+        )
+    yield
+    # ---- shutdown ----
+    logger.info("offdays shutdown: checkpointing WAL")
+    ckpt = health_mod.checkpoint_wal()
+    logger.info("offdays shutdown: checkpoint=%s", ckpt.get("checkpoint"))
+    try:
+        _close_store()
+    except Exception:
+        logger.exception("offdays shutdown: error closing store")
+
+
 app = FastAPI(
     title="0FFDAYS",
     version=__version__,
@@ -75,6 +111,7 @@ app = FastAPI(
         "athlete's phone; this API handles derived counts, scoring, and coach "
         "reporting only."
     ),
+    lifespan=_lifespan,
 )
 
 _store: Store | None = None
@@ -203,7 +240,43 @@ def _competitor(principal: Principal = Depends(_principal)) -> Principal:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"status": "ok", "version": __version__, "drills": len(ALL_DRILLS)}
+    """Instance health: DB reachable + schema current, WAL size, stuck sessions,
+    disk space.
+
+    A load balancer or an operator can tell the difference between "process is
+    up" and "process is up and the DB it needs is actually healthy" from one GET.
+    """
+    return health_mod.health_summary()
+
+
+@app.get("/api/ready")
+def ready() -> dict[str, Any]:
+    """Readiness: can this instance serve traffic right now?
+
+    Fails closed: if the DB is unreachable or the schema is stale the instance is
+    not ready, even if the process itself is alive.
+    """
+    h = health_mod.health_summary()
+    db = h.get("db", {})
+    schema_ok = db.get("schema_current") if isinstance(db, dict) else False
+    db_ok = db.get("db") == "ok" if isinstance(db, dict) else False
+    ready_flag = db_ok and schema_ok and not h.get("issues")
+    return {
+        "ready": ready_flag,
+        "version": __version__,
+        "issues": h.get("issues", []),
+        "utc_now": h.get("utc_now"),
+    }
+
+
+@app.get("/api/live")
+def live() -> dict[str, Any]:
+    """Liveness: is the process itself alive?
+
+    Does not touch the DB. A process that has lost its DB can still be "live"
+    while no longer being "ready" — that distinction is what /api/ready is for.
+    """
+    return {"live": True, "version": __version__}
 
 
 @app.get("/api/drills")
