@@ -2032,8 +2032,16 @@ function stopCamera({ keepRecording = false } = {}) {
     stream.getTracks().forEach((t) => t.stop());
     stream = null;
   }
-  $('video').srcObject = null;
-  $('startstop').classList.remove('danger');
+  // Null-guarded, the way discardRecording() already is. This runs from the
+  // pagehide handler, by which point the document may be torn down and
+  // getElementById returns null -- and the throw landed *before*
+  // discardRecording(), so backgrounding the app stopped the camera but left
+  // the recording in memory. That is the one thing the handler exists to
+  // prevent: footage is not meant to outlive the moment.
+  const video = $('video');
+  if (video) video.srcObject = null;
+  const startstop = $('startstop');
+  if (startstop) startstop.classList.remove('danger');
   if (!keepRecording) discardRecording();
 }
 

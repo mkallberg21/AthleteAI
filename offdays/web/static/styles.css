@@ -1256,7 +1256,13 @@ code, .code, .claim-code {
   border: 1px solid var(--border);
   margin-top: 0.5rem;
 }
-|.details-panel.hidden { display: none; }
+/* The one every page relies on to reveal a panel only when it applies --
+   coach.html alone uses it ninety times. Losing it did not break a layout,
+   it showed every conditional card at once: the week plan, the team goal
+   and the notifications all on screen before there was anything in them. */
+.hidden { display: none !important; }
+
+.details-panel.hidden { display: none; }
 
 /* ============================================================
    SPONSOR SLOTS — placeholder branding areas
@@ -1264,7 +1270,7 @@ code, .code, .claim-code {
    Populate .sponsor-logo with an <img> and .sponsor-text
    with the sponsor name; hide the whole slot when empty.
    ============================================================ */
-|.sponsor-slot {
+.sponsor-slot {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1274,9 +1280,9 @@ code, .code, .claim-code {
   border-radius: var(--radius-sm);
   margin: 0.75rem 0;
 }
-|.sponsor-slot.hidden { display: none; }
+.sponsor-slot.hidden { display: none; }
 
-|.sponsor-logo {
+.sponsor-logo {
   width: 36px;
   height: 36px;
   border-radius: 6px;
@@ -1287,13 +1293,13 @@ code, .code, .claim-code {
   flex-shrink: 0;
   overflow: hidden;
 }
-|.sponsor-logo img {
+.sponsor-logo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-|.sponsor-text {
+.sponsor-text {
   font-size: 0.82rem;
   color: var(--text-muted);
   white-space: nowrap;
@@ -1302,38 +1308,38 @@ code, .code, .claim-code {
 }
 
 /* App-level slot sits just below the topbar masthead. */
-|.sponsor-slot[data-sponsor-level="app"] {
+.sponsor-slot[data-sponsor-level="app"] {
   margin: 0.5rem 0 0.75rem;
 }
 
 /* Athlete-level slot sits inside capture.html bottom card. */
-|.sponsor-slot[data-sponsor-level="athlete"] {
+.sponsor-slot[data-sponsor-level="athlete"] {
   margin-top: 0.75rem;
   justify-content: center;
   text-align: center;
 }
-|.sponsor-slot[data-sponsor-level="athlete"] .sponsor-text {
+.sponsor-slot[data-sponsor-level="athlete"] .sponsor-text {
   display: block;
   text-align: center;
 }
 
 /* Parent-level slot sits inside parent.html wrap. */
-|.sponsor-slot[data-sponsor-level="parent"] {
+.sponsor-slot[data-sponsor-level="parent"] {
   margin: 0.75rem 0;
 }
 
 /* Coach-level slot sits inside coach.html staff card area. */
-|.sponsor-slot[data-sponsor-level="coach"] {
+.sponsor-slot[data-sponsor-level="coach"] {
   margin-top: 0.75rem;
   justify-content: center;
   text-align: center;
 }
-|.sponsor-slot[data-sponsor-level="coach"] .sponsor-text {
+.sponsor-slot[data-sponsor-level="coach"] .sponsor-text {
   display: block;
   text-align: center;
 }
 
-|.details-toggle:hover { background: var(--surface-3); border-color: var(--accent-dim); }
+.details-toggle:hover { background: var(--surface-3); border-color: var(--accent-dim); }
 
 .emoji { font-size: 1.2em; }
 

@@ -132,3 +132,35 @@ def test_the_wordmark_colours_the_half_the_logo_colours():
         text = page.read_text()
         if "topbar-title" in text:
             assert '<span class="highlight">0FF</span>DAYS' in text, page.name
+
+
+def test_the_stylesheet_has_no_stray_characters_before_a_rule():
+    """A single junk character costs whole rules, silently.
+
+    Thirteen lines arrived beginning with "|". CSS has no such selector, so
+    the parser discarded each one and everything up to the next closing
+    brace -- which ate `.hidden { display: none !important }`. Nothing looked
+    broken in the file and nothing failed to load: the athlete screen simply
+    showed all twenty-three of its conditional panels at once, and the
+    sponsor slots lost their styling.
+    """
+    legal_start = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                      "0123456789.#*:[>+~-_@/}) \t")
+    for n, line in enumerate(CSS.splitlines(), 1):
+        if not line.strip():
+            continue
+        assert line[0] in legal_start, f"styles.css line {n} starts with {line[0]!r}: {line[:60]}"
+
+
+def test_the_class_that_hides_things_survives():
+    """Ninety uses in coach.html alone depend on this one rule."""
+    assert re.search(r"^\.hidden \{[^}]*display:\s*none", CSS, re.M), (
+        "the bare .hidden rule is gone; every conditional panel is visible"
+    )
+
+
+def test_the_braces_balance():
+    """An unclosed rule swallows everything after it, the same way."""
+    assert CSS.count("{") == CSS.count("}"), (
+        f"{CSS.count('{')} opening braces against {CSS.count('}')} closing"
+    )
