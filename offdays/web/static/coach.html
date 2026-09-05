@@ -513,8 +513,8 @@
     <div style="overflow-x:auto">
       <table>
         <thead><tr>
-          <th>Athlete</th><th class="num">XP</th><th class="num">Sessions</th>
-          <th class="num">Off-hand</th><th class="num">Form</th><th class="num">Load</th>
+          <th>Athlete</th><th class="num">Sessions</th>
+          <th class="num" id="roster-side-th">Off-hand</th>
           <th>Last active</th><th>Status</th><th></th>
         </tr></thead>
         <tbody id="roster"></tbody>
@@ -672,6 +672,10 @@ import { api, esc, fmtDate, getToken, logout, renderBranding, setOrg } from './a
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
+
+// What this program calls its weaker side, for the one roster column that
+// names it. Defaulted so the table renders before /api/me answers.
+let ROSTER_SIDE = 'Off-hand';
 
 const FLAG_LABELS = {
   never_trained: ['bad', 'never trained'],
@@ -1781,6 +1785,9 @@ function renderAttention(athletes) {
 }
 
 function renderRoster(athletes) {
+  const sideTh = $('roster-side-th');
+  if (sideTh && ROSTER_SIDE) sideTh.textContent = ROSTER_SIDE;
+
   $('roster').innerHTML = athletes.length ? athletes.map((a) => {
     const share = a.offhand_share === null ? '–' : `${Math.round(a.offhand_share * 100)}%`;
     const shareCls = a.offhand_share === null ? '' : a.offhand_share < 0.2 ? 'style="color:var(--warn)"' : '';
@@ -1794,16 +1801,8 @@ function renderRoster(athletes) {
     return `<tr>
       <td><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
           <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span></td>
-      <td class="num">${a.window_xp.toLocaleString()}</td>
       <td class="num">${a.window_sessions}</td>
       <td class="num" ${shareCls}>${share}</td>
-      <td class="num">${a.quality === null ? '–'
-        : `<b style="color:${a.quality >= 80 ? 'var(--accent)'
-          : a.quality >= 60 ? 'var(--warn)' : 'var(--danger)'}">${a.quality}</b>`}</td>
-      <td class="num">${!a.load || a.load.acwr === null ? '–'
-        : `<b style="color:${a.load.zone === 'high' ? 'var(--danger)'
-          : a.load.zone === 'elevated' ? 'var(--warn)' : 'var(--accent)'}"
-          title="${esc(a.load.zone_label)}">${a.load.acwr.toFixed(2)}</b>`}</td>
       <td>${fmtDate(a.last_session)}</td>
       <td>${status}${review}</td>
       <td><button class="inline secondary" data-invite="${a.athlete_id}"
@@ -2522,6 +2521,7 @@ $('signout').addEventListener('click', logout);
     // racing it and losing silently.
     const brandingReady = renderBranding("masthead", "");
     const me = await api('/api/me');
+    if (me.side && me.side.label) ROSTER_SIDE = me.side.label;
     $('whoami').textContent = me.display_name;
     await brandingReady;
     setRole(me.role);
