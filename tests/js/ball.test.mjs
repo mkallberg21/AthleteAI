@@ -12,7 +12,8 @@ import {
   BallTracker, ContactDetector, BallRepCounter, LANDMARK_INDEX, metricDistance,
 } from '../../offdays/web/static/ball.js';
 import { LANDMARKS } from '../../offdays/web/static/counter.js';
-const SPECS = JSON.parse(process.env.DRILL_SPECS);
+import { SPECS } from './specs.mjs';
+
 const spec = (key) => SPECS.find((d) => d.key === key);
 const FPS = 30, DT = 1 / FPS;
 

@@ -64,6 +64,113 @@ class Cue:
 # The fix has to name the body part and the feeling, which is the part a
 # template cannot do.
 CUES: dict[str, tuple[Cue, ...]] = {
+    # --- the second wave of general work ---
+    "gen_jump_rope": (
+        Cue("tempo", "One bounce per turn of the rope. If you are hopping "
+                     "twice between turns, slow the rope down instead.",
+            "the double bounce is a rest you did not mean to take"),
+        Cue("depth", "Barely leave the floor. An inch is enough for the rope "
+                     "to go under, and anything more just tires your calves.",
+            "big jumps are why people stop after thirty seconds"),
+        Cue("consistency", "Land in the same spot, quietly, every time. If you "
+                           "are drifting around the garage, slow down.",
+            "the rhythm is what you are actually training"),
+        Cue("endurance", "Stop when the rhythm breaks rather than when you "
+                         "trip. Rest, then go again.",
+            "a clean thirty seconds beats a ragged two minutes"),
+    ),
+    "gen_hip_hinge": (
+        Cue("depth", "Push your hips back further, not down. You should feel "
+                     "it stretch behind your thighs before you stand up.",
+            "if you feel it in your lower back the hips are not moving"),
+        Cue("consistency", "Same distance back every time. Pick a spot on the "
+                           "wall behind you and send your hips to it.",
+            "a hinge that changes shape every rep is not training anything"),
+        Cue("tempo", "Slow on the way down, then stand up by squeezing your "
+                     "backside.",
+            "the way down is where the work is"),
+        Cue("endurance", "Stop when your back starts rounding.",
+            "a rounded hinge is the one way this exercise can hurt you"),
+    ),
+    "gen_v_up": (
+        Cue("depth", "Bring your chest and your legs up together and reach "
+                     "past your knees, rather than curling up a little.",
+            "the reach is what makes this different from a sit-up"),
+        Cue("consistency", "Same shape every rep. If the last few are half the "
+                           "size of the first few, stop there.",
+            "small ragged reps are just tiring, not training"),
+        Cue("tempo", "Down slowly. Do not drop and bounce off the floor.",
+            "the bounce does the rep for you"),
+        Cue("endurance", "Stop when your legs stop lifting with your chest.",
+            "once they split up you are doing something else"),
+    ),
+    "gen_split_squat": (
+        Cue("depth", "Drop your back knee towards the floor until your front "
+                     "thigh is level. Straight down, not forwards.",
+            "going forwards puts it all in the front knee"),
+        Cue("consistency", "Same depth on both legs. Most people are much "
+                           "better on one side, and that is the point of it.",
+            "the weaker leg is the one that gets hurt"),
+        Cue("tempo", "Steady down, steady up. No bouncing at the bottom.",
+            "the bounce skips the hardest part"),
+        Cue("endurance", "Stop when your front knee starts wobbling inwards.",
+            "that wobble is the muscle that holds the knee giving up"),
+    ),
+    "gen_shoulder_tap": (
+        Cue("consistency", "Keep your hips still. If they rock side to side "
+                           "with each tap, widen your feet.",
+            "the still hips are the whole exercise"),
+        Cue("depth", "Tap the shoulder properly rather than waving at it.",
+            "a half tap does not load the side holding you up"),
+        Cue("tempo", "Slow and deliberate. Fast taps let you swing instead of "
+                     "hold.",
+            "speed hides the wobble rather than fixing it"),
+        Cue("endurance", "Stop when your hips start swinging.",
+            "past that you are practising the swing"),
+        Cue("offhand", "Tap the same number of times with each hand. One side "
+                       "will feel much less steady, and that is the side worth "
+                       "the reps.",
+            "the shaky side is the one that gives out in a game"),
+    ),
+    "gen_a_skip": (
+        Cue("depth", "Knee up to hip height, no higher. Thigh level with the "
+                     "ground and your toe pulled up.",
+            "a low knee makes this a jog with extra steps"),
+        Cue("tempo", "Quick off the floor. The foot comes straight back down "
+                     "underneath you rather than reaching out in front.",
+            "reaching out in front is braking"),
+        Cue("consistency", "Same height each side. Most people are noticeably "
+                           "lower on one leg.",
+            "sprinting rewards the side you never practise"),
+        Cue("endurance", "Stop when the knees stop getting up.",
+            "tired skipping teaches your body the tired shape"),
+    ),
+    "gen_superman": (
+        Cue("position", "Lift your hands and your feet at the same time and "
+                        "keep looking at the floor.",
+            "looking up folds your neck instead of using your back"),
+        Cue("endurance", "Come down when your feet start dropping.",
+            "a shorter hold with everything lifted is worth more"),
+    ),
+    "gen_bear_crawl_hold": (
+        Cue("position", "Knees an inch off the floor and a flat back. If your "
+                        "hips are up in the air, walk your hands forward.",
+            "hips in the air is a rest position"),
+        Cue("endurance", "Stop when your knees touch down.",
+            "the hover is the entire exercise"),
+    ),
+    "gen_single_leg_balance": (
+        Cue("position", "Stand tall with your standing knee soft, not locked. "
+                        "Let your ankle do the wobbling.",
+            "a locked knee stops the ankle learning anything"),
+        Cue("endurance", "Stop when you have to put the other foot down twice "
+                         "in a row. Swap legs and go again.",
+            "both ankles need this, and one of them needs it more"),
+        Cue("offhand", "Give both legs the same time. Almost everyone is "
+                       "steadier on one, and the wobbly one is the ankle that "
+                       "rolls.",
+            "the leg you avoid is the leg that gets hurt"),
+    ),
     "gen_squat": (
         Cue("depth", "Sit back like there is a chair behind you, until your "
                      "thighs are about level with the floor.",
@@ -185,7 +292,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "creeping up is the set ending whether you notice or not"),
     ),
     "gen_jumping_jack": (
-        Cue("depth", "All the way out and all the way up -- hands meeting "
+        Cue("depth", "All the way out and all the way up, hands meeting "
                      "above your head, feet wide.",
             "small ones are barely moving"),
         Cue("tempo", "Find a rhythm you can hold, rather than sprinting the "
@@ -271,7 +378,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "wobbly landings are how ankles get rolled"),
     ),
     "lax_wall_ball": (
-        Cue("depth", "Full throwing motion -- take the stick back past your "
+        Cue("depth", "Full throwing motion, take the stick back past your "
                      "ear and follow through, rather than flicking at it.",
             "a short flick will not survive a game"),
         Cue("tempo", "Find a steady rhythm rather than rushing. Catch, cradle, "
@@ -301,7 +408,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "tired reps groove a tired throw"),
     ),
     "lax_wall_ball_offhand": (
-        Cue("depth", "Same full motion as your strong hand -- back past the "
+        Cue("depth", "Same full motion as your strong hand, back past the "
                      "ear, full follow-through. Do not shorten it because it "
                      "feels awkward.",
             "a shortened off-hand throw becomes permanent"),
@@ -319,7 +426,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "a short tired rep teaches the short version"),
     ),
     "lax_wall_ball_one_hand": (
-        Cue("depth", "Short and controlled -- this is not a full throw. Wrist "
+        Cue("depth", "Short and controlled, this is not a full throw. Wrist "
                      "and forearm, not the whole arm.",
             "the point is control, not distance"),
         Cue("tempo", "Quick hands, close to the wall. If you are stepping "
@@ -343,7 +450,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("consistency", "Alternate every single rep. Same spot on the wall "
                            "from both sides.",
             "the point is that both sides look the same"),
-        Cue("offhand", "Half these reps are off-hand throws by design -- give "
+        Cue("offhand", "Half these reps are off-hand throws by design, give "
                        "them the same motion as the strong side.",
             "an even split is what this drill is for"),
         Cue("endurance", "When the switches get sloppy, stop.",
@@ -383,7 +490,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                      "low, back flat, hands at the ground.",
             "a high stance loses before the whistle goes"),
         Cue("tempo", "Fast. This is the one drill where speed beats a pretty "
-                     "rep -- clamp, rip, up, reset.",
+                     "rep, clamp, rip, up, reset.",
             "a face-off is decided in about half a second"),
         Cue("consistency", "Every rep the same. A clamp that varies is a "
                            "clamp that loses half the time.",
@@ -421,7 +528,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("tempo", "Feet moving the whole time. The hands are quick because "
                      "the feet got there first.",
             "quick hands with slow feet is a throw from a bad position"),
-        Cue("consistency", "Same transfer point every rep -- glove to hand in "
+        Cue("consistency", "Same transfer point every rep, glove to hand in "
                            "front of your chest, not down by your hip.",
             "a low transfer adds a tenth of a second you do not have"),
         Cue("offhand", "Usual arm only. Volume matters more than variety here.",
@@ -478,7 +585,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                        "build the other one.",
             "a pitching arm is not something to build twice"),
         Cue("endurance", "Stop well before your arm aches. These count on the "
-                         "day's total for a reason -- a windmill pitcher throws "
+                         "day's total for a reason, a windmill pitcher throws "
                          "more than anybody else on the field.",
             "the volume nobody counts is the volume that hurts people"),
     ),
@@ -505,7 +612,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("tempo", "Same rhythm every ball. This is a grooving drill, not a "
                      "race.",
             "grooving a stroke needs repetition, not intensity"),
-        Cue("consistency", "Same contact point every time -- out in front, not "
+        Cue("consistency", "Same contact point every time, out in front, not "
                            "beside you.",
             "a late contact point is the single most common fault in the sport"),
         Cue("offhand", "Pick your weaker wing. The stronger one does not need "
@@ -515,7 +622,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "a late ball is a tired ball, and it grooves the wrong thing"),
     ),
     "ten_volley": (
-        Cue("depth", "No backswing. Block it -- the pace is already there and "
+        Cue("depth", "No backswing. Block it, the pace is already there and "
                      "the racket only has to be in the way.",
             "a backswing at the net is how a volley ends up in the fence"),
         Cue("tempo", "Fast and continuous. There is a speed floor here and a "
@@ -536,7 +643,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                      "result.",
             "height buys angle, and angle is free"),
         Cue("tempo", "The toss is the serve. Same height, same spot, every "
-                     "time -- everything after it is just repeating.",
+                     "time, everything after it is just repeating.",
             "an inconsistent toss makes an inconsistent serve, always"),
         Cue("consistency", "Change one thing at a time. Grip, stance or toss, "
                            "never two at once.",
@@ -641,7 +748,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
     ),
     "fb_wall_throw": (
         Cue("depth", "Full motion. Load it properly and finish across your "
-                     "body -- a throw that stops at release is an arm throw.",
+                     "body, a throw that stops at release is an arm throw.",
             "the follow-through is where the shoulder gets to slow down"),
         Cue("tempo", "One throw at a time. Set your feet, throw, reset.",
             "rushed reps are how a session of forty becomes a session of a hundred"),
@@ -657,7 +764,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "a dropping elbow is the first sign an arm has had enough"),
     ),
     "fb_deep_ball": (
-        Cue("depth", "Everything into it -- hips, front side, full "
+        Cue("depth", "Everything into it, hips, front side, full "
                      "follow-through. If you are not doing that, throw the "
                      "shorter drill instead.",
             "a half-hearted deep ball costs the arm the same and teaches less"),
@@ -685,7 +792,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                            "one and you have changed the whole thing.",
             "a kicker's job is doing one movement identically"),
         Cue("offhand", "Do a few easy swings with the other leg at the end. "
-                       "Not to kick with -- just so one hip is not doing "
+                       "Not to kick with, just so one hip is not doing "
                        "everything.",
             "the plant leg and the swing leg age very differently"),
         Cue("endurance", "Stop when your plant foot starts drifting. That is "
@@ -696,7 +803,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("depth", "Push off the outside foot and cover ground. A slide that "
                      "stays still gives up the whole route.",
             "the app measures how far your feet get apart, and so does a receiver"),
-        Cue("tempo", "Slide, reset, slide. Do not hop -- both feet in the air "
+        Cue("tempo", "Slide, reset, slide. Do not hop, both feet in the air "
                      "means you cannot break on anything.",
             "the moment you are airborne you are beaten"),
         Cue("consistency", "Never cross your feet. The app can see it happen "
@@ -712,7 +819,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("position", "One hand over the other, arms locked, and squeeze "
                         "your ears with your biceps. If your head is poking "
                         "forward the line is broken.",
-            "the line is what a streamline is -- everything else is stretching"),
+            "the line is what a streamline is, everything else is stretching"),
         Cue("endurance", "Come down when your hands start drifting forward, "
                          "not after they have. Shake it out and go again.",
             "a drifting streamline is the one you will push off a wall with"),
@@ -776,7 +883,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                      "The distance is what makes it worth doing.",
             "a small hop side to side is a different, easier drill"),
         Cue("tempo", "Land, stop dead, hold it a beat, then go back. The pause "
-                     "is not a rest -- it is the half that protects your knee.",
+                     "is not a rest, it is the half that protects your knee.",
             "learning to stop is what stops you getting hurt when you have to"),
         Cue("consistency", "Same distance both ways. Land quiet, with your "
                            "knee over your foot rather than falling inwards.",
@@ -834,7 +941,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
     "hoc_wide_handles": (
         Cue("depth", "All the way out, both sides. Your bottom arm should be "
                      "nearly straight at the far end of each one.",
-            "this drill is the width -- a narrow one is just tight handles"),
+            "this drill is the width, a narrow one is just tight handles"),
         Cue("tempo", "Slower than tight handles. Reach, control it, come back.",
             "rushing the reach is how the puck ends up behind you"),
         Cue("consistency", "Same distance each way. Most players are much "
@@ -849,7 +956,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                      "your hands past your front hip. The whole sweep.",
             "the puck picks up its speed over the distance it is dragged"),
         Cue("tempo", "One shot at a time. Pull the next puck over, set your "
-                     "feet, then shoot -- do not machine-gun them.",
+                     "feet, then shoot, do not machine-gun them.",
             "ten proper shots beat forty rushed ones"),
         Cue("consistency", "Same spot on the pad, same feet, every time. Move "
                            "the puck around and you are practising forty "
@@ -875,7 +982,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("depth", "Push off the outside foot and actually cover ground. A "
                      "slide that goes nowhere closes nothing off.",
             "the app measures how far apart your feet get, and so does a winger"),
-        Cue("tempo", "Slide, reset, slide. Do not hop -- both feet in the air "
+        Cue("tempo", "Slide, reset, slide. Do not hop, both feet in the air "
                      "means you cannot change direction.",
             "the moment you are airborne you are committed"),
         Cue("consistency", "Never let your feet cross. The app can see it "
@@ -899,7 +1006,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("depth", "Small touches, knee height. A weak foot that has to "
                      "stretch for every ball never gets comfortable.",
             "control comes from the ball staying close, not from reaching"),
-        Cue("tempo", "Slow. This is not a drill you rush -- the count is not "
+        Cue("tempo", "Slow. This is not a drill you rush, the count is not "
                      "the point.",
             "rushing your weak foot just practises the panic"),
         Cue("consistency", "Same part of the foot every time, laces flat.",
@@ -915,7 +1022,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("depth", "Knee height, both feet. If it is going above your head "
                      "you are buying time instead of controlling it.",
             "high juggling hides a weak touch"),
-        Cue("tempo", "Even rhythm. Left, right, left, right -- the same beat "
+        Cue("tempo", "Even rhythm. Left, right, left, right, the same beat "
                      "the whole way.",
             "the rhythm is what makes it a skill rather than a scramble"),
         Cue("consistency", "Every other touch on the other foot, with no "
@@ -998,7 +1105,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("tempo", "Let the ball come to you. Rushing at it is what makes a "
                      "pass shoot off sideways.",
             "a passer who reaches is a passer who shanks"),
-        Cue("consistency", "Same platform every ball -- thumbs together, "
+        Cue("consistency", "Same platform every ball, thumbs together, "
                            "elbows locked, shoulders forward.",
             "the platform is the only flat surface in the whole skill"),
         Cue("endurance", "Stop when you start playing the ball with your hands "
@@ -1025,7 +1132,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                      "thing.",
             "height buys you angle, and angle is free"),
         Cue("tempo", "The toss is the serve. Same height, same spot, every "
-                     "time -- everything after it is just repeating.",
+                     "time, everything after it is just repeating.",
             "an inconsistent toss makes an inconsistent serve, always"),
         Cue("consistency", "Same starting spot, same number of steps. Change "
                            "one thing at a time or you will never know what "
@@ -1048,7 +1155,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("consistency", "Same swing every rep. It has to be repeatable "
                            "before it is worth making it fast.",
             "a swing that varies is a hitter who cannot be set"),
-        Cue("offhand", "Both arms work here -- the non-hitting arm points and "
+        Cue("offhand", "Both arms work here, the non-hitting arm points and "
                        "pulls down. Do not let it hang.",
             "the arm that is not hitting is half of where the power comes from"),
         Cue("endurance", "Stop counting and start listening to your shoulder. "
@@ -1072,7 +1179,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("depth", "Press up and over, not just up. Your hands should "
                      "finish higher than they started by a long way.",
             "a block that goes straight up gets hit through"),
-        Cue("tempo", "Straight from a standing start. No dip and no wind-up -- "
+        Cue("tempo", "Straight from a standing start. No dip and no wind-up, "
                      "at the net you do not get either.",
             "the dip is exactly the time a hitter uses"),
         Cue("consistency", "Land where you took off. Drifting sideways is how "
@@ -1106,7 +1213,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
                      "does not widen your stance is a step that went nowhere.",
             "the app measures how far your feet get apart, and so does an "
             "offensive player"),
-        Cue("tempo", "Push, then let the trail foot catch up. Do not hop -- "
+        Cue("tempo", "Push, then let the trail foot catch up. Do not hop, "
                      "both feet off the floor at once means you cannot change "
                      "direction.",
             "you get beaten in the moment neither foot is down"),
@@ -1209,7 +1316,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
     ),
     "lax_goalie_saves": (
         Cue("depth", "Both hands, all the way to the spot. A one-armed stab "
-                     "does not count -- the app measures your hands together.",
+                     "does not count, the app measures your hands together.",
             "a save is made with two hands out, not with one arm and a lean"),
         Cue("tempo", "Move on the call, not after it. The first move is the "
                      "save; everything after it is catching up.",
@@ -1227,7 +1334,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "corners first"),
     ),
     "lax_ground_ball": (
-        Cue("depth", "Get low -- bend your knees and drop your hips, do not "
+        Cue("depth", "Get low, bend your knees and drop your hips, do not "
                      "just reach down with your hands.",
             "reaching is the single most common way ground balls are lost"),
         Cue("tempo", "Scoop through the ball and keep moving. Do not stop "
@@ -1236,7 +1343,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("consistency", "Same low position every rep. Bottom hand near the "
                            "ground.",
             "the low hand is what gets under the ball"),
-        Cue("offhand", "Scoop from your weak side too -- the ball does not "
+        Cue("offhand", "Scoop from your weak side too, the ball does not "
                        "care which hand you like.",
             "a ground ball you can only take one way is one you often lose"),
         Cue("endurance", "When you stop getting all the way down, the set is "
@@ -1282,7 +1389,7 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "the grip is what makes it go straight"),
         Cue("tempo", "Do not rush. Set your feet between throws.",
             "footwork is most of throwing accuracy"),
-        Cue("offhand", "Glove-side work counts too -- catch cleanly before you "
+        Cue("offhand", "Glove-side work counts too, catch cleanly before you "
                        "throw.",
             "the catch is half of every throw you make in a game"),
     ),

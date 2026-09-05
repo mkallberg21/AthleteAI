@@ -45,6 +45,55 @@ class Transfer:
 
 
 TRANSFERS: dict[str, tuple[Transfer, ...]] = {
+    "gen_jump_rope": (
+        Transfer("Basketball", "landing and going again without a pause"),
+        Transfer("Soccer", "quick feet in a crowd"),
+        Transfer("Tennis", "the split step, which is this exact bounce"),
+        Transfer("Boxing", "it is most of what the footwork is"),
+    ),
+    "gen_hip_hinge": (
+        Transfer("Track", "the shape a sprint start is loaded in"),
+        Transfer("Rowing", "the drive is a hinge with a handle in your hands"),
+        Transfer("Football", "getting under someone lower than you"),
+        Transfer("Baseball", "the load before the swing comes from here"),
+    ),
+    "gen_v_up": (
+        Transfer("Swimming", "holding your body flat instead of folding"),
+        Transfer("Gymnastics", "the hollow shape almost everything starts from"),
+        Transfer("Wrestling", "getting off your back"),
+    ),
+    "gen_split_squat": (
+        Transfer("Soccer", "you almost never push off two feet in a game"),
+        Transfer("Basketball", "the last step before a jump is one leg"),
+        Transfer("Track", "running is single-leg work at speed"),
+        Transfer("Skiing", "holding a turn on the outside leg"),
+    ),
+    "gen_shoulder_tap": (
+        Transfer("Swimming", "not snaking through the water when one arm pulls"),
+        Transfer("Football", "keeping your shape while somebody moves you"),
+        Transfer("Golf", "a base that does not wobble mid-rotation"),
+    ),
+    "gen_a_skip": (
+        Transfer("Track", "it is the drill sprinters actually do"),
+        Transfer("Soccer", "the last ten yards of a chase"),
+        Transfer("Basketball", "getting out and gone on a break"),
+    ),
+    "gen_superman": (
+        Transfer("Swimming", "holding a line instead of dragging your legs"),
+        Transfer("Rowing", "the back that has to stay long for two thousand metres"),
+        Transfer("Gymnastics", "the arch half of every shape"),
+    ),
+    "gen_bear_crawl_hold": (
+        Transfer("Wrestling", "a base nobody can turn over"),
+        Transfer("Football", "staying low with weight on your hands"),
+        Transfer("Rugby", "the position a ruck is won from"),
+    ),
+    "gen_single_leg_balance": (
+        Transfer("Soccer", "you stand on one leg every time you strike a ball"),
+        Transfer("Basketball", "landing from a rebound without rolling an ankle"),
+        Transfer("Dance", "it is the whole job"),
+        Transfer("Skiing", "an ankle that holds when the ground moves"),
+    ),
     "gen_lateral_bound": (
         Transfer("Basketball", "staying in front of the player you are guarding is this exact move"),
         Transfer("Soccer", "cutting across to close down a winger"),

@@ -16,9 +16,10 @@ import {
   sampleColour, MIN_SAMPLE_SHARE,
 } from '../../offdays/web/static/ballvision.js';
 import { LANDMARK_INDEX } from '../../offdays/web/static/ball.js';
+import { SPECS } from './specs.mjs';
 
 const W = 192, H = 108;
-const SPECS = JSON.parse(process.env.DRILL_SPECS);
+
 
 /**
  * A disc cut into wedges of different colours, for the panelled balls. The

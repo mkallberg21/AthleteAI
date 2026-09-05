@@ -89,10 +89,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3993 tests
+python -m pytest tests/ -q          # 4112 tests
 
-DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
-  node --test tests/js/*.test.mjs   # 261 tests
+python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))' > /tmp/specs.json
+DRILL_SPECS_FILE=/tmp/specs.json node --test tests/js/*.test.mjs   # 267 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -108,7 +108,7 @@ offdays/
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
-    catalog.py      The 89 shipped drills, filtered per sport by for_sport()
+    catalog.py      The 98 shipped drills, filtered per sport by for_sport()
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand

@@ -192,6 +192,12 @@ class TestNoDrillOutEarnsOneItCannotBeToldApartFrom:
             # set in everything the camera reaches. Only the wall differs, and
             # there is no wall in the skeleton.
             "vb_set_wall",
+            # A jump over a rope and a jump over nothing are the same jump.
+            # The rope is not in the skeleton, and no better model puts it
+            # there. So jump rope earns exactly what a pogo hop earns, which
+            # is the only arrangement where picking the nicer-sounding name
+            # gains an athlete nothing.
+            "gen_jump_rope",
         }, unverified
 
     def test_the_off_hand_premium_survives_and_is_measured(self):

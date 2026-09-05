@@ -4521,7 +4521,392 @@ SWM_PULL = DrillSpec(
 )
 
 
+# ---------------------------------------------------------------------------
+# The second wave of general work
+#
+# Every sport in the library draws on the general drills, so a gap here is a
+# gap eleven times over. These fill the patterns that were missing rather than
+# adding variations of what was already covered: a hip hinge (the whole
+# posterior chain had no standing movement), single-leg strength, an
+# anti-rotation core drill, balance, and skipping mechanics.
+#
+# And a skipping rope, which is the one piece of equipment every coach in
+# every one of these sports already owns.
+# ---------------------------------------------------------------------------
+
+GEN_JUMP_ROPE = DrillSpec(
+    key="gen_jump_rope",
+    name="Jump Rope",
+    sport="general",
+    category=Category.CONDITIONING,
+    stimulus=Stimulus.ENDURANCE,
+    metric=Metric.REPS,
+    description=(
+        "Small, quick bounces over the rope, staying on the balls of your "
+        "feet. Both feet together, elbows in, and let the wrists turn it "
+        "rather than the arms."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.55),
+    counter=CounterSpec(
+        # A little deeper and a little slower than a pogo hop, which is the
+        # honest difference between clearing a rope and bouncing on the spot.
+        down_threshold=0.88,
+        up_threshold=1.03,
+        min_rep_ms=220,
+        max_rep_ms=1_500,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        # Deliberately identical to pogo hops. See pattern_verified below: to
+        # the camera these are the same movement, so paying them differently
+        # would only teach an athlete which name to tap.
+        xp_per_rep=0.6,
+        daily_rep_cap=1_200,
+        diminishing_after_reps=400,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=4.5,
+        min_reps_per_second=1.10,
+        min_reps=30,
+        min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Phone side-on at about hip height, with your whole body in frame. "
+        "Stay tall and quiet on your feet."
+    ),
+    quality=QualitySpec(
+        target_rom=0.22,
+        consistency_target=0.05,
+        consistency_ceiling=0.16,
+        tempo_min_ms=220,
+        tempo_max_ms=700,
+        w_consistency=0.40,
+        w_depth=0.10,
+        w_tempo=0.25,
+        w_endurance=0.25,
+        min_reps=30,
+    ),
+    load=LoadSpec(load_per_rep=0.08, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    # The rope is not in the skeleton. A jump over a rope and a jump over
+    # nothing are the same jump to one camera, and no future model changes
+    # that, because the information is not in the frame. So this is a label
+    # for the athlete's own practice, carrying its own cues, and it earns
+    # exactly what the movement earns.
+    pattern_verified=False,
+    tracks_handedness=False,
+)
+
+GEN_HIP_HINGE = DrillSpec(
+    key="gen_hip_hinge",
+    name="Hip Hinge",
+    sport="general",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.REPS,
+    description=(
+        "Push your hips back with a long, flat back and soft knees, until you "
+        "feel it behind your thighs. Then stand tall by squeezing, not by "
+        "pulling with your back. This is the shape every heavy lift starts in."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_shoulder", "left_hip", "left_knee"),
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        down_threshold=95.0,
+        up_threshold=172.0,
+        min_rep_ms=900,
+        max_rep_ms=8_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=120),
+    validation=ValidationSpec(max_reps_per_second=1.2, min_reps=5),
+    setup_hint="Phone side-on at hip height so it can see your back stay flat.",
+    quality=QualitySpec(
+        target_rom=77.0,
+        consistency_target=8.0,
+        consistency_ceiling=26.0,
+        tempo_min_ms=900,
+        tempo_max_ms=3_500,
+        w_consistency=0.25, w_depth=0.40, w_tempo=0.20, w_endurance=0.15,
+        min_reps=5,
+    ),
+    load=LoadSpec(load_per_rep=0.7, tissue=Tissue.LOWER_BODY),
+)
+
+GEN_V_UP = DrillSpec(
+    key="gen_v_up",
+    name="V-Ups",
+    sport="general",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.REPS,
+    description=(
+        "Flat on your back, then lift your legs and your chest at the same "
+        "time and reach for your toes. Down slowly. Harder than a sit-up "
+        "because nothing is anchored."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_shoulder", "left_hip", "left_knee"),
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        down_threshold=60.0,
+        up_threshold=160.0,
+        min_rep_ms=800,
+        max_rep_ms=6_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=250, diminishing_after_reps=100),
+    validation=ValidationSpec(max_reps_per_second=1.4, min_reps=4),
+    setup_hint="Phone side-on at floor level, far enough back to see head and feet.",
+    quality=QualitySpec(
+        target_rom=100.0,
+        consistency_target=10.0,
+        consistency_ceiling=30.0,
+        tempo_min_ms=800,
+        tempo_max_ms=3_000,
+        w_consistency=0.25, w_depth=0.40, w_tempo=0.15, w_endurance=0.20,
+        min_reps=4,
+    ),
+    load=LoadSpec(load_per_rep=0.8, tissue=Tissue.CORE),
+)
+
+GEN_SPLIT_SQUAT = DrillSpec(
+    key="gen_split_squat",
+    name="Split Squats",
+    sport="general",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.REPS,
+    description=(
+        "One foot forward, one back, and drop straight down so the back knee "
+        "goes towards the floor. Most sport happens on one leg at a time, and "
+        "this is the drill that trains it."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_hip", "left_knee", "left_ankle"),
+        smoothing=0.35,
+    ),
+    counter=CounterSpec(
+        down_threshold=95.0,
+        up_threshold=165.0,
+        min_rep_ms=900,
+        max_rep_ms=8_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.3, daily_rep_cap=300, diminishing_after_reps=120),
+    validation=ValidationSpec(max_reps_per_second=1.2, min_reps=5),
+    setup_hint="Phone side-on at hip height, far enough back to see both knees.",
+    quality=QualitySpec(
+        target_rom=70.0,
+        consistency_target=8.0,
+        consistency_ceiling=26.0,
+        tempo_min_ms=900,
+        tempo_max_ms=3_500,
+        w_consistency=0.30, w_depth=0.35, w_tempo=0.15, w_endurance=0.20,
+        min_reps=5,
+    ),
+    load=LoadSpec(load_per_rep=0.85, tissue=Tissue.LOWER_BODY),
+)
+
+GEN_SHOULDER_TAP = DrillSpec(
+    key="gen_shoulder_tap",
+    name="Plank Shoulder Taps",
+    sport="general",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.REPS,
+    description=(
+        "In a push-up position, tap one hand to the opposite shoulder without "
+        "letting your hips swing. The work is in the not-moving."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_wrist",
+        reference="right_shoulder",
+        smoothing=0.40,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.30,
+        up_threshold=-0.04,
+        min_rep_ms=600,
+        max_rep_ms=6_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.5, daily_rep_cap=400, diminishing_after_reps=150),
+    validation=ValidationSpec(max_reps_per_second=1.6, min_reps=6),
+    setup_hint="Phone in front of you at floor level, far enough back to see your hips.",
+    quality=QualitySpec(
+        target_rom=0.39,
+        consistency_target=0.06,
+        consistency_ceiling=0.18,
+        tempo_min_ms=600,
+        tempo_max_ms=2_500,
+        w_consistency=0.40, w_depth=0.20, w_tempo=0.15, w_endurance=0.25,
+        min_reps=6,
+    ),
+    load=LoadSpec(load_per_rep=0.35, tissue=Tissue.CORE),
+    tracks_handedness=True,
+)
+
+GEN_A_SKIP = DrillSpec(
+    key="gen_a_skip",
+    name="A-Skips",
+    sport="general",
+    category=Category.SPEED,
+    stimulus=Stimulus.QUICKNESS,
+    metric=Metric.REPS,
+    description=(
+        "A skip with the knee driving up to hip height and the foot landing "
+        "back under you. Not a run and not a march. This is the drill that "
+        "teaches the shape sprinting wants."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_knee",
+        reference="left_hip",
+        smoothing=0.45,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.30,
+        up_threshold=0.15,
+        min_rep_ms=300,
+        max_rep_ms=2_500,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=0.4,
+        daily_rep_cap=600,
+        diminishing_after_reps=250,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(max_reps_per_second=3.2, min_reps=20, min_duration_ms=12_000),
+    setup_hint="Phone side-on at hip height. Stay tall and land under yourself.",
+    quality=QualitySpec(
+        target_rom=0.58,
+        consistency_target=0.07,
+        consistency_ceiling=0.22,
+        tempo_min_ms=300,
+        tempo_max_ms=900,
+        w_consistency=0.35, w_depth=0.25, w_tempo=0.25, w_endurance=0.15,
+        min_reps=20,
+    ),
+    load=LoadSpec(load_per_rep=0.2, tissue=Tissue.LOWER_BODY),
+)
+
+GEN_SUPERMAN = DrillSpec(
+    key="gen_superman",
+    name="Superman Hold",
+    sport="general",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Face down, arms and legs lifted off the floor, holding still. The "
+        "back of the body, which almost nothing else here trains on its own."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.JOINT_ANGLE,
+        joints=("left_shoulder", "left_hip", "left_knee"),
+        smoothing=0.40,
+    ),
+    counter=CounterSpec(
+        down_threshold=150.0,
+        up_threshold=200.0,
+        min_rep_ms=1_000,
+        max_rep_ms=300_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=26.0),
+    validation=ValidationSpec(min_reps=0),
+    setup_hint="Phone side-on at floor level, far enough back to see hands and feet.",
+    quality=QualitySpec(
+        target_rom=1.0,
+        tempo_min_ms=1_000,
+        tempo_max_ms=300_000,
+        w_consistency=0.30, w_depth=0.40, w_tempo=0.0, w_endurance=0.30,
+    ),
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=5.0, tissue=Tissue.CORE),
+)
+
+GEN_BEAR_CRAWL_HOLD = DrillSpec(
+    key="gen_bear_crawl_hold",
+    name="Bear Crawl Hold",
+    sport="general",
+    category=Category.STRENGTH,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "On hands and toes with your knees hovering an inch off the floor, "
+        "back flat. Hold it. Everything switches on and nothing moves."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.45),
+    counter=CounterSpec(
+        down_threshold=0.10,
+        up_threshold=0.62,
+        min_rep_ms=1_000,
+        max_rep_ms=240_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=30.0),
+    validation=ValidationSpec(min_reps=0),
+    setup_hint="Phone side-on at floor level so it can see your knees hovering.",
+    quality=QualitySpec(
+        target_rom=1.0,
+        tempo_min_ms=1_000,
+        tempo_max_ms=240_000,
+        w_consistency=0.35, w_depth=0.35, w_tempo=0.0, w_endurance=0.30,
+    ),
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=6.5, tissue=Tissue.WHOLE_BODY),
+)
+
+GEN_SINGLE_LEG_BALANCE = DrillSpec(
+    key="gen_single_leg_balance",
+    name="Single-Leg Balance",
+    sport="general",
+    category=Category.AGILITY,
+    stimulus=Stimulus.STRENGTH,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "Stand on one leg and stay still. Boring, and one of the few things "
+        "here with real evidence behind it for keeping ankles and knees out "
+        "of trouble."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.RELATIVE_HEIGHT,
+        landmark="left_ankle",
+        reference="right_ankle",
+        smoothing=0.45,
+    ),
+    counter=CounterSpec(
+        down_threshold=-0.60,
+        up_threshold=0.60,
+        min_rep_ms=1_000,
+        max_rep_ms=180_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=18.0),
+    validation=ValidationSpec(min_reps=0),
+    setup_hint="Phone facing you at hip height, whole body in frame.",
+    quality=QualitySpec(
+        target_rom=1.0,
+        tempo_min_ms=1_000,
+        tempo_max_ms=180_000,
+        w_consistency=0.45, w_depth=0.25, w_tempo=0.0, w_endurance=0.30,
+    ),
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=2.5, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
+    GEN_JUMP_ROPE,
+    GEN_HIP_HINGE,
+    GEN_V_UP,
+    GEN_SPLIT_SQUAT,
+    GEN_SHOULDER_TAP,
+    GEN_A_SKIP,
+    GEN_SUPERMAN,
+    GEN_BEAR_CRAWL_HOLD,
+    GEN_SINGLE_LEG_BALANCE,
+
     SOC_JUGGLE,
     SOC_JUGGLE_WEAK,
     SOC_JUGGLE_ALT,

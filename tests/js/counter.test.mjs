@@ -8,6 +8,7 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
 import { RepCounter, computeSignal, elbowFlare, saveZone, stanceWidthSignal, wallBallSignal, LANDMARKS } from '../../offdays/web/static/counter.js';
+import { SPECS } from './specs.mjs';
 
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
 
@@ -30,7 +31,7 @@ function baseSkeleton() {
   return pts;
 }
 
-const SPECS = JSON.parse(process.env.DRILL_SPECS);
+
 const spec = (key) => SPECS.find((d) => d.key === key);
 
 // torso length here is 0.25 (shoulder y 0.35 -> hip y 0.60)

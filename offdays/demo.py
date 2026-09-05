@@ -184,6 +184,79 @@ def _pose(**joints: tuple[float, float]) -> dict[str, tuple[float, float]]:
 # Coordinates are a 100x100 box, y downwards, figure facing right.
 # ---------------------------------------------------------------------------
 DEMOS: dict[str, Demo] = {
+    "gen_jump_rope": Demo(
+        caption='Small, quick bounces on the balls of your feet, turning the rope with your wrists rather than your arms.',
+        frames=(
+            _pose(head=(50, 12), neck=(50, 24), hip=(50, 52),
+                  elbow_near=(46, 40), wrist_near=(44, 50),
+                  elbow_far=(54, 40), wrist_far=(56, 50),
+                  knee_near=(49, 71), ankle_near=(49, 90), toe_near=(55, 90),
+                  knee_far=(52, 71), ankle_far=(52, 90), toe_far=(58, 90)),
+            _pose(head=(50, 7), neck=(50, 19), hip=(50, 47),
+                  elbow_near=(46, 35), wrist_near=(44, 45),
+                  elbow_far=(54, 35), wrist_far=(56, 45),
+                  knee_near=(49, 65), ankle_near=(49, 82), toe_near=(55, 85),
+                  knee_far=(52, 65), ankle_far=(52, 82), toe_far=(58, 85)),
+        ),
+    ),
+    "gen_hip_hinge": Demo(
+        caption='Push your hips back with a long flat back and soft knees, feel it behind your thighs, then stand tall.',
+        frames=(
+            _pose(head=(52, 13), neck=(52, 25), hip=(51, 53),
+                  elbow_near=(49, 40), wrist_near=(49, 52),
+                  elbow_far=(55, 40), wrist_far=(55, 52),
+                  knee_near=(50, 71), ankle_near=(50, 90), toe_near=(56, 90),
+                  knee_far=(54, 71), ankle_far=(54, 90), toe_far=(60, 90)),
+            _pose(head=(33, 33), neck=(38, 37), hip=(60, 50),
+                  elbow_near=(40, 50), wrist_near=(42, 63),
+                  elbow_far=(44, 50), wrist_far=(46, 63),
+                  knee_near=(53, 70), ankle_near=(52, 90), toe_near=(58, 90),
+                  knee_far=(57, 70), ankle_far=(56, 90), toe_far=(62, 90)),
+        ),
+    ),
+    "gen_split_squat": Demo(
+        caption='One foot forward and one back, then drop the back knee straight down towards the floor.',
+        frames=(
+            _pose(head=(50, 12), neck=(50, 24), hip=(50, 52),
+                  elbow_near=(47, 39), wrist_near=(47, 51),
+                  elbow_far=(53, 39), wrist_far=(53, 51),
+                  knee_near=(41, 70), ankle_near=(36, 90), toe_near=(42, 90),
+                  knee_far=(60, 70), ankle_far=(64, 90), toe_far=(70, 90)),
+            _pose(head=(50, 26), neck=(50, 38), hip=(50, 64),
+                  elbow_near=(47, 52), wrist_near=(47, 64),
+                  elbow_far=(53, 52), wrist_far=(53, 64),
+                  knee_near=(38, 74), ankle_near=(36, 90), toe_near=(42, 90),
+                  knee_far=(64, 82), ankle_far=(70, 90), toe_far=(76, 88)),
+        ),
+    ),
+    "gen_a_skip": Demo(
+        caption='Skip with the knee driving up to hip height and the foot landing back underneath you.',
+        frames=(
+            _pose(head=(50, 11), neck=(50, 23), hip=(50, 51),
+                  elbow_near=(44, 38), wrist_near=(37, 45),
+                  elbow_far=(56, 38), wrist_far=(63, 43),
+                  knee_near=(50, 70), ankle_near=(50, 90), toe_near=(56, 90),
+                  knee_far=(53, 70), ankle_far=(53, 90), toe_far=(59, 90)),
+            _pose(head=(50, 9), neck=(50, 21), hip=(50, 49),
+                  elbow_near=(44, 36), wrist_near=(38, 44),
+                  elbow_far=(56, 36), wrist_far=(62, 42),
+                  knee_near=(60, 49), ankle_near=(56, 64), toe_near=(62, 66),
+                  knee_far=(50, 68), ankle_far=(50, 88), toe_far=(56, 88)),
+        ),
+    ),
+    "gen_single_leg_balance": Demo(
+        caption='Stand on one leg with a soft knee and stay still. Let your ankle do the wobbling.',
+        scenery="floor",
+        view="front",
+        frames=(
+            _pose(head=(50, 12), neck=(50, 24), hip=(50, 52),
+                  elbow_near=(42, 40), wrist_near=(38, 52),
+                  elbow_far=(58, 40), wrist_far=(62, 52),
+                  knee_near=(46, 71), ankle_near=(46, 90), toe_near=(46, 94),
+                  knee_far=(58, 66), ankle_far=(62, 78), toe_far=(64, 82)),
+        ),
+        seconds=3.0,
+    ),
     "gen_squat": Demo(
         caption='Stand tall, sit down and back as if reaching for a chair behind you, then stand all the way up.',
         frames=(
@@ -1632,6 +1705,17 @@ NEEDS_FILM: dict[str, str] = {
                         "the same ambiguous horizontal line as a dead bug.",
     "gen_hollow_hold": "Supine, and the whole point is a subtle curve of the "
                        "lower back that a stick figure has no way to show.",
+    "gen_v_up": "Supine, and the whole shape is a fold happening towards the "
+                "camera. Drawn side-on it is two lines closing, which reads as "
+                "a sit-up.",
+    "gen_superman": "Face down, and the lift is a couple of inches. On a stick "
+                    "figure that is indistinguishable from lying still.",
+    "gen_shoulder_tap": "The point is the hips *not* moving while a hand "
+                        "leaves the floor. A drawing of something staying "
+                        "still cannot show that it was hard.",
+    "gen_bear_crawl_hold": "The knees hover an inch off the floor. An inch is "
+                           "below what a stick figure can show, so it reads as "
+                           "kneeling.",
     "lax_wall_ball_btb": "The stick goes *behind* the athlete, which is the "
                          "one direction a side-on view flattens to nothing. "
                          "Drawn, it reads as a stick through the stomach.",

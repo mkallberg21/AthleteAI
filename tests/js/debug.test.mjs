@@ -13,8 +13,9 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
 import { RepCounter, LANDMARKS } from '../../offdays/web/static/counter.js';
+import { SPECS } from './specs.mjs';
 
-const SPECS = JSON.parse(process.env.DRILL_SPECS);
+
 const spec = (key) => SPECS.find((d) => d.key === key);
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
 

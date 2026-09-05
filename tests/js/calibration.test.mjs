@@ -15,9 +15,10 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
 import { RepCounter, LANDMARKS } from '../../offdays/web/static/counter.js';
+import { SPECS } from './specs.mjs';
 
 const IDX = Object.fromEntries(LANDMARKS.map((n, i) => [n, i]));
-const SPECS = JSON.parse(process.env.DRILL_SPECS);
+
 const TORSO = 0.25;
 
 function base() {
@@ -107,6 +108,20 @@ const SWEEP = {
   gen_calf_raise:    { lo: 0.00,  hi: 0.16, kind: 'heel' },
   // A tiny dip high up: the hips barely move, which is the whole drill.
   gen_pogo:          { lo: 0.86,  hi: 1.06, kind: 'body' },
+  // A rope jump: a little deeper and a little slower than a pogo, and to the
+  // camera that difference is the only one there is.
+  gen_jump_rope:     { lo: 0.84,  hi: 1.07, kind: 'body' },
+  // Hips back with a long back. The widest hip excursion of the standing
+  // drills, which is what separates it from a sit-up on the same signal.
+  gen_hip_hinge:     { lo: 90,    hi: 178,  kind: 'hip' },
+  // Chest and legs folding together: wider than a sit-up at both ends.
+  gen_v_up:          { lo: 50,    hi: 170,  kind: 'hip' },
+  // One leg down, one behind. Knee band opened past a two-legged squat.
+  gen_split_squat:   { lo: 88,    hi: 172,  kind: 'knee' },
+  // Knee to hip height and back under you, higher than a high knee.
+  gen_a_skip:        { lo: -0.38, hi: 0.24, kind: 'knee_h' },
+  // A hand leaving the floor for the opposite shoulder.
+  gen_shoulder_tap:  { lo: -0.38, hi: 0.04, kind: 'crosstap' },
   // Heel folding up behind the knee -- the back half of a running stride.
   gen_butt_kick:     { lo: -0.68, hi: 0.16, kind: 'heelfold' },
   // Hand from the hip through to full reach in front of the shoulder.
@@ -159,6 +174,12 @@ function frame(kind, v) {
   } else if (kind === 'jack') {
     pts[IDX.left_wrist] = { x: 0.42, y: 0.35 - v * TORSO, z: 0, visibility: 0.95 };
     pts[IDX.right_wrist] = { x: 0.58, y: 0.35 - v * TORSO, z: 0, visibility: 0.95 };
+  } else if (kind === 'crosstap') {
+    // The left hand travelling up to the right shoulder. Measured against the
+    // far shoulder rather than the near one, because that is the reach a tap
+    // actually is: across the body, not up the same side.
+    const shoulderY = pts[IDX.right_shoulder].y;
+    pts[IDX.left_wrist] = { x: 0.50, y: shoulderY - v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'knee_h') {
     pts[IDX.left_knee] = { x: 0.46, y: 0.60 - v * TORSO, z: 0, visibility: 0.95 };
   } else if (kind === 'knee_rel') {
