@@ -295,15 +295,19 @@ class SideWords:
     label: str
     #: Mid-sentence, lowercase: "reps on their weaker hand".
     weaker: str
+    #: The column heading for the side they favour: "Strong hand".
+    strong: str
     #: The badge and the goal that mean both sides: "Both Hands", "Both Feet".
     both: str
     #: Mid-sentence in Spanish: "la mano d\u00e9bil" / "el pie d\u00e9bil".
     weaker_es: str = "la mano d\u00e9bil"
 
 
-_HANDS = SideWords(noun="hand", label="Off-hand", weaker="weaker hand", both="Both Hands")
+_HANDS = SideWords(noun="hand", label="Off-hand", weaker="weaker hand",
+                   strong="Strong hand", both="Both Hands")
 _FEET = SideWords(noun="foot", label="Weak foot", weaker="weaker foot",
-                  both="Both Feet", weaker_es="el pie d\u00e9bil")
+                  strong="Strong foot", both="Both Feet",
+                  weaker_es="el pie d\u00e9bil")
 
 #: Sports played with the feet. Everything else defaults to hands, which is
 #: the right answer for the ten other sports that ship drills and a safe one

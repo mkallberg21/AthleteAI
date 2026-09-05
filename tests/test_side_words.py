@@ -150,3 +150,80 @@ class TestThePagesAreToldTheWord:
             assert body["side"]["both"] == "Both Feet"
         finally:
             api_module._store = None
+
+
+class TestBothHalvesOfTheSplit:
+    """The roster shows the strong side as well as the weak one.
+
+    A bare "17%" leaves a director to work out what the other 83% was.
+    Showing the pair says it outright, and the two are exact complements
+    because both are computed from the same denominator: reps the camera
+    could not attribute to a side are excluded from both rather than
+    quietly inflating one.
+    """
+
+    def test_a_sport_names_the_strong_side_too(self):
+        assert sports.side_words("lacrosse").strong == "Strong hand"
+        assert sports.side_words("soccer").strong == "Strong foot"
+
+    def test_the_two_shares_are_exact_complements(self, store):
+        from offdays.leaderboard import coach_roster
+        org, athlete = program(store, "lacrosse")
+        store.conn.execute(
+            "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, "
+            "status, reps_total, reps_left, reps_right, submitted_at) "
+            "VALUES (?,?,?,?,'counted',?,?,?,?)",
+            (athlete, "lax_wall_ball", "n1", "2026-09-01T10:00:00Z",
+             100, 30, 70, "2026-09-01T10:00:00Z"))
+        store.conn.commit()
+        rows = [r for r in coach_roster(store.conn, org) if r["athlete_id"] == athlete]
+        assert rows, "the athlete should be on their own roster"
+        row = rows[0]
+        assert row["offhand_share"] is not None
+        assert row["strong_share"] is not None
+        assert round(row["offhand_share"] + row["strong_share"], 3) == 1.0
+
+    def test_an_athlete_with_no_sided_reps_gets_neither(self, store):
+        """Rather than a confident 100% for a side nobody measured."""
+        from offdays.leaderboard import coach_roster
+        org, athlete = program(store, "lacrosse")
+        rows = [r for r in coach_roster(store.conn, org) if r["athlete_id"] == athlete]
+        assert rows[0]["offhand_share"] is None
+        assert rows[0]["strong_share"] is None
+
+    def test_the_api_sends_the_strong_word(self, tmp_path, store):
+        pytest.importorskip("fastapi")
+        from fastapi.testclient import TestClient
+        import offdays.api as api_module
+
+        org = store.create_org("Nashville Dogs", sport="lacrosse")
+        team = store.create_team(org, "2031 Red", "2026", age_group="2031")
+        kid = store.create_user(
+            org, "athlete", "Kid", birth_year=2013, dominant_hand="right")
+        store.join_team(team["join_code"], kid["id"])
+        api_module._store = store
+        try:
+            body = TestClient(api_module.app).get(
+                "/api/me", headers={"Authorization": f"Bearer {kid['token']}"}).json()
+            assert body["side"]["strong"] == "Strong hand"
+        finally:
+            api_module._store = None
+
+
+class TestGroundBallsAreEasyToFind:
+    """Ground balls decide most youth lacrosse games, and the drill sat ninth
+    in the picker behind eight wall-ball variants that are all one movement
+    with a different hand order. A player scrolled past every one of them."""
+
+    def test_ground_balls_come_before_the_wall_ball_variants(self):
+        from offdays.drills.catalog import for_sport
+        order = [d.key for d in for_sport("lacrosse")]
+        variants = [k for k in order if k.startswith("lax_wall_ball_")]
+        assert variants, "expected the wall ball family to still be there"
+        assert order.index("lax_ground_ball") < min(order.index(v) for v in variants)
+
+    def test_it_is_near_the_top_of_what_a_player_sees(self):
+        from offdays.drills.catalog import for_sport
+        order = [d.key for d in for_sport("lacrosse")]
+        assert order.index("lax_ground_ball") <= 2, (
+            "ground balls should be visible without scrolling")

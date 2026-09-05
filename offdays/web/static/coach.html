@@ -514,7 +514,7 @@
       <table>
         <thead><tr>
           <th>Athlete</th><th class="num">Sessions</th>
-          <th class="num" id="roster-side-th">Off-hand</th>
+          <th class="num" id="roster-side-th">Strong / Off-hand</th>
           <th>Last active</th><th>Status</th><th></th>
         </tr></thead>
         <tbody id="roster"></tbody>
@@ -676,6 +676,7 @@ const $ = (id) => document.getElementById(id);
 // What this program calls its weaker side, for the one roster column that
 // names it. Defaulted so the table renders before /api/me answers.
 let ROSTER_SIDE = 'Off-hand';
+let ROSTER_STRONG = 'Strong hand';
 
 const FLAG_LABELS = {
   never_trained: ['bad', 'never trained'],
@@ -1785,11 +1786,18 @@ function renderAttention(athletes) {
 }
 
 function renderRoster(athletes) {
+  // One column rather than two: the split is the point, and a second column
+  // pushed Status off the edge of the card on the width a director reads this
+  // at. "54 / 46" says what a bare "46%" leaves them to work out.
   const sideTh = $('roster-side-th');
-  if (sideTh && ROSTER_SIDE) sideTh.textContent = ROSTER_SIDE;
+  if (sideTh) sideTh.textContent = `${ROSTER_STRONG.split(' ')[0]} / ${ROSTER_SIDE}`;
 
   $('roster').innerHTML = athletes.length ? athletes.map((a) => {
     const share = a.offhand_share === null ? '–' : `${Math.round(a.offhand_share * 100)}%`;
+    // Shown as a pair so the split reads at a glance. 83/17 says what a bare
+    // "17%" leaves the reader to work out.
+    const strong = a.strong_share === null || a.strong_share === undefined
+      ? '–' : `${Math.round(a.strong_share * 100)}`;
     const shareCls = a.offhand_share === null ? '' : a.offhand_share < 0.2 ? 'style="color:var(--warn)"' : '';
     const status = a.flags.length
       ? a.flags.map((f) => {
@@ -1802,7 +1810,7 @@ function renderRoster(athletes) {
       <td><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
           <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span></td>
       <td class="num">${a.window_sessions}</td>
-      <td class="num" ${shareCls}>${share}</td>
+      <td class="num" ${shareCls}><span class="muted">${strong}</span> / ${share}</td>
       <td>${fmtDate(a.last_session)}</td>
       <td>${status}${review}</td>
       <td><button class="inline secondary" data-invite="${a.athlete_id}"
@@ -2522,6 +2530,7 @@ $('signout').addEventListener('click', logout);
     const brandingReady = renderBranding("masthead", "");
     const me = await api('/api/me');
     if (me.side && me.side.label) ROSTER_SIDE = me.side.label;
+    if (me.side && me.side.strong) ROSTER_STRONG = me.side.strong;
     $('whoami').textContent = me.display_name;
     await brandingReady;
     setRole(me.role);

@@ -474,6 +474,11 @@ def coach_roster(
         sided = left + right
         offhand = left if (r["dominant_hand"] or "right") == "right" else right
         offhand_share = round(offhand / sided, 3) if sided else None
+        # The exact complement: both halves come from the same denominator, so
+        # reps the camera could not attribute to a side are left out of both
+        # rather than quietly inflating one of them.
+        strong_share = (round(1 - offhand_share, 3)
+                        if offhand_share is not None else None)
 
         out.append({
             "athlete_id": r["athlete_id"],
@@ -488,6 +493,7 @@ def coach_roster(
             "last_session": last,
             "days_since_session": days_since,
             "offhand_share": offhand_share,
+            "strong_share": strong_share,
             "quality": int(r["quality"]) if r["quality"] is not None else None,
             "load": None,
             "pending_review": int(r["pending_review"]),

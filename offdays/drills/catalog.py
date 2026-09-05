@@ -5091,6 +5091,11 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     GEN_HANDSTAND_HOLD,
     GEN_DEAD_HANG,
     WALL_BALL,
+    # Ground balls sat ninth, behind eight wall-ball variants that are all the
+    # same movement with a different hand order. A lacrosse player opening the
+    # picker scrolled past every one of them to reach the skill that decides
+    # most youth games. Order here is the order they see.
+    GROUND_BALL,
     QUICK_STICK,
     WALL_BALL_STRONG,
     WALL_BALL_OFFHAND,
@@ -5098,7 +5103,6 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     WALL_BALL_CROSS,
     WALL_BALL_BTB,
     WALL_BALL_SPLIT,
-    GROUND_BALL,
     FACEOFF_CLAMP,
     GOALIE_SAVES,
     PUSH_UP,
