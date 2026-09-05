@@ -183,9 +183,18 @@ class TestTheHeaderIsOnEveryScreen:
         """Something has to give at 414px. It is not the club's crest."""
         import re
         css = (self.STATIC / "styles.css").read_text()
-        narrow = re.search(r"@media \(max-width: \d+px\) \{(.*?)\n\}", css, re.S).group(1)
-        assert re.search(r"#whoami \{[^}]*display:\s*none", narrow), narrow
-        assert "club-badge { display: none" not in narrow
+        # Every phone-sized breakpoint, not whichever happens to appear first
+        # in the file -- the stylesheet has several and the rule may live in
+        # any of them.
+        narrow = [
+            m.group(2) for m in re.finditer(
+                r"@media \(max-width: (\d+)px\) \{(.*?)\n\}", css, re.S)
+            if int(m.group(1)) <= 560
+        ]
+        assert narrow, "no phone-sized breakpoint at all"
+        joined = "\n".join(narrow)
+        assert re.search(r"#whoami \{[^}]*display:\s*none", joined), joined[:400]
+        assert "club-badge { display: none" not in joined
 
     def test_the_signed_out_page_carries_only_our_mark(self):
         """There is no club yet at sign-in, so there is nothing to lead with."""

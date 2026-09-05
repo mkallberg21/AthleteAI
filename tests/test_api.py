@@ -455,6 +455,19 @@ class TestCoachDashboard:
         assert res.status_code == 403
 
 
+#: Request bodies an endpoint may declare. The invariant being protected is
+#: "no endpoint can receive a file", and the media type is what decides that:
+#: a file upload requires multipart/form-data or a raw binary type. A
+#: urlencoded form is plain text key/value pairs and cannot carry one -- the
+#: sign-in endpoint accepts one so a phone whose JS module failed to load can
+#: still post a token through a plain HTML form.
+#:
+#: Asserting "must be application/json" was a stricter rule than the one that
+#: matters, and would have been relaxed under pressure the first time any
+#: legitimate form arrived. This is the rule itself.
+BODY_TYPES_ALLOWED = {"application/json", "application/x-www-form-urlencoded"}
+
+
 class TestPrivacy:
     def test_no_endpoint_accepts_video_or_image_data(self, client):
         """The privacy promise has to be structural, not a policy note.
@@ -518,7 +531,7 @@ class TestPrivacy:
             for method, op in methods.items():
                 content = (op.get("requestBody") or {}).get("content", {})
                 for media_type in content:
-                    assert media_type == "application/json", \
+                    assert media_type in BODY_TYPES_ALLOWED, \
                         f"{method.upper()} {path} accepts {media_type}"
 
     def test_the_review_module_has_no_network_path(self, client):
@@ -1507,7 +1520,7 @@ class TestRosterEndpoints:
             for method, op in methods.items():
                 content = (op.get("requestBody") or {}).get("content", {})
                 for media_type in content:
-                    assert media_type == "application/json", f"{method} {path}"
+                    assert media_type in BODY_TYPES_ALLOWED, f"{method} {path}"
 
 
 class TestDigestEndpoints:

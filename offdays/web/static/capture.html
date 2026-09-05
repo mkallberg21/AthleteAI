@@ -15,10 +15,7 @@
 </head>
 <body>
 <div class="topbar">
-  <a href="/" class="topbar-brand">
-    <img src="offdays-mark.png?v=3" alt="" class="topbar-logo" loading="eager" onerror="this.style.display='none'">
-    <span class="topbar-title">0FF<span class="highlight">DAYS</span></span>
-  </a>
+  <div id="masthead"></div>
   <div class="topbar-right">
     <span class="small muted" id="whoami"></span>
     <button class="bell" id="bell">Alerts<span class="dot hidden" id="bell-dot">0</span></button>
@@ -60,6 +57,11 @@
           <div class="feel-row" id="feel-row"></div>
           <div id="wellness-guidance"></div>
           <div id="rtp-plans"></div>
+          <!-- Open discomfort reports, with their "better now" buttons. The
+               script both fills this and binds a click handler to it, so
+               removing the element throws at load and aborts everything
+               after it -- including the club's header. -->
+          <div id="wellness-open"></div>
           <div class="details-block" id="hurt-details">
             <button class="details-toggle secondary" id="hurt-toggle">Something specific hurts</button>
             <div class="details-panel hidden" id="hurt-panel" style="margin-top:0.75rem">

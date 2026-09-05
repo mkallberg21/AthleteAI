@@ -1,6 +1,10 @@
 # API
 fastapi>=0.110
 uvicorn>=0.29
+# FastAPI needs this to read a form body. The sign-in endpoint accepts one so
+# a phone whose JS module failed to load can still sign in -- which is exactly
+# the case where a missing dependency would not be noticed until it mattered.
+python-multipart>=0.0.9
 
 # Storage is stdlib sqlite3 -- no database driver needed.
 

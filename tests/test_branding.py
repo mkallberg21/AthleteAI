@@ -68,10 +68,12 @@ def test_every_foreground_is_readable_on_every_background(name):
 def test_blue_deep_is_never_used_as_text():
     """It is 3.38:1 on Court. Fills only."""
     assert token("--accent-dim") == "#0063C4"
-    body = CSS[CSS.index("* { box-sizing"):]
-    for line in body.splitlines():
-        if "--accent-dim" in line:
-            assert "color:" not in line.split("--accent-dim")[0][-24:], line
+    # "color:" as a property, not as the tail of "border-color:" -- Blue Deep
+    # is barred from text, and a border is not text. The substring check
+    # flagged every legitimate border-color use the moment one appeared.
+    misuse = re.compile(r"(?:^|[;{\s])color:\s*var\(--accent-dim\)")
+    for line in CSS.splitlines():
+        assert not misuse.search(line), line
 
 
 def test_the_two_handedness_colours_stay_apart():
@@ -122,8 +124,11 @@ def test_the_wordmark_colours_the_half_the_logo_colours():
     """Blue carries "0FF", the neutral carries "DAYS" -- the app had it the
     other way round, so its header disagreed with the lockup on every
     document a program sees."""
-    assert ".brand > span:first-child { color: var(--accent); }" in CSS
+    import re as _re
+    rule = _re.search(r"\.topbar-title \.highlight \{([^}]*)\}", CSS)
+    assert rule, "the wordmark's accented half is not styled"
+    assert "--accent" in rule.group(1), rule.group(1)
     for page in STATIC.glob("*.html"):
         text = page.read_text()
-        if 'class="brand"' in text:
-            assert '<span>0FF</span>DAYS' in text, page.name
+        if "topbar-title" in text:
+            assert '<span class="highlight">0FF</span>DAYS' in text, page.name
