@@ -222,7 +222,7 @@ def _fetch_leader_rows(
     conn: sqlite3.Connection,
     rows: list[Any],
     board: Board,
-    limit: int,
+    limit: int | None,
     display_fn,
 ) -> list[dict[str, Any]]:
     """Convert raw SQL rows to leaderboard dicts.
@@ -269,7 +269,8 @@ def _fetch_leader_rows(
 
     if board == "streak":
         results.sort(key=lambda r: (-r.value, r.display_name))
-        results = results[:limit]
+        if limit is not None:
+            results = results[:limit]
 
     if board == "quality":
         results = [r for r in results if r.value > 0]
@@ -330,7 +331,7 @@ def leaderboard_age_group(
     *,
     board: Board = "xp",
     window: Window = "week",
-    limit: int = 50,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Rank one birth-year cohort across every team it is split into.
 
@@ -343,13 +344,24 @@ def leaderboard_age_group(
     has not agreed to their name appearing shows as an initial. The board is
     still legible that way, because the parent reading it is looking for where
     their own child sits, and their own child they can always identify.
+
+    `limit` defaults to no limit, because a cut-off here would answer the
+    parent's question wrongly. The join already bounds this to one birth year
+    at one club, and the rows a cut-off would drop are the low ones -- the
+    children who did the least. A parent asking why their child is on the
+    second squad needs to see the bottom of this list as much as the top, and
+    a child who trained little should not be hidden by their own inactivity.
     """
     sql, params = _build_leaderboard_query(
         board, window, org_id=org_id, age_group=age_group
     )
-    sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC LIMIT ?"
-    params.append(limit * 3 if board == "streak" else limit)
+    sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC"
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit * 3 if board == "streak" else limit)
     rows = conn.execute(sql, params).fetchall()
+    # The streak board re-sorts in Python and slices to `limit`; None there
+    # means the same thing it means here.
     return _fetch_leader_rows(conn, rows, board, limit, _display_name)
 
 

@@ -83,8 +83,13 @@
   <div class="card hidden" id="cohort-card">
     <h2 id="cohort-title">The age group</h2>
     <p class="small muted" id="cohort-why"></p>
-    <div class="tabs" id="cohort-boards"></div>
-    <table><tbody id="cohort-rows"></tbody></table>
+    <table>
+      <thead><tr>
+        <th colspan="2"></th>
+        <th class="num small muted" style="font-weight:600">XP</th>
+      </tr></thead>
+      <tbody id="cohort-rows"></tbody>
+    </table>
     <p class="small muted" id="cohort-masked" style="margin-top:10px"></p>
   </div>
 
@@ -391,13 +396,10 @@ $('lang').addEventListener('change', async () => {
 // actually calls it: a soccer club reads "Weak foot" on this column.
 let SIDE = { noun: 'hand', label: 'Off-hand', weaker: 'weaker hand', both: 'Both Hands' };
 
-const cohortBoards = () => [
-  ['xp', 'Overall'],
-  ['offhand', SIDE.label],
-  ['streak', 'Days in a row'],
-  ['improvement', 'Most improved'],
-];
-let cohortBoard = 'xp';
+// One board, not four. A parent came here to answer a single question -- where
+// is my child against the year group -- and four tabs turned that into a
+// hunt for the one their child ranks best on. XP is the number that already
+// folds in the others, so it is the one shown.
 let cohortGroup = null;
 let myAthleteIds = new Set();
 
@@ -426,9 +428,11 @@ async function loadCohort() {
   // The one sentence on this card that names the weaker side, so it takes the
   // program's own word for it rather than assuming hands.
   $('cohort-why').textContent = T('parent.cohort.why',
-    "Every squad in your child's birth year, ranked on work they control: "
-    + 'sessions done, {weaker} reps, days in a row, improvement. Not ability, '
-    + "and not a prediction of next season's teams.")
+    "Every squad in your child's birth year, ranked on points earned in the "
+    + 'last month. Points come from work they control: reps recorded, extra '
+    + 'for {weaker} reps, and a daily ceiling so one long Sunday cannot '
+    + "outweigh a steady week. Not ability, and not a prediction of next "
+    + "season's teams.")
     // The label form rather than the "weaker X" form: "weak foot reps" and
     // "off-hand reps" both read as things a coach says, where "weaker foot
     // reps" reads as a translation.
@@ -438,13 +442,11 @@ async function loadCohort() {
     'Children whose families have not agreed to their name being shown appear '
     + 'as an initial. Yours is highlighted.');
 
-  $('cohort-boards').innerHTML = cohortBoards().map(([k, label]) =>
-    `<button data-cb="${k}" aria-selected="${k === cohortBoard}">${esc(label)}</button>`).join('');
-  $('cohort-boards').querySelectorAll('button').forEach((b) =>
-    b.addEventListener('click', () => { cohortBoard = b.dataset.cb; loadCohort(); }));
-
   try {
-    const data = await api(`/api/leaderboard?board=${cohortBoard}&window=month`
+    // No limit: the whole cohort, including the children who trained least.
+    // Truncating this list would cut exactly the rows a parent asking "why
+    // the other squad" needs to see.
+    const data = await api('/api/leaderboard?board=xp&window=month'
       + `&age_group=${encodeURIComponent(cohortGroup)}`);
     $('cohort-rows').innerHTML = data.rows.length ? data.rows.map((r) => {
       const mine = myAthleteIds.has(r.athlete_id);

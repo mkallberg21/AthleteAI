@@ -1116,7 +1116,14 @@ def get_leaderboard(
     team_id: int | None = None,
     age_group: str | None = Query(default=None, description="Cohort board: every team sharing this age group."),
     sport: str | None = Query(default=None, description="Sport-wide board: aggregate across all programs for this sport."),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        le=200,
+        description="Rows to return. The cohort board (age_group=) returns the "
+                    "whole cohort when this is omitted; every other board "
+                    "defaults to 50.",
+    ),
     principal: Principal = Depends(_principal),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -1149,7 +1156,7 @@ def get_leaderboard(
             sport,
             board=board,
             window=window,
-            limit=limit,
+            limit=50 if limit is None else limit,
         )
         return {"board": board, "window": window, "sport": sport, "team_id": team_id, "rows": rows}
     if age_group:
@@ -1174,7 +1181,7 @@ def get_leaderboard(
         board=board,
         window=window,
         team_id=team_id,
-        limit=limit,
+        limit=50 if limit is None else limit,
     )
     return {"board": board, "window": window, "team_id": team_id, "rows": rows}
 

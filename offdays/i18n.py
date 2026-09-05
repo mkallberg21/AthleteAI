@@ -191,15 +191,18 @@ STRINGS: dict[str, dict[str, str]] = {
         ES: "El grupo de edad {age_group}",
     },
     "parent.cohort.why": {
-        EN: ("Every squad in your child's birth year, ranked on work they "
-             "control: sessions done, {weaker} reps, days in a row, "
-             "improvement. Not ability, and not a prediction of next "
-             "season's teams."),
+        EN: ("Every squad in your child's birth year, ranked on points earned "
+             "in the last month. Points come from work they control: reps "
+             "recorded, extra for {weaker} reps, and a daily ceiling so one "
+             "long Sunday cannot outweigh a steady week. Not ability, and not "
+             "a prediction of next season's teams."),
         ES: ("Todos los equipos del a\u00f1o de nacimiento de su hijo o hija, "
-             "ordenados por el trabajo que controlan: sesiones hechas, "
-             "repeticiones con {weaker}, d\u00edas seguidos, mejora. No la "
-             "capacidad, ni una predicci\u00f3n de los equipos de la pr\u00f3xima "
-             "temporada."),
+             "ordenados por los puntos ganados en el \u00faltimo mes. Los puntos "
+             "vienen del trabajo que controlan: repeticiones registradas, un "
+             "extra por las repeticiones con {weaker} y un tope diario para "
+             "que un domingo largo no pese m\u00e1s que una semana constante. No "
+             "la capacidad, ni una predicci\u00f3n de los equipos de la "
+             "pr\u00f3xima temporada."),
     },
     "parent.cohort.masked": {
         EN: ("Children whose families have not agreed to their name being "

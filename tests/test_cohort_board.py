@@ -191,3 +191,69 @@ class TestWhoMayOpenIt:
         """The board tab cannot offer a cohort it does not know the name of."""
         me = wired["client"].get("/api/me", headers=wired["athlete"]).json()
         assert me["age_group"] == "2031"
+
+
+class TestTheWholeCohortIsShown:
+    """A cut-off on this board answers the parent's question wrongly.
+
+    The rows a limit drops are the low ones: the children who trained least.
+    A parent asking why their child is on the second squad needs the bottom of
+    this list as much as the top, and a child who did little should not be
+    hidden from the comparison by having done little. The join already bounds
+    this to one birth year at one club, so there is nothing a cap protects.
+    """
+
+    @pytest.fixture
+    def big_cohort(self, store):
+        """A birth year larger than the old 50-row default."""
+        org = store.create_org("Nashville Dogs")
+        red = store.create_team(org, "2031 Red", "2026", age_group="2031")
+        blue = store.create_team(org, "2031 Blue", "2026", age_group="2031")
+        for i in range(60):
+            person = store.create_user(
+                org, "athlete", f"Athlete {i:02d}", birth_year=2013,
+                dominant_hand="right", guardian_consent=True)
+            store.join_team((red if i % 2 else blue)["join_code"], person["id"])
+        return org
+
+    def test_a_cohort_larger_than_the_old_default_is_not_truncated(
+            self, store, big_cohort):
+        rows = leaderboard_age_group(store.conn, big_cohort, "2031")
+        assert len(rows) == 60
+
+    def test_a_child_who_trained_nothing_is_still_on_the_board(
+            self, store, big_cohort):
+        """Zero is a legitimate row here, and often the informative one."""
+        rows = leaderboard_age_group(store.conn, big_cohort, "2031")
+        assert [r for r in rows if r["value"] == 0]
+
+    def test_an_explicit_limit_is_still_honoured(self, store, big_cohort):
+        """Uncapped by default is not the same as uncappable."""
+        rows = leaderboard_age_group(store.conn, big_cohort, "2031", limit=10)
+        assert len(rows) == 10
+
+    def test_the_endpoint_returns_the_cohort_without_being_asked_for_a_limit(
+            self, wired):
+        """The page sends no limit; the cohort still comes back.
+
+        The name is masked here because that family consented to
+        participation and not to their child being named, which is the
+        behaviour TestConsentStillGovernsNames pins. The row is present
+        either way -- that is the point.
+        """
+        r = wired["client"].get(
+            "/api/leaderboard?age_group=2031", headers=wired["guardian"])
+        assert r.status_code == 200
+        assert [row for row in r.json()["rows"] if row["display_name"] == "Athlete S."]
+
+    def test_the_program_board_still_defaults_to_fifty(self, store):
+        """Removing the cap was scoped to the cohort board on purpose."""
+        from offdays.leaderboard import leaderboard
+        org = store.create_org("Big Club")
+        team = store.create_team(org, "Squad", "2026", age_group="2031")
+        for i in range(60):
+            person = store.create_user(
+                org, "athlete", f"Player {i:02d}", birth_year=2013,
+                dominant_hand="right", guardian_consent=True)
+            store.join_team(team["join_code"], person["id"])
+        assert len(leaderboard(store.conn, org)) == 50
