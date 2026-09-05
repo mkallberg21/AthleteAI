@@ -104,18 +104,28 @@ def _build_leaderboard_query(
     sport_filter: str | None = None,
     org_id: int | None = None,
     team_id: int | None = None,
+    age_group: str | None = None,
 ) -> tuple[str, list[Any]]:
     """Build the SQL query and params for a leaderboard.
 
     Returns (sql, params). The caller adds the GROUP BY, ORDER BY, and LIMIT.
     """
     start = window_start(window)
-    join_clause = (
-        "JOIN team_members tm ON tm.user_id = u.id AND tm.team_id = ?"
-        if team_id is not None else
-        "LEFT JOIN team_members tm ON tm.user_id = u.id"
-    )
-    scope_params: list[Any] = [team_id] if team_id is not None else []
+    if team_id is not None:
+        join_clause = "JOIN team_members tm ON tm.user_id = u.id AND tm.team_id = ?"
+        scope_params: list[Any] = [team_id]
+    elif age_group is not None:
+        # Every team sharing the cohort, which is the whole point: a parent
+        # asking why their child is on one squad and not the other is asking
+        # about a comparison that crosses the team boundary.
+        join_clause = (
+            "JOIN team_members tm ON tm.user_id = u.id "
+            "JOIN teams tg ON tg.id = tm.team_id AND tg.age_group = ?"
+        )
+        scope_params = [age_group]
+    else:
+        join_clause = "LEFT JOIN team_members tm ON tm.user_id = u.id"
+        scope_params = []
 
     # --- value subquery ---
     if board in ("xp", "streak"):
@@ -288,6 +298,55 @@ def leaderboard(
 ) -> list[dict[str, Any]]:
     """Rank athletes in a program (or one team) on the given board."""
     sql, params = _build_leaderboard_query(board, window, org_id=org_id, team_id=team_id)
+    sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC LIMIT ?"
+    params.append(limit * 3 if board == "streak" else limit)
+    rows = conn.execute(sql, params).fetchall()
+    return _fetch_leader_rows(conn, rows, board, limit, _display_name)
+
+
+def age_group_of(conn: sqlite3.Connection, athlete_id: int) -> str | None:
+    """The cohort an athlete's team sits in, or None if it has no cohort set."""
+    row = conn.execute(
+        "SELECT t.age_group FROM team_members tm JOIN teams t ON t.id = tm.team_id "
+        "WHERE tm.user_id = ? AND t.age_group <> '' LIMIT 1",
+        (athlete_id,),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def age_group_teams(conn: sqlite3.Connection, org_id: int, age_group: str) -> list[str]:
+    """Team names sharing a cohort, so a caller can say who is being compared."""
+    rows = conn.execute(
+        "SELECT name FROM teams WHERE org_id = ? AND age_group = ? ORDER BY name",
+        (org_id, age_group),
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
+def leaderboard_age_group(
+    conn: sqlite3.Connection,
+    org_id: int,
+    age_group: str,
+    *,
+    board: Board = "xp",
+    window: Window = "week",
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Rank one birth-year cohort across every team it is split into.
+
+    A club that splits a cohort by ability creates the question this board
+    answers: a parent on the second squad wants to know what the first squad
+    is doing that their child is not. A team-only board cannot answer it,
+    because the people they are being measured against are not on it.
+
+    The same consent gate applies as anywhere else -- a child whose guardian
+    has not agreed to their name appearing shows as an initial. The board is
+    still legible that way, because the parent reading it is looking for where
+    their own child sits, and their own child they can always identify.
+    """
+    sql, params = _build_leaderboard_query(
+        board, window, org_id=org_id, age_group=age_group
+    )
     sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC LIMIT ?"
     params.append(limit * 3 if board == "streak" else limit)
     rows = conn.execute(sql, params).fetchall()

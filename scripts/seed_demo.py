@@ -99,6 +99,25 @@ ROSTER = [
     ("Cole Dretler",    "goalie",   "left",  3.0, 0.44, 3,  dict(rom_cv=0.08, rom_scale=0.94, decay=0.93, offhand_deficit=0.07)),
 ]
 
+# The other half of the same birth year. A club splits a cohort by ability and
+# then has to answer for the split, so the demo needs both sides of it: two of
+# these four out-work most of the Red squad, one is mid-table, and one is
+# behind. A Blue roster where everybody beat everybody would prove nothing
+# except that the seeder was told to prove something.
+BLUE_ROSTER = [
+    # Tops the cohort on volume and does it with a balanced weak hand. The
+    # whole argument for showing a parent this board: the athlete on the
+    # second squad doing more than most of the first.
+    ("Dano Otis",       "attack",   "right", 5.5, 0.46, 0,  dict(rom_cv=0.06, rom_scale=1.01, decay=0.97, offhand_deficit=0.05)),
+    # Quietly ahead of the middle of Red, without the volume to be obvious
+    # about it in a practice a coach watches.
+    ("Henry Zedman",    "midfield", "left",  4.5, 0.41, 0,  dict(rom_cv=0.09, rom_scale=0.97, decay=0.95, offhand_deficit=0.09)),
+    # Ahead of Red's back four on effort, behind its front on volume.
+    ("Colton Evans",    "defense",  "right", 3.5, 0.38, 1,  dict(rom_cv=0.11, rom_scale=0.93, decay=0.92, offhand_deficit=0.13)),
+    # Behind, and stays behind. The board is not a morality play.
+    ("Harrison Frist",  "midfield", "right", 2.0, 0.19, 5,  dict(rom_cv=0.16, rom_scale=0.85, decay=0.87, offhand_deficit=0.24)),
+]
+
 DRILL_MIX = [
     ("lax_wall_ball", 0.55),
     ("gen_push_up", 0.15),
@@ -201,7 +220,11 @@ def main() -> int:
     # Age-group squads rather than Varsity/JV: a 2031 birth-year group split
     # into a Red and a Blue side, which is how most youth clubs actually name
     # a roster.
-    red = store.create_team(org_id, "2031 Red", "2026")
+    # Both squads carry the same age_group, which is what makes one cohort
+    # board out of two rosters. Without it they are simply two teams that
+    # happen to have a year in their names.
+    red = store.create_team(org_id, "2031 Red", "2026", age_group="2031")
+    blue = store.create_team(org_id, "2031 Blue", "2026", age_group="2031")
 
     # A director sees the whole program; a coach sees only the teams they are
     # assigned to. That difference is enforced on the Principal, not in the
@@ -211,7 +234,7 @@ def main() -> int:
     # visible -- Coach Tommy's dashboard cannot reach a team he is not on.
     coach_tokens = []
     for coach_name, team in (("Coach Tommy", red), ("Coach Matt", red),
-                             ("Coach Mike", red)):
+                             ("Coach Mike", red), ("Coach Bryan", blue)):
         coach = store.create_user(org_id, "coach", coach_name)
         store.assign_staff_to_team(coach["id"], team["id"])
         coach_tokens.append((coach_name, coach["token"]))
@@ -227,8 +250,9 @@ def main() -> int:
     end_of_day = now.replace(hour=23, minute=30, second=0, microsecond=0)
     athletes = []
 
-    for i, (name, position, hand, per_week, offhand, quiet_days, form) in enumerate(ROSTER):
-        team = red
+    for i, (team, (name, position, hand, per_week, offhand, quiet_days, form)) in enumerate(
+        [(red, r) for r in ROSTER] + [(blue, r) for r in BLUE_ROSTER]
+    ):
         athlete = store.create_user(
             org_id, "athlete", name,
             # An age-group squad: "2031" is the graduation year, so the whole
@@ -401,7 +425,7 @@ def main() -> int:
     print(f"  assignments: {len(assignments_mod.list_for_org(store.conn, org_id))}")
     print(f"  form-scored: {scored} sessions")
     print(f"  notifications: {sum(generated.values())} scheduled + new-assignment alerts")
-    print(f"\n  Join code: 2031 Red={red['join_code']}")
+    print(f"\n  Join code: 2031 Red={red['join_code']}  2031 Blue={blue['join_code']}")
     print(f"\n  Guardian invite (unredeemed, for {athletes[1][1]}): {pending['code']}")
     print("\n  Sign-in tokens")
     print(f"    {'Joel White (director)':<26} {director['token']}")

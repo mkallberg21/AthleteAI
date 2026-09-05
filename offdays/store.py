@@ -25,6 +25,7 @@ from . import goalie
 from . import rewatch
 from . import notifications
 from . import recognition
+from . import leaderboard as leaderboard_mod
 from .drills.catalog import ALL_DRILLS
 from . import family
 from . import film
@@ -2521,7 +2522,9 @@ class Store:
         )
         return org_id
 
-    def create_team(self, org_id: int, name: str, season: str = "") -> dict[str, Any]:
+    def create_team(
+        self, org_id: int, name: str, season: str = "", *, age_group: str = ""
+    ) -> dict[str, Any]:
         billing_mod.check_can_add_team(self.conn, org_id)
         # Retry on the astronomically unlikely join-code collision rather than
         # surfacing a UNIQUE constraint error to a coach mid-setup.
@@ -2530,11 +2533,16 @@ class Store:
             try:
                 with transaction(self.conn) as c:
                     cur = c.execute(
-                        "INSERT INTO teams(org_id, name, season, join_code, created_at) "
-                        "VALUES (?,?,?,?,?)",
-                        (org_id, name, season, code, _iso(_now())),
+                        "INSERT INTO teams(org_id, name, season, age_group, join_code, "
+                        "created_at) VALUES (?,?,?,?,?,?)",
+                        (org_id, name, season, age_group.strip(), code, _iso(_now())),
                     )
-                return {"id": int(cur.lastrowid), "name": name, "join_code": code}
+                return {
+                    "id": int(cur.lastrowid),
+                    "name": name,
+                    "age_group": age_group.strip(),
+                    "join_code": code,
+                }
             except sqlite3.IntegrityError:
                 continue
         raise StoreError("could not allocate a unique join code")
@@ -2567,24 +2575,42 @@ class Store:
         elif role in ("coach", "director"):
             billing_mod.check_can_add_staff(self.conn, org_id)
 
-        token = new_token()
         consent_at = _iso(_now()) if guardian_consent else None
-        with transaction(self.conn) as c:
-            cur = c.execute(
-                "INSERT INTO users(org_id, role, display_name, email, birth_year, "
-                "guardian_consent_at, dominant_hand, token_hash, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
-                (
-                    org_id, role, display_name, email, birth_year,
-                    consent_at, dominant_hand, hash_token(token), _iso(_now()),
-                ),
-            )
-            user_id = int(cur.lastrowid)
-            c.execute(
-                "INSERT OR REPLACE INTO memberships(user_id, org_id, role, created_at, active) "
-                "VALUES (?,?,?,?,1)",
-                (user_id, org_id, role, _iso(_now())),
-            )
+        # A sign-in code is one letter and five digits, which is 2.4 million
+        # codes -- deliberately short, because a twelve-year-old has to type it
+        # off a slip of paper. Short enough that collisions are not theoretical:
+        # across a 600-athlete club the birthday odds of two codes landing on
+        # the same value are better than one in ten, and the club meets it as a
+        # failed import halfway through onboarding. Retry the way create_team
+        # already does rather than lengthening a code a child has to read.
+        for _ in range(10):
+            token = new_token()
+            try:
+                with transaction(self.conn) as c:
+                    cur = c.execute(
+                        "INSERT INTO users(org_id, role, display_name, email, birth_year, "
+                        "guardian_consent_at, dominant_hand, token_hash, created_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?)",
+                        (
+                            org_id, role, display_name, email, birth_year,
+                            consent_at, dominant_hand, hash_token(token), _iso(_now()),
+                        ),
+                    )
+                    user_id = int(cur.lastrowid)
+                    c.execute(
+                        "INSERT OR REPLACE INTO memberships(user_id, org_id, role, created_at, active) "
+                        "VALUES (?,?,?,?,1)",
+                        (user_id, org_id, role, _iso(_now())),
+                    )
+                break
+            except sqlite3.IntegrityError as exc:
+                # Only a code clash is retryable. Anything else -- a bad org_id,
+                # a duplicate email -- is a real error and must not be masked by
+                # nine more attempts at the same broken insert.
+                if "token_hash" not in str(exc):
+                    raise
+        else:
+            raise StoreError("could not allocate a unique sign-in code")
         return {"id": user_id, "token": token, "display_name": display_name}
 
     def join_team(self, join_code: str, user_id: int, jersey: str = "", position: str = "") -> int:
@@ -3735,11 +3761,14 @@ class Store:
         """What a parent sees: their own children, and nothing else.
 
         Deliberately excludes two things the athlete and coach views carry.
-        There is no leaderboard, because a ranked list of other people's
-        children for adults to scroll is the mechanism behind the worst
-        behaviour in youth sports. And there is no integrity or review status,
-        because "your child's session was held for review" reads as an
-        accusation and is a coach's conversation to have.
+        There is no program leaderboard here, because a ranked list of other
+        people's children for adults to scroll is the mechanism behind the
+        worst behaviour in youth sports. The cohort board is the single
+        exception and it is not in this payload -- only the age_group needed
+        to fetch it, so a guardian opens it deliberately rather than meeting
+        it on the way to their own child's week. And there is no integrity or
+        review status, because "your child's session was held for review"
+        reads as an accusation and is a coach's conversation to have.
         """
         athletes = []
         for row in guardians_mod.athletes_for(self.conn, guardian_id):
@@ -3764,6 +3793,10 @@ class Store:
                 "athlete_id": athlete_id,
                 "display_name": row["display_name"],
                 "relationship": row["relationship"],
+                # The cohort their squad sits in. The one board a guardian may
+                # open is this one, so the page needs to know it exists before
+                # it can offer it.
+                "age_group": leaderboard_mod.age_group_of(self.conn, athlete_id),
                 "level": profile["level"],
                 "streak": profile["streak"],
                 "week_sessions": int(week["sessions"]),

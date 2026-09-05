@@ -97,7 +97,16 @@ from .guardians import GuardianError
 from .roster import RosterError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY, for_sport as drills_for_sport
 from .drills.base import CUE_CELLS, CUE_UNREADABLE
-from .leaderboard import attach_load, coach_roster, leaderboard, leaderboard_sport_wide, team_standings
+from .leaderboard import (
+    age_group_of,
+    age_group_teams,
+    attach_load,
+    coach_roster,
+    leaderboard,
+    leaderboard_age_group,
+    leaderboard_sport_wide,
+    team_standings,
+)
 from .store import Principal, Store, StoreError, transaction
 
 logger = logging.getLogger(__name__)
@@ -263,12 +272,18 @@ def _athlete(principal: Principal = Depends(_principal)) -> Principal:
 
 
 def _competitor(principal: Principal = Depends(_principal)) -> Principal:
-    """Who may see a leaderboard.
+    """Who may see a program-wide or team leaderboard.
 
-    Athletes and their coaches, not guardians. A ranked list of other people's
-    children, for adults to scroll, is the mechanism behind the worst behaviour
-    in youth sports -- so the parent portal has no leaderboard, and neither does
-    the API for a parent's token.
+    Athletes and their coaches. A ranked list of other people's children, for
+    adults to scroll, is the mechanism behind the worst behaviour in youth
+    sports, so a parent's token does not open the program board.
+
+    One board is exempt, and only one: the cohort board on /api/leaderboard,
+    reachable by a guardian with age_group= and only for the cohort their own
+    child is in. That exists because the question a parent actually has --
+    "why is my child on the second squad" -- has an answer made of work done,
+    and refusing to show it does not stop them asking. It sends them to the
+    car park to ask another parent instead. See get_leaderboard.
     """
     if principal.role == "guardian":
         raise HTTPException(
@@ -616,6 +631,9 @@ def me(
             # is off: a child tapping something that tells them their parent
             # said no is a conversation the app should not start.
             "consents": guardians_mod.current_consents(store.conn, principal.id),
+            # The cohort their team sits in, so the leaderboard knows whether
+            # there is a wider board to offer than their own squad.
+            "age_group": age_group_of(store.conn, principal.id),
         }
     return {
         "role": principal.role,
@@ -990,11 +1008,35 @@ def get_leaderboard(
     board: Literal["xp", "offhand", "streak", "reps", "improvement", "quality"] = "xp",
     window: Literal["week", "month", "season", "all"] = "week",
     team_id: int | None = None,
+    age_group: str | None = Query(default=None, description="Cohort board: every team sharing this age group."),
     sport: str | None = Query(default=None, description="Sport-wide board: aggregate across all programs for this sport."),
     limit: int = Query(default=50, ge=1, le=200),
-    principal: Principal = Depends(_competitor),
+    principal: Principal = Depends(_principal),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    """Rank a program, one team, one cohort, or a whole sport.
+
+    A guardian may read exactly one of these: the cohort board for the cohort
+    their own child trains in. Everything else is athletes and staff only.
+    """
+    if principal.role == "guardian":
+        if not age_group:
+            raise HTTPException(
+                status_code=403,
+                detail="Leaderboards are for athletes and coaches. Your portal "
+                       "shows your own athlete's progress, and the age-group "
+                       "board they are part of.",
+            )
+        mine = {
+            age_group_of(store.conn, a["id"])
+            for a in guardians_mod.athletes_for(store.conn, principal.id)
+        }
+        if age_group not in mine:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only see the age group your own athlete is in.",
+            )
+
     if sport:
         rows = leaderboard_sport_wide(
             store.conn,
@@ -1004,6 +1046,22 @@ def get_leaderboard(
             limit=limit,
         )
         return {"board": board, "window": window, "sport": sport, "team_id": team_id, "rows": rows}
+    if age_group:
+        rows = leaderboard_age_group(
+            store.conn,
+            principal.org_id,
+            age_group,
+            board=board,
+            window=window,
+            limit=limit,
+        )
+        return {
+            "board": board,
+            "window": window,
+            "age_group": age_group,
+            "teams": age_group_teams(store.conn, principal.org_id, age_group),
+            "rows": rows,
+        }
     rows = leaderboard(
         store.conn,
         principal.org_id,

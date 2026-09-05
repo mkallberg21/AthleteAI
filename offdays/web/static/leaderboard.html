@@ -15,6 +15,7 @@
 <div class="wrap wrap--narrow">
   <div class="card">
     <h2>Leaderboards</h2>
+    <div class="tabs" id="scopes"></div>
     <div class="tabs" id="boards"></div>
     <div class="tabs" id="windows"></div>
     <p class="small muted" id="board-note"></p>
@@ -54,8 +55,21 @@ const WINDOWS = [['week', 'This week'], ['month', 'This month'], ['season', 'Sea
 let board = 'xp';
 let window_ = 'week';
 let myId = null;
+// 'team' is your own squad. 'cohort' is every squad in your age group, which
+// is where a club's Red/Blue split becomes visible instead of assumed.
+let scope = 'team';
+let myAgeGroup = null;
+let myTeam = null;
 
 function renderTabs() {
+  $('scopes').innerHTML = !myAgeGroup ? '' : [
+    ['team', 'My team'], ['cohort', myAgeGroup + ' age group'],
+  ].map(([k, label]) =>
+    `<button data-scope="${k}" aria-selected="${k === scope}">${esc(label)}</button>`).join('');
+  $('scopes').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    scope = b.dataset.scope; renderTabs(); load();
+  }));
+
   $('boards').innerHTML = BOARDS.map(([k, label]) =>
     `<button data-board="${k}" aria-selected="${k === board}">${esc(label)}</button>`).join('');
   $('windows').innerHTML = WINDOWS.map(([k, label]) =>
@@ -72,11 +86,22 @@ function renderTabs() {
 
 const MEDALS = { 1: '\u{1F947}', 2: '\u{1F948}', 3: '\u{1F949}' };
 
+// A squad label has to be readable at a glance on a cohort board, because the
+// whole reason to look at one is to see which side of the split a name is on.
+// Colour comes from the squad's own name where the club used one.
+function squadClass(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('red')) return 'squad--red';
+  if (n.includes('blue')) return 'squad--blue';
+  return '';
+}
+
 async function load() {
   $('err').classList.add('hidden');
   try {
     const [data, standings] = await Promise.all([
-      api(`/api/leaderboard?board=${board}&window=${window_}`),
+      api(`/api/leaderboard?board=${board}&window=${window_}`
+          + (scope === 'cohort' && myAgeGroup ? `&age_group=${encodeURIComponent(myAgeGroup)}` : '')),
       api(`/api/standings?window=${window_}`),
     ]);
 
@@ -85,7 +110,8 @@ async function load() {
       return `<tr${isMe ? ` style="background:${accent(0.08)}"` : ''}>
         <td class="rank ${r.rank <= 3 ? 'top' : ''}" style="width:44px">${MEDALS[r.rank] || r.rank}</td>
         <td><b>${esc(r.display_name)}</b>${isMe ? ' <span class="pill ok">you</span>' : ''}
-            <br><span class="small muted">${esc(r.team_name)} &middot; Lvl ${r.level}${r.detail ? ` &middot; ${esc(r.detail)}` : ''}</span></td>
+            <span class="squad ${squadClass(r.team_name)}">${esc(r.team_name)}</span>
+            <br><span class="small muted">Lvl ${r.level}${r.detail ? ` &middot; ${esc(r.detail)}` : ''}</span></td>
         <td class="num"><b>${r.value.toLocaleString()}</b></td>
       </tr>`;
     }).join('') : '<tr><td class="muted small">Nobody on this board yet. Be first.</td></tr>';
@@ -105,7 +131,12 @@ async function load() {
 }
 
 (async () => {
-  try { myId = (await api('/api/me')).athlete_id; } catch { /* still render the board */ }
+  try {
+    const me = await api('/api/me');
+    myId = me.athlete_id;
+    myAgeGroup = me.age_group || null;
+    myTeam = me.team_name || null;
+  } catch { /* still render the board */ }
   renderTabs();
   await load();
 })();

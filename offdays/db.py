@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS teams (
     org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
     season      TEXT NOT NULL DEFAULT '',
+    -- The birth-year cohort two teams share when a club splits it by ability
+    -- ("2031 Red" and "2031 Blue" are both '2031'). Free text because clubs
+    -- name cohorts differently -- birth year here, "U14" elsewhere -- and a
+    -- club that never splits a cohort can leave it empty.
+    age_group   TEXT NOT NULL DEFAULT '',
     -- Athletes self-serve onboarding with this code; no email needed, which
     -- matters when the athletes are 12 and do not have school email.
     join_code   TEXT NOT NULL UNIQUE,
@@ -940,6 +945,9 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
 # they have to be applied explicitly or an upgraded deployment reads a schema it
 # does not have.
 ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "teams": [
+        ("age_group", "TEXT NOT NULL DEFAULT ''"),
+    ],
     "sessions": [
         ("completed_at", "TEXT"),
         ("result_json", "TEXT"),

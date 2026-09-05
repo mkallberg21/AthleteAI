@@ -21,10 +21,23 @@ they matter:
 
 Two deliberate omissions:
 
-* **No leaderboard in the parent view.** Parent-versus-parent comparison is the
-  mechanism behind the worst behaviour in youth sports, and building a
-  ranked list of other people's children for adults to scroll would be a
-  choice, not an accident.
+* **No open leaderboard in the parent view.** Parent-versus-parent comparison
+  is the mechanism behind the worst behaviour in youth sports, so a parent's
+  token does not open the program board or any team board.
+
+  One exception, added deliberately and scoped tightly: the cohort board for
+  the age group their own child is in. Clubs split a birth year by ability,
+  and the parent on the second squad has a real question -- what is the first
+  squad doing that mine is not. Refusing to answer it does not retire the
+  question; it moves it to the car park, where it gets answered with a guess
+  about politics. The board answers it with work done: sessions, off-hand
+  share, consistency, improvement. Not ability, and not a projection of who
+  makes which team.
+
+  What keeps it from becoming the thing above: it is one cohort and not the
+  club; every board on it ranks effort an athlete controls rather than talent
+  they do not; and LEADERBOARD_NAME still gates names, so a family that wants
+  their child counted but not named gets exactly that.
 * **No integrity or review status.** "Your child's session was held for review"
   reads as an accusation, and it is a coach's conversation to have, not a
   push notification's.

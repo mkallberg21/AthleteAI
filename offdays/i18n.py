@@ -178,11 +178,34 @@ STRINGS: dict[str, dict[str, str]] = {
     "parent.report.looking_after": {
         EN: "Looking after themselves", ES: "Cuidándose"},
     "parent.report.no_ranking": {
-        EN: ("This is about your own child only. We do not rank children "
-             "against their teammates here or anywhere else."),
-        ES: ("Esto se refiere únicamente a su propio hijo o hija. No "
-             "clasificamos a los niños frente a sus compañeros ni aquí ni en "
-             "ningún otro lugar."),
+        EN: ("This report is about your own child only \u2014 nobody is ranked "
+             "on it. The age-group board is the one place comparison happens, "
+             "and it ranks work done, never ability."),
+        ES: ("Este informe trata \u00fanicamente de su propio hijo o hija: aqu\u00ed "
+             "no se clasifica a nadie. La tabla del grupo de edad es el \u00fanico "
+             "lugar donde hay comparaci\u00f3n, y ordena el trabajo realizado, "
+             "nunca la capacidad."),
+    },
+    "parent.cohort.title": {
+        EN: "The {age_group} age group",
+        ES: "El grupo de edad {age_group}",
+    },
+    "parent.cohort.why": {
+        EN: ("Every squad in your child's birth year, ranked on work they "
+             "control: sessions done, weak-hand reps, days in a row, "
+             "improvement. Not ability, and not a prediction of next "
+             "season's teams."),
+        ES: ("Todos los equipos del a\u00f1o de nacimiento de su hijo o hija, "
+             "ordenados por el trabajo que controlan: sesiones hechas, "
+             "repeticiones con la mano d\u00e9bil, d\u00edas seguidos, mejora. No la "
+             "capacidad, ni una predicci\u00f3n de los equipos de la pr\u00f3xima "
+             "temporada."),
+    },
+    "parent.cohort.masked": {
+        EN: ("Children whose families have not agreed to their name being "
+             "shown appear as an initial. Yours is highlighted."),
+        ES: ("Los ni\u00f1os cuyas familias no han aceptado que se muestre su "
+             "nombre aparecen con una inicial. El suyo est\u00e1 resaltado."),
     },
     "parent.days_trained": {EN: "days trained", ES: "días entrenados"},
     "parent.sessions": {EN: "sessions", ES: "sesiones"},

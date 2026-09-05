@@ -80,6 +80,14 @@
     <div id="away-err" class="err hidden"></div>
   </div>
 
+  <div class="card hidden" id="cohort-card">
+    <h2 id="cohort-title">The age group</h2>
+    <p class="small muted" id="cohort-why"></p>
+    <div class="tabs" id="cohort-boards"></div>
+    <table><tbody id="cohort-rows"></tbody></table>
+    <p class="small muted" id="cohort-masked" style="margin-top:10px"></p>
+  </div>
+
   <div class="card">
     <h2 data-i18n="parent.add_athlete">Add another athlete</h2>
     <p class="small muted">If you have a second child in the program, paste their invite code.</p>
@@ -245,8 +253,9 @@ function renderReport(r) {
     ${section(T('parent.report.looking_after', 'Looking after themselves'), r.care)}
     <p class="small muted" style="margin-top:12px">
       ${esc(T('parent.report.no_ranking',
-        `This is about ${r.display_name} only. We do not rank children against `
-        + 'their teammates here or anywhere else.'))}
+        `This report is about ${r.display_name} only — nobody is ranked on it. `
+        + 'The age-group board is the one place comparison happens, and it '
+        + 'ranks work done, never ability.'))}
     </p>
   </div>`;
 }
@@ -368,6 +377,69 @@ $('lang').addEventListener('change', async () => {
   await load();
 });
 
+/**
+ * The one board a guardian may open.
+ *
+ * Four ways of ranking, all of them work an athlete decides to do rather than
+ * talent they were born with. There is deliberately no "form" board here: a
+ * parent reading a quality score next to another family's child is the
+ * comparison this product exists to avoid, and it is the one a coach should
+ * be having out loud anyway.
+ */
+const COHORT_BOARDS = [
+  ['xp', 'Overall'],
+  ['offhand', 'Weak hand'],
+  ['streak', 'Days in a row'],
+  ['improvement', 'Most improved'],
+];
+let cohortBoard = 'xp';
+let cohortGroup = null;
+let myAthleteIds = new Set();
+
+function squadClass(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('red')) return 'squad--red';
+  if (n.includes('blue')) return 'squad--blue';
+  return '';
+}
+
+async function loadCohort() {
+  if (!cohortGroup) return;
+  $('cohort-title').textContent =
+    T('parent.cohort.title', `The ${cohortGroup} age group`).replace('{age_group}', cohortGroup);
+  $('cohort-why').textContent = T('parent.cohort.why',
+    "Every squad in your child's birth year, ranked on work they control: "
+    + 'sessions done, weak-hand reps, days in a row, improvement. Not ability, '
+    + "and not a prediction of next season's teams.");
+  $('cohort-masked').textContent = T('parent.cohort.masked',
+    'Children whose families have not agreed to their name being shown appear '
+    + 'as an initial. Yours is highlighted.');
+
+  $('cohort-boards').innerHTML = COHORT_BOARDS.map(([k, label]) =>
+    `<button data-cb="${k}" aria-selected="${k === cohortBoard}">${esc(label)}</button>`).join('');
+  $('cohort-boards').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => { cohortBoard = b.dataset.cb; loadCohort(); }));
+
+  try {
+    const data = await api(`/api/leaderboard?board=${cohortBoard}&window=month`
+      + `&age_group=${encodeURIComponent(cohortGroup)}`);
+    $('cohort-rows').innerHTML = data.rows.length ? data.rows.map((r) => {
+      const mine = myAthleteIds.has(r.athlete_id);
+      return `<tr${mine ? ' class="mine"' : ''}>
+        <td class="rank" style="width:40px">${r.rank}</td>
+        <td><b>${esc(r.display_name)}</b>
+            <span class="squad ${squadClass(r.team_name)}">${esc(r.team_name)}</span></td>
+        <td class="num"><b>${r.value.toLocaleString()}</b></td>
+      </tr>`;
+    }).join('') : '<tr><td class="muted small">Nothing on this board yet.</td></tr>';
+    $('cohort-card').classList.remove('hidden');
+  } catch (e) {
+    // A cohort board that will not load must not take the rest of the page
+    // with it -- their own child's week is the part that matters.
+    $('cohort-card').classList.add('hidden');
+  }
+}
+
 async function load() {
   $('err').classList.add('hidden');
   const data = await api('/api/guardians/me');
@@ -378,9 +450,13 @@ async function load() {
     : '<div class="card"><p class="muted">No athletes linked yet. '
       + 'Use an invite code from your coach below.</p></div>';
 
+  myAthleteIds = new Set(data.athletes.map((a) => a.athlete_id));
+  cohortGroup = (data.athletes.find((a) => a.age_group) || {}).age_group || null;
+
   wire();
   await loadDecisions();
   await loadReports(data.athletes);
+  await loadCohort();
 
   $('away-card').classList.toggle('hidden', !data.athletes.length);
   $('away-athlete').innerHTML = data.athletes
