@@ -634,12 +634,14 @@ def me(
             # The cohort their team sits in, so the leaderboard knows whether
             # there is a wider board to offer than their own squad.
             "age_group": age_group_of(store.conn, principal.id),
+            "side": _side_words(store, principal.org_id),
         }
     return {
         "role": principal.role,
         "athlete_id": principal.id,
         "display_name": principal.display_name,
         "org_id": principal.org_id,
+        "side": _side_words(store, principal.org_id),
     }
 
 
@@ -667,12 +669,14 @@ def login_post(
             "role": principal.role,
             **store.athlete_profile(principal.id),
             "consents": guardians_mod.current_consents(store.conn, principal.id),
+            "side": _side_words(store, principal.org_id),
         }
     return {
         "role": principal.role,
         "athlete_id": principal.id,
         "display_name": principal.display_name,
         "org_id": principal.org_id,
+        "side": _side_words(store, principal.org_id),
     }
 
 
@@ -1952,6 +1956,7 @@ def guardian_home(
 ) -> dict[str, Any]:
     return {
         "display_name": principal.display_name,
+        "side": _side_words(store, principal.org_id),
         **store.guardian_summary(principal.id),
     }
 
@@ -2069,6 +2074,17 @@ def _sport_label(store: Store, org_id: int) -> str:
     """The program's sport as a coach would say it: "Lacrosse", not "lacrosse"."""
     sport = sports_mod.BY_KEY.get(_org_sport(store, org_id))
     return sport.label if sport else "Game"
+
+
+def _side_words(store: Store, org_id: int) -> dict[str, str]:
+    """What this program calls its weaker side, for the pages to render.
+
+    Sent rather than hardcoded per page: a soccer club reading "Off-hand" on
+    its own leaderboard is the tell that this is somebody else's product.
+    """
+    words = sports_mod.side_words(_org_sport(store, org_id))
+    return {"noun": words.noun, "label": words.label,
+            "weaker": words.weaker, "both": words.both}
 
 
 class SeasonPhaseSetting(BaseModel):

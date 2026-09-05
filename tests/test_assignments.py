@@ -94,7 +94,7 @@ class TestCreation:
 
     def test_rejects_offhand_target_on_a_drill_without_handedness(self, store, program):
         """A squat has no off-hand, so requiring one is a coach error worth catching."""
-        with pytest.raises(AssignmentError, match="handedness"):
+        with pytest.raises(AssignmentError, match="does not track sides"):
             make(store, program, drill_key="gen_squat", min_offhand=0.4)
 
     def test_rejects_a_team_from_another_program(self, store, program):

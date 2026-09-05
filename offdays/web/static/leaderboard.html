@@ -42,9 +42,14 @@ const $ = (id) => document.getElementById(id);
 
 // Several boards rather than one, so the athlete who cannot win on raw volume
 // can still be first at something that matters.
-const BOARDS = [
+// The program's word for its weaker side. Defaulted to hands so the page
+// renders before /api/me answers, then replaced by whatever the program
+// actually calls it: a soccer club reads "Weak foot" on this column.
+let SIDE = { noun: 'hand', label: 'Off-hand', weaker: 'weaker hand', both: 'Both Hands' };
+
+const boards = () => [
   ['xp', 'XP', 'Total XP earned in the window.'],
-  ['offhand', 'Off-hand', 'Reps on your weaker hand. The hardest work, ranked on its own.'],
+  ['offhand', SIDE.label, `Reps on your ${SIDE.weaker}. The hardest work, ranked on its own.`],
   ['streak', 'Streak', 'Consecutive days trained. Consistency, not volume.'],
   ['reps', 'Reps', 'Raw rep count across every drill.'],
   ['quality', 'Form', 'Average form score. Ranks how well you move, not how much.'],
@@ -70,11 +75,11 @@ function renderTabs() {
     scope = b.dataset.scope; renderTabs(); load();
   }));
 
-  $('boards').innerHTML = BOARDS.map(([k, label]) =>
+  $('boards').innerHTML = boards().map(([k, label]) =>
     `<button data-board="${k}" aria-selected="${k === board}">${esc(label)}</button>`).join('');
   $('windows').innerHTML = WINDOWS.map(([k, label]) =>
     `<button data-window="${k}" aria-selected="${k === window_}">${esc(label)}</button>`).join('');
-  $('board-note').textContent = (BOARDS.find(([k]) => k === board) || [])[2] || '';
+  $('board-note').textContent = (boards().find(([k]) => k === board) || [])[2] || '';
 
   $('boards').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
     board = b.dataset.board; renderTabs(); load();
@@ -135,6 +140,7 @@ async function load() {
     const me = await api('/api/me');
     myId = me.athlete_id;
     myAgeGroup = me.age_group || null;
+    if (me.side) SIDE = me.side;
     myTeam = me.team_name || null;
   } catch { /* still render the board */ }
   renderTabs();

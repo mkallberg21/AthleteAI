@@ -159,15 +159,15 @@ class TestStreaks:
 
 class TestBadges:
     def test_badge_award_is_idempotent(self):
-        stats = AthleteStats(session_count=1, wall_ball_reps=150, total_xp=200)
+        stats = AthleteStats(session_count=1, skill_reps=150, total_xp=200)
         assert earned_badges(stats) == earned_badges(stats)
 
     def test_thresholds_gate_correctly(self):
-        assert "wall_100" not in earned_badges(AthleteStats(wall_ball_reps=99))
-        assert "wall_100" in earned_badges(AthleteStats(wall_ball_reps=100))
+        assert "wall_100" not in earned_badges(AthleteStats(skill_reps=99))
+        assert "wall_100" in earned_badges(AthleteStats(skill_reps=100))
 
     def test_higher_tiers_include_lower_ones(self):
-        earned = earned_badges(AthleteStats(wall_ball_reps=10_000))
+        earned = earned_badges(AthleteStats(skill_reps=10_000))
         assert {"wall_100", "wall_1000", "wall_10000"} <= set(earned)
 
     def test_empty_stats_earn_nothing(self):

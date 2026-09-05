@@ -263,7 +263,7 @@ class TestCaptureFlow:
         profile = client.get("/api/me", headers=athlete["headers"]).json()
         assert profile["total_xp"] > 0
         assert profile["streak"] == 1
-        assert profile["stats"]["wall_ball_reps"] == 120
+        assert profile["stats"]["skill_reps"] == 120
         assert len(profile["recent_sessions"]) == 1
 
 

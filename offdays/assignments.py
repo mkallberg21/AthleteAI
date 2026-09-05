@@ -147,13 +147,13 @@ def create(
         raise AssignmentError("min_offhand must be between 0 and 1")
     if target_reps == 0 and target_sessions == 0 and min_offhand == 0.0:
         raise AssignmentError(
-            "an assignment needs at least one target (reps, sessions, or off-hand share)"
+            "an assignment needs at least one target (reps, sessions, or weak-side share)"
         )
 
     drill = DRILLS_BY_KEY[drill_key]
     if min_offhand > 0 and not drill.tracks_handedness:
         raise AssignmentError(
-            f"{drill.name} does not track handedness, so an off-hand target is meaningless"
+            f"{drill.name} does not track sides, so a weak-side target is meaningless"
         )
 
     team = conn.execute(

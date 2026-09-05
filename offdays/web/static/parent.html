@@ -386,9 +386,14 @@ $('lang').addEventListener('change', async () => {
  * comparison this product exists to avoid, and it is the one a coach should
  * be having out loud anyway.
  */
-const COHORT_BOARDS = [
+// The program's word for its weaker side. Defaulted to hands so the page
+// renders before /api/me answers, then replaced by whatever the program
+// actually calls it: a soccer club reads "Weak foot" on this column.
+let SIDE = { noun: 'hand', label: 'Off-hand', weaker: 'weaker hand', both: 'Both Hands' };
+
+const cohortBoards = () => [
   ['xp', 'Overall'],
-  ['offhand', 'Weak hand'],
+  ['offhand', SIDE.label],
   ['streak', 'Days in a row'],
   ['improvement', 'Most improved'],
 ];
@@ -415,7 +420,7 @@ async function loadCohort() {
     'Children whose families have not agreed to their name being shown appear '
     + 'as an initial. Yours is highlighted.');
 
-  $('cohort-boards').innerHTML = COHORT_BOARDS.map(([k, label]) =>
+  $('cohort-boards').innerHTML = cohortBoards().map(([k, label]) =>
     `<button data-cb="${k}" aria-selected="${k === cohortBoard}">${esc(label)}</button>`).join('');
   $('cohort-boards').querySelectorAll('button').forEach((b) =>
     b.addEventListener('click', () => { cohortBoard = b.dataset.cb; loadCohort(); }));
@@ -443,6 +448,7 @@ async function loadCohort() {
 async function load() {
   $('err').classList.add('hidden');
   const data = await api('/api/guardians/me');
+  if (data.side) SIDE = data.side;
   $('whoami').textContent = data.display_name;
 
   $('athletes').innerHTML = data.athletes.length

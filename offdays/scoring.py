@@ -159,7 +159,7 @@ def score_session(
             effective_offhand = _diminished_reps(integrity.reps_total, drill) * share
             breakdown.offhand_bonus = int(round(effective_offhand * bonus_rate))
             breakdown.lines.append(
-                (f"Off-hand bonus ({offhand_reps} reps)", breakdown.offhand_bonus)
+                (f"Weak-side bonus ({offhand_reps} reps)", breakdown.offhand_bonus)
             )
 
         # Balance bonus: the weaker side carried a real share of the work.
@@ -306,22 +306,27 @@ class BadgeSpec:
 
 BADGES: tuple[BadgeSpec, ...] = (
     BadgeSpec("first_session", "First Rep", "Logged your first session.", "bronze"),
-    BadgeSpec("wall_100", "Century", "100 lifetime wall ball reps.", "bronze"),
-    BadgeSpec("wall_1000", "Four Digits", "1,000 lifetime wall ball reps.", "silver"),
-    BadgeSpec("wall_10000", "Ten Thousand", "10,000 lifetime wall ball reps.", "gold"),
+    # Counted on the athlete's own sport's skill drills, whatever those are.
+    # These used to count lacrosse wall ball and nothing else, which made three
+    # of the fourteen badges permanently unreachable for every other sport in
+    # the library: a soccer player could see them and never earn one. The keys
+    # are unchanged so awards already made stay awarded.
+    BadgeSpec("wall_100", "Century", "100 lifetime reps on your sport's own drills.", "bronze"),
+    BadgeSpec("wall_1000", "Four Digits", "1,000 lifetime reps on your sport's own drills.", "silver"),
+    BadgeSpec("wall_10000", "Ten Thousand", "10,000 lifetime reps on your sport's own drills.", "gold"),
     BadgeSpec("streak_7", "Week Strong", "Trained 7 days in a row.", "bronze"),
     BadgeSpec("streak_30", "Month Strong", "Trained 30 days in a row.", "silver"),
     BadgeSpec("streak_100", "Relentless", "Trained 100 days in a row.", "gold"),
     BadgeSpec(
         "ambidextrous",
         "Both Hands",
-        "Ten sessions where the weak hand carried 40%+ of the reps.",
+        "Ten sessions where the {weaker} carried 40%+ of the reps.",
         "silver",
     ),
     BadgeSpec(
         "offhand_1000",
         "Weak Side No More",
-        "1,000 lifetime off-hand reps.",
+        "1,000 lifetime {label} reps.",
         "gold",
     ),
     BadgeSpec("early_bird", "Before School", "Ten sessions completed before 8am.", "silver"),
@@ -339,7 +344,7 @@ class AthleteStats:
 
     total_xp: int = 0
     session_count: int = 0
-    wall_ball_reps: int = 0
+    skill_reps: int = 0
     offhand_reps: int = 0
     balanced_sessions: int = 0
     early_sessions: int = 0
@@ -357,9 +362,9 @@ def earned_badges(stats: AthleteStats) -> list[str]:
     level = level_for_xp(stats.total_xp)
     checks: list[tuple[str, bool]] = [
         ("first_session", stats.session_count >= 1),
-        ("wall_100", stats.wall_ball_reps >= 100),
-        ("wall_1000", stats.wall_ball_reps >= 1_000),
-        ("wall_10000", stats.wall_ball_reps >= 10_000),
+        ("wall_100", stats.skill_reps >= 100),
+        ("wall_1000", stats.skill_reps >= 1_000),
+        ("wall_10000", stats.skill_reps >= 10_000),
         ("streak_7", stats.longest_streak >= 7),
         ("streak_30", stats.longest_streak >= 30),
         ("streak_100", stats.longest_streak >= 100),

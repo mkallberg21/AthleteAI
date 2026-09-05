@@ -267,3 +267,54 @@ def effective_min_age(program_min_age: int, profile: Profile) -> int:
 
 def budget_scale(profile: Profile) -> float:
     return BUDGET_SCALE.get(profile.level, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# What the weaker side is called
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SideWords:
+    """The vocabulary a sport uses for its weaker side.
+
+    Underneath, every bilateral drill in the library measures the same two
+    numbers: reps on the left and reps on the right. Which of those is the
+    hard one is an athlete fact, not a sport fact. But the *word* is a sport
+    fact, and getting it wrong is the fastest way to tell a soccer club that
+    this is a lacrosse product with the names swapped: no coach has ever asked
+    a midfielder about their off-hand.
+
+    So the numbers stay shared and only the noun moves. A club that plays with
+    its feet reads "weak foot" on the same column a lacrosse club reads
+    "off-hand" on.
+    """
+
+    #: "hand" or "foot". The bare noun, for building a sentence.
+    noun: str
+    #: The column heading a coach scans: "Off-hand", "Weak foot".
+    label: str
+    #: Mid-sentence, lowercase: "reps on their weaker hand".
+    weaker: str
+    #: The badge and the goal that mean both sides: "Both Hands", "Both Feet".
+    both: str
+
+
+_HANDS = SideWords(noun="hand", label="Off-hand", weaker="weaker hand", both="Both Hands")
+_FEET = SideWords(noun="foot", label="Weak foot", weaker="weaker foot", both="Both Feet")
+
+#: Sports played with the feet. Everything else defaults to hands, which is
+#: the right answer for the ten other sports that ship drills and a safe one
+#: for any sport added later: a wrong "off-hand" reads as an odd word, while a
+#: wrong "weak foot" on a throwing sport reads as a bug.
+FOOT_SPORTS = frozenset({"soccer"})
+
+
+def side_words(sport: str | None) -> SideWords:
+    """The weaker-side vocabulary for a sport, defaulting to hands.
+
+    Takes free text rather than a key, because callers hold whatever is on the
+    organizations row, and normalize() is what turns "Futbol" into soccer.
+    """
+    found = normalize(sport or "")
+    key = found.key if found is not None else ""
+    return _FEET if key in FOOT_SPORTS else _HANDS

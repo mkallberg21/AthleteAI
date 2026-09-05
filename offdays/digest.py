@@ -368,7 +368,7 @@ def build_kpis(
 
     offhand = KPI(
         key="offhand",
-        label="Work on the weak hand",
+        label="Work on the weaker side",
         value=_rate(current.offhand_reps, current.sided_reps),
         previous=_rate(previous.offhand_reps, previous.sided_reps),
         best=best(lambda w: _rate(w.offhand_reps, w.sided_reps)),
@@ -458,7 +458,7 @@ def _milestones(current: WeekStats, previous: WeekStats, roster: int) -> list[st
     offhand_share = _rate(current.offhand_reps, current.sided_reps)
     if offhand_share >= 0.40:
         out.append(
-            f"{offhand_share * 100:.0f}% of reps went to the weak hand. "
+            f"{offhand_share * 100:.0f}% of reps went to the weaker side. "
             "That is genuinely hard to do."
         )
 

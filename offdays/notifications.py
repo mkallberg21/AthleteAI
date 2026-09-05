@@ -613,7 +613,7 @@ def _assignment_gap(item: dict[str, Any]) -> str:
         left = item["target_sessions"] - progress["sessions_done"]
         gaps.append(f"{left} more session{'s' if left != 1 else ''}")
     if not progress["offhand_met"]:
-        gaps.append(f"{item['min_offhand']:.0%} off-hand needed")
+        gaps.append(f"{item['min_offhand']:.0%} weak-side needed")
     return ", ".join(gaps) or "Nearly there."
 
 
@@ -631,7 +631,7 @@ def notify_new_assignment(conn: sqlite3.Connection, assignment_id: int) -> int:
     if assignment.target_sessions:
         parts.append(f"{assignment.target_sessions} sessions")
     if assignment.min_offhand:
-        parts.append(f"{assignment.min_offhand:.0%} off-hand")
+        parts.append(f"{assignment.min_offhand:.0%} weak side")
     detail = " · ".join(parts)
 
     made = 0

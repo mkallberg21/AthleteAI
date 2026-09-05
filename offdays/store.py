@@ -3232,11 +3232,22 @@ class Store:
             (athlete_id,),
         ).fetchone()
 
-        wall = c.execute(
-            "SELECT COALESCE(SUM(reps_total),0) AS r FROM sessions "
-            "WHERE athlete_id=? AND status='counted' AND drill_key IN ('lax_wall_ball','lax_quick_stick')",
-            (athlete_id,),
-        ).fetchone()["r"]
+        # The skill drills of whichever sport this program plays. Hardcoding
+        # lacrosse here is what made three badges unreachable for every other
+        # sport; "general" is excluded on purpose, because push-ups are not
+        # anybody's sport and a badge that any athlete earns by doing squats
+        # says nothing.
+        sport = self._sport_of_athlete(athlete_id)
+        skill_keys = [d.key for d in ALL_DRILLS if d.sport == sport]
+        if skill_keys:
+            marks = ",".join("?" * len(skill_keys))
+            wall = c.execute(
+                f"SELECT COALESCE(SUM(reps_total),0) AS r FROM sessions "
+                f"WHERE athlete_id=? AND status='counted' AND drill_key IN ({marks})",
+                (athlete_id, *skill_keys),
+            ).fetchone()["r"]
+        else:
+            wall = 0
 
         hand = self._dominant_hand(athlete_id) or "right"
         offhand_col = "reps_left" if hand == "right" else "reps_right"
@@ -3270,7 +3281,7 @@ class Store:
         return AthleteStats(
             total_xp=total_xp,
             session_count=int(agg["n"]),
-            wall_ball_reps=int(wall),
+            skill_reps=int(wall),
             offhand_reps=int(offhand),
             balanced_sessions=int(balanced),
             early_sessions=int(early),
@@ -3278,6 +3289,14 @@ class Store:
             current_streak=streak.current,
             longest_streak=streak.longest,
         )
+
+    def _sport_of_athlete(self, athlete_id: int) -> str:
+        """The sport of the program this athlete belongs to."""
+        row = self.conn.execute(
+            "SELECT o.sport FROM organizations o JOIN users u ON u.org_id = o.id "
+            "WHERE u.id = ?", (athlete_id,)
+        ).fetchone()
+        return (row[0] if row and row[0] else "lacrosse")
 
     def _sync_badges(self, athlete_id: int) -> list[str]:
         """Award any newly-earned badges. Idempotent."""
@@ -3314,11 +3333,17 @@ class Store:
             paused=absence.paused_days(self.conn, athlete_id),
         )
 
+        words = sports.side_words(self._sport_of_athlete(athlete_id))
+        def _badge_text(text: str) -> str:
+            return text.format(weaker=words.weaker, label=words.label.lower(),
+                               both=words.both)
+
         badges = [
             {
                 "key": r["badge_key"],
-                "name": BADGES_BY_KEY[r["badge_key"]].name,
-                "description": BADGES_BY_KEY[r["badge_key"]].description,
+                "name": (words.both if r["badge_key"] == "ambidextrous"
+                         else BADGES_BY_KEY[r["badge_key"]].name),
+                "description": _badge_text(BADGES_BY_KEY[r["badge_key"]].description),
                 "tier": BADGES_BY_KEY[r["badge_key"]].tier,
                 "awarded_at": r["awarded_at"],
             }
@@ -3366,7 +3391,7 @@ class Store:
             "load": self.load_state(athlete_id).to_dict(),
             "stats": {
                 "sessions": stats.session_count,
-                "wall_ball_reps": stats.wall_ball_reps,
+                "skill_reps": stats.skill_reps,
                 "offhand_reps": stats.offhand_reps,
                 "balanced_sessions": stats.balanced_sessions,
                 "distinct_drills": stats.distinct_drills,

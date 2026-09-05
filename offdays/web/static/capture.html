@@ -190,7 +190,7 @@
         <div class="stat"><b id="s-streak">0</b><span>Day streak</span></div>
         <div class="stat"><b id="s-xp">0</b><span>Total XP</span></div>
         <div class="stat"><b id="s-today">0</b><span>XP today</span></div>
-        <div class="stat"><b id="s-offhand">0</b><span>Off-hand reps</span></div>
+        <div class="stat"><b id="s-offhand">0</b><span id="s-offhand-label">Off-hand reps</span></div>
         <div class="stat"><b id="s-quality">–</b><span>Form score</span></div>
       </div>
       <div id="streak-warn" class="banner warn hidden" style="position:static;margin-top:12px"></div>
@@ -463,8 +463,15 @@ const BADGE_ICONS = {
 // `prefetched` is passed only at boot, where the profile is fetched ahead of
 // the drill list. Every later call refetches, because this is what refreshes
 // XP and the streak after a session.
+// The program's word for its weaker side. Defaulted to hands so the page can
+// render before /api/me answers, then replaced by whatever the program calls
+// it: a soccer club reads "Weak foot" wherever a lacrosse club reads
+// "Off-hand". The numbers underneath are the same two either way.
+let SIDE = { noun: 'hand', label: 'Off-hand', weaker: 'weaker hand', both: 'Both Hands' };
+
 async function loadHome(prefetched) {
   profile = prefetched || await api('/api/me');
+  if (profile.side) SIDE = profile.side;
   const weekPlan = await loadWeekPlan();
   homeSport = profile.sport || null;
   $('whoami').textContent = profile.display_name;
@@ -480,6 +487,7 @@ async function loadHome(prefetched) {
   $('s-xp').textContent = profile.total_xp.toLocaleString();
   $('s-today').textContent = `${profile.xp_today}`;
   $('s-offhand').textContent = profile.stats.offhand_reps.toLocaleString();
+  $('s-offhand-label').textContent = `${SIDE.label} reps`;
 
   const q = profile.quality || {};
   if (q.current === null || q.current === undefined) {
@@ -1167,7 +1175,7 @@ async function loadAssignments() {
     if (a.min_offhand > 0) {
       const share = p.offhand_share === null ? '–' : `${Math.round(p.offhand_share * 100)}%`;
       targets.push(`<div class="target ${p.offhand_met ? 'met' : 'unmet'}">
-        <b>${share}</b><span>Off-hand / ${Math.round(a.min_offhand * 100)}%</span></div>`);
+        <b>${share}</b><span>${SIDE.label} / ${Math.round(a.min_offhand * 100)}%</span></div>`);
     }
 
     return `<div class="assignment ${cls}">
