@@ -64,7 +64,8 @@ class ScoringConfig:
     balance_threshold: float = 0.40
     balance_bonus_xp: int = 40
 
-    # Level curve: XP needed for level N is level_base * N ** level_exponent.
+    # Level curve: total XP needed to reach level N is
+    # level_base * (N - 1) ** level_exponent, so level 1 starts at zero.
     level_base: int = 300
     level_exponent: float = 1.45
 

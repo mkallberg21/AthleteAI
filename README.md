@@ -89,10 +89,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 4112 tests
+python -m pytest tests/ -q          # 4174 tests
 
 python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))' > /tmp/specs.json
-DRILL_SPECS_FILE=/tmp/specs.json node --test tests/js/*.test.mjs   # 267 tests
+DRILL_SPECS_FILE=/tmp/specs.json node --test tests/js/*.test.mjs   # 269 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep

@@ -515,7 +515,7 @@
         <thead><tr>
           <th>Athlete</th><th class="num">Sessions</th>
           <th class="num" id="roster-side-th">Strong / Off-hand</th>
-          <th>Last active</th><th>Status</th><th></th>
+          <th>Last active</th><th>Status</th>
         </tr></thead>
         <tbody id="roster"></tbody>
       </table>
@@ -683,11 +683,20 @@ const FLAG_LABELS = {
   inactive_10d: ['bad', 'quiet 10+ days'],
   quiet_5d: ['warn', 'quiet 5+ days'],
   no_sessions_this_week: ['warn', 'nothing this week'],
-  neglecting_offhand: ['warn', 'off-hand neglected'],
+  neglecting_offhand: ['warn', null],  // named per sport, see flagLabel()
   form_slipping: ['bad', 'form slipping'],
   load_spike: ['bad', 'load spike'],
   needs_rest: ['warn', 'needs a rest day'],
 };
+
+// A soccer program should read "weak foot neglected", not "off-hand". The
+// wording arrives with /api/me, after this table first paints, so it is
+// resolved per render rather than baked into the table above.
+function flagLabel(flag) {
+  const [cls, label] = FLAG_LABELS[flag] || ['warn', flag];
+  if (flag === 'neglecting_offhand') return [cls, `${ROSTER_SIDE.toLowerCase()} neglected`];
+  return [cls, label];
+}
 
 function showError(message) {
   $('err').textContent = message;
@@ -1774,7 +1783,7 @@ function renderAttention(athletes) {
   $('attention-card').classList.toggle('hidden', flagged.length === 0);
   $('attention').innerHTML = flagged.map((a) => {
     const chips = a.flags.map((f) => {
-      const [cls, label] = FLAG_LABELS[f] || ['warn', f];
+      const [cls, label] = flagLabel(f);
       return `<span class="pill ${cls}">${esc(label)}</span>`;
     }).join(' ');
     return `<div style="display:flex;justify-content:space-between;gap:10px;
@@ -1801,23 +1810,57 @@ function renderRoster(athletes) {
     const shareCls = a.offhand_share === null ? '' : a.offhand_share < 0.2 ? 'style="color:var(--warn)"' : '';
     const status = a.flags.length
       ? a.flags.map((f) => {
-          const [cls, label] = FLAG_LABELS[f] || ['warn', f];
+          const [cls, label] = flagLabel(f);
           return `<span class="pill ${cls}">${esc(label)}</span>`;
         }).join(' ')
       : '<span class="pill ok">on track</span>';
     const review = a.pending_review ? ` <span class="pill warn">${a.pending_review} in review</span>` : '';
     return `<tr>
       <td><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
-          <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span></td>
+          <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span>
+          <button class="linkish" data-invite="${a.athlete_id}"
+                title="Issue a sign-in code for a parent or guardian">Invite</button></td>
       <td class="num">${a.window_sessions}</td>
       <td class="num" ${shareCls}><span class="muted">${strong}</span> / ${share}</td>
       <td>${fmtDate(a.last_session)}</td>
       <td>${status}${review}</td>
-      <td><button class="inline secondary" data-invite="${a.athlete_id}"
-            title="Invite a parent or guardian">Invite parent</button></td>
     </tr>`;
-  }).join('') : '<tr><td colspan="6" class="muted small">No athletes yet. Add one below.</td></tr>';
+  }).join('') : '<tr><td colspan="5" class="muted small">No athletes yet. Add one below.</td></tr>';
 }
+
+// The invite sits under the athlete's name rather than in a column of its own:
+// at the width this page is read on, a sixth column falls off the card and the
+// control is only reachable by scrolling the table sideways.
+async function inviteGuardian(btn) {
+  const id = Number(btn.dataset.invite);
+  btn.disabled = true;
+  const before = btn.textContent;
+  btn.textContent = 'Issuing\u2026';
+  try {
+    const res = await api('/api/coach/guardian-invites', {
+      method: 'POST', body: { athlete_id: id },
+    });
+    // Shown once and stored only as a hash, so it is put where it can be copied
+    // rather than announced and lost.
+    const row = btn.closest('td');
+    const out = document.createElement('div');
+    out.className = 'small';
+    out.style.marginTop = '4px';
+    out.innerHTML = `Code <code>${esc(res.code)}</code> for a parent of `
+      + `${esc(res.athlete_name)}. It works once.`;
+    btn.replaceWith(out);
+    return row;
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = before;
+    alert(err.message || 'Could not issue an invite.');
+  }
+}
+
+document.getElementById('roster').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-invite]');
+  if (btn) inviteGuardian(btn);
+});
 
 function renderStandings(teams) {
   $('standings').innerHTML = teams.length ? teams.map((t) => `
