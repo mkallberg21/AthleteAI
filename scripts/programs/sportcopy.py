@@ -27,7 +27,7 @@ SPORT = {
    "Touches are the currency, and they are counted for the first time here.",
    "Juggling, wall passing and first-touch work are what separate players at "
    "this age, and they happen in gardens and car parks you never see.",
-   "heading, which this product refuses to count at all — see page four",
+   "heading, which this product refuses to count at all. See page four",
    'juggling in the garden'),
  "volleyball": (
    "Serving and setting reps against a wall, finally on the record.",
@@ -66,7 +66,7 @@ SPORT = {
    "quarterback arm volume, which no governing body counts at all",
    'throwing in the back garden'),
  "rugby": (
-   "Handling and conditioning, honestly counted — and contact left alone.",
+   "Handling and conditioning, honestly counted, and contact left alone.",
    "Passing and fitness work is solo and unrecorded. Contact work is not in "
    "this product at all, and that is a deliberate decision, not a gap.",
    "conditioning honesty without pushing unsupervised contact",
@@ -81,7 +81,7 @@ SPORT = {
  "cheer": (
    "Conditioning only. This product will not score how a body looks.",
    "Between sessions the useful work is strength, holds and tumbling "
-   "conditioning — not appearance, and not stunting without spotters.",
+   "conditioning, not appearance, and not stunting without spotters.",
    "conditioning athletes safely without unsupervised stunting",
    'conditioning at home'),
  "dance": (

@@ -496,7 +496,7 @@ def check_can_add_athletes(
         raise BillingError(
             f"{subscription.plan.name} includes {subscription.seat_limit} athletes "
             f"and this program has {subscription.usage.athletes}. Adding {count} "
-            f"needs {need} more seat{'s' if need != 1 else ''} — upgrade the plan "
+            f"needs {need} more seat{'s' if need != 1 else ''}, so upgrade the plan "
             "or remove inactive athletes."
         )
 
@@ -551,7 +551,7 @@ def quote(conn: sqlite3.Connection, org_id: int, plan_code: str) -> dict[str, An
         "total_cents": total,
         "total_display": f"${total / 100:,.2f}",
         "per_athlete_display": (
-            f"${total / billable / 100:,.2f}" if billable else "—"
+            f"${total / billable / 100:,.2f}" if billable else "–"
         ),
         "fits_current_usage": fits,
     }
@@ -654,7 +654,7 @@ def run_billing_cycle(
         amount = subscription.monthly_cents
         result = gateway.charge(
             subscription.org_id, amount,
-            f"{subscription.plan.name} — {subscription.usage.athletes} athletes",
+            f"{subscription.plan.name}: {subscription.usage.athletes} athletes",
         )
         conn.execute(
             "UPDATE subscriptions SET period_start = ?, period_end = ?, "

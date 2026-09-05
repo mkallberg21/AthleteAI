@@ -89,7 +89,7 @@ STAGES: tuple[Stage, ...] = (
         "light", "Moving again", min_days=1, minutes_cap=15, loads_injury=False,
         what=(
             "Easy stuff that leaves the sore bit alone. Some of this happens "
-            "away from the app — a walk, a gentle bike — and that counts."
+            "away from the app, a walk or a gentle bike, and that counts."
         ),
     ),
     Stage(
@@ -250,7 +250,7 @@ def can_advance(plan: Plan, today: date) -> dict[str, Any]:
     if today not in plan.clear_days:
         return {
             "ok": False,
-            "reason": "Tell the app how you feel today first — it takes one tap.",
+            "reason": "Tell the app how you feel today first. It takes one tap.",
         }
 
     return {"ok": True, "reason": ""}
@@ -273,7 +273,7 @@ def setback_message(plan: Plan, area_label: str) -> str:
     """
     base = (
         f"Your {area_label.lower()} spoke up, so you have gone back one stage. "
-        "That is not a punishment and it is not starting over — it is the ramp "
+        "That is not a punishment and it is not starting over. It is the ramp "
         "doing exactly what it is for. Telling us is the right call every time."
     )
     if plan.setbacks >= SETBACKS_BEFORE_RECLEARANCE:

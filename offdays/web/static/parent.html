@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>0FFDAYS &mdash; Parent</title>
+<title>0FFDAYS · Parent</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="stylesheet" href="styles.css">
@@ -27,7 +27,7 @@
   <div class="card">
     <p class="privacy-note" style="margin:0">
       <b>Your athlete's video never leaves their phone.</b> The app analyses it
-      on the device and uploads only counts &mdash; reps, which hand, how long.
+      on the device and uploads only counts: reps, which hand, how long.
       Nobody at the club can watch footage, because none is ever sent.
     </p>
   </div>
@@ -58,7 +58,7 @@
     <h2 data-i18n="parent.away.title">Going away</h2>
     <p class="small muted">
       A holiday or a tournament weekend pauses a streak instead of breaking
-      it. The days come out of the count rather than being added to it &mdash;
+      it. The days come out of the count rather than being added to it, so
       they come back to the streak they earned, not a bigger one.
     </p>
     <label for="away-athlete" data-i18n="parent.away.who">Who</label>
@@ -165,7 +165,7 @@ function renderAthlete(a) {
       <div class="stat"><b>${a.week_reps.toLocaleString()}</b><span>Reps this week</span></div>
       <div class="stat"><b>${a.streak}</b><span>Day streak</span></div>
       <div class="stat"><b class="${q.current ? qualityClass(q.current) : ''}">${
-        q.current === null || q.current === undefined ? '&mdash;' : q.current
+        q.current === null || q.current === undefined ? '–' : q.current
       }${trend}</b><span>Form score</span></div>
     </div>
 
@@ -176,7 +176,7 @@ function renderAthlete(a) {
         Messages your athlete has been sent
       </summary>
       <div class="small muted" style="margin:8px 0">
-        You see everything they are sent. Messages are one-way &mdash; nobody
+        You see everything they are sent. Messages are one-way, so nobody
         can reply through the app, including you.
       </div>
       <div class="msg-list">Loading&hellip;</div>
@@ -249,11 +249,11 @@ function renderReport(r) {
     </div>
     ${section(T('parent.report.worth_knowing', 'Worth knowing'), r.highlights)}
     ${section(T('parent.report.coach_said', 'What their coach said'),
-      r.recognition.map((m) => m.title + (m.from_name ? ` — ${m.from_name}` : '')))}
+      r.recognition.map((m) => m.title + (m.from_name ? `, ${m.from_name}` : '')))}
     ${section(T('parent.report.looking_after', 'Looking after themselves'), r.care)}
     <p class="small muted" style="margin-top:12px">
       ${esc(T('parent.report.no_ranking',
-        `This report is about ${r.display_name} only — nobody is ranked on it. `
+        `This report is about ${r.display_name} only, and nobody is ranked on it. `
         + 'The age-group board is the one place comparison happens, and it '
         + 'ranks work done, never ability.'))}
     </p>
@@ -498,7 +498,7 @@ async function loadDecisions() {
       <span class="dotmark"></span>
       <div><b>${data.blocked.map(esc).join(', ')} cannot train yet</b>
         <em>Training is paused until you allow it. That may be exactly what you
-          intended &mdash; if not, the switch is on their card below.</em></div>
+          intended. If not, the switch is on their card below.</em></div>
     </div>`;
 
   $('decide-steps').innerHTML = data.athletes.map((a) => a.steps.map((step) => `
@@ -590,7 +590,7 @@ function wireDetails() {
             <button class="danger inline" data-unshare="${c.id}">Take it back now</button>
           </div>`).join('')
           : `<p class="small muted">Sharing is on, but they have not sent
-             anything. Clips are only ever sent when they choose one &mdash;
+             anything. Clips are only ever sent when they choose one, and
              nothing is uploaded automatically. Anything sent deletes itself
              after ${data.retention_days} days.</p>`;
       } catch (e) { target.textContent = e.message; }
@@ -626,7 +626,7 @@ function wireDetails() {
           ${data.sessions.slice(0, 25).map((sn) => `<tr>
             <td class="small muted">${esc(sn.day)}</td>
             <td>${esc(sn.drill)}</td>
-            <td class="num">${sn.reps || (sn.hold_s ? `${sn.hold_s}s` : '&mdash;')}</td>
+            <td class="num">${sn.reps || (sn.hold_s ? `${sn.hold_s}s` : '–')}</td>
             <td class="small ${sn.status === 'counted' ? 'muted' : 'warn-text'}">${
               esc(sn.status)}</td>
           </tr>`).join('')}

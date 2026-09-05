@@ -103,7 +103,7 @@ class Goal:
         attached.
         """
         if self.met:
-            return f"Done — {self.counted} of you got there."
+            return f"Done. {self.counted} of you got there."
         if self.counted == 0:
             return f"Nobody has got there yet. {self.bar_text()} puts you in."
         return f"{self.counted} of {self.target_athletes} so far."
@@ -172,12 +172,12 @@ def create(
     if per_athlete_days > MAX_PER_ATHLETE_DAYS:
         raise GoalError(
             f"{per_athlete_days} days is more of a volume target than a bar to "
-            f"clear — {MAX_PER_ATHLETE_DAYS} is the most this will take"
+            f"clear. {MAX_PER_ATHLETE_DAYS} is the most this will take"
         )
     if per_athlete_sessions > MAX_PER_ATHLETE_SESSIONS:
         raise GoalError(
             f"{per_athlete_sessions} sessions is more of a volume target than a "
-            f"bar to clear — {MAX_PER_ATHLETE_SESSIONS} is the most this will take"
+            f"bar to clear. {MAX_PER_ATHLETE_SESSIONS} is the most this will take"
         )
     if per_athlete_days > span:
         raise GoalError(

@@ -167,7 +167,7 @@ def _from_return_plan(plan: rtp_mod.Plan, name: str) -> Item:
             kind=Kind.HOLD,
             athlete_id=plan.athlete_id,
             display_name=name,
-            line="Not training — waiting on clearance",
+            line="Not training, waiting on clearance",
             detail=f"{plan.area_label} ramp cannot start until someone signs it off.",
         )
     stage = plan.spec
@@ -190,7 +190,7 @@ _ACTIONS = {
         "They reported something that needs a day off it.",
     ),
     wellness_mod.Action.TELL_SOMEONE: (
-        Kind.HOLD, "Not training — needs a grown-up first",
+        Kind.HOLD, "Not training, needs a grown-up first",
         "They reported something that should be looked at before they train.",
     ),
     wellness_mod.Action.EASE_OFF: (

@@ -80,7 +80,7 @@ PROGRAM_STEPS: tuple[Step, ...] = (
         title="Get one athlete training",
         detail="Hand out their code and have them record one session.",
         why=(
-            "The only step that proves the whole chain works — code handed "
+            "The only step that proves the whole chain works: code handed "
             "over, app installed, camera pointed, session counted."
         ),
         anchor="roster-card",
@@ -156,7 +156,7 @@ ATHLETE_STEPS: tuple[Step, ...] = (
     Step(
         key="check_in",
         title="Say how you feel",
-        detail="One tap. It never costs you a streak — that is the whole point.",
+        detail="One tap. It never costs you a streak, which is the whole point.",
         required=False,
         anchor="wellness-card",
     ),
@@ -203,7 +203,7 @@ JOINING_STEPS: tuple[Step, ...] = (
 #: athlete and their parent comfortable, and it is true -- so it is worth the
 #: line before anyone points a camera at a child.
 PROMISE = (
-    "Your phone watches you and counts the reps. The video never leaves it — "
+    "Your phone watches you and counts the reps. The video never leaves it, and "
     "not to us, not to your coach. What they see is the numbers."
 )
 
@@ -281,7 +281,7 @@ def blockers(conn: sqlite3.Connection, org_id: int) -> list[dict[str, Any]]:
             ),
             "detail": (
                 f"{names}{more} cannot record anything until their parent "
-                "accepts in their own portal. Nothing is broken — this is the "
+                "accepts in their own portal. Nothing is broken, because this is the "
                 "consent gate doing its job, and it switches on the moment a "
                 "parent is linked."
             ),
@@ -348,7 +348,7 @@ def athlete_blockers(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str
         "title": "Waiting on a parent",
         "detail": (
             "Recording is paused until a parent or guardian says yes in their "
-            "own portal. Nothing is wrong and nothing is lost — give them a "
+            "own portal. Nothing is wrong and nothing is lost, so give them a "
             "nudge and everything here switches on."
         ),
     }]
@@ -578,7 +578,7 @@ def staff_progress(
                 "title": "You are not on a team yet",
                 "detail": (
                     "A director has to assign you before any athletes appear. "
-                    "Nothing is broken and there is nothing for you to fix — "
+                    "Nothing is broken and there is nothing for you to fix, because "
                     "this dashboard is empty because it is scoped to your "
                     "teams, not because the program is."
                 ),
@@ -590,7 +590,7 @@ def staff_progress(
                 "detail": (
                     "You are not assigned to a team, so this shows every "
                     "athlete rather than yours. Ask a director to assign you "
-                    "and it narrows to the ones you actually coach — which is "
+                    "and it narrows to the ones you actually coach, which is "
                     "how it should sit at a club with hundreds of children."
                 ),
             })
@@ -613,11 +613,11 @@ def staff_progress(
         "facts": [
             (
                 f"You see {athletes} athlete{'s' if athletes != 1 else ''} across "
-                f"{len(teams)} team{'s' if len(teams) != 1 else ''} — the ones you "
+                f"{len(teams)} team{'s' if len(teams) != 1 else ''}, the ones you "
                 "are assigned to, and nobody else's."
             ) if teams else (
                 f"You can see {athletes} athlete"
-                f"{'s' if athletes != 1 else ''} — everyone in the program, "
+                f"{'s' if athletes != 1 else ''}, everyone in the program, "
                 "because you are not assigned to a team."
             ),
             "Counts, form scores and load. Never their video: that stays on their phone.",

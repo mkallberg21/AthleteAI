@@ -104,7 +104,7 @@ STRINGS: dict[str, dict[str, str]] = {
         EN: ("Off unless you turn it on. Everywhere else in this app video "
              "stays on your athlete's phone and is never uploaded. With this "
              "on, they can choose to send one specific clip to their coach for "
-             "feedback — never automatically, always one at a time. Clips are "
+             "feedback, never automatically and always one at a time. Clips are "
              "deleted after 30 days, and turning this off deletes any that are "
              "still there straight away."),
         ES: ("Está desactivado hasta que usted lo active. En el resto de la "
@@ -134,7 +134,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "consent.family.coach_video.why": {
         EN: ("Off unless you turn it on. Everywhere else in this app video "
              "stays on their phone. With this on, they can choose to send you "
-             "one specific clip for feedback — their choice, one at a time, "
+             "one specific clip for feedback: their choice, one at a time, "
              "never automatic. It is uploaded to do that, so it is a real "
              "decision and not just a screen. Clips are deleted after 30 days, "
              "and turning this off deletes them straight away."),
@@ -157,7 +157,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "parent.away.blurb": {
         EN: ("A holiday or a tournament weekend pauses a streak instead of "
              "breaking it. The days come out of the count rather than being "
-             "added to it — they come back to the streak they earned, not a "
+             "added to it, so they come back to the streak they earned and not a "
              "bigger one."),
         ES: ("Unas vacaciones o un fin de semana de torneo pausan la racha en "
              "lugar de romperla. Esos días salen de la cuenta en vez de "
@@ -178,7 +178,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "parent.report.looking_after": {
         EN: "Looking after themselves", ES: "Cuidándose"},
     "parent.report.no_ranking": {
-        EN: ("This report is about your own child only \u2014 nobody is ranked "
+        EN: ("This report is about your own child only, and nobody is ranked "
              "on it. The age-group board is the one place comparison happens, "
              "and it ranks work done, never ability."),
         ES: ("Este informe trata \u00fanicamente de su propio hijo o hija: aqu\u00ed "
@@ -224,7 +224,7 @@ STRINGS: dict[str, dict[str, str]] = {
     # -- Recognition, shipped defaults only --------------------------------
     "recognition.first_session": {
         EN: ("{first_name}, that is your first one logged. The hard part is "
-             "starting and you have done it — see you at practice."),
+             "starting and you have done it. See you at practice."),
         ES: ("{first_name}, esa es tu primera sesión registrada. Lo difícil es "
              "empezar y ya lo hiciste. Nos vemos en el entrenamiento."),
     },
@@ -253,7 +253,7 @@ STRINGS: dict[str, dict[str, str]] = {
              "obligara. Eso es lo que distingue a un jugador."),
     },
     "recognition.streak_100": {
-        EN: ("{first_name} — one hundred days. I am not sure what to say "
+        EN: ("{first_name}, one hundred days. I am not sure what to say "
              "except that I have coached a long time and this is rare."),
         ES: ("{first_name}, cien días. No sé bien qué decir, salvo que llevo "
              "mucho tiempo entrenando y esto se ve muy pocas veces."),

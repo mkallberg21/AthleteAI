@@ -88,7 +88,7 @@ FREE_REASONS: dict[str, str] = {
              "reason to lock a fourteen-year-old out of their streak.",
     "coach_roster": "If what a coach sees depended on which parents paid, a "
                     "club at partial adoption would have a partial dashboard "
-                    "— and would drop the product.",
+                    "and would drop the product.",
     "coach_assignments": "A coach prescribing work cannot have it land for "
                          "some of the squad and not others depending on whose "
                          "parents paid. Half a compliance table is worse than "
@@ -176,7 +176,7 @@ FEATURES: tuple[Feature, ...] = (
             "Beyond the last 30 days: the whole season, and the shape of it."),
     Feature("peer_context", "How they compare for their age", Tier.HOUSEHOLD,
             Audience.PARENT,
-            "Percentile context against their age band — never against "
+            "Percentile context against their age band, never against "
             "named teammates."),
     Feature("film", "Film study", Tier.HOUSEHOLD, Audience.ATHLETE,
             "Short clips with audio feedback, capped by age."),

@@ -917,6 +917,43 @@ def new_token() -> str:
     return f"{letter}{digits}"
 
 
+def fresh_token(conn: sqlite3.Connection) -> str:
+    """A sign-in code not already in use.
+
+    The code space is small on purpose -- one letter and five digits, because
+    a twelve-year-old types it off a slip of paper -- so a draw that is already
+    taken is ordinary rather than exotic. Every path that writes users.token_hash
+    goes through here, so a guardian redeeming an invite and an athlete claiming
+    an account get the same protection a coach creating a roster does.
+
+    The UNIQUE constraint is still the thing that guarantees correctness under
+    a race; this only stops the common case from reaching it.
+    """
+    for _ in range(20):
+        token = new_token()
+        taken = conn.execute(
+            "SELECT 1 FROM users WHERE token_hash = ? LIMIT 1", (hash_token(token),)
+        ).fetchone()
+        if taken is None:
+            return token
+    raise RuntimeError("could not allocate a unique sign-in code")
+
+
+def new_nonce() -> str:
+    """A session nonce: machine-to-machine, so it does not have to be typeable.
+
+    Nonces used to come from new_token(), which is one letter and five digits
+    because a child reads a sign-in code off a slip of paper. A nonce is never
+    read by a person -- the client is handed one and hands it straight back --
+    so that alphabet bought nothing and cost a great deal. Every session ever
+    recorded consumes one, and at a few thousand sessions a birthday collision
+    stops being unlikely and becomes expected: a club's second season would
+    have athletes meeting "could not start session" for no reason they could
+    see or fix.
+    """
+    return secrets.token_urlsafe(18)
+
+
 def new_join_code() -> str:
     """Six-character team code an athlete types to join a team.
 

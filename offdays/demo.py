@@ -520,7 +520,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "lax_wall_ball": Demo(
-        caption='Side-on to a wall. Throw, catch what comes back, throw again — one throw and one catch is a rep.',
+        caption='Side-on to a wall. Throw, catch what comes back, throw again. One throw and one catch is a rep.',
         scenery='wall',
         frames=(
             _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
@@ -540,7 +540,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "lax_wall_ball_strong": Demo(
-        caption='Wall ball with your strong hand on top of the stick every rep. Same picture as plain wall ball — the hand order is the drill.',
+        caption='Wall ball with your strong hand on top of the stick every rep. Same picture as plain wall ball. The hand order is the drill.',
         scenery='wall',
         frames=(
             _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
@@ -580,7 +580,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "lax_quick_stick": Demo(
-        caption='Stand closer and catch and release in one motion — no cradle, no wind-up. Faster than wall ball, same shape.',
+        caption='Stand closer and catch and release in one motion, with no cradle and no wind-up. Faster than wall ball, same shape.',
         scenery='wall',
         frames=(
             _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
@@ -783,7 +783,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "bkb_between_legs": Demo(
-        caption='The same change of hands, but the ball goes through your legs as your foot steps forward — not while you are standing still.',
+        caption='The same change of hands, but the ball goes through your legs as your foot steps forward, not while you are standing still.',
         view="front",
         frames=(
             _pose(head=(50, 16), neck=(50, 27), hip=(50, 52),
@@ -819,7 +819,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "bkb_stance": Demo(
-        caption='Feet wide, chest up, hands out, and your hips genuinely down. Hold it — standing up stops the clock.',
+        caption='Feet wide, chest up, hands out, and your hips genuinely down. Hold it, because standing up stops the clock.',
         view="front",
         mirror=False,
         seconds=4.0,
@@ -883,7 +883,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "soc_juggle_weak": Demo(
-        caption='The same juggling on your weaker foot only. Same picture — the foot is the drill.',
+        caption='The same juggling on your weaker foot only. Same picture. The foot is the drill.',
         frames=(
             _pose(head=(50, 16), neck=(50, 27), hip=(50, 53),
                   elbow_near=(58, 40), wrist_near=(64, 46),
@@ -934,7 +934,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "soc_wall_pass": Demo(
-        caption='Pass firmly into the wall and control what comes back. Strike it — a soft pass does not count.',
+        caption='Pass firmly into the wall and control what comes back. Strike it, because a soft pass does not count.',
         scenery="wall",
         frames=(
             _pose(head=(54, 18), neck=(53, 29), hip=(54, 55),
@@ -970,7 +970,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "soc_shuffle": Demo(
-        caption='Side-on defending stance. Shuffle across without ever crossing your feet — one push is one rep.',
+        caption='Side-on defending stance. Shuffle across without ever crossing your feet. One push is one rep.',
         view="front",
         frames=(
             _pose(head=(44, 20), neck=(44, 31), hip=(45, 55),
@@ -1006,7 +1006,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "ten_alternate": Demo(
-        caption='Change wing every shot — forehand, backhand, forehand. The ball has to leave from the other side each time.',
+        caption='Change wing every shot: forehand, backhand, forehand. The ball has to leave from the other side each time.',
         scenery="wall",
         frames=(
             _pose(head=(56, 18), neck=(54, 29), hip=(54, 55),
@@ -1042,7 +1042,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "ten_volley": Demo(
-        caption='Close to the wall, no bounce. Short punchy blocks with the racket out in front — no backswing.',
+        caption='Close to the wall, no bounce. Short punchy blocks with the racket out in front, with no backswing.',
         scenery="wall",
         frames=(
             _pose(head=(54, 18), neck=(53, 29), hip=(54, 55),
@@ -1114,7 +1114,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "vb_set": Demo(
-        caption='Hands above your forehead, elbows out. Push it straight up and catch nothing — every clean contact counts.',
+        caption='Hands above your forehead, elbows out. Push it straight up and catch nothing. Every clean contact counts.',
         view="front",
         frames=(
             _pose(head=(50, 22), neck=(50, 33), hip=(50, 57),
@@ -1249,7 +1249,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "bb_long_toss": Demo(
-        caption='Back up and throw it properly — crow hop into it and use the whole arm. Fewer throws, harder ones.',
+        caption='Back up and throw it properly. Crow hop into it and use the whole arm. Fewer throws, harder ones.',
         scenery="wall",
         frames=(
             _pose(head=(56, 22), neck=(54, 33), hip=(56, 58),
@@ -1267,7 +1267,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "bb_quick_hands": Demo(
-        caption='Short, quick transfers from close range — glove to hand to release, with no wind-up at all.',
+        caption='Short, quick transfers from close range: glove to hand to release, with no wind-up at all.',
         scenery="wall",
         frames=(
             _pose(head=(53, 20), neck=(52, 31), hip=(53, 56),
@@ -1304,7 +1304,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "bb_fielding": Demo(
-        caption='Down into fielding position and back up, over and over. No ball needed — this is the footwork.',
+        caption='Down into fielding position and back up, over and over. No ball needed, because this is the footwork.',
         frames=(
             _pose(head=(46, 44), neck=(50, 52), hip=(60, 64),
                   elbow_near=(48, 60), wrist_near=(42, 74),
@@ -1319,7 +1319,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "bb_catcher_stance": Demo(
-        caption='Down in the crouch with your hips low and your chest up. Hold it — standing up stops the clock.',
+        caption='Down in the crouch with your hips low and your chest up. Hold it, because standing up stops the clock.',
         mirror=False,
         seconds=4.0,
         view="front",
@@ -1352,7 +1352,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "hoc_wide_handles": Demo(
-        caption='The same handle pushed right out to each side — full extension one way, full extension the other.',
+        caption='The same handle pushed right out to each side: full extension one way, full extension the other.',
         view="front",
         frames=(
             _pose(head=(50, 18), neck=(50, 29), hip=(50, 54),
@@ -1423,7 +1423,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "hoc_stance": Demo(
-        caption='Knees bent, chest up, weight on the balls of your feet. Hold it — standing up stops the clock.',
+        caption='Knees bent, chest up, weight on the balls of your feet. Hold it, because standing up stops the clock.',
         frames=(
             _pose(head=(46, 26), neck=(48, 36), hip=(56, 58),
                   elbow_near=(42, 46), wrist_near=(34, 52),
@@ -1452,7 +1452,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "fb_quick_release": Demo(
-        caption='Short, fast throws with a compact arm action — the ball is gone before your front foot lands.',
+        caption='Short, fast throws with a compact arm action. The ball is gone before your front foot lands.',
         scenery="wall",
         frames=(
             _pose(head=(53, 20), neck=(52, 31), hip=(53, 56),
@@ -1470,7 +1470,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "fb_deep_ball": Demo(
-        caption='Fewer throws, all of them hard. Full drop, full turn, everything into it — these cost the arm more.',
+        caption='Fewer throws, all of them hard. Full drop, full turn, everything into it. These cost the arm more.',
         scenery="wall",
         frames=(
             _pose(head=(58, 22), neck=(56, 33), hip=(58, 58),
@@ -1505,7 +1505,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "fb_shuffle": Demo(
-        caption="Slide across without turning your hips — a back mirroring a receiver, or a tackle's kick-slide.",
+        caption="Slide across without turning your hips, like a back mirroring a receiver or a tackle's kick-slide.",
         view="front",
         frames=(
             _pose(head=(44, 20), neck=(44, 31), hip=(45, 55),
@@ -1604,7 +1604,7 @@ DEMOS: dict[str, Demo] = {
         ),
     ),
     "sb_windmill": Demo(
-        caption='The full underhand circle, with or without a ball. Half a circle does not count — take it all the way round.',
+        caption='The full underhand circle, with or without a ball. Half a circle does not count, so take it all the way round.',
         frames=(
             _pose(head=(52, 20), neck=(52, 31), hip=(52, 56),
                   elbow_near=(58, 20), wrist_near=(60, 8),

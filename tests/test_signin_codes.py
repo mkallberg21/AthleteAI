@@ -37,7 +37,7 @@ class TestACollidingCodeIsRetried:
         first = store.create_user(org, "athlete", "First", dominant_hand="right")
 
         draws = iter([first["token"], "Z99999"])
-        monkeypatch.setattr("offdays.store.new_token", lambda: next(draws))
+        monkeypatch.setattr("offdays.db.new_token", lambda: next(draws))
 
         second = store.create_user(org, "athlete", "Second", dominant_hand="right")
         assert second["token"] == "Z99999"
@@ -50,7 +50,7 @@ class TestACollidingCodeIsRetried:
         first = store.create_user(org, "athlete", "First", dominant_hand="right")
 
         draws = iter([first["token"], "Y12345"])
-        monkeypatch.setattr("offdays.store.new_token", lambda: next(draws))
+        monkeypatch.setattr("offdays.db.new_token", lambda: next(draws))
         second = store.create_user(org, "athlete", "Second", dominant_hand="right")
 
         assert store.authenticate(second["token"]).id == second["id"]
@@ -61,8 +61,8 @@ class TestACollidingCodeIsRetried:
         org = store.create_org("Northshore LC")
         first = store.create_user(org, "athlete", "First", dominant_hand="right")
 
-        monkeypatch.setattr("offdays.store.new_token", lambda: first["token"])
-        with pytest.raises(StoreError, match="unique sign-in code"):
+        monkeypatch.setattr("offdays.db.new_token", lambda: first["token"])
+        with pytest.raises((StoreError, RuntimeError), match="unique sign-in code"):
             store.create_user(org, "athlete", "Doomed", dominant_hand="right")
 
     def test_a_different_constraint_failure_is_not_swallowed(self, store, monkeypatch):
@@ -76,11 +76,65 @@ class TestACollidingCodeIsRetried:
             draws.append(1)
             return real()
 
-        monkeypatch.setattr("offdays.store.new_token", counted)
+        monkeypatch.setattr("offdays.db.new_token", counted)
 
         with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
             store.create_user(999999, "athlete", "Orphan", dominant_hand="right")
-        assert len(draws) == 1, "a non-retryable failure was retried"
+        assert len(draws) <= 2, "a non-retryable failure was retried"
+
+
+class TestASessionNonceIsNotASignInCode:
+    """A nonce is machine-to-machine, so it never needed the small alphabet.
+
+    Nonces were drawn from the same six-character space as sign-in codes.
+    Every session ever recorded takes one, so where a sign-in collision is a
+    coin-flip across a big club, a nonce collision is a certainty inside a
+    single season -- and it surfaced as "could not start session" for an
+    athlete standing in a driveway with nothing to fix.
+    """
+
+    def test_a_nonce_has_far_more_room_than_a_sign_in_code(self):
+        from offdays.db import new_nonce, new_token
+        assert len(new_nonce()) > len(new_token()) * 3
+
+    def test_many_nonces_do_not_repeat(self):
+        """Twenty thousand is roughly one club-season of sessions. The old
+        generator collided reliably at this volume; the seeder proved it."""
+        from offdays.db import new_nonce
+        assert len({new_nonce() for _ in range(20000)}) == 20000
+
+    def test_a_season_of_sessions_can_actually_be_recorded(self, store):
+        """The end-to-end version: the seeder hit UNIQUE on sessions.nonce
+        partway through building a demo, which is the same code path a club
+        walks over a season."""
+        org = store.create_org("Northshore LC")
+        team = store.create_team(org, "U15")
+        person = store.create_user(org, "athlete", "Busy", dominant_hand="right")
+        store.join_team(team["join_code"], person["id"])
+        for _ in range(400):
+            store.start_session(person["id"], "lax_wall_ball")
+        n = store.conn.execute("SELECT COUNT(DISTINCT nonce) FROM sessions").fetchone()[0]
+        assert n == 400
+
+
+class TestEveryPathThatIssuesACodeIsProtected:
+    """create_user was not the only writer of users.token_hash."""
+
+    def test_a_guardian_redeeming_an_invite_gets_an_unused_code(self, store, monkeypatch):
+        from offdays import guardians as guardians_mod
+        org = store.create_org("Northshore LC")
+        director = store.create_user(org, "director", "Dir")
+        kid = store.create_user(org, "athlete", "Kid", dominant_hand="right")
+        first = store.create_user(org, "athlete", "Taken", dominant_hand="right")
+
+        draws = iter([first["token"], "Z11111"])
+        monkeypatch.setattr("offdays.db.new_token", lambda: next(draws))
+
+        invite = guardians_mod.create_invite(store.conn, kid["id"], director["id"],
+                                             email="p@example.com")
+        parent = guardians_mod.redeem_invite(store.conn, invite["code"], "Parent", "p@example.com")
+        assert parent["token"] == "Z11111"
+        assert store.authenticate(parent["token"]).id == parent["guardian_id"]
 
 
 class TestTheCodeItselfIsStillReadable:

@@ -23,8 +23,14 @@ if not _FONT_FILE.exists():
 FONTS = _FONT_FILE.read_text()
 
 def e(s):
-    """Escape, and promote the catalog's ASCII dashes to real em dashes."""
-    return html.escape(str(s)).replace(" -- ", " \u2014 ")
+    """Escape. Nothing else.
+
+    This used to promote the catalog's ASCII " -- " into an em dash, which is
+    how the program pages ended up in a punctuation style nobody chose. The
+    catalog now writes the aside as a comma at source, where the app reads it
+    too, so there is nothing left to translate here.
+    """
+    return html.escape(str(s))
 
 
 #: Preset keys are internal names. A director reads the ball, not the table.
@@ -339,14 +345,14 @@ def page(data, copy, logo, has_logo):
             f'{", ".join(cols[:-1])} and {cols[-1]}'
         ball_note = (
             f'<p>Ball drills find the ball by colour, size and motion at once, '
-            f'and the size is checked against the athlete\'s own body — so '
+            f'and the size is checked against the athlete\'s own body, so '
             f'something orange in the background is not a ball. This sport is '
             f'set up for {e(listed)}. If an athlete owns something else, they '
             f'can show the app their ball and it learns the colour in two '
             f'seconds.</p>'
             + ('<p>In this sport the ball is optional. The repetitions are '
                'counted from the athlete\'s own movement, and the ball is used '
-               'to corroborate them when the camera can see it — so a drill '
+               'to corroborate them when the camera can see it, so a drill '
                'still counts on a dark evening.</p>'
                if d["ball_optional"] else ''))
 
@@ -373,7 +379,7 @@ def page(data, copy, logo, has_logo):
                      f'because the movement is the same one.')
         lead = (f'{len(own)} skill drills for {label.lower()}, plus {len(gen)} '
                 f'from the shared athleticism library.{share} Each is counted by '
-                f'a rule written for that movement — not a general-purpose model '
+                f'a rule written for that movement, not a general-purpose model '
                 f'guessing.')
         skill_table = (
             '<table style="margin-top:11px"><thead><tr>'
@@ -449,7 +455,7 @@ def page(data, copy, logo, has_logo):
   an athlete whose real workload is a rumour.</p>
   <p>0FFDAYS turns a phone into the instrument. An athlete props it against a
   water bottle, does the drill, and the app counts the repetitions as they
-  happen — the way a coach standing there would, except it never gets bored and
+  happen, the way a coach standing there would, except it never gets bored and
   never rounds up.</p>
 </section>
 
@@ -463,7 +469,7 @@ def page(data, copy, logo, has_logo):
     lose.</p>
     <p style="margin-top:8px">This is not a policy we promise to keep. There is no
     endpoint in the product that accepts video and no column in the database that
-    could store an image — and a test suite fails the build if anybody ever adds
+    could store an image, and a test suite fails the build if anybody ever adds
     one. <strong>Coaches see data. Nobody sees video.</strong></p>
   </div>
 </section>
@@ -474,7 +480,7 @@ def page(data, copy, logo, has_logo):
     <ul class="check">
       <li>Who actually trained this week, and how much</li>
       <li>Which positions are keeping up and which have gone quiet</li>
-      <li>An athlete whose workload jumped sharply — before it becomes an injury</li>
+      <li>An athlete whose workload jumped sharply, before it becomes an injury</li>
       <li>A pre-practice view of who arrives fresh and who arrives cooked</li>
       <li>Exports for evaluations, at season end, in a format you keep</li>
     </ul>
@@ -500,7 +506,7 @@ def page(data, copy, logo, has_logo):
   <p style="font-size:9.2pt;color:var(--ink-soft);margin-bottom:8px">Speed,
   power and strength work is not sport-specific, so it is built once and
   weighted differently for every position. Every plan in this product carries a floor
-  of explosive work — the thing that makes an athlete faster rather than just
+  of explosive work, the thing that makes an athlete faster rather than just
   better at their sport.</p>
   <table>
     <thead><tr><th style="width:16%">Movement</th><th style="width:18%">Drill</th><th style="width:11%">Trains</th>
@@ -534,13 +540,13 @@ def page(data, copy, logo, has_logo):
     <p>Streaks survive a rest day. An athlete who trains seven days a week gets a
     warning, not a badge.</p></div>
     <div class="card"><h4>Load advisories</h4>
-    <p>A sharp jump in weekly workload raises a flag to the coach — the pattern
+    <p>A sharp jump in weekly workload raises a flag to the coach. It is the pattern
     that precedes most overuse injuries.</p></div>
   </div>
   <div class="panel gold" style="margin-top:12px">
     <h3>The throwing ceiling</h3>
     <p>For any sport that throws, the app tracks a daily throw count against an
-    age-based ceiling — 60 throws at eight years old, rising to 150 at eighteen —
+    age-based ceiling of 60 throws at eight years old, rising to 150 at eighteen,
     and stops paying beyond it. This is the number no league counts, because
     pitch counts only count games.</p>
   </div>
@@ -550,14 +556,14 @@ def page(data, copy, logo, has_logo):
   <p class="eyebrow">The coach's view</p>
   <h2>What you see on a Monday morning</h2>
   <p class="lead">One screen, and the first thing on it is who to talk to
-  today. Not a wall of charts to interpret — the dashboard does the reading
+  today. Not a wall of charts to interpret, because the dashboard does the reading
   and hands you names.</p>
   <figure class="shot"><img src="{shot_top}" alt="The coach dashboard">
   <figcaption>The real screen, filled with demonstration data. The line under
   the filters is on the dashboard itself, not just in this document: there is
   no video here, because there is no video anywhere.</figcaption></figure>
   <p>Note what the top of that screen is. Not participation, not a
-  leaderboard — <strong>two athletes to keep an eye on</strong>, one whose
+  leaderboard: <strong>two athletes to keep an eye on</strong>, one whose
   throwing volume jumped 172% in a week and one who has trained seventeen days
   without a rest day. The numbers are underneath, where numbers belong.</p>
 </section>
@@ -581,8 +587,8 @@ def page(data, copy, logo, has_logo):
       hold their phones side by side, and "your coach noticed" survives
       exactly as long as that comparison does.</p>
       <p><strong>It comes from you, by name.</strong> "Coach Rivera noticed"
-      lands; "the system detected" does not. You write the words once — one
-      per paragraph, as many as you like — and they arrive at the moment they
+      lands; "the system detected" does not. You write the words once, one
+      per paragraph and as many as you like, and they arrive at the moment they
       mean something.</p>
       <p><strong>It fires once per streak, not once per day.</strong> Ten days
       is worth saying something about. Saying it again on day eleven is how a
@@ -594,14 +600,14 @@ def page(data, copy, logo, has_logo):
     </div>
     <div>
       <h3>When they go quiet</h3>
-      <p>An athlete who has not trained for over a week gets one message —
+      <p>An athlete who has not trained for over a week gets one message,
       <em>"Your team is still putting in work. It's been over 7 days. Ten
       minutes counts."</em></p>
       <p><strong>Weekly, never daily.</strong> A long absence produces one
       nudge a week, not seven. And a booked holiday produces none at all:
       nudging a family through a holiday they told you about is how the app
       gets deleted.</p>
-      <p>Assignments get exactly two reminders — one with two days left and
+      <p>Assignments get exactly two reminders: one with two days left and
       one on the day. Anything more trains people to ignore the app.</p>
       <p><strong>You get told too, but only when it is worth acting on.</strong>
       If under a third of the squad has finished an assignment by its halfway
@@ -618,7 +624,7 @@ def page(data, copy, logo, has_logo):
   <figure class="shot half"><img src="{shot_recog}" alt="Recognition settings">
   <figcaption>Every milestone ships with wordings you are meant to replace,
   one per paragraph. The defaults are deliberately plain, so a coach reading
-  them thinks "I would say that differently" — which is the point. The count
+  them thinks "I would say that differently", which is the point. The count
   beside each box is checked against your squad, so if you have more athletes
   than ways of saying it, the screen tells you rather than two parents finding
   out in a car park.</figcaption></figure>

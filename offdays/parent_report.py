@@ -194,7 +194,7 @@ def _headline(report: Report) -> str:
                 "Months vary a lot at this age."
             )
         return (
-            f"{got_out} — a few sessions rather than a routine, which some "
+            f"{got_out}, a few sessions rather than a routine, which some "
             "months are."
         )
 
@@ -212,7 +212,7 @@ def _headline(report: Report) -> str:
     if current.days == previous.days:
         return (
             f"{first} trained on {current.days} days last month, the same as "
-            "the month before — steady is the hard part."
+            "the month before. Steady is the hard part."
         )
     return (
         f"{first} trained on {current.days} days last month, down from "
@@ -234,7 +234,7 @@ def _highlights(report: Report, best: sqlite3.Row | None) -> list[str]:
             and current.quality > previous.quality):
         out.append(
             f"Their form score improved from {previous.quality} to "
-            f"{current.quality} — the reps are getting better, not just more "
+            f"{current.quality}, so the reps are getting better and not just more "
             "numerous."
         )
     elif current.quality is not None:
@@ -293,7 +293,7 @@ def _care(conn: sqlite3.Connection, athlete_id: int, start: date, end: date,
     if ramps:
         out.append(
             "They started a graded return to full training, which needs a "
-            "grown-up to sign off at each stage — you will have seen those "
+            "grown-up to sign off at each stage, so you will have seen those "
             "at the time."
         )
 
@@ -414,7 +414,7 @@ def render_html(report: Report, unsubscribe: str = "") -> str:
     ))
 
     recognition = _bullets("What their coach said", [
-        f"{r['title']}" + (f" — {r['from_name']}" if r["from_name"] else "")
+        f"{r['title']}" + (f", {r['from_name']}" if r["from_name"] else "")
         for r in report.recognition
     ])
 
@@ -476,7 +476,7 @@ def render_html(report: Report, unsubscribe: str = "") -> str:
 def render_text(report: Report) -> str:
     """Plain text, for clients that will not render HTML."""
     lines = [
-        f"{report.display_name} — {report.month_label}",
+        f"{report.display_name}: {report.month_label}",
         "",
         report.headline,
         "",
@@ -486,7 +486,7 @@ def render_text(report: Report) -> str:
     for title, items in (
         ("Worth knowing", report.highlights),
         ("What their coach said", [
-            r["title"] + (f" — {r['from_name']}" if r["from_name"] else "")
+            r["title"] + (f", {r['from_name']}" if r["from_name"] else "")
             for r in report.recognition
         ]),
         ("Looking after themselves", report.care),
@@ -508,7 +508,7 @@ def subject_line(report: Report) -> str:
     a quiet month into a public verdict in a notification preview, which is
     the last place a parent should first read it.
     """
-    return f"{report.first_name}'s month — {report.month_label}"
+    return f"{report.first_name}'s month: {report.month_label}"
 
 
 # ---------------------------------------------------------------------------

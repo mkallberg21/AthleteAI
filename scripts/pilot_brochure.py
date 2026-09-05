@@ -178,7 +178,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       </div>
       <div>
         <h1>The off days<br>are the season.</h1>
-        <p class="sub">A pilot proposal for the Nashville Dogs — one squad,
+        <p class="sub">A pilot proposal for the Nashville Dogs: one squad,
         one season, and a way to see the work that happens between practices
         without asking a single child to upload a video of themselves.</p>
       </div>
@@ -194,7 +194,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       own. Almost none of them can prove it, and none of them find out in time
       to do anything about it.</p>
       <p>The athlete who has quietly not touched a stick in twelve days looks
-      identical to the one who has been out there every evening — until a game,
+      identical to the one who has been out there every evening, until a game,
       by which point the gap has been growing for a fortnight. The athlete
       grinding out six hundred reps a week with their dominant hand only looks
       like the hardest worker on the roster, because in volume terms they are.
@@ -224,7 +224,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       It is never sent.</p>
       <p>An athlete props their phone against a bag and records a wall-ball set.
       The pose analysis runs in the browser, on the device, while they train.
-      What reaches the club is a row of numbers — how many reps, which hand,
+      What reaches the club is a row of numbers: how many reps, which hand,
       how consistent the tempo, how the range of motion held up as they tired.
       The footage stays in the camera buffer and is gone when the screen closes.</p>
       <p>This is enforced by the shape of the system rather than by a policy
@@ -232,13 +232,13 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       the database stores one. A coach cannot request footage, because there is
       no mechanism by which they could receive it.</p>
       <p><b style="color:#fff">The one exception, stated plainly.</b> An athlete
-      can choose to send a coach one specific clip for feedback — and only when
+      can choose to send a coach one specific clip for feedback, and only when
       a guardian has switched that permission on for that child. It is never
       automatic, it is one clip at a time, it expires, and withdrawing consent
       deletes it immediately. That is the whole of it.</p>
       <div class="grow"></div>
       <p style="font-size:9.6pt;color:#8FA8C0;max-width:38em">Every screenshot in
-      this document is the running application with demonstration data — not a
+      this document is the running application with demonstration data, not a
       mockup, and not a rendering.</p>
       <div class="footline">0FFDAYS · PILOT PROPOSAL</div><div class="pagenum">3</div>
     </section>""")
@@ -251,7 +251,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       <p>The first thing on the screen is not a chart to interpret. It is a
       short list of who to talk to today, and why. Joel signs in and sees the
       whole program; a coach signs in and sees only the squad they are assigned
-      to — enforced on every request, not hidden in the page.</p>
+      to. That is enforced on every request, not hidden in the page.</p>
       <figure>
         <img src="{shot('c01-program.png')}" alt="The director's dashboard">
         <figcaption>The director's view · 2031 Red · last 7 days</figcaption>
@@ -262,7 +262,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
         beside each. Not a leaderboard of who trained most.</p></div>
         <div><div class="n">02</div><p>The line under the filters is on the
         product itself: no video reaches this screen, ever.</p></div>
-        <div><div class="n">03</div><p>Assignment progress at a glance — who
+        <div><div class="n">03</div><p>Assignment progress at a glance: who
         still has not started the week's work.</p></div>
       </div>
       <div class="footline">0FFDAYS · PILOT PROPOSAL</div><div class="pagenum">4</div>
@@ -275,7 +275,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       <h2>Training too little and training too much are both worth a call.</h2>
       <p>Most tools in this space only find the first. The pattern that precedes
       most overuse injuries in youth sport is a sharp jump in weekly load, and
-      it is invisible without a baseline — which is exactly what six weeks of
+      it is invisible without a baseline, which is exactly what six weeks of
       counted reps gives you.</p>
       <figure style="margin-bottom:16px">
         <img src="{shot('c04-needs-a-nudge.png')}" alt="Needs a nudge">
@@ -295,7 +295,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       <h2>A ten-year-old opens it and knows what to do.</h2>
       <p>Their position's plan, the drill drawn before they attempt it, and a
       target they can actually hit. A child who has never heard of a given
-      exercise is not left guessing at it — every drill in the library is
+      exercise is not left guessing at it. Every drill in the library is
       demonstrated, and the goalies get goalie work rather than a midfielder's.</p>
       <div class="shots-2">
         <figure><img src="{shot('athlete-1-home.png')}" alt="Home screen">
@@ -316,7 +316,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
         <figure><img src="{shot('athlete-4-good-rep.png')}" alt="What a good rep looks like">
           <figcaption>Target range and tempo, from the same numbers the counter scores against</figcaption></figure>
       </div>
-      <p style="margin-top:20px">The counter runs against a declarative spec —
+      <p style="margin-top:20px">The counter runs against a declarative spec,
       the same definition the server re-checks the submission against, so a
       session that could not physically have happened does not become a number
       on a coach's screen. Reps the counter was unsure about are held back for
@@ -329,12 +329,12 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       <p class="eyebrow">The other half of the game</p>
       <div class="rule"></div>
       <h2>Lacrosse IQ, and who has actually watched it.</h2>
-      <p>Reps build hands. Watching builds the rest — reading a slide, seeing a
+      <p>Reps build hands. Watching builds the rest: reading a slide, seeing a
       cut two passes early. Short clips, curated by your staff, capped by age
       so it cannot become forty minutes of screen time dressed up as training.</p>
       <figure>
         <img src="{shot('c18-sport-iq.png')}" alt="Lacrosse IQ coverage">
-        <figcaption>Grouped by clip, never by athlete — coverage, not compliance</figcaption>
+        <figcaption>Grouped by clip, never by athlete. Coverage, not compliance</figcaption>
       </figure>
       <div class="footline">0FFDAYS · PILOT PROPOSAL</div><div class="pagenum">8</div>
     </section>""")
@@ -352,7 +352,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       pauses it rather than breaking it. "Needs a rest day" sits in the same
       list as "quiet for ten days", because both are a conversation. Standings
       are per athlete rather than per team total, so a bigger squad cannot win
-      by being bigger — and the squad has one collective number to chase
+      by being bigger, and the squad has one collective number to chase
       instead of a table that ranks eleven-year-olds against their friends.</p>
       <p>Recognition messages are drawn from a pool wide enough that no two
       athletes get the same sentence inside a month. The first thing two
@@ -390,7 +390,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
       <div class="weeks">
         <div class="week"><div class="when">Before week 1</div>
           <p>We load your roster, set the season phase, and put your crest on
-          it. Nothing to install — it runs in a phone's browser and can be
+          it. Nothing to install, because it runs in a phone's browser and can be
           added to a home screen.</p></div>
         <div class="week"><div class="when">Week 1</div>
           <p>Fifteen minutes with the coaching staff, and a note home to
@@ -398,7 +398,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
           gathered before any athlete is on the board.</p></div>
         <div class="week"><div class="when">Weeks 2&ndash;3</div>
           <p>Athletes record their own off-day work. We watch for the boring
-          failure modes — a phone propped where it cannot see, a drill that
+          failure modes: a phone propped where it cannot see, a drill that
           needs its target adjusted for this age group.</p></div>
         <div class="week"><div class="when">Weeks 4&ndash;8</div>
           <p>Assignments, film, and the pre-practice list in ordinary use. By
@@ -421,7 +421,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
         <div class="ask">
           <h3>From the Dogs</h3>
           <ul>
-            <li>One squad — 2031 Red.</li>
+            <li>One squad, 2031 Red.</li>
             <li>A roster with birth years and positions, in any format you already keep it.</li>
             <li>Fifteen minutes of a coaches' meeting to introduce it.</li>
             <li>One member of staff as the point of contact.</li>
@@ -495,7 +495,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
     fonts = FONTS.read_text()
     return (
         f"<!doctype html><html><head><meta charset='utf-8'>"
-        f"<title>Nashville Dogs — 0FFDAYS pilot</title>"
+        f"<title>Nashville Dogs &middot; 0FFDAYS pilot</title>"
         f"<style>{fonts}{STYLE}</style></head><body>{''.join(pages)}</body></html>"
     )
 

@@ -92,7 +92,7 @@ def main() -> int:
             pem = sns_mod.fetch_certificate(url)
             path = chain_mod.validate_pem(pem, anchors)
         except Exception as exc:  # noqa: BLE001 -- report and continue
-            print(f"  {url}: could not fetch or validate — {exc}")
+            print(f"  {url}: could not fetch or validate: {exc}")
             failed += 1
             continue
 

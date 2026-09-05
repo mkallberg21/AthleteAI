@@ -128,7 +128,7 @@ async def _lifespan(app: FastAPI):
     logger.info("offdays startup: migrate=%s integrity=%s", mig.get("migrate"), integ.get("integrity"))
     if integ.get("integrity_ok") is False:
         logger.warning(
-            "offdays startup: integrity_check returned %s — schedule a full "
+            "offdays startup: integrity_check returned %s, so schedule a full "
             "PRAGMA integrity_check from scripts/health_reap.py soon",
             integ.get("integrity"),
         )
@@ -1391,7 +1391,7 @@ def send_digest(
     if queued is None:
         raise HTTPException(
             status_code=400,
-            detail="Not queued — you have unsubscribed from the weekly digest.",
+            detail="Not queued, because you have unsubscribed from the weekly digest.",
         )
 
     stats = mailer.flush(store.conn, limit=5)
@@ -2151,7 +2151,7 @@ def set_specialisation_age(
 
 def _specialisation_label(age: int) -> str:
     if age >= 99:
-        return "Never — every athlete stays on the all-round plan"
+        return "Never, every athlete stays on the all-round plan"
     if age <= 0:
         return "All ages"
     return f"Age {age} and up"
@@ -2532,7 +2532,7 @@ def clear_plan(
     if principal.id == athlete_id:
         raise HTTPException(
             status_code=403,
-            detail="you cannot clear your own return — ask a parent or your coach",
+            detail="you cannot clear your own return, so ask a parent or your coach",
         )
 
     is_guardian = guardians_mod.guards(store.conn, principal.id, athlete_id)
@@ -2727,7 +2727,7 @@ def parent_messages(
         "replies_allowed": False,
         "note": (
             "You see everything your athlete is sent. Messages here are "
-            "one-way — nobody can reply through the app, including you."
+            "one-way, so nobody can reply through the app, including you."
         ),
     }
 
@@ -2768,6 +2768,10 @@ def athlete_week_plan(
     """The athlete's week in one glance: assignments, budget, film, and a plain
     line that says what this week actually asks for.
     """
+    # _athlete_age lives in week_plan and was never imported here, so this
+    # endpoint raised NameError on every call it ever received.
+    from .week_plan import _athlete_age
+
     return {
         **store.week_plan(athlete_id=principal.id).to_dict(),
         "age": _athlete_age(store.conn, principal.id),
@@ -3157,7 +3161,7 @@ def _may_set_absence(store: Store, principal: Principal, athlete_id: int) -> str
     if principal.role == "athlete":
         raise HTTPException(
             status_code=403,
-            detail="a parent or your coach sets this — ask them to add it",
+            detail="a parent or your coach sets this, so ask them to add it",
         )
     if principal.role in ("coach", "director"):
         row = store.conn.execute(
@@ -3507,7 +3511,7 @@ def pricing() -> dict[str, Any]:
             "note": (
                 "The club buys a seat for every rostered athlete and covers it "
                 "by adding a line to its own season fee. The money still comes "
-                "from parents, through the channel they already pay through — "
+                "from parents, through the channel they already pay through, and "
                 "so the club is out nothing, every athlete is covered, and a "
                 "share comes back for families who cannot afford the season."
             ),
@@ -3516,7 +3520,7 @@ def pricing() -> dict[str, Any]:
             "note": (
                 "A club that would rather cover its families buys a "
                 "seat-metered plan. Those include the parent product for "
-                "every athlete on the roster — that is what paying for seats "
+                "every athlete on the roster, which is what paying for seats "
                 "means here, and it is cheaper than covering families one at "
                 "a time."
             ),
@@ -3860,7 +3864,7 @@ def add_family_athlete(
     if not store.is_family(principal.org_id):
         raise HTTPException(
             status_code=400,
-            detail="that is a program account — add athletes from the coach dashboard",
+            detail="that is a program account, so add athletes from the coach dashboard",
         )
     team = store.conn.execute(
         "SELECT join_code FROM teams WHERE org_id = ? ORDER BY id LIMIT 1",
@@ -3895,7 +3899,7 @@ def family_board(
     if not store.is_family(principal.org_id):
         raise HTTPException(
             status_code=400,
-            detail="that is a program account — the team leaderboard is at /leaderboard",
+            detail="that is a program account, and the team leaderboard is at /leaderboard",
         )
     return store.family_board(principal.org_id)
 

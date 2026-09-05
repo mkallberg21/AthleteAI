@@ -31,7 +31,8 @@ from . import family
 from . import film
 from . import rtp
 from . import wellness
-from .db import connect, hash_token, init_db, new_join_code, new_token, transaction
+from .db import (connect, fresh_token, hash_token, init_db, new_join_code,
+                  new_nonce, new_token, transaction)
 from .drills import DRILLS_BY_KEY, get_drill
 from .drills.base import SignalKind
 from . import assignments as assignments_mod
@@ -715,7 +716,7 @@ class Store:
         longest = max(b.clip_max_s for b in film.BANDS)
         if end_s is not None and (end_s - start_s) > longest:
             raise StoreError(
-                f"clips are capped at {longest} seconds — trim it to the moment "
+                f"clips are capped at {longest} seconds, so trim it to the moment "
                 "that actually teaches something"
             )
 
@@ -1798,7 +1799,7 @@ class Store:
             raise StoreError("that clip is empty")
         if len(blob) > self.MAX_CLIP_BYTES:
             raise StoreError(
-                f"that clip is too big — keep it under "
+                f"that clip is too big, so keep it under "
                 f"{self.MAX_CLIP_BYTES // (1024 * 1024)}MB"
             )
         if mime not in ("video/webm", "video/mp4"):
@@ -2247,7 +2248,7 @@ class Store:
                 "  submitted_at, completed_at, duration_ms, reps_total, status, "
                 "  integrity_score, integrity_notes, self_reported) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,1)",
-                (athlete_id, drill_key, f"self-{new_token()}", stamp, stamp, stamp,
+                (athlete_id, drill_key, f"self-{new_nonce()}", stamp, stamp, stamp,
                  minutes * 60_000, max(0, reps), "counted", 1.0,
                  json.dumps([
                      "Logged by the athlete because the camera could not count "
@@ -2444,7 +2445,7 @@ class Store:
         result.fetched = len(rows)
         if not rows:
             result.error = (
-                "They returned an empty roster. Nothing has been changed — "
+                "They returned an empty roster. Nothing has been changed, and "
                 "that is almost always a wrong team id rather than an empty team."
             )
             self._record_sync(team_id, provider, result)
@@ -2584,7 +2585,7 @@ class Store:
         # failed import halfway through onboarding. Retry the way create_team
         # already does rather than lengthening a code a child has to read.
         for _ in range(10):
-            token = new_token()
+            token = fresh_token(self.conn)
             try:
                 with transaction(self.conn) as c:
                     cur = c.execute(
@@ -2767,7 +2768,7 @@ class Store:
         if drill_key not in DRILLS_BY_KEY:
             raise StoreError(f"unknown drill: {drill_key!r}")
         self._require_participation_consent(athlete_id)
-        nonce = new_token()
+        nonce = new_nonce()
         with transaction(self.conn) as c:
             cur = c.execute(
                 "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, status) "
@@ -2794,7 +2795,7 @@ class Store:
         issued = []
         with transaction(self.conn) as c:
             for _ in range(count):
-                nonce = new_token()
+                nonce = new_nonce()
                 cur = c.execute(
                     "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, "
                     "status, reserved) VALUES (?,?,?,?,'open',1)",
@@ -3739,7 +3740,7 @@ class Store:
                 "That code is not valid. Ask your coach for a new one."
             )
 
-        token = new_token()
+        token = fresh_token(self.conn)
         with transaction(self.conn) as c:
             c.execute(
                 "UPDATE users SET token_hash = ?, claim_code_hash = NULL, "

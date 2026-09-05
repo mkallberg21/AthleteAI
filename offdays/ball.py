@@ -272,7 +272,7 @@ def _review_confirmation(
     if result.quality < spec.ball.min_track_quality:
         result.note(
             "Not enough to confirm a ball was used, which is common with a "
-            "lacrosse ball — it does not count against the session."
+            "lacrosse ball, and it does not count against the session."
         )
         return result
 

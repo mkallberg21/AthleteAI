@@ -124,7 +124,7 @@ FUNDAMENTALS: tuple[Topic, ...] = (
         find=(
             "A loose ball where one player calls 'ball' and a teammate calls "
             "'release' or 'help'. Youth or high school footage is better than "
-            "college here -- the calls are louder and clearer."
+            "college here, the calls are louder and clearer."
         ),
         ask=Ask(
             prompt="Your teammate yells \"ball!\" on a loose ball. What is your job?",
@@ -204,7 +204,7 @@ CORE: tuple[Topic, ...] = (
         positions=OFFENSE, min_age=13, max_age=200, target_s=115,
         find=(
             "A pass followed immediately by a cut to the goal and a return "
-            "feed. Look for one where the defender relaxes after the pass -- "
+            "feed. Look for one where the defender relaxes after the pass, "
             "that relaxation is the whole lesson."
         ),
         ask=Ask(
@@ -227,7 +227,7 @@ CORE: tuple[Topic, ...] = (
         focus="On-ball defence",
         positions=DEFENCE, min_age=13, max_age=200, target_s=125,
         find=(
-            "A defender closing out on a ball carrier -- one clip where he "
+            "A defender closing out on a ball carrier, one clip where he "
             "breaks down under control, one where he runs through and gets "
             "beaten. The contrast carries the point."
         ),
@@ -253,7 +253,7 @@ CORE: tuple[Topic, ...] = (
         positions=FIELD, min_age=13, max_age=200, target_s=110,
         find=(
             "A ground ball scrum where one player moves the opponent first and "
-            "scoops second. Slow motion helps -- the box-out happens fast and "
+            "scoops second. Slow motion helps, the box-out happens fast and "
             "is easy to miss at speed."
         ),
         ask=Ask(
@@ -290,7 +290,7 @@ CORE: tuple[Topic, ...] = (
             answer=2,
             because=(
                 "Watching only the ball loses your man; watching only your man "
-                "loses the play. Position beats attention -- stand where both "
+                "loses the play. Position beats attention, stand where both "
                 "are in front of you."
             ),
         ),
@@ -385,7 +385,7 @@ ADVANCED: tuple[Topic, ...] = (
         positions=DEFENCE, min_age=15, max_age=200, target_s=170,
         find=(
             "A full defensive possession with an adjacent slide, ideally with "
-            "audible communication. Wide angle throughout -- a tight shot on "
+            "audible communication. Wide angle throughout, a tight shot on "
             "the ball destroys this clip."
         ),
         ask=Ask(
@@ -409,7 +409,7 @@ ADVANCED: tuple[Topic, ...] = (
         focus="Team defence",
         positions=DEFENCE, min_age=15, max_age=200, target_s=160,
         find=(
-            "The rotation after a slide -- who fills the sliding defender's "
+            "The rotation after a slide, who fills the sliding defender's "
             "spot. Follow the second and third rotation, not the slide itself; "
             "that is where possessions are actually lost."
         ),
@@ -423,7 +423,7 @@ ADVANCED: tuple[Topic, ...] = (
             answer=1,
             because=(
                 "A slide always leaves someone open. Defence is not the slide, "
-                "it is the rotation behind it -- and it has to happen before "
+                "it is the rotation behind it, and it has to happen before "
                 "the extra pass arrives."
             ),
         ),
@@ -458,7 +458,7 @@ ADVANCED: tuple[Topic, ...] = (
         positions=DEFENCE + ("goalie",), min_age=15, max_age=200, target_s=165,
         find=(
             "A clear from a goalie save to the offensive end. Wide angle, and "
-            "let it run -- clears are about the shape of five players, not one "
+            "let it run, clears are about the shape of five players, not one "
             "good pass."
         ),
         ask=Ask(
@@ -483,7 +483,7 @@ ADVANCED: tuple[Topic, ...] = (
         positions=OFFENSE, min_age=15, max_age=200, target_s=150,
         find=(
             "A successful ride that forces a turnover. Show the sideline being "
-            "used as an extra defender -- that is the concept most young "
+            "used as an extra defender, that is the concept most young "
             "players miss."
         ),
         ask=Ask(
@@ -508,7 +508,7 @@ ADVANCED: tuple[Topic, ...] = (
         positions=("fogo", "midfield"), min_age=15, max_age=200, target_s=155,
         find=(
             "A won face-off followed by the exit and the wing play. Keep the "
-            "wings in frame from the whistle -- most face-off footage cuts "
+            "wings in frame from the whistle, most face-off footage cuts "
             "them out entirely, which is why nobody learns this."
         ),
         ask=Ask(
@@ -545,7 +545,7 @@ ADVANCED: tuple[Topic, ...] = (
             answer=1,
             because=(
                 "Five defenders can cover one rotation. The second one always "
-                "leaves somebody genuinely open -- the extra pass is what finds "
+                "leaves somebody genuinely open, the extra pass is what finds "
                 "them."
             ),
         ),
@@ -565,7 +565,7 @@ ADVANCED: tuple[Topic, ...] = (
             options=(
                 "The one from the crease, because it is quicker",
                 "The outside shot, because the goalie can see it",
-                "None -- it tries to cover everything",
+                "None, it tries to cover everything",
             ),
             answer=1,
             because=(
@@ -588,7 +588,7 @@ ADVANCED: tuple[Topic, ...] = (
         ask=Ask(
             prompt="You catch the ball up top with a defender set and help nearby. What now?",
             options=(
-                "Dodge -- you have the ball, so it is your turn",
+                "Dodge, you have the ball, so it is your turn",
                 "Move it and make the defence shift first",
                 "Shoot from where you are",
             ),
@@ -634,7 +634,7 @@ def catalogue(sport: str = "lacrosse") -> dict[str, Any]:
             "for each topic's minimum age."
         ) if topics else (
             f"There is no film curriculum for {sport} yet. The module is "
-            "built and the age caps apply -- what is missing is somebody who "
+            "built and the age caps apply, what is missing is somebody who "
             "coaches the sport writing the topics."
         ),
         # Carried on the response a coach reads immediately before going to
@@ -643,7 +643,7 @@ def catalogue(sport: str = "lacrosse") -> dict[str, Any]:
         "what_to_cut": film.WHAT_TO_CUT,
         "not_this": (
             "Not highlight reels. A montage of finishes teaches nothing while "
-            "looking exactly like film study -- it fills the shelf, it earns "
+            "looking exactly like film study, it fills the shelf, it earns "
             "the same XP, and the athlete comes away having watched somebody "
             f"else be good at {sport}. Clips whose titles read as highlight "
             "reels are refused."
@@ -743,7 +743,7 @@ BKB_FUNDAMENTALS: tuple[Topic, ...] = (
         find=(
             "Any half-court possession. Cut one where the offence is spread "
             "and one where two players have drifted to the same side, back to "
-            "back. Youth footage is better here -- the mistake is more obvious."
+            "back. Youth footage is better here, the mistake is more obvious."
         ),
         ask=Ask(
             prompt="Two teammates end up on the same side of the floor. What happens?",
@@ -778,7 +778,7 @@ BKB_FUNDAMENTALS: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "A passer throws to a target. No target, no pass -- and a late "
+                "A passer throws to a target. No target, no pass, and a late "
                 "reach turns a good pass into a fumble."
             ),
         ),
@@ -817,7 +817,7 @@ BKB_CORE: tuple[Topic, ...] = (
         positions=ALL_BKB, min_age=13, max_age=200, target_s=125,
         find=(
             "A drive from the wing where a help defender steps in. Cut it wide "
-            "enough to see the helper *before* they move -- the interesting "
+            "enough to see the helper *before* they move, the interesting "
             "part is where they were standing."
         ),
         ask=Ask(
@@ -867,7 +867,7 @@ BKB_CORE: tuple[Topic, ...] = (
         positions=ALL_BKB, min_age=13, max_age=200, target_s=115,
         find=(
             "A possession where a cutter is open and the pass arrives late. "
-            "Pause on the frame where the window was actually open -- that is "
+            "Pause on the frame where the window was actually open, that is "
             "the whole lesson."
         ),
         ask=Ask(
@@ -965,7 +965,7 @@ BKB_ADVANCED: tuple[Topic, ...] = (
         positions=ALL_BKB, min_age=15, max_age=200, target_s=160,
         find=(
             "A pick and roll where the low defender steps across to touch the "
-            "roller before recovering. Cut it wide -- the whole point is what "
+            "roller before recovering. Cut it wide, the whole point is what "
             "the third and fourth defenders do."
         ),
         ask=Ask(
@@ -995,7 +995,7 @@ BKB_ADVANCED: tuple[Topic, ...] = (
         ask=Ask(
             prompt="You catch it in the middle with two defenders on the ball. What now?",
             options=(
-                "Look up -- you are attacking four against three",
+                "Look up, you are attacking four against three",
                 "Drive straight to the rim before they recover",
                 "Pass it straight back out to reset",
             ),
@@ -1036,7 +1036,7 @@ BKB_ADVANCED: tuple[Topic, ...] = (
         focus="Decision-making",
         positions=ALL_BKB, min_age=15, max_age=200, target_s=160,
         find=(
-            "Two shots from similar spots -- one early in the clock with a "
+            "Two shots from similar spots, one early in the clock with a "
             "defender closing, one after a pass with feet set. Same distance, "
             "different shots."
         ),
@@ -1111,14 +1111,14 @@ VB_FUNDAMENTALS: tuple[Topic, ...] = (
         find=(
             "Any rally with a ball dropping between two players. Cut one where "
             "somebody calls early and one where nobody does. Youth footage is "
-            "better -- the silence is more obvious."
+            "better, the silence is more obvious."
         ),
         ask=Ask(
             prompt="A ball is coming down between you and a teammate. What do you do?",
             options=(
                 "Call for it loudly and early, before it gets there",
                 "Wait to see if they call it first",
-                "Go for it -- whoever gets there first takes it",
+                "Go for it, whoever gets there first takes it",
             ),
             answer=0,
             because=(
@@ -1278,7 +1278,7 @@ VB_CORE: tuple[Topic, ...] = (
         focus="Team offence",
         positions=VB_ALL, min_age=13, max_age=200, target_s=115,
         find=(
-            "A hit that comes off the block and drops. Cut it wide -- the clip "
+            "A hit that comes off the block and drops. Cut it wide, the clip "
             "is the three players around the hitter, not the swing."
         ),
         ask=Ask(
@@ -1308,7 +1308,7 @@ VB_CORE: tuple[Topic, ...] = (
         ask=Ask(
             prompt="What makes a serve difficult, other than speed?",
             options=(
-                "Where it lands -- a seam, a weak passer, or deep in a corner",
+                "Where it lands, a seam, a weak passer, or deep in a corner",
                 "How hard it is hit",
                 "How much spin is on it",
             ),
@@ -1377,7 +1377,7 @@ VB_ADVANCED: tuple[Topic, ...] = (
         positions=VB_FRONT, min_age=15, max_age=200, target_s=155,
         find=(
             "A hitter using the blocker's outside hand deliberately. Slow "
-            "footage helps -- the intent is only visible if you can see the "
+            "footage helps, the intent is only visible if you can see the "
             "arm change late."
         ),
         ask=Ask(
@@ -1413,7 +1413,7 @@ VB_ADVANCED: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "Leaving early on a guess opens the court you just left. Base "
-                "first, read second, move third -- in that order every time."
+                "first, read second, move third, in that order every time."
             ),
         ),
     ),
@@ -1571,7 +1571,7 @@ SOC_CORE: tuple[Topic, ...] = (
         positions=SOC_OUT, min_age=13, max_age=200, target_s=125,
         find=(
             "A team pressing on a bad touch, and another chasing a settled "
-            "centre back. The trigger is the clip -- what happened just before "
+            "centre back. The trigger is the clip, what happened just before "
             "they went."
         ),
         ask=Ask(
@@ -1619,7 +1619,7 @@ SOC_CORE: tuple[Topic, ...] = (
         positions=SOC_ATT, min_age=13, max_age=200, target_s=125,
         find=(
             "A pass in to a player who lays it off, and a third player running "
-            "onto it. Cut it wide -- the runner is the clip and they start off "
+            "onto it. Cut it wide, the runner is the clip and they start off "
             "screen."
         ),
         ask=Ask(
@@ -1745,7 +1745,7 @@ SOC_ADVANCED: tuple[Topic, ...] = (
         ask=Ask(
             prompt="The other team presses your goalkeeper. Where is the free player?",
             options=(
-                "Wherever they left somebody unmarked to press with -- usually the far side",
+                "Wherever they left somebody unmarked to press with, usually the far side",
                 "Up front, because everybody has come forward",
                 "There is not one, so it should go long",
             ),
@@ -1792,7 +1792,7 @@ SOC_ADVANCED: tuple[Topic, ...] = (
         ask=Ask(
             prompt="You are one-on-two with a teammate free beside you. What now?",
             options=(
-                "Pass -- two defenders on you means one is off them",
+                "Pass, two defenders on you means one is off them",
                 "Take them on, because you are past one already",
                 "Shield the ball and wait for support",
             ),
@@ -2009,7 +2009,7 @@ TEN_CORE: tuple[Topic, ...] = (
         ask=Ask(
             prompt="You hit an approach shot. Where do you stop?",
             options=(
-                "Keep moving forward -- the service line is the worst place to stand",
+                "Keep moving forward, the service line is the worst place to stand",
                 "On the service line, where you can cover both a lob and a pass",
                 "Halfway, so you can react to whatever comes",
             ),
@@ -2026,7 +2026,7 @@ TEN_CORE: tuple[Topic, ...] = (
         focus="Competing",
         positions=TEN_ALL, min_age=13, max_age=200, target_s=110,
         find=(
-            "A player between points after an error -- one walking to the towel "
+            "A player between points after an error, one walking to the towel "
             "with their head up, one dropping their shoulders. Both are easy to "
             "find in any junior match."
         ),
@@ -2127,7 +2127,7 @@ TEN_ADVANCED: tuple[Topic, ...] = (
         positions=TEN_DOUBLES, min_age=15, max_age=200, target_s=155,
         find=(
             "A doubles pair shifting across together, next to one where a gap "
-            "opens up the middle. Wide footage only -- the shape is the clip."
+            "opens up the middle. Wide footage only, the shape is the clip."
         ),
         ask=Ask(
             prompt="Your partner is pulled wide. Where do you go?",
@@ -2156,7 +2156,7 @@ TEN_ADVANCED: tuple[Topic, ...] = (
         ask=Ask(
             prompt="It is 30-30. How should you play the point?",
             options=(
-                "Your best pattern, played with margin -- not something new",
+                "Your best pattern, played with margin, not something new",
                 "More aggressively, to take the initiative",
                 "More safely, and wait for a mistake",
             ),
@@ -2281,7 +2281,7 @@ BB_CORE: tuple[Topic, ...] = (
             options=(
                 "You can wait for a pitch in your zone rather than protect",
                 "You should swing at the next pitch before it gets to 2-1",
-                "Nothing -- hit the ball hard whatever the count",
+                "Nothing, hit the ball hard whatever the count",
             ),
             answer=0,
             because=(
@@ -2467,7 +2467,7 @@ BB_ADVANCED: tuple[Topic, ...] = (
         focus="Team defence",
         positions=DEFENCE, min_age=15, max_age=200, target_s=150,
         find=(
-            "A ball in the gap and the full relay -- outfielder to middle "
+            "A ball in the gap and the full relay, outfielder to middle "
             "infielder to base. Cut wide enough to see all three plus the "
             "trailer."
         ),
@@ -2516,7 +2516,7 @@ BB_ADVANCED: tuple[Topic, ...] = (
         focus="Staying healthy",
         positions=DIAMOND, min_age=15, max_age=200, target_s=150,
         find=(
-            "A pitcher whose mechanics change late in an outing -- arm slot "
+            "A pitcher whose mechanics change late in an outing, arm slot "
             "dropping, front side flying open. Compare the first inning with "
             "the fifth."
         ),
@@ -2530,7 +2530,7 @@ BB_ADVANCED: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "Pain is a late signal. Losing the strike zone and reaching for "
-                "the ball come first, and they are the ones to stop on -- for "
+                "the ball come first, and they are the ones to stop on, for "
                 "yourself as much as for whoever is counting."
             ),
         ),
@@ -2624,7 +2624,7 @@ HOC_FUNDAMENTALS: tuple[Topic, ...] = (
         ask=Ask(
             prompt="You have been on for a minute and the puck is deep. What now?",
             options=(
-                "Change -- a tired player is worse than a fresh one",
+                "Change, a tired player is worse than a fresh one",
                 "Stay on, because you are near the puck",
                 "Stay on until you touch it once more",
             ),
@@ -2646,7 +2646,7 @@ HOC_CORE: tuple[Topic, ...] = (
         find=(
             "A player pulling out of a hit because the other one turned, next "
             "to a check into the boards from behind. Use footage where the "
-            "second one was called -- the whistle is part of the lesson."
+            "second one was called, the whistle is part of the lesson."
         ),
         ask=Ask(
             prompt="You are about to finish a check and the player turns their back. What do you do?",
@@ -2758,7 +2758,7 @@ HOC_CORE: tuple[Topic, ...] = (
             because=(
                 "A puck rung round the boards is a fifty-fifty you have given "
                 "away in your own end. With time, a pass is not the risky "
-                "option -- it is the safe one."
+                "option, it is the safe one."
             ),
         ),
     ),
@@ -2823,7 +2823,7 @@ HOC_ADVANCED: tuple[Topic, ...] = (
         find=(
             "A defensive-zone sequence where three players collapse to the "
             "puck in the corner and the pass goes to the man alone in the "
-            "slot. Cut it wide -- the mistake is off-puck."
+            "slot. Cut it wide, the mistake is off-puck."
         ),
         ask=Ask(
             prompt="The puck is in the corner and your man is alone in the slot. Where do you go?",
@@ -2848,7 +2848,7 @@ HOC_ADVANCED: tuple[Topic, ...] = (
         find=(
             "The same goalie on a shot from the top of the circle and on a "
             "pass across the crease. What their depth does between the two is "
-            "the clip -- freeze frames help more than motion here."
+            "the clip, freeze frames help more than motion here."
         ),
         ask=Ask(
             prompt="A pass goes from one side of the slot to the other. What should your depth do?",
@@ -2879,7 +2879,7 @@ HOC_ADVANCED: tuple[Topic, ...] = (
             prompt="A teammate takes a hit, gets up slowly and says they are fine. What do you do?",
             options=(
                 "Tell an adult anyway",
-                "Believe them -- they know how they feel",
+                "Believe them, they know how they feel",
                 "Watch them for a shift and see",
             ),
             answer=0,
@@ -3034,7 +3034,7 @@ JDG_CORE: tuple[Topic, ...] = (
         focus="Staying safe",
         positions=TUMBLING, min_age=13, max_age=200, target_s=130,
         find=(
-            "A coach teaching a bail-out -- how to land safely on a skill that "
+            "A coach teaching a bail-out, how to land safely on a skill that "
             "has already gone wrong. Training footage, not competition."
         ),
         ask=Ask(
@@ -3065,7 +3065,7 @@ JDG_CORE: tuple[Topic, ...] = (
             prompt="You are tired and the last few attempts have got worse. What now?",
             options=(
                 "Stop that skill. Tired reps teach the tired version",
-                "Push through -- that is where the improvement is",
+                "Push through, that is where the improvement is",
                 "Do a few more slowly",
             ),
             answer=0,
@@ -3096,7 +3096,7 @@ JDG_CORE: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "A longer body turns at a different speed. The skill is not "
-                "gone, the timing is out -- and being told that is the "
+                "gone, the timing is out, and being told that is the "
                 "difference between a hard month and quitting."
             ),
         ),
@@ -3142,7 +3142,7 @@ JDG_CORE: tuple[Topic, ...] = (
             options=(
                 "Say so and do not go up",
                 "Go up, but come down quickly",
-                "Go up -- everybody else is ready",
+                "Go up, everybody else is ready",
             ),
             answer=0,
             because=(
@@ -3162,7 +3162,7 @@ JDG_ADVANCED: tuple[Topic, ...] = (
         positions=JUDGED_ALL, min_age=15, max_age=200, target_s=160,
         find=(
             "A judge or a senior coach explaining what a score is actually "
-            "made of -- the elements, the deductions, the execution. The point "
+            "made of, the elements, the deductions, the execution. The point "
             "is how specific and how technical it is."
         ),
         ask=Ask(
@@ -3195,7 +3195,7 @@ JDG_ADVANCED: tuple[Topic, ...] = (
             prompt="An adult in your sport makes a comment about your body or your weight. What do you do?",
             options=(
                 "Tell another adult you trust, even if it seemed like a joke",
-                "Ignore it -- it is part of the sport",
+                "Ignore it, it is part of the sport",
                 "Change what you are doing so it stops",
             ),
             answer=0,
@@ -3446,7 +3446,7 @@ FB_CORE: tuple[Topic, ...] = (
         ask=Ask(
             prompt="On a play fake, what should a defender's eyes be on?",
             options=(
-                "Their key -- the player their job says to read",
+                "Their key, the player their job says to read",
                 "The ball",
                 "The quarterback's eyes",
             ),
@@ -3487,7 +3487,7 @@ FB_CORE: tuple[Topic, ...] = (
         focus="Staying safe",
         positions=FB_BALL, min_age=13, max_age=200, target_s=130,
         find=(
-            "A quarterback through a full practice -- individual period, "
+            "A quarterback through a full practice, individual period, "
             "seven-on-seven, team. Count the throws. That number is the clip."
         ),
         ask=Ask(
@@ -3501,7 +3501,7 @@ FB_CORE: tuple[Topic, ...] = (
             because=(
                 "Baseball counts pitches down to the last one. Football counts "
                 "nothing, and the same shoulder and the same elbow are doing "
-                "the work. The app counts what it can see -- the rest is on "
+                "the work. The app counts what it can see, the rest is on "
                 "you to notice."
             ),
         ),
@@ -3523,7 +3523,7 @@ FB_ADVANCED: tuple[Topic, ...] = (
             prompt="A receiver is stretched out for a catch and you can get there. What do you do?",
             options=(
                 "Pull up or hit low. They cannot protect themselves at all",
-                "Finish it -- they chose to go up for it",
+                "Finish it, they chose to go up for it",
                 "Lead with your shoulder and aim high",
             ),
             answer=0,
@@ -3716,7 +3716,7 @@ RUG_CORE: tuple[Topic, ...] = (
         find=(
             "Your own union's current guidance on tackle height for this age "
             "group. This one has to be re-cut when the law changes, which it "
-            "has done repeatedly -- do not use footage from another country or "
+            "has done repeatedly, do not use footage from another country or "
             "another season."
         ),
         ask=Ask(
@@ -3778,7 +3778,7 @@ RUG_CORE: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "A carrier with nobody behind them loses the ball. Most turnovers "
-                "at this level are not tackles -- they are a carrier arriving "
+                "at this level are not tackles, they are a carrier arriving "
                 "alone."
             ),
         ),
@@ -3932,8 +3932,8 @@ RUG_ADVANCED: tuple[Topic, ...] = (
             because=(
                 "Nothing stops the contact. What a braced neck changes is how "
                 "violently your head travels afterwards, and that is the part "
-                "that matters. This app cannot count neck work -- a good "
-                "isometric hold does not move -- so it is coached rather than "
+                "that matters. This app cannot count neck work, a good "
+                "isometric hold does not move, so it is coached rather than "
                 "scored."
             ),
         ),
@@ -4002,7 +4002,7 @@ TRK_FUNDAMENTALS: tuple[Topic, ...] = (
         ask=Ask(
             prompt="You feel great in the first minute of a race. What does that mean?",
             options=(
-                "Nothing yet -- everybody feels great in the first minute",
+                "Nothing yet, everybody feels great in the first minute",
                 "You are having a good day and should push",
                 "You went out too slow",
             ),
@@ -4035,7 +4035,7 @@ TRK_FUNDAMENTALS: tuple[Topic, ...] = (
             because=(
                 "Pain in the same spot that will not settle is the one to have "
                 "looked at rather than run through. Running injuries do not "
-                "announce themselves -- they build for weeks and then stop you "
+                "announce themselves, they build for weeks and then stop you "
                 "for months."
             ),
         ),
@@ -4047,7 +4047,7 @@ TRK_FUNDAMENTALS: tuple[Topic, ...] = (
         positions=TRK_ENDURANCE, min_age=0, max_age=200, target_s=68,
         find=(
             "A squad on a recovery run where half the group is racing it. The "
-            "clip is the conversation -- who can talk and who cannot."
+            "clip is the conversation, who can talk and who cannot."
         ),
         ask=Ask(
             prompt="How fast should an easy run be?",
@@ -4156,7 +4156,7 @@ TRK_CORE: tuple[Topic, ...] = (
         ask=Ask(
             prompt="You are in a pack halfway through a cross country race. What is the job?",
             options=(
-                "Stay in it and use it -- running alone costs you",
+                "Stay in it and use it, running alone costs you",
                 "Get clear of it so you have space",
                 "Drop back and save energy",
             ),
@@ -4181,8 +4181,8 @@ TRK_CORE: tuple[Topic, ...] = (
         ask=Ask(
             prompt="Going up a steep hill in a race, what should stay the same?",
             options=(
-                "Your effort -- which means your pace slows",
-                "Your pace -- which means your effort rises",
+                "Your effort, which means your pace slows",
+                "Your pace, which means your effort rises",
                 "Your stride length",
             ),
             answer=0,
@@ -4278,7 +4278,7 @@ TRK_ADVANCED: tuple[Topic, ...] = (
         focus="Training sense",
         positions=TRK_ALL, min_age=15, max_age=200, target_s=145,
         find=(
-            "Not footage -- a coach explaining a training log to a squad, or "
+            "Not footage, a coach explaining a training log to a squad, or "
             "a screen recording of one being filled in. The point is what the "
             "log is FOR."
         ),
@@ -4293,7 +4293,7 @@ TRK_ADVANCED: tuple[Topic, ...] = (
             because=(
                 "It is worth no XP on purpose. Nothing you type can earn you "
                 "anything, which is exactly why the app is willing to believe "
-                "it -- and why over-stating it only buys you a warning you did "
+                "it, and why over-stating it only buys you a warning you did "
                 "not need."
             ),
         ),
@@ -4317,7 +4317,7 @@ TRK_ADVANCED: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "The load is your bodyweight and your mileage. A different "
-                "shoe moves it around -- sometimes helpfully -- but the way to "
+                "shoe moves it around, sometimes helpfully, but the way to "
                 "have less of it is to run less of it."
             ),
         ),
@@ -4428,7 +4428,7 @@ SWM_CORE: tuple[Topic, ...] = (
         focus="Training sense",
         positions=SWM_ALL, min_age=13, max_age=200, target_s=128,
         find=(
-            "Not footage -- a coach going through a training log with a squad, "
+            "Not footage, a coach going through a training log with a squad, "
             "or a screen recording of one being filled in. The point is what "
             "the log is FOR."
         ),
@@ -4443,7 +4443,7 @@ SWM_CORE: tuple[Topic, ...] = (
             because=(
                 "It is worth no XP on purpose. Nothing you type can earn you "
                 "anything, which is exactly why the app is willing to believe "
-                "it -- and why over-stating it only buys you a warning you did "
+                "it, and why over-stating it only buys you a warning you did "
                 "not need."
             ),
         ),
@@ -4511,7 +4511,7 @@ SWM_CORE: tuple[Topic, ...] = (
             prompt="In a distance race, what should the second half look like?",
             options=(
                 "As fast as the first, or faster",
-                "Slightly slower -- that is normal",
+                "Slightly slower, that is normal",
                 "Much faster, saving everything for the end",
             ),
             answer=0,
@@ -4590,7 +4590,7 @@ SWM_ADVANCED: tuple[Topic, ...] = (
             options=(
                 "When you are too tired to hold the technique you came for",
                 "When you stop enjoying it",
-                "It does not -- more work is more fitness",
+                "It does not, more work is more fitness",
             ),
             answer=0,
             because=(
@@ -4620,7 +4620,7 @@ SWM_ADVANCED: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "Everything you gained in the hard months is sitting under a "
-                "layer of tiredness. A taper does not add fitness -- it takes "
+                "layer of tiredness. A taper does not add fitness, it takes "
                 "the tiredness off the top of it."
             ),
         ),
@@ -4639,7 +4639,7 @@ SWM_ADVANCED: tuple[Topic, ...] = (
             options=(
                 "Let them go first at the next wall",
                 "Speed up so they do not catch you",
-                "Stay where you are -- you were there first",
+                "Stay where you are, you were there first",
             ),
             answer=0,
             because=(
@@ -4676,7 +4676,7 @@ GOLF_FUNDAMENTALS: tuple[Topic, ...] = (
         max_age=200,
         target_s=60,
         find=(
-            "Side-on footage of a golfer setting up to two different shots -- one "
+            "Side-on footage of a golfer setting up to two different shots, one "
             "where the stance and grip are the same both times, one where they shift "
             "between them. Short clip; the point is the feet, not the swing."
         ),
@@ -4704,7 +4704,7 @@ GOLF_FUNDAMENTALS: tuple[Topic, ...] = (
         max_age=200,
         target_s=65,
         find=(
-            "A round where the short-game shots -- chips, pitches, putts -- are shown "
+            "A round where the short-game shots, chips, pitches, putts, are shown "
             "with a visible count of how many there were. Youth or club footage works; "
             "the point is the count, not the quality."
         ),
@@ -4736,8 +4736,8 @@ GOLF_CORE: tuple[Topic, ...] = (
         max_age=200,
         target_s=110,
         find=(
-            "Footage of a golfer picking a specific landing spot -- a tree, a bunker "
-            "edge, a patch of fairway -- rather than aiming vaguely at the hole. Two "
+            "Footage of a golfer picking a specific landing spot, a tree, a bunker "
+            "edge, a patch of fairway, rather than aiming vaguely at the hole. Two "
             "versions: one with a target, one without."
         ),
         ask=Ask(
@@ -4749,7 +4749,7 @@ GOLF_CORE: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "A big target is no target -- 'somewhere in the middle' is a guess "
+                "A big target is no target, 'somewhere in the middle' is a guess "
                 "before you start. A small target gives you something real to judge "
                 "the shot against afterwards."
             ),
@@ -4764,7 +4764,7 @@ GOLF_CORE: tuple[Topic, ...] = (
         max_age=200,
         target_s=115,
         find=(
-            "A club-selection moment where the player has a safe place to miss -- a "
+            "A club-selection moment where the player has a safe place to miss, a "
             "wide side of the fairway, a putt rather than a bunker shot. Contrast "
             "with one where the same distance leaves a hazard in play."
         ),
@@ -4778,7 +4778,7 @@ GOLF_CORE: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "You will not hit every shot perfectly. The smart shot is the one "
-                "where the miss is still a manageable next shot -- not one that turns "
+                "where the miss is still a manageable next shot, not one that turns "
                 "a simple hole into two or three extra shots."
             ),
         ),
@@ -4792,7 +4792,7 @@ GOLF_CORE: tuple[Topic, ...] = (
         max_age=200,
         target_s=120,
         find=(
-            "Footage or a demo of two shots -- one that goes the right distance but "
+            "Footage or a demo of two shots, one that goes the right distance but "
             "curves a little, and one that is dead straight but the wrong distance. "
             "The second one is the worse of the two."
         ),
@@ -4805,7 +4805,7 @@ GOLF_CORE: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "Golf holes are a series of distances you have to hit -- carry over "
+                "Golf holes are a series of distances you have to hit, carry over "
                 "a bunker, reach a green, leave yourself a putt. A shot that is a "
                 "little offline is usually still in play; a shot that is ten yards "
                 "short or long often is not."
@@ -4824,7 +4824,7 @@ GOLF_ADVANCED: tuple[Topic, ...] = (
         max_age=200,
         target_s=150,
         find=(
-            "A decision point on a course -- a forced carry over water, a risky pin "
+            "A decision point on a course, a forced carry over water, a risky pin "
             "attack, a lay-up on a par five. Two versions: one where the player takes "
             "the shot, one where they play to a safer place."
         ),
@@ -4833,12 +4833,12 @@ GOLF_ADVANCED: tuple[Topic, ...] = (
             options=(
                 "When the reward is real and the penalty for missing is something you can recover from",
                 "Whenever you feel confident, no matter the risk",
-                "Never -- you should always play the safe shot",
+                "Never, you should always play the safe shot",
             ),
             answer=0,
             because=(
                 "Aggression is not a mood, it is a calculation. The right aggressive "
-                "shot is one where missing still leaves you a playable next shot -- "
+                "shot is one where missing still leaves you a playable next shot, "
                 "not one where a small mistake costs you the hole."
             ),
         ),
@@ -4852,7 +4852,7 @@ GOLF_ADVANCED: tuple[Topic, ...] = (
         max_age=200,
         target_s=155,
         find=(
-            "A full hole from tee to green with a smart route -- maybe laying up on a "
+            "A full hole from tee to green with a smart route, maybe laying up on a "
             "par five, aiming away from a bad bunker, leaving an uphill putt. Wide "
             "enough to show the shape of the hole, not just the swing."
         ),
@@ -4866,7 +4866,7 @@ GOLF_ADVANCED: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "A golf hole is a sequence, not a single shot. The best shot is "
-                "often not the one that looks best right now -- it is the one that "
+                "often not the one that looks best right now, it is the one that "
                 "leaves you an easier shot, or no penalty, on the next one."
             ),
         ),
@@ -4893,7 +4893,7 @@ GOLF_ADVANCED: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "An up-and-down is two shots -- the chip or pitch, then the putt. "
+                "An up-and-down is two shots, the chip or pitch, then the putt. "
                 "The chip is not about getting it close in one impossible shot; "
                 "it is about leaving a putt you can actually make. A simple chip to "
                 "a flat putt beats a heroic flop that leaves a three-footer every time."
@@ -4928,7 +4928,7 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
         target_s=60,
         find=(
             "Footage of a class bowing in and out, ideally at the start and end of a "
-            "session. Youth or school footage is fine -- what matters is that the bow "
+            "session. Youth or school footage is fine, what matters is that the bow "
             "is visible and repeated, not how fancy it is."
         ),
         ask=Ask(
@@ -4940,7 +4940,7 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "The bow is not about rank or who wins -- it is about the agreement "
+                "The bow is not about rank or who wins, it is about the agreement "
                 "a class makes: that everyone here is training, that they will look "
                 "out for each other, and that leaving the mat is leaving the room "
                 "you were just in."
@@ -4957,7 +4957,7 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
         target_s=65,
         find=(
             "Ground-work footage where one person taps and the other lets go straight "
-            "away -- ideally two takes, one good and one where the release is a beat "
+            "away, ideally two takes, one good and one where the release is a beat "
             "late. The second one is the lesson."
         ),
         ask=Ask(
@@ -4971,7 +4971,7 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
             because=(
                 "A tap is a stop sign, and it goes both ways. The person applying "
                 "the hold is responsible for letting go, and the person tapping is "
-                "responsible for tapping early enough that it is still a choice -- not "
+                "responsible for tapping early enough that it is still a choice, not "
                 "an injury. Both sides of that are what let you come back next session."
             ),
         ),
@@ -4985,8 +4985,8 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
         max_age=200,
         target_s=70,
         find=(
-            "A class where the gear is noticeably right for the activity -- mats, "
-            "mouthguards, gloves, protective cups -- next to one where it is casual. "
+            "A class where the gear is noticeably right for the activity, mats, "
+            "mouthguards, gloves, protective cups, next to one where it is casual. "
             "Ideally the two are shown doing the same drill."
         ),
         ask=Ask(
@@ -4998,7 +4998,7 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "The gear is not costume -- it is the answer to whatever the training "
+                "The gear is not costume, it is the answer to whatever the training "
                 "is about. Striking needs headgear and mouthguards; throwing needs mats "
                 "and a clear space; groundwork needs something for the skin. The right "
                 "gear is the one that matches the risk of the session."
@@ -5015,7 +5015,7 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
         target_s=72,
         find=(
             "Training footage where a practitioner gets countered or submitted and then "
-            "resets -- ideally with a brief exchange between partners. The point is the "
+            "resets, ideally with a brief exchange between partners. The point is the "
             "reset, not the mistake."
         ),
         ask=Ask(
@@ -5027,7 +5027,7 @@ MA_FUNDAMENTALS: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "Getting caught is not a verdict on you -- it is information. Every "
+                "Getting caught is not a verdict on you, it is information. Every "
                 "tap or throw is a specific thing that happened in a specific position, "
                 "and the next session is a chance to ask about that one thing. The "
                 "feeling of being outclassed is temporary; the lesson is what stays."
@@ -5047,7 +5047,7 @@ MA_CORE: tuple[Topic, ...] = (
         target_s=115,
         find=(
             "A coaching-education clip or a coach going over a training plan with a "
-            "class -- something about how often a young athlete should train, what they "
+            "class, something about how often a young athlete should train, what they "
             "should and should not be doing, and that more is not always better."
         ),
         ask=Ask(
@@ -5059,7 +5059,7 @@ MA_CORE: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "A growing body is not a small adult body -- it needs recovery, variety, "
+                "A growing body is not a small adult body, it needs recovery, variety, "
                 "and time to develop. Training more is not automatically training better, "
                 "and overtraining a young athlete is how they stop enjoying it, or get "
                 "hurt, long before they have a chance to get good at it."
@@ -5076,13 +5076,13 @@ MA_CORE: tuple[Topic, ...] = (
         target_s=120,
         find=(
             "Sparring or randori footage where partners are clearly listening to each "
-            "other -- helping with a correction, resetting after a good exchange. The "
+            "other, helping with a correction, resetting after a good exchange. The "
             "point is the tone of the interaction, not the technique."
         ),
         ask=Ask(
             prompt="When someone gives you a hard fight in training, what is the best way to think about it?",
             options=(
-                "They just showed you something real about your game -- thank them for it",
+                "They just showed you something real about your game, thank them for it",
                 "They are trying to beat you and you should try harder next time",
                 "It means you need a different partner",
             ),
@@ -5090,7 +5090,7 @@ MA_CORE: tuple[Topic, ...] = (
             because=(
                 "A training partner who pushes you is giving you the closest thing to "
                 "real resistance you will get short of a competition. That is valuable "
-                "on its own, and it is also information -- about what works, what does "
+                "on its own, and it is also information, about what works, what does "
                 "not, and what you need to work on. Treating it as a lesson rather than "
                 "a loss is what lets you come back better."
             ),
@@ -5109,7 +5109,7 @@ MA_ADVANCED: tuple[Topic, ...] = (
         target_s=155,
         find=(
             "A coaching-education or athlete-student clip about preparing for a "
-            "tournament or grading -- what to eat, how to warm up, what to bring, how "
+            "tournament or grading, what to eat, how to warm up, what to bring, how "
             "to handle being there. Something that treats the day as a day, not just "
             "the match."
         ),
@@ -5124,7 +5124,7 @@ MA_ADVANCED: tuple[Topic, ...] = (
             because=(
                 "A competition is a long day in a strange place with your adrenaline "
                 "on. The people who do well are usually the ones who planned the whole "
-                "day -- food, warm-up, rest between fights or matches -- and not just "
+                "day, food, warm-up, rest between fights or matches, and not just "
                 "the ones who walked on cold and hoped."
             ),
         ),
@@ -5139,13 +5139,13 @@ MA_ADVANCED: tuple[Topic, ...] = (
         target_s=145,
         find=(
             "A clip or short piece about how long it takes to develop real skill in a "
-            "martial art -- belt progressions, the idea that strength and speed come "
+            "martial art, belt progressions, the idea that strength and speed come "
             "later, or a coach talking about what they were like when they started."
         ),
         ask=Ask(
             prompt="What is the most realistic way to think about getting good at a martial art?",
             options=(
-                "It is a long path, and progress comes in seasons -- some fast, some slow -- not in a straight line",
+                "It is a long path, and progress comes in seasons, some fast, some slow, not in a straight line",
                 "If you are not improving fast, you are doing it wrong",
                 "The goal is to get a belt as quickly as possible",
             ),
@@ -5153,7 +5153,7 @@ MA_ADVANCED: tuple[Topic, ...] = (
             because=(
                 "Real skill is built by showing up over a long time, with bad days and "
                 "plateaus and sudden jumps mixed together. Treat it like that and the "
-                "slow parts are not a failure -- they are the path. Treat it like a race "
+                "slow parts are not a failure, they are the path. Treat it like a race "
                 "and you will probably end up somewhere else."
             ),
         ),
@@ -5167,7 +5167,7 @@ MA_ADVANCED: tuple[Topic, ...] = (
         max_age=200,
         target_s=140,
         find=(
-            "A coach or athlete talking about rest, recovery, or overtraining -- "
+            "A coach or athlete talking about rest, recovery, or overtraining, "
             "ideally in a martial-arts context, but any sport where showing up is the "
             "point works too. The idea is the part about recovery being part of it."
         ),
@@ -5197,7 +5197,7 @@ MA_ADVANCED: tuple[Topic, ...] = (
         max_age=200,
         target_s=142,
         find=(
-            "A short piece -- coaching education, athlete interview, or similar -- about "
+            "A short piece, coaching education, athlete interview, or similar, about "
             "how other kinds of movement (running, gymnastics, swimming, team sports) "
             "help a martial artist. The point is the crossover, not any one sport."
         ),
@@ -5210,7 +5210,7 @@ MA_ADVANCED: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "Martial arts use your whole body and your whole attention -- balance, "
+                "Martial arts use your whole body and your whole attention, balance, "
                 "stamina, coordination, timing. Other sports train pieces of that in "
                 "different ways, and a body and mind that are good at more than one thing "
                 "usually come into the mat better than one that only ever knows one thing."
@@ -5244,7 +5244,7 @@ ROW_FUNDAMENTALS: tuple[Topic, ...] = (
         max_age=200,
         target_s=65,
         find=(
-            "Footage of a rower from the side -- ideally slow motion -- where the "
+            "Footage of a rower from the side, ideally slow motion, where the "
             "blade goes in cleanly, pulls, and comes out cleanly, next to one where "
             "it catches bad or checks out early. The first five strokes of a piece "
             "are often the most readable."
@@ -5260,7 +5260,7 @@ ROW_FUNDAMENTALS: tuple[Topic, ...] = (
             because=(
                 "A rowing stroke is the boat moving away from a blade that is not "
                 "moving through the water. A clean catch and a clean finish are what "
-                "make that work -- the middle is the part everyone watches, but the "
+                "make that work, the middle is the part everyone watches, but the "
                 "two ends are what decide whether it was a good stroke."
             ),
         ),
@@ -5274,7 +5274,7 @@ ROW_FUNDAMENTALS: tuple[Topic, ...] = (
         max_age=200,
         target_s=68,
         find=(
-            "Side-on footage of the recovery -- body coming forward before the catch, "
+            "Side-on footage of the recovery, body coming forward before the catch, "
             "sequencing from arms to body to slide. Contrast with a rower diving "
             "head-first into the catch."
         ),
@@ -5283,13 +5283,13 @@ ROW_FUNDAMENTALS: tuple[Topic, ...] = (
             options=(
                 "The body should move toward the catch in a controlled sequence, so the next stroke starts ready",
                 "You should rush to get back to the catch as fast as possible",
-                "Nothing -- the recovery is the easy part and does not matter",
+                "Nothing, the recovery is the easy part and does not matter",
             ),
             answer=0,
             because=(
                 "A rushed or collapsed recovery gives away the run the drive just "
                 "earned and leaves you reaching at the catch. Good recovery is what "
-                "lets the drive be good too -- it is not rest, it is the other half "
+                "lets the drive be good too, it is not rest, it is the other half "
                 "of the stroke."
             ),
         ),
@@ -5304,7 +5304,7 @@ ROW_FUNDAMENTALS: tuple[Topic, ...] = (
         target_s=70,
         find=(
             "Coaching-education or safety-oriented footage about the physical reality "
-            "of the water -- capsize recovery, being aware of where you are, and the "
+            "of the water, capsize recovery, being aware of where you are, and the "
             "difference between a training session on a buoyed stretch and open water."
         ),
         ask=Ask(
@@ -5316,7 +5316,7 @@ ROW_FUNDAMENTALS: tuple[Topic, ...] = (
             ),
             answer=0,
             because=(
-                "A buoyed stretch is a controlled place to train. Open water is not -- "
+                "A buoyed stretch is a controlled place to train. Open water is not, "
                 "weather, traffic, and distance all matter more than they do on a "
                 "practice course, and the skills that keep you safe on one do not "
                 "automatically cover the other."
@@ -5335,8 +5335,8 @@ ROW_CORE: tuple[Topic, ...] = (
         max_age=200,
         target_s=120,
         find=(
-            "Side-on slow motion of a strong clean drive -- legs, then body, then arms "
-            "in sequence -- next to one where the arms and back do too much too early. "
+            "Side-on slow motion of a strong clean drive, legs, then body, then arms "
+            "in sequence, next to one where the arms and back do too much too early. "
             "Two or three strokes is enough."
         ),
         ask=Ask(
@@ -5350,7 +5350,7 @@ ROW_CORE: tuple[Topic, ...] = (
             because=(
                 "The legs are the biggest muscles and they do the biggest part of the "
                 "work first. When the arms or back start too early, the rest of the "
-                "stroke is starved of the run they should have had -- and the stroke is "
+                "stroke is starved of the run they should have had, and the stroke is "
                 "slower and harder on the back for it."
             ),
         ),
@@ -5365,7 +5365,7 @@ ROW_CORE: tuple[Topic, ...] = (
         target_s=125,
         find=(
             "Footage of a clean, quiet catch next to one where the blade checks the "
-            "boat or splashes. Slow motion is ideal -- the catch happens fast and the "
+            "boat or splashes. Slow motion is ideal, the catch happens fast and the "
             "difference is small."
         ),
         ask=Ask(
@@ -5380,7 +5380,7 @@ ROW_CORE: tuple[Topic, ...] = (
                 "A catch that is too hard or too early hits the water like a brake, "
                 "because the blade is still accelerating when it meets it. A good catch "
                 "is one where the blade gets in cleanly and starts working without "
-                "stopping the boat -- quiet is the sign of that."
+                "stopping the boat, quiet is the sign of that."
             ),
         ),
     ),
@@ -5394,8 +5394,8 @@ ROW_CORE: tuple[Topic, ...] = (
         target_s=115,
         find=(
             "Footage from a launch or a camera on the bank showing a four or an eight "
-            "where one side is clearly doing something different -- over-driving, "
-            "checking the boat, rushing -- and how it affects the run. A single sculler "
+            "where one side is clearly doing something different, over-driving, "
+            "checking the boat, rushing, and how it affects the run. A single sculler "
             "works too if the point is about balance."
         ),
         ask=Ask(
@@ -5409,7 +5409,7 @@ ROW_CORE: tuple[Topic, ...] = (
             because=(
                 "A rowing boat is a thin thing on a thin thing, and it runs on a line "
                 "that is easy to lose. A bad side, a late catch on one side, an uneven "
-                "finish -- all of it tilts the boat and slows it. Balance is not a "
+                "finish, all of it tilts the boat and slows it. Balance is not a "
                 "nice-to-have, it is part of the speed."
             ),
         ),
@@ -5424,13 +5424,13 @@ ROW_CORE: tuple[Topic, ...] = (
         target_s=118,
         find=(
             "A race or time-trial piece where the first ten strokes are clearly set "
-            "rather than thrown -- ideally with splits or rate visible. Contrast with "
+            "rather than thrown, ideally with splits or rate visible. Contrast with "
             "one where the rowers sprint at the start and pay for it."
         ),
         ask=Ask(
             prompt="How should a piece usually start?",
             options=(
-                "With a controlled build -- getting to race pace rather than starting there",
+                "With a controlled build, getting to race pace rather than starting there",
                 "As fast as possible from the first stroke",
                 "Slowly, then speeding up later",
             ),
@@ -5455,7 +5455,7 @@ ROW_ADVANCED: tuple[Topic, ...] = (
         max_age=200,
         target_s=150,
         find=(
-            "Coaching-education or sports-medicine footage about backs in rowing -- "
+            "Coaching-education or sports-medicine footage about backs in rowing, "
             "core support, sequencing, how much is too much, and what overuse looks "
             "like before it becomes an injury. Something aimed at young rowers."
         ),
@@ -5470,8 +5470,8 @@ ROW_ADVANCED: tuple[Topic, ...] = (
             because=(
                 "Rowing is a repeated extension under load, and a young rower who rows "
                 "too much, rows badly, or rows through the pain that should have been a "
-                "warning is the one who ends up stopped. Looking after the back -- technique, "
-                "core, and sensible volume -- is what lets a rowing career last long enough to "
+                "warning is the one who ends up stopped. Looking after the back, technique, "
+                "core, and sensible volume, is what lets a rowing career last long enough to "
                 "mean anything."
             ),
         ),
@@ -5485,7 +5485,7 @@ ROW_ADVANCED: tuple[Topic, ...] = (
         max_age=200,
         target_s=155,
         find=(
-            "A coach or sports-medicine clip about training volume in rowing -- how much "
+            "A coach or sports-medicine clip about training volume in rowing, how much "
             "is appropriate for a young rower, what signs to watch for, and why more is "
             "not automatically better. Ideally aimed at a developing athlete."
         ),
@@ -5499,7 +5499,7 @@ ROW_ADVANCED: tuple[Topic, ...] = (
             answer=0,
             because=(
                 "Rowing is one of the sports where volume is part of what you are training "
-                "for -- but volume without recovery and without good technique is how "
+                "for, but volume without recovery and without good technique is how "
                 "overuse happens. A young rower who treats every week as a chance to add "
                 "more is one bad back or one overuse injury away from a season that is "
                 "gone."
@@ -5522,13 +5522,13 @@ ROW_ADVANCED: tuple[Topic, ...] = (
         ask=Ask(
             prompt="What is the difference between rowing fast and rowing hard?",
             options=(
-                "Rowing fast is the boat moving well; rowing hard is the rower working hard -- and they are not the same thing",
+                "Rowing fast is the boat moving well; rowing hard is the rower working hard, and they are not the same thing",
                 "They are the same thing",
                 "Rowing hard always makes the boat faster",
             ),
             answer=0,
             because=(
-                "You can work very hard and still lose the run of the boat -- rushing the "
+                "You can work very hard and still lose the run of the boat, rushing the "
                 "recovery, checking at the catch, breaking the connection. Good rowing is "
                 "the thing that makes the boat go fast, not the thing that makes the rower "
                 "appear to be trying hardest."
@@ -5544,14 +5544,14 @@ ROW_ADVANCED: tuple[Topic, ...] = (
         max_age=200,
         target_s=140,
         find=(
-            "Footage from the coxswain's seat or from a launch following a boat -- "
+            "Footage from the coxswain's seat or from a launch following a boat, "
             "showing a cox calling a piece, making a correction, and steering. Ideally "
             "something with a clear call and a clear response."
         ),
         ask=Ask(
             prompt="What is the job of a coxswain in a race?",
             options=(
-                "To steer the straightest line, call the race plan, and keep the crew organized and motivated -- all of it at once",
+                "To steer the straightest line, call the race plan, and keep the crew organized and motivated, all of it at once",
                 "To yell louder than anyone else",
                 "To sit at the back and watch",
             ),
@@ -5559,7 +5559,7 @@ ROW_ADVANCED: tuple[Topic, ...] = (
             because=(
                 "A coxswain is not a mascot and not just a voice. A good one sets the "
                 "line, runs the race, reads the other boat, and keeps the crew doing the "
-                "thing they practiced -- all while the boat is moving under them. The "
+                "thing they practiced, all while the boat is moving under them. The "
                 "crew can only do their job if the cox is doing theirs."
             ),
         ),

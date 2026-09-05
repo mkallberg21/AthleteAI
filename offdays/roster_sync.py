@@ -277,7 +277,7 @@ PROVIDERS: tuple[Provider, ...] = (
         fetch=_csv_url,
         verified=True,
         note=(
-            "Works with anything that can produce a CSV link — Stack Sports, "
+            "Works with anything that can produce a CSV link: Stack Sports, "
             "LeagueApps, Sports Connect, a school export, a shared sheet. "
             "Goes through the same parser as the upload button, which is why "
             "this is the one adapter that is actually proven."

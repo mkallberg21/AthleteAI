@@ -1469,3 +1469,205 @@ code, .code, .claim-code {
    names needs to find theirs without reading every line. */
 tr.mine { background: rgba(0, 139, 253, 0.10); }
 tr.mine td { border-color: var(--accent-dim); }
+
+/* ---------------------------------------------------------------
+   TRAINING LOAD GAUGE
+
+   The markup for this shipped without any styles at all, so the
+   athlete's workload gauge rendered as three words concatenated
+   against the left edge ("easiersteadysharp jump") with no track,
+   no steady band, and no marker. It is the one number on the home
+   screen that is about not getting hurt, so it has to read.
+
+   The track runs 0 to 2 on the acute:chronic ratio. The shaded
+   band is the steady range, and the marker is where this athlete
+   actually sits.
+   --------------------------------------------------------------- */
+.gauge {
+  position: relative;
+  margin: 14px 0 26px;
+  padding-top: 2px;
+}
+.gauge-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.gauge-safe {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--go);
+  opacity: 0.55;
+}
+.gauge-mark {
+  position: absolute;
+  top: 0;
+  width: 3px;
+  height: 14px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.gauge-mark.elevated { background: var(--warn); }
+.gauge-mark.high     { background: var(--danger); }
+.gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 9px;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+/* ---------------------------------------------------------------
+   THE REST OF THE TRAINING-LOAD AND BUDGET CARD
+
+   These classes were in the markup with no rules behind them, so
+   the athlete's home screen rendered a scale as "075 min for a
+   good week" (the zero and the target with nothing between them),
+   advisories at body size with an invisible bullet, and the zone
+   label as plain text. All of it is the wellbeing half of the
+   screen, which is the half that has to be legible.
+   --------------------------------------------------------------- */
+.budget-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.budget-head span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.budget-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.budget-bar .ceiling {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: calc(100% + 4px);
+  background: var(--text-dim);
+  opacity: 0.7;
+}
+
+.load-zone {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.load-zone.optimal    { color: var(--go);     border-color: #1C5E3A; background: rgba(18,161,80,0.12); }
+.load-zone.elevated   { color: #E39A2B;       border-color: #6B4A16; background: rgba(199,119,0,0.12); }
+.load-zone.high       { color: var(--danger); border-color: #6E2C28; background: rgba(221,90,80,0.12); }
+.load-zone.detraining { color: var(--text-dim); }
+
+/* An advisory is a sentence about this athlete's body. It reads as a note,
+   not as a headline, because the headline is the number above it. */
+.advisory {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+.advisory em {
+  display: block;
+  font-style: normal;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.advisory .dotmark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.advisory.info .dotmark    { background: var(--accent); }
+.advisory.caution .dotmark { background: var(--warn); }
+.advisory.warning .dotmark { background: var(--danger); }
+.advisory.warning { color: var(--text); }
+
+/* ---------------------------------------------------------------
+   THE DRILL PICKER AND THE STAT ROW
+
+   Two more blocks whose markup shipped without rules. The picker
+   is the screen an athlete opens to train, and it was rendering as
+   default grey browser buttons with centre-aligned paragraphs. The
+   stat row ran its number straight into its label, so a streak
+   read "35Day streak".
+   --------------------------------------------------------------- */
+.drill-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  margin-top: 9px;
+  padding: 13px 15px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.drill-btn:hover { background: var(--surface-2, var(--surface)); border-color: var(--border-light); }
+.drill-btn:active { transform: translateY(1px); }
+.drill-btn b {
+  display: block;
+  font-family: var(--font-condensed);
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.drill-btn span {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.drill-btn .transfer-inline { color: var(--text-dim); font-size: 0.8rem; }
+.drill-btn .held-note { color: var(--warn); font-size: 0.8rem; }
+/* A drill an athlete cannot start right now still shows, with its reason. */
+.drill-btn.held { border-left-color: var(--warn); opacity: 0.75; }
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 12px;
+}
+.stat b {
+  display: block;
+  font-family: var(--font-condensed);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat span {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}

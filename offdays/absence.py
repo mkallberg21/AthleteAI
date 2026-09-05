@@ -116,12 +116,12 @@ def schedule(
         raise AbsenceError("an absence cannot end before it starts")
     if (end - start).days + 1 > MAX_DAYS:
         raise AbsenceError(
-            f"{(end - start).days + 1} days is longer than a pause — "
+            f"{(end - start).days + 1} days is longer than a pause, and "
             f"{MAX_DAYS} is the most this will hold a streak across"
         )
     if (today - start).days > MAX_BACKDATE_DAYS:
         raise AbsenceError(
-            f"an absence can only start up to {MAX_BACKDATE_DAYS} days ago — "
+            f"an absence can only start up to {MAX_BACKDATE_DAYS} days ago, and "
             "this is for a trip, not for repairing an old gap"
         )
     if (start - today).days > MAX_LEAD_DAYS:
@@ -198,5 +198,5 @@ def note(absence: Absence | None) -> str:
     reason = f" ({absence.reason})" if absence.reason else ""
     return (
         f"You are down as away until {absence.ends_on.isoformat()}{reason}. "
-        "Your streak is paused, not broken — pick it back up when you are home."
+        "Your streak is paused, not broken. Pick it back up when you are home."
     )

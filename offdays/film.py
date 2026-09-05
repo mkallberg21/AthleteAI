@@ -416,7 +416,7 @@ class DayState:
         if self.spent:
             return (
                 "That is your film for today. It is meant to be a few minutes, "
-                "not an evening — the rest of the learning happens with a stick "
+                "not an evening, because the rest of the learning happens with a stick "
                 "in your hands and in actual games."
             )
         if self.clips == 0:

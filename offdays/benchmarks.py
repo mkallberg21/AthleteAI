@@ -321,7 +321,7 @@ def assess_time(
                 band=band, week=week, status=Status.FULL,
                 headline="Enjoy the break",
                 detail=(
-                    "Nothing logged, and that is fine right now — the rest "
+                    "Nothing logged, and that is fine right now. The rest "
                     "between seasons is what lets you come back fresh. Pick it "
                     "up when pre-season starts."
                 ),
@@ -345,7 +345,7 @@ def assess_time(
             headline="That is more than enough for this week",
             detail=(
                 f"{round(minutes)} minutes is past the {band.weekly_max} that suits "
-                f"your age. Take a couple of days off — rest is when the work "
+                f"your age. Take a couple of days off, because rest is when the work "
                 "actually turns into progress, and there is more to being your age "
                 "than this."
             ),
@@ -360,7 +360,7 @@ def assess_time(
             detail=(
                 f"{round(minutes)} minutes over {week.days} day{_s(week.days)} is a "
                 "full week for "
-                "your age. Anything else is a bonus, not a requirement — go and do "
+                "your age. Anything else is a bonus and not a requirement, so go and do "
                 "something else."
             ),
             fraction=min(1.5, fraction), phase=phase,
@@ -385,7 +385,7 @@ def assess_time(
             headline="Ticking over nicely",
             detail=(
                 f"{round(minutes)} minutes during the break is plenty. There is "
-                "nothing to catch up on — this is the part of the year where "
+                "nothing to catch up on. This is the part of the year where "
                 "doing less is the training."
             ),
             fraction=fraction, phase=phase,
@@ -827,7 +827,7 @@ def _specialisation_note(
             reason = (
                 f" You have {profile.primary.sport.label} down for most of the "
                 f"year{others}, so we are giving the all-round work a bit longer "
-                "than usual — that is the part that protects you."
+                "than usual, and that is the part that protects you."
             )
         else:
             played = _names([p.sport.label for p in profile.participations])
@@ -846,7 +846,7 @@ def _specialisation_note(
         "detail": (
             f"Your training plan is the all-round one until you are {min_age}. "
             "The best players your age are the ones who can run, jump, land and "
-            "change direction — that is what turns into being good at "
+            "change direction, and that is what turns into being good at "
             f"{label} later, and it is worth more right now than practising one "
             f"job.{reason}"
         ),
@@ -876,7 +876,7 @@ def _sport_advisories(profile: sports.Profile, age: int | None) -> list[str]:
     if profile.level == sports.Level.HIGH:
         out.append(
             f"{profile.primary.sport.label} is most of your year. The strongest "
-            "thing you could do for it is a season of something else — a "
+            "thing you could do for it is a season of something else, a "
             "different sport builds parts of you this one never asks for, and "
             "it is the single best protection against getting hurt."
         )
@@ -884,14 +884,14 @@ def _sport_advisories(profile: sports.Profile, age: int | None) -> list[str]:
         out.append(
             f"{profile.primary.sport.label} is the only sport you have down. "
             "At your age, playing a second one is not a distraction from this "
-            "— it is one of the better things you can do for it."
+            "and it is one of the better things you can do for it."
         )
 
     if profile.sport_count >= 2:
         played = _names([p.sport.label for p in profile.participations])
         out.append(
             f"You play {played}. That already counts as training, so what you "
-            "do here does not need to be as long — the weekly number below has "
+            "do here does not need to be as long, and the weekly number below has "
             "been trimmed to match."
         )
     return out
@@ -979,7 +979,7 @@ def report(
     if week.longest_session_minutes > band.session_max:
         advisories.append(
             f"One session ran {round(week.longest_session_minutes)} minutes. "
-            f"Around {band.session_max} is plenty in one go at your age — "
+            f"Around {band.session_max} is plenty in one go at your age, and "
             "shorter and more often beats one long grind."
         )
     if week.days > band.days_max:

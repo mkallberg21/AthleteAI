@@ -151,7 +151,7 @@ MILESTONES: tuple[Milestone, ...] = (
         streak=None,
         bodies=(
             "{first_name}, that is your first one logged. The hard part is "
-            "starting and you have done it — see you at practice.",
+            "starting and you have done it. See you at practice.",
             "First one on the board, {first_name}. Everything after this is "
             "just keeping it going.",
             "{first_name}, you have got one in the bank. That is one more "
@@ -199,7 +199,7 @@ MILESTONES: tuple[Milestone, ...] = (
             "Three days, {first_name}. Something is starting here.",
             "{first_name}, three on the trot. Keep the chain going.",
             "That is three, {first_name}. Habits are built in threes.",
-            "{first_name}, day three. Most people stop at one — you did not.",
+            "{first_name}, day three. Most people stop at one. You did not.",
             "Three days deep, {first_name}. This is the part that counts.",
             "{first_name}, three in three. That is a pattern, not luck.",
             "Third day running, {first_name}. I am watching this one.",
@@ -229,7 +229,7 @@ MILESTONES: tuple[Milestone, ...] = (
             "Well done.",
             "{first_name}, that is five. A working week of turning up.",
             "Five straight, {first_name}. You are past where most stop.",
-            "{first_name}, five days. This is no longer a good week — it is "
+            "{first_name}, five days. This is no longer a good week. It is "
             "how you train.",
             "That is five in five, {first_name}. Quietly excellent.",
             "{first_name}, five on the trot. The chain is getting hard to "
@@ -334,7 +334,7 @@ MILESTONES: tuple[Milestone, ...] = (
         label="A hundred days in a row",
         streak=100,
         bodies=(
-            "{first_name} — one hundred days. I am not sure what to say "
+            "{first_name}, one hundred days. I am not sure what to say "
             "except that I have coached a long time and this is rare.",
             "One hundred, {first_name}. Three months and change without "
             "missing. I have not seen many of those.",
@@ -342,7 +342,7 @@ MILESTONES: tuple[Milestone, ...] = (
             "somebody else's career.",
             "A hundred straight, {first_name}. Whatever happens on the "
             "field, you have already proved something.",
-            "{first_name} — one hundred. I would like to shake your hand.",
+            "{first_name}, one hundred. I would like to shake your hand.",
             "A hundred days, {first_name}. That is not talent. That is much "
             "harder to come by than talent.",
         ),
@@ -352,7 +352,7 @@ MILESTONES: tuple[Milestone, ...] = (
             "{first_name}, a hundred days. I am so proud I could burst.",
             "A hundred in a row, {first_name}. Nobody in this house made you "
             "do a single one.",
-            "{first_name} — one hundred days. That is remarkable and you "
+            "{first_name}, one hundred days. That is remarkable and you "
             "should know it.",
             "A hundred straight, {first_name}. I will remember this one.",
             "{first_name}, one hundred. Extraordinary.",

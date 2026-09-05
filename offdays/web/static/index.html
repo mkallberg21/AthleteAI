@@ -41,7 +41,7 @@
       <h1 style="font-size:1.6rem; margin-bottom:0.5rem;">Train on your own. Get the credit.</h1>
       <p style="font-size:0.9rem;">Record your drills with your phone. The app counts your reps on the phone itself and sends the numbers to your coach.</p>
       <div class="privacy-note" style="text-align:left; margin-top:0.75rem;">
-        <strong style="color:var(--accent-bright)">Your video never leaves your phone.</strong> It is not uploaded, not saved, and not stored anywhere. Only the counts — reps, which hand, how long — are sent. Your coach sees the numbers, never the footage.
+        <strong style="color:var(--accent-bright)">Your video never leaves your phone.</strong> It is not uploaded, not saved, and not stored anywhere. Only the counts are sent: reps, which hand, how long. Your coach sees the numbers, never the footage.
       </div>
     </div>
 
@@ -131,7 +131,7 @@
       <div class="section-header">
         <span class="section-title">Starting a program?</span>
       </div>
-      <p class="small muted" style="margin-top:0.25rem;">Set up your club or school here. Pick your sport and the app fits itself around it — positions, the drills it suggests, and which other sports it tells your athletes their training carries over into.</p>
+      <p class="small muted" style="margin-top:0.25rem;">Set up your club or school here. Pick your sport and the app fits itself around it: positions, the drills it suggests, and which other sports it tells your athletes their training carries over into.</p>
       <form style="margin-top:0.75rem;">
         <div class="form-group">
           <label class="form-label" for="org-name">Program name</label>
@@ -182,7 +182,7 @@ function describeSport() {
   const count = Number(chosen.dataset.positions || 0);
   $('org-sport-note').textContent = count
     ? `${count} positions, each with its own suggested mix of work.`
-    : 'No positions modelled for this one yet — athletes get the all-round plan.';
+    : 'No positions modelled for this one yet, so athletes get the all-round plan.';
 }
 
 $('org-sport').addEventListener('change', describeSport);
@@ -201,7 +201,7 @@ $('create-family').addEventListener('click', async () => {
       body: { parent_name: parent, family_name: $('fam-name').value.trim() },
     });
     $('fam-token').innerHTML =
-      `You are set up. This is your code &mdash; copy it now, it is not shown
+      `You are set up. This is your code. Copy it now, it is not shown
        again:<br><code style="word-break:break-all">${res.parent.token}</code>
        <br>Sign in with it above, then add your children.`;
     $('fam-token').classList.remove('hidden');
@@ -226,7 +226,7 @@ $('create-org').addEventListener('click', async () => {
       body: { name, sport: $('org-sport').value, director_name: director },
     });
     $('org-token').innerHTML =
-      `<b>${name}</b> is set up. This is your director code &mdash; copy it now,
+      `<b>${name}</b> is set up. This is your director code. Copy it now,
        it is not shown again:<br>
        <code style="word-break:break-all">${res.director.token}</code>`;
     $('org-token').classList.remove('hidden');

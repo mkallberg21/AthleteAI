@@ -240,7 +240,7 @@ def assess(report: Report) -> Assessment:
             headline="Stop for today and find an adult now",
             detail=(
                 f"Anything in your {report.area.label.lower()} is worth an adult "
-                "looking at straight away — today, not tomorrow. Don't train, "
+                "looking at straight away. Today, not tomorrow. Don't train, "
                 "don't play, and tell your parent or your coach now. If you took "
                 "a knock to the head and feel dizzy, sick, foggy or your vision "
                 "is off, that is a hospital question, not an app question."
@@ -283,7 +283,7 @@ def assess(report: Report) -> Assessment:
             action=Action.EASE_OFF,
             headline=f"Give your {report.area.label.lower()} a couple of days",
             detail=(
-                "Anything that loads it is off the list for now — the app will "
+                "Anything that loads it is off the list for now, and the app will "
                 "hide those drills and leave the rest. Your streak is safe "
                 "either way. If it is still there in a few days, or it gets "
                 "worse, tell someone rather than waiting it out."

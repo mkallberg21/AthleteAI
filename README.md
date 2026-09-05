@@ -89,7 +89,7 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 3981 tests
+python -m pytest tests/ -q          # 3993 tests
 
 DRILL_SPECS="$(python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))')" \
   node --test tests/js/*.test.mjs   # 261 tests
@@ -2675,7 +2675,7 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 29 modules across 413 call sites.
+SQL lives in 29 modules across 414 call sites.
 store.py holds 39% of them.
 
 924 occurrences are mechanical (search-and-replace with tests behind it).

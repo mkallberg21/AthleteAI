@@ -47,7 +47,7 @@ def main() -> int:
         "--workers",
         type=int,
         default=None,
-        help="uvicorn workers (default: 1 — this app is not yet stateless "
+        help="uvicorn workers (default: 1, because this app is not yet stateless "
         "at the worker level; see docs before setting >1)",
     )
     ap.add_argument(

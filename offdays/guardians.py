@@ -52,7 +52,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .db import hash_token, new_token, transaction
+from .db import fresh_token, hash_token, new_token, transaction
 
 # The terms a guardian is agreeing to. Stored with each consent so a later
 # policy change cannot be applied retroactively to an agreement made under
@@ -89,7 +89,7 @@ SCOPES = (
         "Let a coach watch a clip your athlete chooses to send",
         "Off unless you turn it on. Everywhere else in this app video stays on "
         "your athlete's phone and is never uploaded. With this on, they can "
-        "choose to send one specific clip to their coach for feedback — never "
+        "choose to send one specific clip to their coach for feedback, never "
         "automatically, always one at a time. Clips are deleted after 30 days, "
         "and turning this off deletes any that are still there straight away.",
     ),
@@ -114,7 +114,7 @@ FAMILY_SCOPE_COPY = {
         "Let clips your athlete sends reach your dashboard",
         "Off unless you turn it on. Everywhere else in this app video stays on "
         "their phone. With this on, they can choose to send you one specific "
-        "clip for feedback — their choice, one at a time, never automatic. It "
+        "clip for feedback: their choice, one at a time, never automatic. It "
         "is uploaded to do that, so it is a real decision and not just a "
         "screen. Clips are deleted after 30 days, and turning this off deletes "
         "them straight away.",
@@ -259,7 +259,7 @@ def redeem_invite(
     if athlete is None:
         raise GuardianError("that athlete is no longer in the program")
 
-    token = new_token()
+    token = fresh_token(conn)
     with transaction(conn) as c:
         cur = c.execute(
             "INSERT INTO users(org_id, role, display_name, email, token_hash, created_at) "

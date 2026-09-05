@@ -96,7 +96,7 @@ class KPI:
     def formatted(self, value: float | None = None) -> str:
         raw = self.value if value is None else value
         if raw is None:
-            return "—"
+            return "–"
         if self.unit == "percent":
             return f"{raw * 100:.0f}%"
         if self.unit == "score":
@@ -423,7 +423,7 @@ def _headline(digest: TeamDigest, current: WeekStats) -> str:
     improving = [k for k in digest.kpis if k.direction == "up"]
     if improving:
         top = max(improving, key=lambda k: abs(k.delta_pct or 0.05))
-        return f"{top.label} {top.change_text()} — now {top.formatted()}."
+        return f"{top.label} {top.change_text()}, now {top.formatted()}."
 
     if current.reps:
         return (
@@ -451,7 +451,7 @@ def _milestones(current: WeekStats, previous: WeekStats, roster: int) -> list[st
 
     if current.reps > previous.reps and previous.reps:
         out.append(
-            f"{current.reps - previous.reps:,} more reps than last week — "
+            f"{current.reps - previous.reps:,} more reps than last week, and "
             f"{current.reps / max(1, current.active_athletes):,.0f} per active athlete."
         )
 
@@ -860,7 +860,7 @@ def subject_line(digest: TeamDigest) -> str:
     scope = digest.team_name if digest.team_id else digest.org_name
     participation = digest.kpi("participation")
     if participation and participation.is_record:
-        return f"{scope}: record week — {participation.formatted()} of the squad trained"
+        return f"{scope}: record week, {participation.formatted()} of the squad trained"
     if participation and participation.value:
         return (
             f"{scope}: {participation.formatted()} trained last week"

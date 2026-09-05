@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>0FFDAYS &mdash; Train</title>
+<title>0FFDAYS · Train</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="color-scheme" content="dark">
 <meta name="supported-color-schemes" content="dark">
@@ -115,7 +115,7 @@
           What else do you play?
         </summary>
         <p class="small muted" style="margin:8px 0">
-          Tick the seasons you play each one. This is not a test &mdash; it lets
+          Tick the seasons you play each one. This is not a test. It lets
           the app stop expecting the same driveway time from someone who is
           already at basketball twice a week.
         </p>
@@ -191,7 +191,7 @@
         <div class="stat"><b id="s-xp">0</b><span>Total XP</span></div>
         <div class="stat"><b id="s-today">0</b><span>XP today</span></div>
         <div class="stat"><b id="s-offhand">0</b><span>Off-hand reps</span></div>
-        <div class="stat"><b id="s-quality">&mdash;</b><span>Form score</span></div>
+        <div class="stat"><b id="s-quality">–</b><span>Form score</span></div>
       </div>
       <div id="streak-warn" class="banner warn hidden" style="position:static;margin-top:12px"></div>
     </div>
@@ -483,7 +483,7 @@ async function loadHome(prefetched) {
 
   const q = profile.quality || {};
   if (q.current === null || q.current === undefined) {
-    $('s-quality').textContent = '—';
+    $('s-quality').textContent = '–';
   } else {
     const arrow = q.trend > 2 ? ' <span class="trend-up">&#9650;</span>'
       : q.trend < -2 ? ' <span class="trend-down">&#9660;</span>' : '';
@@ -500,7 +500,7 @@ async function loadHome(prefetched) {
     warn.textContent = `Train today to keep your ${profile.streak}-day streak alive.`;
     warn.classList.remove('hidden');
   } else if (profile.xp_today >= profile.daily_cap) {
-    warn.textContent = "You've hit today's XP cap. Rest up — it resets tomorrow.";
+    warn.textContent = "You've hit today's XP cap. Rest up, it resets tomorrow.";
     warn.classList.remove('hidden');
   } else {
     warn.classList.add('hidden');
@@ -568,7 +568,7 @@ async function loadBudget() {
   $('budget-headline').textContent = b.headline;
   $('budget-band').textContent = `${b.band.label} · ${b.band.weekly_target} min/week`;
   $('budget-detail').textContent = b.detail;
-  $('budget-target-label').textContent = `${b.band.weekly_target} min — a good week`;
+  $('budget-target-label').textContent = `${b.band.weekly_target} min for a good week`;
 
   // Why this number is not the number it was last month. Without it, a budget
   // that drops when the season starts reads as the app moving the goalposts.
@@ -594,7 +594,7 @@ async function loadBudget() {
     ? peers.map((p) => `
         <div class="peer">
           <b>${esc(p.label)}</b>
-          <span class="pct">${p.percentile === null ? '&mdash;' : `${p.percentile}<small>th</small>`}</span>
+          <span class="pct">${p.percentile === null ? '–' : `${p.percentile}<small>th</small>`}</span>
           <span>${esc(p.blurb)} Compared with ${esc(p.against || `${p.peer_count} others your age`)}.</span>
         </div>`).join('')
       + `<p class="small muted" style="margin-top:10px">${esc(report.disclaimer)}</p>`
@@ -705,7 +705,7 @@ function startBeats() {
         $('film-state').textContent = 'Watched, start to finish. Nice.';
         showClipQuestion();
       } else if (out.audible_share < 0.6) {
-        $('film-state').textContent = 'Turn the sound up — the coaching is in the audio.';
+        $('film-state').textContent = 'Turn the sound up. The coaching is in the audio.';
       }
     } catch { /* a dropped beat is not worth interrupting a clip for */ }
   }, 4000);
@@ -731,7 +731,7 @@ $('film-options').addEventListener('click', async (event) => {
     // says what the answer was rather than marking anyone.
     $('film-because').textContent = out.correct
       ? `Yes. ${out.because}`
-      : `Not quite — it was "${filmClip.question.options[out.answer]}". ${out.because}`;
+      : `Not quite. It was "${filmClip.question.options[out.answer]}". ${out.because}`;
     $('film-options').querySelectorAll('button').forEach((b) => { b.disabled = true; });
   } catch (e) { showError(e.message); }
 });
@@ -852,7 +852,7 @@ function renderPlans(plans) {
           p.clinician_name ? `, after ${esc(p.clinician_name)}` : ''}.</p>` : ''}
       ${p.can_advance
         ? `<button class="secondary" data-advance="${p.id}">
-             I feel good — next stage</button>`
+             I feel good, next stage</button>`
         : `<p class="small muted" style="margin:0">${esc(p.blocker)}</p>`}
     </div>`).join('');
 }
@@ -870,7 +870,7 @@ $('rtp-plans').addEventListener('click', async (event) => {
 
 function renderWellness(status) {
   $('wellness-state').textContent = status.checked_in_today
-    ? 'Logged today — thanks'
+    ? 'Logged today, thanks'
     : 'Two taps. It never costs you anything.';
 
   $('wellness-guidance').innerHTML = (status.guidance || []).map((g) => `
@@ -1017,7 +1017,7 @@ function renderMix(mix) {
     + `<p class="small muted" style="margin-top:8px">
         Solid is what you did over the last ${mix.window_days} days; the outline is
         the mix that suits your position. Neither is a target for how <em>long</em>
-        you train &mdash; that is the bar above.</p>`;
+        you train. That is the bar above.</p>`;
 
   // Suppressed while an athlete is over their ceiling: there, the only
   // message that should land is "stop".
@@ -1082,7 +1082,7 @@ async function loadTrainingLoad() {
   // The recovery button is the whole point: it removes the reason to train
   // through fatigue, because resting no longer costs the streak.
   $('load-action').innerHTML = state.rest_recommended
-    ? `<button class="secondary rest-cta" id="take-rest">Take a recovery day &mdash; keeps your streak</button>`
+    ? `<button class="secondary rest-cta" id="take-rest">Take a recovery day, it keeps your streak</button>`
     : '';
 
   const btn = $('take-rest');
@@ -1092,7 +1092,7 @@ async function loadTrainingLoad() {
       try {
         await api('/api/recovery', { method: 'POST' });
         $('load-action').innerHTML =
-          '<div class="rest-done">Recovery day logged. Your streak is safe &mdash; '
+          '<div class="rest-done">Recovery day logged. Your streak is safe, and '
           + 'rest is when the work actually turns into progress.</div>';
         await loadHome();
       } catch (e) {
@@ -1165,7 +1165,7 @@ async function loadAssignments() {
         <b>${p.sessions_done}/${a.target_sessions}</b><span>Sessions</span></div>`);
     }
     if (a.min_offhand > 0) {
-      const share = p.offhand_share === null ? '—' : `${Math.round(p.offhand_share * 100)}%`;
+      const share = p.offhand_share === null ? '–' : `${Math.round(p.offhand_share * 100)}%`;
       targets.push(`<div class="target ${p.offhand_met ? 'met' : 'unmet'}">
         <b>${share}</b><span>Off-hand / ${Math.round(a.min_offhand * 100)}%</span></div>`);
     }
@@ -1238,7 +1238,7 @@ async function loadWeekPlan() {
           ? `${-a.days_remaining}d overdue`
           : a.days_remaining === 0 ? 'due today' : `${a.days_remaining}d left`;
         return `<div class="wp-assign-row">
-          <span class="wp-name"><b>${esc(a.title)}</b> — ${esc(a.drill_name)}</span>
+          <span class="wp-name"><b>${esc(a.title)}</b> &middot; ${esc(a.drill_name)}</span>
           <span class="wp-progress">${p.reps_done || 0}/${a.target_reps || 0} reps · ${p.sessions_done || 0}/${a.target_sessions || 0} sessions · ${due}</span>
           ${p.reps_met && p.sessions_met && p.offhand_met
             ? '<span class="pill ok">done</span>'
@@ -1297,8 +1297,8 @@ async function refreshConnBanner() {
   if (!navigator.onLine) {
     el.classList.add('offline');
     text.textContent = queued
-      ? `Offline — ${queued} session${queued === 1 ? '' : 's'} saved, will upload later`
-      : 'Offline — you can still record. Sessions upload when you reconnect.';
+      ? `Offline. ${queued} session${queued === 1 ? '' : 's'} saved, will upload later`
+      : 'Offline. You can still record, and sessions upload when you reconnect.';
   } else if (queued) {
     el.classList.add('syncing');
     text.textContent = `Uploading ${queued} saved session${queued === 1 ? '' : 's'}…`;
@@ -1409,7 +1409,7 @@ async function openCapture(drill) {
         ballCounter = null;
         setBanner('');
       } else {
-        setBanner('Could not load the ball detector — this drill needs it.', true);
+        setBanner('Could not load the ball detector, and this drill needs it.', true);
       }
     }
   }
@@ -1520,7 +1520,7 @@ function renderLoop() {
     const landmarks = result.landmarks && result.landmarks[0];
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!landmarks) {
-      if (running) setBanner('Nobody in frame — counting paused.', true);
+      if (running) setBanner('Nobody in frame, so counting is paused.', true);
       return;
     }
     // Kept for the vision detector, which needs the torso to know how big the
@@ -1586,7 +1586,7 @@ function renderLoop() {
     // held for review, and it is trivially fixable *while* recording.
     const conf = counter.meanConfidence;
     if (conf > 0 && conf < 0.6) {
-      setBanner('Move so your whole body is in frame — reps may be missed.', true);
+      setBanner('Move so your whole body is in frame, or reps may be missed.', true);
     } else {
       setBanner('');
     }
@@ -1672,7 +1672,7 @@ async function calibrateBall() {
     const profile = calibrate(image, box);
     if (profile) {
       ballVision.setProfile(profile);
-      setBanner('Got it — that is your ball.');
+      setBanner('Got it, that is your ball.');
       setTimeout(() => setBanner(''), 1600);
     } else {
       // Distinguish the two reasons, because they need different things from
@@ -1726,7 +1726,7 @@ function framingState() {
     return { level: 'ok', text: 'Looking for the ball…' };
   }
   if (quality > 0.15) return { level: 'ok', text: 'Losing the ball sometimes' };
-  return { level: 'bad', text: 'Cannot see the ball — try the button below' };
+  return { level: 'bad', text: 'Cannot see the ball. Try the button below' };
 }
 
 function updateBallReadout() {
@@ -1747,7 +1747,7 @@ function updateBallReadout() {
   }
   // One line, and only when there is something to do about it. Not a checklist.
   $('ball-help').textContent = framing.level === 'bad' && ballCounter.tracker.frames > 45
-    ? 'Any angle is fine — it just needs to see the ball.'
+    ? 'Any angle is fine. It just needs to see the ball.'
     : '';
 }
 
@@ -1764,8 +1764,8 @@ function describeOrientation() {
   if (!note || !video.videoWidth) return;
   const upright = video.videoHeight >= video.videoWidth;
   note.textContent = upright
-    ? 'Phone upright — landscape works just as well.'
-    : 'Phone on its side — upright works just as well.';
+    ? 'Phone upright. Landscape works just as well.'
+    : 'Phone on its side. Upright works just as well.';
 }
 
 // Turning the phone mid-session is normal. Everything adapts, but the overlay
@@ -1871,7 +1871,7 @@ function updateCue(t) {
   if (t < spec.lead_in_ms) {
     const left = Math.ceil((spec.lead_in_ms - t) / 1000);
     word.className = 'cue-word waiting';
-    word.textContent = `Get set — first call in ${left}`;
+    word.textContent = `Get set. First call in ${left}`;
     return;
   }
 
@@ -2203,7 +2203,7 @@ function renderDebug() {
   pushTrace(d);
 
   const n = (v, places = 1) =>
-    Number.isFinite(v) ? v.toFixed(places) : '—';
+    Number.isFinite(v) ? v.toFixed(places) : '–';
   const cell = (label, value, cls = '') =>
     `<div><span>${esc(label)}</span><b class="${cls}">${esc(String(value))}</b></div>`;
 
@@ -2319,7 +2319,7 @@ async function loadTechnique(drillKey) {
     }
 
     $('technique-cues').innerHTML = ref.cues
-      .map((c) => `<li>${esc(c.fix)} <span class="muted">— ${esc(c.why)}</span></li>`)
+      .map((c) => `<li>${esc(c.fix)} <span class="muted">&middot; ${esc(c.why)}</span></li>`)
       .join('');
 
     // Self-hosted, and only shown when a deployment actually added one.

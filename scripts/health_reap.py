@@ -145,7 +145,7 @@ def main() -> int:
     )
 
     if not any(steps.values()):
-        print("nothing to do — pass at least one of --checkpoint, --clean, "
+        print("nothing to do. Pass at least one of --checkpoint, --clean, "
               "--disk, --integrity, --backup", file=sys.stderr)
         return 2
 

@@ -52,7 +52,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Football", "a defensive back breaking on the ball"),
     ),
     "gen_high_knees": (
-        Transfer("Track", "clean sprint mechanics — knees up, quick off the ground"),
+        Transfer("Track", "clean sprint mechanics: knees up, quick off the ground"),
         Transfer("Soccer", "the last ten yards of a chase, when form falls apart"),
         Transfer("Basketball", "getting out and gone on a fast break"),
         Transfer("Football", "driving out of a stance"),
@@ -98,7 +98,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Wrestling", "the last thirty seconds of a period"),
     ),
     "gen_jumping_jack": (
-        Transfer("Any sport", "it is a warm-up — feet and arms on the same beat "
+        Transfer("Any sport", "it is a warm-up, feet and arms on the same beat "
                               "before you do anything harder"),
     ),
     "gen_lunge": (
@@ -127,7 +127,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
     "gen_dead_bug": (
         Transfer("Gymnastics", "keeping your middle still while your limbs move"),
         Transfer("Dance", "control, which is what makes a line look effortless"),
-        Transfer("Swimming", "not wriggling — a wriggle is drag"),
+        Transfer("Swimming", "not wriggling, because a wriggle is drag"),
     ),
     "gen_wall_sit": (
         Transfer("Skiing & Snowboarding", "this is literally the position, for a whole run"),
@@ -151,7 +151,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
     # reason: these are sport skills, and the honest transfer is the underlying
     # coordination rather than "it helps everywhere".
     "soc_juggle": (
-        Transfer("Basketball", "soft first touch — the ball stops where you want it"),
+        Transfer("Basketball", "soft first touch, so the ball stops where you want it"),
         Transfer("Volleyball", "reading a ball out of the air and getting under it"),
     ),
     "bkb_dribble": (
@@ -163,7 +163,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Cheer", "catching something coming down and absorbing it"),
     ),
     "bb_wall_throw": (
-        Transfer("Lacrosse", "throw, catch, repeat — the same wall, a different tool"),
+        Transfer("Lacrosse", "throw, catch, repeat on the same wall with a different tool"),
         Transfer("Football", "a throwing motion that starts at your feet"),
     ),
     "ten_wall_rally": (
@@ -209,7 +209,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Football", "a lineman's first step off the snap"),
     ),
     "lax_ground_ball": (
-        Transfer("Baseball", "fielding a grounder — the same low body, same funnel"),
+        Transfer("Baseball", "fielding a grounder with the same low body and same funnel"),
         Transfer("Soccer", "getting low to a loose ball first"),
         Transfer("Wrestling", "the level change is the same movement"),
     ),
@@ -450,7 +450,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Lacrosse", "protecting the stick through traffic"),
     ),
     "bkb_pound_weak": (
-        Transfer("Lacrosse", "off-hand wall ball — the same hard half of the work"),
+        Transfer("Lacrosse", "off-hand wall ball, the same hard half of the work"),
         Transfer("Soccer", "your weak foot, which defenders find in about a half"),
         Transfer("Hockey", "handling on your backhand"),
     ),
@@ -459,7 +459,7 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Hockey", "quick hands in tight"),
     ),
     "bkb_wall_pass": (
-        Transfer("Lacrosse", "wall ball — same loop, same reason it works"),
+        Transfer("Lacrosse", "wall ball, same loop and same reason it works"),
         Transfer("Volleyball", "clean hands on a ball coming back fast"),
         Transfer("Football", "catching with your hands and not your chest"),
     ),
@@ -470,13 +470,13 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Soccer", "staying down and side-on as a defender"),
     ),
     "lax_goalie_saves": (
-        Transfer("Hockey", "a goalie's job is the same job — get the body part "
+        Transfer("Hockey", "a goalie's job is the same job, which is to get the body part "
                            "nearest the puck to it first"),
         Transfer("Soccer", "keeping, and reacting to a spot rather than a ball"),
         Transfer("Tennis", "the split step and the first move to a corner"),
     ),
     "lax_quick_stick": (
-        Transfer("Baseball", "turning two — catch and release without a wasted beat"),
+        Transfer("Baseball", "turning two, catch and release without a wasted beat"),
         Transfer("Hockey", "one-touch passing"),
     ),
 }
@@ -551,7 +551,7 @@ def blurb(
         if len(theirs) == 2 else "all of which you play"
     if not rest:
         return f"This one pays off in {_listed(theirs)}, {verb}."
-    return f"This one pays off in {_listed(theirs)}, {verb} — and in {_listed(rest)}."
+    return f"This one pays off in {_listed(theirs)}, {verb}, and in {_listed(rest)}."
 
 
 def describe(

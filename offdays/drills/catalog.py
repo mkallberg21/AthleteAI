@@ -183,7 +183,7 @@ QUICK_STICK = DrillSpec(
     ),
     tracks_handedness=True,
     ball=LACROSSE_BALL_FAST,
-    setup_hint="Closer to the wall than wall ball. No cradle -- catch and go.",
+    setup_hint="Closer to the wall than wall ball. No cradle, catch and go.",
     quality=QualitySpec(
         target_rom=0.28,
         consistency_target=0.18,
@@ -263,7 +263,7 @@ WALL_BALL_OFFHAND = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        'Every rep with your weaker hand on top. The hardest pattern in the routine and the one that changes a player fastest -- and the one pattern the camera really can check, because it can see which hand is on top. Off-hand reps are paid at a premium wherever you do them.'
+        'Every rep with your weaker hand on top. The hardest pattern in the routine and the one that changes a player fastest, and the one pattern the camera really can check, because it can see which hand is on top. Off-hand reps are paid at a premium wherever you do them.'
     ),
     signal=SignalSpec(
         kind=SignalKind.WALL_BALL_CYCLE,
@@ -311,7 +311,7 @@ WALL_BALL_ONE_HAND = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        'Bottom hand off the stick. Short, controlled throws that build the top-hand strength a one-handed catch in traffic needs. The app counts your reps but cannot see whether the bottom hand was off -- that one is on you, and it earns the same as any other wall ball.'
+        'Bottom hand off the stick. Short, controlled throws that build the top-hand strength a one-handed catch in traffic needs. The app counts your reps but cannot see whether the bottom hand was off, that one is on you, and it earns the same as any other wall ball.'
     ),
     signal=SignalSpec(
         kind=SignalKind.WALL_BALL_CYCLE,
@@ -542,7 +542,7 @@ FACEOFF_CLAMP = DrillSpec(
     metric=Metric.REPS,
     description=(
         "From the down stance: clamp, rip the ball back, come up to ready, "
-        "reset. Repeated for speed rather than volume -- a face-off is won in "
+        "reset. Repeated for speed rather than volume, a face-off is won in "
         "the first half second and lost in the next two."
     ),
     signal=SignalSpec(
@@ -616,7 +616,7 @@ GOALIE_SAVES = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        'The app calls a spot -- high, hip, low, either side, or five hole -- and you drive BOTH hands and your lead foot to it, then reset. Reaching with one arm does not count: the app measures your hands together, so a one-armed stab moves the measurement half as far and never registers as a save. There is no ball and no shooter -- this trains the path to the spot, not reading a shot, and it is not a save percentage.'
+        'The app calls a spot, high, hip, low, either side, or five hole, and you drive BOTH hands and your lead foot to it, then reset. Reaching with one arm does not count: the app measures your hands together, so a one-armed stab moves the measurement half as far and never registers as a save. There is no ball and no shooter, this trains the path to the spot, not reading a shot, and it is not a save percentage.'
     ),
     signal=SignalSpec(
         # The one drill in the catalogue where the athlete is sent somewhere
@@ -692,7 +692,7 @@ GOALIE_SAVES = DrillSpec(
     setup_hint=(
         "Stand in your stance in the goal or against a wall, phone straight in "
         "front of you at hip height, far enough back that your whole body and "
-        "both hands stay in frame. Face the phone square -- turned sideways it "
+        "both hands stay in frame. Face the phone square, turned sideways it "
         "cannot tell your left from your right. Two hands on the stick the "
         "whole time. Wait for the first call."
     ),
@@ -1464,8 +1464,8 @@ GEN_BUTT_KICK = DrillSpec(
     metric=Metric.REPS,
     description=(
         "Heels snapping up towards your backside, quickly, staying tall. The "
-        "front half of a running stride has a drill and the back half did not "
-        "-- this is the back half."
+        "front half of a running stride has a drill and the back half did not. "
+        "This is the back half."
     ),
     signal=SignalSpec(
         # The heel against the knee on the same leg. High knees measure the
@@ -1530,7 +1530,7 @@ GEN_KNEE_DRIVE_HOLD = DrillSpec(
     metric=Metric.HOLD_SECONDS,
     description=(
         "Hands on a wall, body in a straight line, one knee driven up and "
-        "held there. The clock runs only while the knee is actually up -- "
+        "held there. The clock runs only while the knee is actually up, "
         "letting it drift down stops it."
     ),
     signal=SignalSpec(
@@ -1579,7 +1579,7 @@ GEN_POGO = DrillSpec(
     metric=Metric.REPS,
     description=(
         "Fast, small bounces off the balls of your feet, knees almost "
-        "straight. Not jumps for height -- the point is how little time you "
+        "straight. Not jumps for height, the point is how little time you "
         "spend on the floor. Slow down and it stops counting them."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.60),
@@ -1665,7 +1665,7 @@ GEN_SKATER_BOUND = DrillSpec(
     ),
     setup_hint=(
         "Phone square in front of you with room either side. Land on one leg "
-        "and stop dead before the next one -- the pause is the half of this "
+        "and stop dead before the next one, the pause is the half of this "
         "that protects your knees."
     ),
     quality=QualitySpec(
@@ -1698,7 +1698,7 @@ GEN_CALF_RAISE = DrillSpec(
     description=(
         "Up onto the balls of your feet, all the way, and down under control. "
         "It watches your heel against your toes, so coming up half way does "
-        "not count -- which is what almost everybody does when they stop "
+        "not count, which is what almost everybody does when they stop "
         "paying attention."
     ),
     signal=SignalSpec(
@@ -1733,7 +1733,7 @@ GEN_CALF_RAISE = DrillSpec(
         min_reps=15, min_duration_ms=20_000,
     ),
     setup_hint=(
-        "Phone low and close, side-on to one foot -- ankle height, a couple of "
+        "Phone low and close, side-on to one foot, ankle height, a couple of "
         "feet away. This is the smallest movement in the app and the only one "
         "where framing decides whether it can be counted at all. Fingertips on "
         "a wall for balance is fine."
@@ -1805,7 +1805,7 @@ GEN_DEAD_HANG = DrillSpec(
     metric=Metric.HOLD_SECONDS,
     description=(
         "Hang from a bar with your arms straight and stay there. The clock "
-        "runs while you are hanging -- pull yourself up and it stops, because "
+        "runs while you are hanging, pull yourself up and it stops, because "
         "that is a different exercise and this one is about the grip."
     ),
     signal=SignalSpec(
@@ -1830,7 +1830,7 @@ GEN_DEAD_HANG = DrillSpec(
     ),
     setup_hint=(
         "Phone side-on so it can see your head and your hands. Anything you "
-        "can hang from that will hold you -- a bar, a beam, a set of monkey "
+        "can hang from that will hold you, a bar, a beam, a set of monkey "
         "bars. Shoulders active rather than sagging."
     ),
     quality=None,
@@ -1917,7 +1917,7 @@ SOC_JUGGLE_WEAK = DrillSpec(
     description=(
         "Weak foot only, for as long as you can keep it up. The app reads "
         "which foot took every touch, so this is one of the few things here it "
-        "can genuinely confirm -- and weak-side touches are paid at a premium "
+        "can genuinely confirm, and weak-side touches are paid at a premium "
         "wherever you do them."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -1929,7 +1929,7 @@ SOC_JUGGLE_WEAK = DrillSpec(
     scoring=ScoringSpec(xp_per_rep=1.4, daily_rep_cap=400, diminishing_after_reps=150),
     validation=ValidationSpec(max_reps_per_second=3.0, min_reps=8),
     setup_hint=(
-        "Weak foot only -- if the other one touches it, start the count again. "
+        "Weak foot only, if the other one touches it, start the count again. "
         "Phone low enough to see your feet and the ball."
     ),
     quality=None,
@@ -1946,7 +1946,7 @@ SOC_JUGGLE_ALT = DrillSpec(
     metric=Metric.REPS,
     description=(
         "Left, right, left, right, without letting it drop. The app checks the "
-        "ball really is changing feet -- if it settles onto your strong side it "
+        "ball really is changing feet, if it settles onto your strong side it "
         "counts as ordinary juggling, and says so."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -1973,7 +1973,7 @@ SOC_THIGH = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        "Off the thigh, not the foot. Only thigh touches register -- a ball "
+        "Off the thigh, not the foot. Only thigh touches register, a ball "
         "played off your laces is too far from your knee for this drill to see "
         "it, so it counts nothing."
     ),
@@ -2007,7 +2007,7 @@ SOC_WALL_PASS = DrillSpec(
     metric=Metric.REPS,
     description=(
         "Pass firmly into a wall and control the return, over and over. This "
-        "one has a strike-speed floor rather than a ceiling -- a soft touch "
+        "one has a strike-speed floor rather than a ceiling, a soft touch "
         "does not clear it, which is how the app knows it was a pass and not a "
         "juggle."
     ),
@@ -2026,7 +2026,7 @@ SOC_WALL_PASS = DrillSpec(
     validation=ValidationSpec(max_reps_per_second=1.6, min_reps=10, min_duration_ms=20_000),
     setup_hint=(
         "Find a wall nobody parks a car behind. Two or three metres back, phone "
-        "side-on. Strike it properly -- a pass you would actually make in a game."
+        "side-on. Strike it properly, a pass you would actually make in a game."
     ),
     quality=None,
     load=LoadSpec(load_per_rep=0.5, load_per_minute=1.4, tissue=Tissue.LOWER_BODY),
@@ -2063,7 +2063,7 @@ SOC_TOE_TAPS = DrillSpec(
     ),
     setup_hint=(
         "Ball still, phone low and in front. Stay on your toes and keep your "
-        "chest up -- if you are looking down at it, slow down."
+        "chest up, if you are looking down at it, slow down."
     ),
     quality=None,
     load=LoadSpec(load_per_rep=0.08, load_per_minute=2.2, tissue=Tissue.LOWER_BODY),
@@ -2080,7 +2080,7 @@ SOC_SHUFFLE = DrillSpec(
     description=(
         "Side-on defending stance, shuffling across without crossing your feet. "
         "One rep is one push. It measures how far apart your feet get, and it "
-        "can see when they cross -- which is the moment a winger goes past you."
+        "can see when they cross, which is the moment a winger goes past you."
     ),
     signal=SignalSpec(kind=SignalKind.STANCE_WIDTH, smoothing=0.45),
     counter=CounterSpec(
@@ -2181,7 +2181,7 @@ BKB_CROSSOVER = DrillSpec(
     description=(
         "Push the ball hard from one hand to the other, low and in front of "
         "you, over and over. The app checks the ball actually keeps changing "
-        "hands -- if it stays on your strong hand it counts as dribbling, and "
+        "hands, if it stays on your strong hand it counts as dribbling, and "
         "says so."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2195,7 +2195,7 @@ BKB_CROSSOVER = DrillSpec(
     validation=ValidationSpec(max_reps_per_second=4.0, min_reps=12),
     setup_hint=(
         "Phone where it can see the floor in front of your feet. Stay low and "
-        "keep the ball below your knees -- a high crossover is a stolen ball."
+        "keep the ball below your knees, a high crossover is a stolen ball."
     ),
     quality=None,
     load=LoadSpec(load_per_rep=0.2, load_per_minute=1.6, tissue=Tissue.WHOLE_BODY),
@@ -2212,7 +2212,7 @@ BKB_BETWEEN_LEGS = DrillSpec(
     description=(
         "Same change of hands, through your legs instead of in front. The app "
         "counts the bounces and sees the hands swap, but it cannot see whether "
-        "the ball went through your legs -- so this earns the same as a "
+        "the ball went through your legs, so this earns the same as a "
         "crossover."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2227,7 +2227,7 @@ BKB_BETWEEN_LEGS = DrillSpec(
     scoring=ScoringSpec(xp_per_rep=0.7, daily_rep_cap=500, diminishing_after_reps=200),
     validation=ValidationSpec(max_reps_per_second=3.5, min_reps=12),
     setup_hint=(
-        "Phone low and square to you. Step into it -- the ball goes through as "
+        "Phone low and square to you. Step into it, the ball goes through as "
         "your foot comes forward, not while you are standing still."
     ),
     quality=None,
@@ -2245,7 +2245,7 @@ BKB_POUND_WEAK = DrillSpec(
     description=(
         "Hard, low dribbles on your weak hand only, for as long as you can "
         "stand it. The app reads which hand is on the ball, so this is one of "
-        "the few things here it can genuinely confirm -- and weak-hand reps "
+        "the few things here it can genuinely confirm, and weak-hand reps "
         "are paid at a premium wherever you do them."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2262,7 +2262,7 @@ BKB_POUND_WEAK = DrillSpec(
         min_reps=15,
     ),
     setup_hint=(
-        "Weak hand only. Knees bent, ball below your knee, and pound it -- if "
+        "Weak hand only. Knees bent, ball below your knee, and pound it, if "
         "it is coming back above your waist you are patting it, not pounding."
     ),
     quality=None,
@@ -2356,7 +2356,7 @@ BKB_FORM_SHOT = DrillSpec(
         "One hand, close to a wall or straight up to yourself. Dip, rise, "
         "release, hold the follow-through. It counts your shots and watches "
         "one thing: whether your elbow stayed under the ball. It has no idea "
-        "whether anything went in -- there is no hoop in this drill and the "
+        "whether anything went in, there is no hoop in this drill and the "
         "app cannot see one."
     ),
     signal=SignalSpec(
@@ -2392,7 +2392,7 @@ BKB_FORM_SHOT = DrillSpec(
     setup_hint=(
         "Phone square in front of you at chest height, close enough to see "
         "your shooting elbow clearly. Turned sideways it cannot tell an elbow "
-        "under the ball from one flared out. One hand only -- the guide hand "
+        "under the ball from one flared out. One hand only, the guide hand "
         "comes off."
     ),
     quality=QualitySpec(
@@ -2434,7 +2434,7 @@ BKB_SLIDE = DrillSpec(
     description=(
         "Push off the back foot, step out with the front, then slide the back "
         "foot in. One rep is one push. The app measures how far apart your "
-        "feet are, so a step that never really goes anywhere does not count -- "
+        "feet are, so a step that never really goes anywhere does not count, "
         "and it can see when your feet cross, which is the one thing that "
         "makes a slide stop working."
     ),
@@ -2465,7 +2465,7 @@ BKB_SLIDE = DrillSpec(
     ),
     setup_hint=(
         "Phone square in front of you, far enough back to see both feet. Get "
-        "in your stance and slide -- push off the back foot, do not hop, and "
+        "in your stance and slide, push off the back foot, do not hop, and "
         "never let your feet cross."
     ),
     quality=QualitySpec(
@@ -2499,7 +2499,7 @@ BKB_STANCE = DrillSpec(
     metric=Metric.HOLD_SECONDS,
     description=(
         "Sit in a real defensive stance and stay there. The clock only runs "
-        "while your hips are actually down -- stand up and it stops, which is "
+        "while your hips are actually down, stand up and it stops, which is "
         "the entire point of the drill."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
@@ -2583,7 +2583,7 @@ VB_PASS = DrillSpec(
     metric=Metric.REPS,
     description=(
         "Bump the ball straight up off your platform, over and over. The app "
-        "checks your hands are below your shoulders -- a pass played up at "
+        "checks your hands are below your shoulders, a pass played up at "
         "head height is a set, and it counts as one."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2618,7 +2618,7 @@ VB_SERVE = DrillSpec(
     metric=Metric.REPS,
     description=(
         "Toss and serve into a wall, one hand, over and over. The app reads "
-        "which hand struck it, so a serve is genuinely tellable from a set -- "
+        "which hand struck it, so a serve is genuinely tellable from a set, "
         "and it has no idea whether the ball would have gone in."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
@@ -2636,7 +2636,7 @@ VB_SERVE = DrillSpec(
     setup_hint=(
         "Find a wall nobody parks a car behind and stand well back. Phone "
         "side-on so it sees your toss and your hitting arm. Same toss every "
-        "time -- that is the whole serve."
+        "time, that is the whole serve."
     ),
     quality=None,
     load=LoadSpec(
@@ -2659,7 +2659,7 @@ VB_ARM_SWING = DrillSpec(
     description=(
         "The hitting swing on its own, no ball needed. Draw the elbow back and "
         "high, then swing through and finish. It watches your hitting arm and "
-        "counts full swings -- a lazy half swing does not register."
+        "counts full swings, a lazy half swing does not register."
     ),
     signal=SignalSpec(
         # The same signal the basketball shot uses, and for the same reason: it
@@ -2688,7 +2688,7 @@ VB_ARM_SWING = DrillSpec(
     setup_hint=(
         "Phone square in front of you, far enough back to see your whole arm. "
         "Turned sideways it cannot tell a high elbow from a dropped one. No "
-        "ball -- this is the swing on its own."
+        "ball, this is the swing on its own."
     ),
     quality=QualitySpec(
         target_rom=80.0,
@@ -2743,7 +2743,7 @@ VB_APPROACH = DrillSpec(
     ),
     setup_hint=(
         "You need a few metres of run-up and a clear landing. Phone side-on "
-        "at hip height. Land on two feet, bend your knees, and stop -- the "
+        "at hip height. Land on two feet, bend your knees, and stop, the "
         "landing is the part that keeps you playing."
     ),
     quality=QualitySpec(
@@ -2777,7 +2777,7 @@ VB_BLOCK_JUMP = DrillSpec(
     metric=Metric.REPS,
     description=(
         "From a blocking stance: hands up, jump straight, press over, land "
-        "where you took off. No approach and no swing -- this one is about "
+        "where you took off. No approach and no swing, this one is about "
         "getting up quickly from standing and coming down under control."
     ),
     signal=SignalSpec(
@@ -2804,7 +2804,7 @@ VB_BLOCK_JUMP = DrillSpec(
     ),
     setup_hint=(
         "Phone square in front of you so it can see both hands. Start with "
-        "your hands already up at your shoulders -- a block that starts from "
+        "your hands already up at your shoulders, a block that starts from "
         "your waist is a block that arrives late."
     ),
     quality=QualitySpec(
@@ -2854,7 +2854,7 @@ VB_SET_WALL = DrillSpec(
     ),
     setup_hint=(
         "Stand a metre off a wall with the phone side-on. Hands above your "
-        "forehead the whole time -- if they drop, you are passing."
+        "forehead the whole time, if they drop, you are passing."
     ),
     quality=None,
     load=LoadSpec(load_per_rep=0.3, load_per_minute=1.8, tissue=Tissue.UPPER_BODY),
@@ -2970,7 +2970,7 @@ BB_LONG_TOSS = DrillSpec(
     ),
     setup_hint=(
         "Somewhere with room and a partner or a net. Phone side-on. Crow hop "
-        "into every one -- if you are throwing flat-footed, come in closer."
+        "into every one, if you are throwing flat-footed, come in closer."
     ),
     quality=None,
     load=LoadSpec(
@@ -2990,7 +2990,7 @@ BB_QUICK_HANDS = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        "Short, quick transfers into the wall from close range -- glove to "
+        "Short, quick transfers into the wall from close range, glove to "
         "hand to release. There is a speed floor here: a long toss cannot be "
         "done this fast, which is how the app knows these were transfers."
     ),
@@ -3007,7 +3007,7 @@ BB_QUICK_HANDS = DrillSpec(
         min_reps=20, min_duration_ms=30_000,
     ),
     setup_hint=(
-        "Close to the wall, phone side-on. Short arm action -- this is about "
+        "Close to the wall, phone side-on. Short arm action, this is about "
         "the transfer, not the throw. Feet moving the whole time."
     ),
     quality=None,
@@ -3061,7 +3061,7 @@ BB_TEE_SWING = DrillSpec(
     ),
     setup_hint=(
         "Phone square in front of you, far enough back to see your hands "
-        "through the whole swing. Same tee height every rep -- moving it "
+        "through the whole swing. Same tee height every rep, moving it "
         "around teaches you nothing."
     ),
     quality=QualitySpec(
@@ -3095,7 +3095,7 @@ BB_FIELDING = DrillSpec(
     stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
-        "Down into fielding position and back up, over and over -- the "
+        "Down into fielding position and back up, over and over, the "
         "footwork with no ball needed. It counts how far your hips travel, so "
         "bending at the waist does not register as getting down."
     ),
@@ -3117,7 +3117,7 @@ BB_FIELDING = DrillSpec(
     ),
     setup_hint=(
         "Phone side-on at hip height. Get your hips down and your hands out in "
-        "front -- if your back is rounding, you are bending instead of "
+        "front, if your back is rounding, you are bending instead of "
         "getting down."
     ),
     quality=QualitySpec(
@@ -3151,7 +3151,7 @@ SB_WINDMILL = DrillSpec(
     description=(
         "The full underhand circle, with or without a ball. It follows your "
         "pitching hand all the way round, so a half circle does not count. "
-        "Every rep goes on the day's arm total -- this is the highest-volume "
+        "Every rep goes on the day's arm total, this is the highest-volume "
         "motion in the sport and the one nobody counts."
     ),
     signal=SignalSpec(
@@ -3178,7 +3178,7 @@ SB_WINDMILL = DrillSpec(
         min_reps=10, min_duration_ms=30_000,
     ),
     setup_hint=(
-        "Phone side-on so it can see the whole circle -- square to you it "
+        "Phone side-on so it can see the whole circle, square to you it "
         "cannot tell a full circle from a half one. Same stride every pitch."
     ),
     quality=QualitySpec(
@@ -3216,7 +3216,7 @@ BB_CATCHER_STANCE = DrillSpec(
     metric=Metric.HOLD_SECONDS,
     description=(
         "Down in the crouch and stay there. The clock only runs while your "
-        "hips are actually low -- stand up and it stops, which is the whole "
+        "hips are actually low, stand up and it stops, which is the whole "
         "point of a drill for a position that spends two hours down."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
@@ -3292,7 +3292,7 @@ TEN_ALTERNATE = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        "Rally against the wall changing wing every shot -- forehand, "
+        "Rally against the wall changing wing every shot, forehand, "
         "backhand, forehand. The app checks the ball really is leaving from "
         "alternate sides of you; if you settle onto one wing it counts as an "
         "ordinary rally and says so."
@@ -3306,7 +3306,7 @@ TEN_ALTERNATE = DrillSpec(
     validation=ValidationSpec(max_reps_per_second=2.0, min_reps=12),
     setup_hint=(
         "Stand further off the wall than feels comfortable so you have time to "
-        "turn. Phone square to you -- from the side it cannot tell which wing "
+        "turn. Phone square to you, from the side it cannot tell which wing "
         "the ball came off."
     ),
     quality=None,
@@ -3323,7 +3323,7 @@ TEN_ONE_WING = DrillSpec(
     metric=Metric.REPS,
     description=(
         "Every ball on the same wing, recovering to the middle between shots. "
-        "The app checks the ball keeps leaving from the same side of you -- it "
+        "The app checks the ball keeps leaving from the same side of you, it "
         "cannot tell a forehand from a backhand, so which wing you pick is "
         "yours to decide and worth making the weaker one."
     ),
@@ -3335,7 +3335,7 @@ TEN_ONE_WING = DrillSpec(
     scoring=ScoringSpec(xp_per_rep=1.2, daily_rep_cap=400, diminishing_after_reps=180),
     validation=ValidationSpec(max_reps_per_second=2.0, min_reps=12),
     setup_hint=(
-        "Pick a wing and stay on it. Recover to the middle after every ball -- "
+        "Pick a wing and stay on it. Recover to the middle after every ball, "
         "standing still on one side is a different, much easier drill."
     ),
     quality=None,
@@ -3370,7 +3370,7 @@ TEN_VOLLEY = DrillSpec(
     ),
     setup_hint=(
         "Two metres off the wall, racket up in front of you. Short blocks, no "
-        "backswing -- if you are taking one, you are too far back."
+        "backswing, if you are taking one, you are too far back."
     ),
     quality=None,
     load=LoadSpec(load_per_rep=0.3, load_per_minute=2.0, tissue=Tissue.UPPER_BODY),
@@ -3387,7 +3387,7 @@ TEN_SERVE = DrillSpec(
     description=(
         "Toss and serve into a fence or a wall. It watches your hitting arm "
         "rather than the ball, so it counts full service motions and not "
-        "half-hearted ones -- and it has no idea whether the serve would have "
+        "half-hearted ones, and it has no idea whether the serve would have "
         "gone in."
     ),
     signal=SignalSpec(
@@ -3419,7 +3419,7 @@ TEN_SERVE = DrillSpec(
     ),
     setup_hint=(
         "Somewhere you can hit into safely, phone square to you and far enough "
-        "back to see your whole arm. Same toss every time -- everything after "
+        "back to see your whole arm. Same toss every time, everything after "
         "it is just repeating."
     ),
     quality=QualitySpec(
@@ -3510,7 +3510,7 @@ TEN_RECOVERY = DrillSpec(
     description=(
         "Side to side along the baseline without crossing your feet. One rep "
         "is one push. It measures how far apart your feet get, and it can see "
-        "when they cross -- which is the moment you stop being able to change "
+        "when they cross, which is the moment you stop being able to change "
         "direction."
     ),
     signal=SignalSpec(kind=SignalKind.STANCE_WIDTH, smoothing=0.45),
@@ -3586,7 +3586,7 @@ HOC_STICKHANDLE = DrillSpec(
     description=(
         "Ball or puck side to side in front of you, as quick as you can keep "
         "it clean. One rep is one trip across your body and back. It reads "
-        "your hands, not the puck -- so it counts the handle, and it has no "
+        "your hands, not the puck, so it counts the handle, and it has no "
         "idea whether the puck stayed on the blade."
     ),
     signal=SignalSpec(
@@ -3628,7 +3628,7 @@ HOC_STICKHANDLE = DrillSpec(
     setup_hint=(
         "Phone square in front of you at about chest height, far enough back "
         "to see both hands the whole way across. It needs to see you from the "
-        "front -- side-on it cannot tell forehand from backhand at all."
+        "front, side-on it cannot tell forehand from backhand at all."
     ),
     quality=QualitySpec(
         target_rom=0.48,
@@ -3663,7 +3663,7 @@ HOC_WIDE_HANDLES = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        "The same handle, pushed right out to each side -- full extension one "
+        "The same handle, pushed right out to each side, full extension one "
         "way, full extension the other. Slower and much wider than tight "
         "handles, and the app can tell the difference, because a narrow handle "
         "never reaches these thresholds."
@@ -3685,7 +3685,7 @@ HOC_WIDE_HANDLES = DrillSpec(
         min_reps=15, min_duration_ms=25_000,
     ),
     setup_hint=(
-        "Same setup as tight handles, but stand back further -- your hands go "
+        "Same setup as tight handles, but stand back further, your hands go "
         "a long way out and the app only counts what it can see."
     ),
     quality=QualitySpec(
@@ -3720,7 +3720,7 @@ HOC_SHOT = DrillSpec(
         "Off a pad into a net. It follows your hands sweeping the puck from "
         "behind your back foot right through to the follow-through, so a full "
         "shot counts and a flick of the wrists does not. It cannot see the "
-        "puck and does not know where it went -- what it knows is that your "
+        "puck and does not know where it went, what it knows is that your "
         "hands travelled the whole way."
     ),
     signal=SignalSpec(kind=SignalKind.HAND_SWEEP, smoothing=0.40),
@@ -3742,7 +3742,7 @@ HOC_SHOT = DrillSpec(
     setup_hint=(
         "Phone in front of you, past the net and off to the side you are "
         "facing, high enough to see your hands finish. Same spot on the pad "
-        "every shot -- moving around teaches you nothing."
+        "every shot, moving around teaches you nothing."
     ),
     quality=QualitySpec(
         target_rom=1.60,
@@ -3776,7 +3776,7 @@ HOC_BUTTERFLY = DrillSpec(
     description=(
         "Down into the butterfly and back up to your skates, over and over. "
         "It measures how far your hips travel, so dropping to a knee does not "
-        "register as getting down -- and getting back up is half the rep."
+        "register as getting down, and getting back up is half the rep."
     ),
     signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.35),
     counter=CounterSpec(
@@ -3797,7 +3797,7 @@ HOC_BUTTERFLY = DrillSpec(
     ),
     setup_hint=(
         "Phone side-on at about knee height, on a soft floor. Pads if you have "
-        "them. This is the drop and the recovery -- the app cannot see whether "
+        "them. This is the drop and the recovery, the app cannot see whether "
         "you sealed, only how far you went and how fast you got back."
     ),
     quality=QualitySpec(
@@ -3827,7 +3827,7 @@ HOC_SHUFFLE = DrillSpec(
     description=(
         "Slide across the top of the zone without ever turning your hips. One "
         "rep is one push. It measures how far apart your feet are, so a step "
-        "that goes nowhere does not count -- and it can see when your feet "
+        "that goes nowhere does not count, and it can see when your feet "
         "cross, which off the ice is the exact moment you stop being able to "
         "change direction."
     ),
@@ -3875,7 +3875,7 @@ HOC_STANCE = DrillSpec(
     stimulus=Stimulus.STRENGTH,
     metric=Metric.HOLD_SECONDS,
     description=(
-        "Knees bent, chest up, weight on the balls of your feet -- and stay "
+        "Knees bent, chest up, weight on the balls of your feet, and stay "
         "there. The clock only runs while your hips are actually down. Stand "
         "up out of it and it stops, which is the whole drill."
     ),
@@ -3942,7 +3942,7 @@ FB_QUICK_RELEASE = DrillSpec(
     stimulus=Stimulus.SKILL,
     metric=Metric.REPS,
     description=(
-        "Short, fast throws with a compact arm action -- ball out before the "
+        "Short, fast throws with a compact arm action, ball out before the "
         "front foot lands. There is a speed floor here: a full throw cannot be "
         "repeated this quickly, which is how the app knows these were quick "
         "ones."
@@ -3970,7 +3970,7 @@ FB_QUICK_RELEASE = DrillSpec(
     ),
     setup_hint=(
         "Phone side-on so it can see your throwing arm through the whole "
-        "motion. Close to the wall or the net -- this is the release, not the "
+        "motion. Close to the wall or the net, this is the release, not the "
         "throw."
     ),
     quality=None,
@@ -4041,7 +4041,7 @@ FB_DEEP_BALL = DrillSpec(
     description=(
         "Fewer throws, all of them hard. Full drop, full turn, everything into "
         "it. Each one costs the arm more than a normal throw and the app "
-        "counts it that way -- which is the whole reason to keep the number "
+        "counts it that way, which is the whole reason to keep the number "
         "small."
     ),
     signal=FB_THROW_SIGNAL,
@@ -4085,7 +4085,7 @@ FB_KICK = DrillSpec(
         "The full leg swing, with or without a ball. It follows your kicking "
         "foot from the ground to the top of the follow-through, so a half "
         "swing does not count. A punt is a punt in either code, so rugby "
-        "kickers use this drill too -- it is the highest-volume thing anybody "
+        "kickers use this drill too, it is the highest-volume thing anybody "
         "on either field does alone, and until now nothing counted it."
     ),
     signal=SignalSpec(
@@ -4111,7 +4111,7 @@ FB_KICK = DrillSpec(
     ),
     setup_hint=(
         "Phone side-on to your kicking leg, far enough back to see the whole "
-        "swing. Same approach every rep -- changing it teaches you nothing."
+        "swing. Same approach every rep, changing it teaches you nothing."
     ),
     quality=QualitySpec(
         # Measured, not guessed -- and the guess was badly low. Standing puts
@@ -4148,7 +4148,7 @@ FB_SHUFFLE = DrillSpec(
     stimulus=Stimulus.QUICKNESS,
     metric=Metric.REPS,
     description=(
-        "Slide across without turning your hips -- a defensive back mirroring "
+        "Slide across without turning your hips, a defensive back mirroring "
         "a receiver, or a tackle's kick-slide in pass protection. They are the "
         "same feet doing the same job, so they are one drill. One rep is one "
         "push, and it can see when your feet cross, which is the moment "
@@ -4257,7 +4257,7 @@ RUG_QUICK_HANDS = DrillSpec(
     ),
     setup_hint=(
         "Phone square in front of you at chest height. It has to see you from "
-        "the front -- side-on it cannot tell a pass left from a pass right at "
+        "the front, side-on it cannot tell a pass left from a pass right at "
         "all, and this drill is entirely about the difference."
     ),
     quality=QualitySpec(
@@ -4343,7 +4343,7 @@ RUG_SPIN_PASS = DrillSpec(
     description=(
         "The long one, off both hands. Hands start behind your back hip and "
         "finish pointing at the target, which is the widest sweep in the "
-        "sport -- and the app can tell it from a short pass, because a short "
+        "sport, and the app can tell it from a short pass, because a short "
         "pass never gets there."
     ),
     signal=SignalSpec(kind=SignalKind.HAND_SWEEP, smoothing=0.45),
@@ -4408,7 +4408,7 @@ SWM_STREAMLINE = DrillSpec(
     description=(
         "Arms locked overhead, one hand over the other, ears squeezed between "
         "your biceps, body in one straight line. The clock runs only while "
-        "your hands are actually up -- letting them drift forward stops it."
+        "your hands are actually up, letting them drift forward stops it."
     ),
     signal=SignalSpec(
         # The hands against the shoulder line. This is the one position the
@@ -4463,7 +4463,7 @@ SWM_PULL = DrillSpec(
     description=(
         "Bands anchored high, bent forward, and pull from full reach through "
         "to your hip. It follows your hand the whole way, so a half pull does "
-        "not count -- and a half pull is what everybody does once the set gets "
+        "not count, and a half pull is what everybody does once the set gets "
         "long."
     ),
     signal=SignalSpec(
@@ -4490,7 +4490,7 @@ SWM_PULL = DrillSpec(
     setup_hint=(
         "Phone side-on to the arm you are pulling with, far enough back to see "
         "it from full reach to your hip. Hinge at the hips so your back is "
-        "flat -- standing upright turns this into a different exercise."
+        "flat, standing upright turns this into a different exercise."
     ),
     quality=QualitySpec(
         # Measured. Hinged forward, the hand starts about half a torso above

@@ -563,7 +563,7 @@ def generate_assignment_stalls(
                 f"{assignment.title} is not landing",
                 f"{done} of {eligible} have finished it with {remaining} "
                 f"day{'' if remaining == 1 else 's'} left. Worth a look at "
-                "whether it is too much, unclear, or badly timed — there is "
+                "whether it is too much, unclear, or badly timed, and there is "
                 "still time to change it.",
                 link="/app/coach.html",
                 dedupe_key=f"{Kind.ASSIGNMENT_STALLED}:{assignment.id}:half",
@@ -586,7 +586,7 @@ def generate_assignment_stalls(
             else:
                 body = (
                     f"{done} of {eligible} finished it. When it lands that "
-                    "low it is usually the assignment rather than the squad — "
+                    "low it is usually the assignment rather than the squad, and "
                     "worth a smaller target or a longer window next time."
                 )
             if enqueue(
@@ -641,7 +641,7 @@ def notify_new_assignment(conn: sqlite3.Connection, assignment_id: int) -> int:
             athlete["id"],
             Kind.ASSIGNMENT_NEW,
             f"New assignment: {assignment.title}",
-            f"{assignment.drill_name} — {detail}. Due {assignment.due_on}.",
+            f"{assignment.drill_name}: {detail}. Due {assignment.due_on}.",
             link="/app/capture.html",
             dedupe_key=f"{Kind.ASSIGNMENT_NEW}:{assignment_id}",
         ):
@@ -808,14 +808,14 @@ def generate_guardian_digests(
                 line = f"{name}: no sessions logged this week"
             if athlete["load_advisories"]:
                 concerns += 1
-                line += " — worth a look at their rest"
+                line += ", worth a look at their rest"
             lines.append(line)
 
         if enqueue(
             conn,
             guardian["id"],
             Kind.GUARDIAN_DIGEST,
-            "This week's training" + (" — one thing to check" if concerns else ""),
+            "This week's training" + (", one thing to check" if concerns else ""),
             " · ".join(lines),
             link="/app/parent.html",
             dedupe_key=f"{Kind.GUARDIAN_DIGEST}:{year}-W{week}",
