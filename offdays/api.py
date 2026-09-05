@@ -12,7 +12,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, Query, Request, Response
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -20,7 +20,38 @@ from fastapi.responses import (
     PlainTextResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.types import ASGIApp, Scope, Receive, Send
+
+
+class _NoCacheMiddleware(BaseHTTPMiddleware):
+    """Strip any cache headers off static files so phones always fetch fresh."""
+
+    async def dispatch(self, request: Request, call_next: ASGIApp) -> Response:
+        response = await call_next(request)
+        path = request.url.path
+        # Only strip caches for static app assets (including HTML).
+        if path.startswith("/app/") and (
+            path.endswith(".css") or path.endswith(".js") or path.endswith(".png")
+            or path.endswith(".svg") or path.endswith(".woff2") or path.endswith(".html")
+        ):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 from pydantic import BaseModel, Field
+
+class TokenLoginRequest(BaseModel):
+    """POST body for the non-JavaScript sign-in fallback.
+
+    Mirrors what the JS flow does via GET /api/me with a Bearer header, so a
+    phone whose module failed to load can still sign in through a plain form
+    post. The JS path stays preferred where it works.
+    """
+    token: str = Field(min_length=1, max_length=64)
+    org_id: int | None = Field(default=None, description="Home org when the person holds roles in several.")
 
 from . import __version__
 from .config import CONFIG
@@ -66,7 +97,7 @@ from .guardians import GuardianError
 from .roster import RosterError
 from .drills import ALL_DRILLS, DRILLS_BY_KEY, for_sport as drills_for_sport
 from .drills.base import CUE_CELLS, CUE_UNREADABLE
-from .leaderboard import attach_load, coach_roster, leaderboard, team_standings
+from .leaderboard import attach_load, coach_roster, leaderboard, leaderboard_sport_wide, team_standings
 from .store import Principal, Store, StoreError, transaction
 
 logger = logging.getLogger(__name__)
@@ -114,7 +145,21 @@ app = FastAPI(
     lifespan=_lifespan,
 )
 
+app.add_middleware(_NoCacheMiddleware)
+
 _store: Store | None = None
+
+
+def _close_store() -> None:
+    """Best-effort store teardown on shutdown. No-op if already closed."""
+    global _store
+    if _store is not None:
+        try:
+            _store.close()
+        except Exception:
+            log.exception("offdays: error closing store on shutdown")
+        finally:
+            _store = None
 
 
 def _utcnow_stamp() -> str:
@@ -580,6 +625,39 @@ def me(
     }
 
 
+
+    
+@app.post("/api/me/login", status_code=200)
+def login_post(
+    token: str = Form(...),
+    org_id: int | None = Form(None),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Plain POST sign-in for phones whose JavaScript module failed to load.
+
+    Accepts form-encoded body (what HTML forms send) so a phone that can't
+    load api.js can still sign in through a plain form post.
+    """
+    try:
+        principal = store.authenticate(token, org_id=org_id)
+    except StoreError as exc:
+        raise HTTPException(
+            status_code=401, detail="invalid or inactive code") from exc
+
+    if principal.role == "athlete":
+        return {
+            "role": principal.role,
+            **store.athlete_profile(principal.id),
+            "consents": guardians_mod.current_consents(store.conn, principal.id),
+        }
+    return {
+        "role": principal.role,
+        "athlete_id": principal.id,
+        "display_name": principal.display_name,
+        "org_id": principal.org_id,
+    }
+
+
 @app.get("/api/athletes/{athlete_id}")
 def athlete_profile(
     athlete_id: int,
@@ -912,10 +990,20 @@ def get_leaderboard(
     board: Literal["xp", "offhand", "streak", "reps", "improvement", "quality"] = "xp",
     window: Literal["week", "month", "season", "all"] = "week",
     team_id: int | None = None,
+    sport: str | None = Query(default=None, description="Sport-wide board: aggregate across all programs for this sport."),
     limit: int = Query(default=50, ge=1, le=200),
     principal: Principal = Depends(_competitor),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    if sport:
+        rows = leaderboard_sport_wide(
+            store.conn,
+            sport,
+            board=board,
+            window=window,
+            limit=limit,
+        )
+        return {"board": board, "window": window, "sport": sport, "team_id": team_id, "rows": rows}
     rows = leaderboard(
         store.conn,
         principal.org_id,
@@ -3963,7 +4051,15 @@ def decide_review(
 # ----------------------------------------------------------------------
 
 if CONFIG.static_dir.is_dir():
-    app.mount("/app", StaticFiles(directory=CONFIG.static_dir, html=True), name="app")
+    app.mount(
+        "/app",
+        StaticFiles(
+            directory=CONFIG.static_dir,
+            html=True,
+            follow_symlink=False,
+        ),
+        name="app",
+    )
 
     @app.get("/")
     def index() -> FileResponse:

@@ -902,17 +902,26 @@ def hash_token(token: str) -> str:
 
 
 def new_token() -> str:
-    return secrets.token_urlsafe(32)
+    """A six-character sign-in code a kid can type from a slip of paper.
+
+    Letter first, then five digits -- easy to read aloud, hard to misread,
+    short enough that a twelve-year-old will not lose it in their pocket.
+    """
+    letter = secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ")
+    digits = "".join(secrets.choice("0123456789") for _ in range(5))
+    return f"{letter}{digits}"
 
 
 def new_join_code() -> str:
-    """Short, unambiguous team code an athlete can type from a whiteboard.
+    """Six-character team code an athlete types to join a team.
 
-    Excludes characters that get misread when a 12-year-old copies them off a
-    locker room wall: O/0, I/1, S/5.
+    Letter first, then five digits -- same shape as the sign-in token so a kid
+    who has one does not get confused by the other. Uses the full 0-9 range
+    (the join-code alphabet in new_token is unambiguous enough at six characters).
     """
-    alphabet = "ABCDEFGHJKLMNPQRTUVWXYZ234679"
-    return "".join(secrets.choice(alphabet) for _ in range(6))
+    letter = secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ")
+    digits = "".join(secrets.choice("0123456789") for _ in range(5))
+    return f"{letter}{digits}"
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:

@@ -2,18 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>0FFDAYS &mdash; Coach Dashboard</title>
-<link rel="stylesheet" href="styles.css">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>0FFDAYS — Coach Dashboard</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A0A0B">
+<link rel="apple-touch-icon" href="icon-192.png?v=3">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 <div class="topbar">
-  <div id="masthead"></div>
-  <div style="display:flex;gap:8px;align-items:center">
+  <a href="/" class="topbar-brand">
+    <img src="offdays-mark.png?v=3" alt="" class="topbar-logo" loading="eager" onerror="this.style.display='none'">
+    <span class="topbar-title">0FF<span class="highlight">DAYS</span></span>
+  </a>
+  <div class="topbar-right">
     <select class="org-switch hidden" id="org-switch"></select>
     <span class="small muted" id="whoami"></span>
-    <button class="secondary inline" id="signout">Sign out</button>
+    <button class="btn btn-ghost btn-sm" id="signout">Sign out</button>
   </div>
+</div>
+
+<div class="sponsor-slot" data-sponsor-level="app">
+  <div class="sponsor-logo"></div>
+  <div class="sponsor-text">Sponsored by</div>
 </div>
 
 <div class="wrap">
@@ -83,9 +98,14 @@
       <div class="plan-grid" id="plans"></div>
     </details>
     <div id="billing-err" class="err hidden"></div>
-  </div>
+    </div>
 
-  <div class="card hidden" id="staff-card">
+    <div class="sponsor-slot" data-sponsor-level="coach">
+    <div class="sponsor-logo"></div>
+    <div class="sponsor-text">Sponsored by</div>
+    </div>
+
+    <div class="card hidden" id="staff-card">
     <h2>Coaches &amp; team access</h2>
     <p class="small muted">
       A coach sees the athletes on the teams they are assigned to. Assigning a

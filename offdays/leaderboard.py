@@ -24,9 +24,6 @@ from .scoring import compute_streak, level_for_xp
 Window = Literal["week", "month", "season", "all"]
 Board = Literal["xp", "offhand", "streak", "reps", "improvement", "quality"]
 
-
-# Length of each window in days. `all` is unbounded, hence None -- which is
-# also why "improvement over all time" has no meaningful previous window.
 WINDOW_DAYS: dict[str, int | None] = {
     "week": 7,
     "month": 30,
@@ -34,15 +31,10 @@ WINDOW_DAYS: dict[str, int | None] = {
     "all": None,
 }
 
-
-# Sessions required before an athlete is ranked on form. Without a floor, one
-# tidy session beats a month of consistent work, which is the opposite of what
-# the board is for.
 QUALITY_MIN_SESSIONS = 3
 
 
 def window_start(window: Window, today: date | None = None) -> str:
-    """Inclusive start day (YYYY-MM-DD) for a leaderboard window."""
     today = today or datetime.now(timezone.utc).date()
     days = WINDOW_DAYS.get(window)
     if days is None:
@@ -72,27 +64,29 @@ class LeaderRow:
         }
 
 
-def _display_name(row: sqlite3.Row) -> str:
-    """Withhold a minor's name from shared boards without recorded consent.
-
-    They still appear and still compete -- the ranking is not the problem, the
-    identifiability is. An initial-and-jersey handle keeps the accountability
-    the leaderboard exists for while keeping an unconsented minor's full name
-    off a screen their teammates' parents can see.
-    """
-    birth_year = row["birth_year"]
-    consented = row["guardian_consent_at"]
-    name = row["display_name"]
+def _display_name(row: Any) -> str:
+    """Per-program display: full name or initial+jersey for unconsented minors."""
+    # row is a tuple: (athlete_id, display_name, birth_year, guardian_consent_at, dominant_hand, jersey, value, team_name)
+    birth_year = row[2]
+    consented = row[3]
+    name = row[1]
     if birth_year is None or consented:
         return name
-
     age = datetime.now(timezone.utc).year - int(birth_year)
     if age > CONFIG.minor_age_ceiling:
         return name
-
     initial = name.strip()[:1].upper() or "?"
-    jersey = row["jersey"] if "jersey" in row.keys() and row["jersey"] else None
+    jersey = row[5] if row[5] else None
     return f"{initial}. (#{jersey})" if jersey else f"Athlete {initial}."
+
+
+def _sport_display_name(row: Any) -> str:
+    """Sport-wide display: first_name + last_initial, no consent gating."""
+    name = row[1].strip()
+    parts = name.split()
+    if len(parts) >= 2:
+        return f"{parts[0]} {parts[-1][0].upper()}."
+    return name
 
 
 def _scope_clause(team_id: int | None, org_id: int) -> tuple[str, list[Any]]:
@@ -104,130 +98,149 @@ def _scope_clause(team_id: int | None, org_id: int) -> tuple[str, list[Any]]:
     return ("LEFT JOIN team_members tm ON tm.user_id = u.id", [])
 
 
-def leaderboard(
-    conn: sqlite3.Connection,
-    org_id: int,
-    *,
-    board: Board = "xp",
-    window: Window = "week",
+def _build_leaderboard_query(
+    board: Board,
+    window: Window,
+    sport_filter: str | None = None,
+    org_id: int | None = None,
     team_id: int | None = None,
-    limit: int = 50,
-) -> list[dict[str, Any]]:
-    """Rank athletes in a program (or one team) on the given board."""
+) -> tuple[str, list[Any]]:
+    """Build the SQL query and params for a leaderboard.
+
+    Returns (sql, params). The caller adds the GROUP BY, ORDER BY, and LIMIT.
+    """
     start = window_start(window)
-    join, scope_params = _scope_clause(team_id, org_id)
-
-    base_select = (
-        "SELECT u.id AS athlete_id, u.display_name, u.birth_year, u.guardian_consent_at, "
-        "u.dominant_hand, tm.jersey, "
-        "COALESCE(t.name, 'Unassigned') AS team_name, "
+    join_clause = (
+        "JOIN team_members tm ON tm.user_id = u.id AND tm.team_id = ?"
+        if team_id is not None else
+        "LEFT JOIN team_members tm ON tm.user_id = u.id"
     )
-    base_from = (
-        f"FROM users u {join} "
-        "LEFT JOIN teams t ON t.id = tm.team_id "
-        "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1 "
-    )
+    scope_params: list[Any] = [team_id] if team_id is not None else []
 
+    # --- value subquery ---
     if board in ("xp", "streak"):
-        sql = (
-            base_select
-            + "COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
-            "  WHERE x.athlete_id = u.id AND x.day >= ?), 0) AS value "
-            + base_from
+        value_sql = (
+            "COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
+            "  WHERE x.athlete_id = u.id AND x.day >= ?), 0) AS value"
         )
-        params = [start, org_id, *scope_params]
+        value_params: list[Any] = [start]
 
     elif board == "reps":
-        # Self-reported sessions are excluded here and only here. Nobody has an
-        # incentive to overstate a number that only tightens their own load
-        # advisories, and a strong one to overstate a number on a board -- so
-        # their reps feed their own overuse protection and never a comparison.
-        sql = (
-            base_select
-            + "COALESCE((SELECT SUM(s.reps_total) FROM sessions s "
+        value_sql = (
+            "COALESCE((SELECT SUM(s.reps_total) FROM sessions s "
             "  WHERE s.athlete_id = u.id AND s.status = 'counted' "
             "  AND s.self_reported = 0 "
-            "  AND date(s.submitted_at) >= ?), 0) AS value "
-            + base_from
+            "  AND date(s.submitted_at) >= ?), 0) AS value"
         )
-        params = [start, org_id, *scope_params]
+        value_params = [start]
 
     elif board == "offhand":
-        # Off-hand depends on the athlete's dominant hand, so the column is
-        # chosen per row rather than fixed in the query.
-        sql = (
-            base_select
-            + "COALESCE((SELECT SUM(CASE WHEN u.dominant_hand = 'left' "
+        value_sql = (
+            "COALESCE((SELECT SUM(CASE WHEN u.dominant_hand = 'left' "
             "    THEN s.reps_right ELSE s.reps_left END) "
             "  FROM sessions s WHERE s.athlete_id = u.id AND s.status = 'counted' "
-            "  AND date(s.submitted_at) >= ?), 0) AS value "
-            + base_from
+            "  AND date(s.submitted_at) >= ?), 0) AS value"
         )
-        params = [start, org_id, *scope_params]
+        value_params = [start]
 
     elif board == "quality":
-        # Mean form score over the window, for athletes with enough sessions
-        # to have earned a place on it.
-        sql = (
-            base_select
-            + "COALESCE((SELECT CAST(ROUND(AVG(s.quality_score)) AS INTEGER) "
+        value_sql = (
+            "COALESCE((SELECT CAST(ROUND(AVG(s.quality_score)) AS INTEGER) "
             "  FROM sessions s WHERE s.athlete_id = u.id AND s.status = 'counted' "
             "  AND s.quality_score IS NOT NULL "
             "  AND date(COALESCE(s.completed_at, s.submitted_at)) >= ? "
-            "  HAVING COUNT(*) >= ?), 0) AS value "
-            + base_from
+            "  HAVING COUNT(*) >= ?), 0) AS value"
         )
-        params = [start, QUALITY_MIN_SESSIONS, org_id, *scope_params]
+        value_params = [start, QUALITY_MIN_SESSIONS]
 
     elif board == "improvement":
-        # This window's XP minus the previous equal-length window's. Rewards
-        # the athlete who went from nothing to something, which is the one a
-        # total-XP board never surfaces.
         span_days = WINDOW_DAYS.get(window)
         if span_days is None:
-            # All-time has no earlier window to improve on. Subtracting an
-            # empty range degrades this board to total XP rather than
-            # overflowing off the start of the calendar.
             prev_start = start
         else:
             prev_start = (date.fromisoformat(start) - timedelta(days=span_days)).isoformat()
-        sql = (
-            base_select
-            + "(COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
+        value_sql = (
+            "(COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
             "   WHERE x.athlete_id = u.id AND x.day >= ?), 0) "
             " - COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
-            "   WHERE x.athlete_id = u.id AND x.day >= ? AND x.day < ?), 0)) AS value "
-            + base_from
+            "   WHERE x.athlete_id = u.id AND x.day >= ? AND x.day < ?), 0)) AS value"
         )
-        params = [start, prev_start, start, org_id, *scope_params]
+        value_params = [start, prev_start, start]
+
     else:
         raise ValueError(f"unknown board: {board!r}")
 
-    sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC LIMIT ?"
-    params.append(limit * 3 if board == "streak" else limit)
+    # --- WHERE clause ---
+    if sport_filter is not None:
+        where_clause = (
+            "WHERE u.role = 'athlete' AND u.active = 1 "
+            "AND u.id IN (SELECT athlete_id FROM athlete_sports WHERE sport = ?)"
+        )
+        where_params: list[Any] = [sport_filter]
+    else:
+        where_clause = "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1"
+        where_params = [org_id]
 
-    rows = conn.execute(sql, params).fetchall()
+    # --- build full SQL ---
+    if board == "quality":
+        sql = (
+            "SELECT u.id AS athlete_id, u.display_name, u.birth_year, "
+            "u.guardian_consent_at, u.dominant_hand, tm.jersey, "
+            + value_sql + ", "
+            "COALESCE(t.name, 'Unassigned') AS team_name "
+            "FROM users u " + join_clause + " "
+            "LEFT JOIN teams t ON t.id = tm.team_id "
+            + where_clause
+        )
+        params = scope_params + value_params + where_params
+    else:
+        sql = (
+            "SELECT u.id AS athlete_id, u.display_name, u.birth_year, "
+            "u.guardian_consent_at, u.dominant_hand, tm.jersey, "
+            + value_sql + ", "
+            "COALESCE(t.name, 'Unassigned') AS team_name "
+            "FROM users u " + join_clause + " "
+            "LEFT JOIN teams t ON t.id = tm.team_id "
+            + where_clause
+        )
+        params = value_params + scope_params + where_params
 
+    return sql, params
+
+
+def _fetch_leader_rows(
+    conn: sqlite3.Connection,
+    rows: list[Any],
+    board: Board,
+    limit: int,
+    display_fn,
+) -> list[dict[str, Any]]:
+    """Convert raw SQL rows to leaderboard dicts.
+
+    Rows are tuples: (athlete_id, display_name, birth_year, guardian_consent_at,
+                      dominant_hand, jersey, value, team_name)
+    """
     results: list[LeaderRow] = []
     for row in rows:
+        athlete_id = row[0]
+        value = int(row[6])
+        team_name = row[7]
+
         total_xp = int(
             conn.execute(
                 "SELECT COALESCE(SUM(amount),0) AS t FROM xp_ledger WHERE athlete_id=?",
-                (row["athlete_id"],),
-            ).fetchone()["t"]
+                (athlete_id,),
+            ).fetchone()[0]
         )
-        value = int(row["value"])
-        detail = ""
 
+        detail = ""
         if board == "streak":
-            days = [
-                date.fromisoformat(r["day"])
-                for r in conn.execute(
-                    "SELECT day FROM xp_ledger WHERE athlete_id=? GROUP BY day "
-                    "HAVING SUM(amount) >= ? ORDER BY day",
-                    (row["athlete_id"], CONFIG.scoring.streak_min_xp),
-                )
-            ]
+            day_rows = conn.execute(
+                "SELECT day FROM xp_ledger WHERE athlete_id=? GROUP BY day "
+                "HAVING SUM(amount) >= ? ORDER BY day",
+                (athlete_id, CONFIG.scoring.streak_min_xp),
+            ).fetchall()
+            days = [date.fromisoformat(r[0]) for r in day_rows]
             streak = compute_streak(days, datetime.now(timezone.utc).date())
             value = streak.current
             detail = "at risk today" if streak.at_risk else ""
@@ -235,11 +248,11 @@ def leaderboard(
         results.append(
             LeaderRow(
                 rank=0,
-                athlete_id=row["athlete_id"],
-                display_name=_display_name(row),
+                athlete_id=athlete_id,
+                display_name=display_fn(row),
                 value=value,
                 level=level_for_xp(total_xp),
-                team_name=row["team_name"],
+                team_name=team_name,
                 detail=detail,
             )
         )
@@ -249,12 +262,8 @@ def leaderboard(
         results = results[:limit]
 
     if board == "quality":
-        # A zero here means "not enough sessions to rank", not "terrible form".
-        # Showing it as a score would be both wrong and discouraging.
         results = [r for r in results if r.value > 0]
 
-    # Competition ranking: equal values share a rank, and the next distinct
-    # value skips accordingly (1,2,2,4).
     prev_value: int | None = None
     prev_rank = 0
     for i, r in enumerate(results, start=1):
@@ -268,13 +277,45 @@ def leaderboard(
     return [r.to_dict() for r in results]
 
 
-def team_standings(conn: sqlite3.Connection, org_id: int, window: Window = "week") -> list[dict[str, Any]]:
-    """Team-vs-team board, ranked by XP *per active athlete*.
+def leaderboard(
+    conn: sqlite3.Connection,
+    org_id: int,
+    *,
+    board: Board = "xp",
+    window: Window = "week",
+    team_id: int | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Rank athletes in a program (or one team) on the given board."""
+    sql, params = _build_leaderboard_query(board, window, org_id=org_id, team_id=team_id)
+    sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC LIMIT ?"
+    params.append(limit * 3 if board == "streak" else limit)
+    rows = conn.execute(sql, params).fetchall()
+    return _fetch_leader_rows(conn, rows, board, limit, _display_name)
 
-    Total XP would just rank teams by roster size. Per-athlete average is the
-    number that actually says which team is putting in the work, and it gives a
-    small squad a real shot at beating a big one.
+
+def leaderboard_sport_wide(
+    conn: sqlite3.Connection,
+    sport: str,
+    *,
+    board: Board = "xp",
+    window: Window = "week",
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Rank athletes across every program for one sport.
+
+    Used by the sport= query param on /api/leaderboard. Filtering is by sport
+    rather than org_id, and display names use first_name + last_initial.
     """
+    sql, params = _build_leaderboard_query(board, window, sport_filter=sport)
+    sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC LIMIT ?"
+    params.append(limit * 3 if board == "streak" else limit)
+    rows = conn.execute(sql, params).fetchall()
+    return _fetch_leader_rows(conn, rows, board, limit, _sport_display_name)
+
+
+def team_standings(conn: sqlite3.Connection, org_id: int, window: Window = "week") -> list[dict[str, Any]]:
+    """Team-vs-team board, ranked by XP *per active athlete*."""
     start = window_start(window)
     rows = conn.execute(
         """
@@ -296,17 +337,15 @@ def team_standings(conn: sqlite3.Connection, org_id: int, window: Window = "week
     for r in rows:
         roster = int(r["roster"])
         total = int(r["total_xp"])
-        standings.append(
-            {
-                "team_id": r["team_id"],
-                "team_name": r["team_name"],
-                "roster": roster,
-                "active": int(r["active"]),
-                "total_xp": total,
-                "xp_per_athlete": round(total / roster, 1) if roster else 0.0,
-                "participation": round(int(r["active"]) / roster, 3) if roster else 0.0,
-            }
-        )
+        standings.append({
+            "team_id": r["team_id"],
+            "team_name": r["team_name"],
+            "roster": roster,
+            "active": int(r["active"]),
+            "total_xp": total,
+            "xp_per_athlete": round(total / roster, 1) if roster else 0.0,
+            "participation": round(int(r["active"]) / roster, 3) if roster else 0.0,
+        })
     standings.sort(key=lambda s: (-s["xp_per_athlete"], s["team_name"]))
     for i, s in enumerate(standings, start=1):
         s["rank"] = i
@@ -320,15 +359,9 @@ def coach_roster(
     window: Window = "week",
     scope: tuple[str, list[Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """The coach's working view: who is training, who has gone quiet.
-
-    Deliberately carries no video and no imagery -- only counts, recency, and
-    balance. A coach should be able to run this in front of a parent.
-    """
+    """The coach's working view: who is training, who has gone quiet."""
     start = window_start(window)
     join, scope_params = _scope_clause(team_id, org_id)
-    # Restricts the roster to the caller's assigned teams. Empty for a
-    # director, so the same statement serves both.
     scope_sql, staff_scope_params = scope or ("", [])
 
     rows = conn.execute(
@@ -383,46 +416,34 @@ def coach_roster(
         offhand = left if (r["dominant_hand"] or "right") == "right" else right
         offhand_share = round(offhand / sided, 3) if sided else None
 
-        out.append(
-            {
-                "athlete_id": r["athlete_id"],
-                # The coach is entitled to the real name -- they are the
-                # responsible adult. Only shared leaderboards get the handle.
-                "display_name": r["display_name"],
-                "jersey": r["jersey"],
-                "position": r["position"],
-                "team_name": r["team_name"],
-                "dominant_hand": r["dominant_hand"],
-                "window_xp": int(r["window_xp"]),
-                "level": level_for_xp(int(r["total_xp"])),
-                "window_sessions": int(r["window_sessions"]),
-                "last_session": last,
-                "days_since_session": days_since,
-                "offhand_share": offhand_share,
-                "quality": int(r["quality"]) if r["quality"] is not None else None,
-                # Attached by `attach_load`; the roster query stays pure SQL.
-                "load": None,
-                "pending_review": int(r["pending_review"]),
-                # Flags are what makes this actionable rather than another
-                # table to read: they say who to text tonight.
-                "flags": _flags(
-                    int(r["window_sessions"]), days_since, offhand_share,
-                    int(r["quality"]) if r["quality"] is not None else None,
-                ),
-            }
-        )
+        out.append({
+            "athlete_id": r["athlete_id"],
+            "display_name": r["display_name"],
+            "jersey": r["jersey"],
+            "position": r["position"],
+            "team_name": r["team_name"],
+            "dominant_hand": r["dominant_hand"],
+            "window_xp": int(r["window_xp"]),
+            "level": level_for_xp(int(r["total_xp"])),
+            "window_sessions": int(r["window_sessions"]),
+            "last_session": last,
+            "days_since_session": days_since,
+            "offhand_share": offhand_share,
+            "quality": int(r["quality"]) if r["quality"] is not None else None,
+            "load": None,
+            "pending_review": int(r["pending_review"]),
+            "flags": _flags(
+                int(r["window_sessions"]), days_since, offhand_share,
+                int(r["quality"]) if r["quality"] is not None else None,
+            ),
+        })
     return out
 
 
 def attach_load(
-    athletes: list[dict[str, Any]], states: dict[int, dict[str, Any]]
+    athletes: list[dict[str, Any]], states: dict[int, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Fold workload into an already-built roster.
-
-    Kept separate because load analysis needs a month of per-day history per
-    athlete -- expressing that in the roster query would turn one readable
-    statement into an unreadable one for no gain.
-    """
+    """Fold workload into an already-built roster."""
     for athlete in athletes:
         state = states.get(athlete["athlete_id"])
         if not state:
@@ -452,8 +473,6 @@ def _flags(
         flags.append("no_sessions_this_week")
     if offhand_share is not None and offhand_share < 0.20:
         flags.append("neglecting_offhand")
-    # Volume without form is the pattern worth catching: an athlete grinding
-    # out sloppy reps is banking fatigue rather than skill.
     if quality is not None and quality < 55 and window_sessions >= 2:
         flags.append("form_slipping")
     return flags

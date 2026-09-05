@@ -5,18 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>0FFDAYS &mdash; Train</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0A0A0B">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="styles.css">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A0A0B">
+<link rel="apple-touch-icon" href="icon-192.png?v=3">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 <div class="topbar">
-  <div id="masthead"></div>
-  <div style="display:flex;align-items:center;gap:10px">
+  <a href="/" class="topbar-brand">
+    <img src="offdays-mark.png?v=3" alt="" class="topbar-logo" loading="eager" onerror="this.style.display='none'">
+    <span class="topbar-title">0FF<span class="highlight">DAYS</span></span>
+  </a>
+  <div class="topbar-right">
     <span class="small muted" id="whoami"></span>
     <button class="bell" id="bell">Alerts<span class="dot hidden" id="bell-dot">0</span></button>
   </div>
+</div>
+
+<div class="sponsor-slot" data-sponsor-level="app">
+  <div class="sponsor-logo"></div>
+  <div class="sponsor-text">Sponsored by</div>
 </div>
 
 <div class="wrap wrap--narrow">
@@ -42,36 +53,43 @@
     </div>
 
     <div class="card" id="wellness-card">
-      <div class="budget-head">
-        <b>How do you feel today?</b>
-        <span class="small muted" id="wellness-state"></span>
-      </div>
-      <div class="feel-row" id="feel-row"></div>
-      <div id="wellness-guidance"></div>
-      <div id="rtp-plans"></div>
-      <div id="wellness-open"></div>
-      <details style="margin-top:10px" id="hurt-details">
-        <summary class="small muted" style="cursor:pointer">
-          Something specific hurts
-        </summary>
-        <p class="small muted" style="margin:8px 0" id="hurt-promise"></p>
-        <label for="hurt-area">Where?</label>
-        <select id="hurt-area"></select>
-        <label for="hurt-side">Which side?</label>
-        <select id="hurt-side">
-          <option value="">Not sure / both</option>
-          <option value="left">Left</option>
-          <option value="right">Right</option>
-        </select>
-        <label for="hurt-severity">How bad?</label>
-        <select id="hurt-severity"></select>
-        <div id="hurt-flags" class="small" style="margin:8px 0"></div>
-        <label for="hurt-note">Anything else? (optional)</label>
-        <textarea id="hurt-note" rows="2"
-          placeholder="Only you and your parent or guardian can read this."></textarea>
-        <button class="secondary" id="hurt-save" style="margin-top:8px">Tell the app</button>
-      </details>
-    </div>
+          <div class="section-header">
+            <span class="section-title">How do you feel today?</span>
+            <span class="small muted" id="wellness-state"></span>
+          </div>
+          <div class="feel-row" id="feel-row"></div>
+          <div id="wellness-guidance"></div>
+          <div id="rtp-plans"></div>
+          <div class="details-block" id="hurt-details">
+            <button class="details-toggle secondary" id="hurt-toggle">Something specific hurts</button>
+            <div class="details-panel hidden" id="hurt-panel" style="margin-top:0.75rem">
+              <p class="small muted" style="margin:8px 0" id="hurt-promise"></p>
+              <div class="form-group">
+                <label class="form-label" for="hurt-area">Where?</label>
+                <select id="hurt-area" class="form-select"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="hurt-side">Which side?</label>
+                <select id="hurt-side" class="form-select">
+                  <option value="">Not sure / both</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="hurt-severity">How bad?</label>
+                <select id="hurt-severity" class="form-select"></select>
+              </div>
+              <div id="hurt-flags" class="small muted" style="margin:8px 0"></div>
+              <div class="form-group">
+                <label class="form-label" for="hurt-note">Anything else? (optional)</label>
+                <textarea id="hurt-note" rows="2" class="form-input"
+                  placeholder="Only you and your parent or guardian can read this."></textarea>
+              </div>
+              <button class="btn btn-secondary" id="hurt-save" style="margin-top:0.5rem">Tell the app</button>
+            </div>
+          </div>
+        </div>
 
     <div class="card hidden" id="budget-card">
       <div class="budget-head">
@@ -189,6 +207,11 @@
     <div class="card">
       <h2>Recent sessions</h2>
       <table><tbody id="recent"></tbody></table>
+    </div>
+
+    <div class="sponsor-slot" data-sponsor-level="athlete">
+      <div class="sponsor-logo"></div>
+      <div class="sponsor-text">Sponsored by</div>
     </div>
 
     <button class="secondary" onclick="location.href='leaderboard.html'">Leaderboards</button>

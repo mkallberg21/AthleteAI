@@ -2,101 +2,161 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A0A0B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png?v=3">
+<link rel="stylesheet" href="styles.css?v=3">
 <title>0FFDAYS</title>
-<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="topbar"><div class="masthead"><div class="stack"><div class="by-offdays"><b>0FF</b>DAYS</div></div></div></div>
+<div class="app-shell">
 
-<div class="wrap wrap--narrow">
-  <div class="card">
-    <h1>Train on your own. Get the credit.</h1>
-    <p>
-      Record your drills with your phone. The app counts your reps on the phone
-      itself and sends the numbers to your coach.
-    </p>
-    <p class="privacy-note">
-      <b>Your video never leaves your phone.</b> It is not uploaded, not saved,
-      and not stored anywhere. Only the counts &mdash; reps, which hand, how
-      long &mdash; are sent. Your coach sees the numbers, never the footage.
-    </p>
+  <!-- Header -->
+  <header class="topbar">
+    <a href="/" class="topbar-brand">
+      <img src="offdays-mark.png?v=3" alt="" class="topbar-logo" loading="eager" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+      <span class="topbar-title">0FF<span class="highlight">DAYS</span></span>
+    </a>
+    <div class="topbar-right">
+      <span class="muted small" id="topbar-role" style="display:none"></span>
+    </div>
+  </header>
+
+  <div class="sponsor-slot" data-sponsor-level="app">
+    <div class="sponsor-logo"></div>
+    <div class="sponsor-text">Sponsored by</div>
   </div>
 
-  <div class="card">
-    <h2>Sign in</h2>
-    <label for="token">Your athlete code</label>
-    <input id="token" type="password" autocomplete="off" placeholder="Paste the code your coach gave you">
-    <div id="err" class="err hidden"></div>
-    <button id="go">Continue</button>
-  </div>
+  <!-- Content -->
+  <main class="wrap">
 
-  <div class="card">
-    <h2>First time here?</h2>
-    <p class="small muted">
-      If your coach gave you a short claim code on a slip of paper, enter it
-      here to set up your account.
+    <!-- Hero -->
+    <div class="card-elevated" style="text-align:center; padding:1.75rem 1.25rem;">
+      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🏆</div>
+      <h1 style="font-size:1.6rem; margin-bottom:0.5rem;">Train on your own. Get the credit.</h1>
+      <p style="font-size:0.9rem;">Record your drills with your phone. The app counts your reps on the phone itself and sends the numbers to your coach.</p>
+      <div class="privacy-note" style="text-align:left; margin-top:0.75rem;">
+        <strong style="color:var(--accent-bright)">Your video never leaves your phone.</strong> It is not uploaded, not saved, and not stored anywhere. Only the counts — reps, which hand, how long — are sent. Your coach sees the numbers, never the footage.
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Sign in -->
+    <div class="card">
+      <div class="section-header">
+        <span class="section-title">Sign in</span>
+      </div>
+      <form id="signin-form" style="margin-top:0.5rem;" action="/api/me/login" method="post" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="token">Your athlete code</label>
+          <input id="token" class="form-input" type="password" autocomplete="off"
+                 placeholder="Paste the code your coach gave you"
+                 value="" name="token"
+                 aria-describedby="err">
+          <div id="err" class="form-error hidden"></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="go">Continue</button>
+      </form>
+    </div>
+
+    <!-- First time here -->
+    <div class="card">
+      <div class="section-header">
+        <span class="section-title">First time here?</span>
+      </div>
+      <p class="small muted" style="margin-top:0.25rem;">If your coach gave you a short claim code on a slip of paper, enter it here to set up your account.</p>
+      <form style="margin-top:0.75rem;">
+        <div class="form-group">
+          <label class="form-label" for="claim">Claim code</label>
+          <input id="claim" class="form-input" placeholder="ABCD-EFGH" autocomplete="off">
+          <div id="cerr" class="form-error hidden"></div>
+        </div>
+        <button type="button" class="btn btn-secondary" id="claim-btn">Claim my account</button>
+      </form>
+    </div>
+
+    <!-- Parent or guardian -->
+    <div class="card">
+      <div class="section-header">
+        <span class="section-title">Parent or guardian?</span>
+      </div>
+      <p class="small muted" style="margin-top:0.25rem;">If a coach sent you an invite code, set up your account here. You will be able to see your athlete's training and choose what they share.</p>
+      <form style="margin-top:0.75rem;">
+        <div class="form-group">
+          <label class="form-label" for="invite">Invite code</label>
+          <input id="invite" class="form-input" placeholder="ABCD-EFGH-JKLM" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pname">Your name</label>
+          <input id="pname" class="form-input" placeholder="Dana Pierce" autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pemail">Email (optional)</label>
+          <input id="pemail" class="form-input" type="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div id="perr" class="form-error hidden"></div>
+        <button type="button" class="btn btn-secondary" id="redeem">Create parent account</button>
+      </form>
+    </div>
+
+    <!-- Just your own family? -->
+    <div class="card">
+      <div class="section-header">
+        <span class="section-title">Just your own family?</span>
+      </div>
+      <p class="small muted" style="margin-top:0.25rem;">No club needed. You take the coach's place: you set what they work on, write the messages they get, and see everything. Everything the app does for a team works for a household.</p>
+      <form style="margin-top:0.75rem;">
+        <div class="form-group">
+          <label class="form-label" for="fam-parent">Your name</label>
+          <input id="fam-parent" class="form-input" placeholder="Dana Pierce" autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="fam-name">Family name (optional)</label>
+          <input id="fam-name" class="form-input" placeholder="The Pierces">
+        </div>
+        <div id="ferr" class="form-error hidden"></div>
+        <button type="button" class="btn btn-secondary" id="create-family">Create a family account</button>
+        <div id="fam-token" class="small muted hidden" style="margin-top:0.75rem; padding:0.75rem; background:var(--surface-2); border-radius:var(--radius-sm);"></div>
+      </form>
+    </div>
+
+    <!-- Starting a program? -->
+    <div class="card">
+      <div class="section-header">
+        <span class="section-title">Starting a program?</span>
+      </div>
+      <p class="small muted" style="margin-top:0.25rem;">Set up your club or school here. Pick your sport and the app fits itself around it — positions, the drills it suggests, and which other sports it tells your athletes their training carries over into.</p>
+      <form style="margin-top:0.75rem;">
+        <div class="form-group">
+          <label class="form-label" for="org-name">Program name</label>
+          <input id="org-name" class="form-input" placeholder="Northshore Lacrosse Club">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="org-sport">Sport</label>
+          <select id="org-sport" class="form-select"></select>
+          <p id="org-sport-note" class="form-hint"></p>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="org-director">Your name</label>
+          <input id="org-director" class="form-input" placeholder="Dana Pierce" autocomplete="name">
+        </div>
+        <div id="oerr" class="form-error hidden"></div>
+        <button type="button" class="btn btn-secondary" id="create-org">Create program</button>
+        <div id="org-token" class="small muted hidden" style="margin-top:0.75rem; padding:0.75rem; background:var(--surface-2); border-radius:var(--radius-sm);"></div>
+      </form>
+    </div>
+
+    <p class="small muted" style="text-align:center; margin-top:0.5rem;">
+      Coaches and directors sign in with the same code and land on the dashboard.
     </p>
-    <label for="claim">Claim code</label>
-    <input id="claim" placeholder="ABCD-EFGH" autocomplete="off">
-    <div id="cerr" class="err hidden"></div>
-    <button class="secondary" id="claim-btn">Claim my account</button>
-  </div>
 
-  <div class="card">
-    <h2>Parent or guardian?</h2>
-    <p class="small muted">
-      If a coach sent you an invite code, set up your account here. You will be
-      able to see your athlete's training and choose what they share.
-    </p>
-    <label for="invite">Invite code</label>
-    <input id="invite" placeholder="ABCD-EFGH-JKLM" autocomplete="off">
-    <label for="pname">Your name</label>
-    <input id="pname" placeholder="Dana Pierce" autocomplete="name">
-    <label for="pemail">Email (optional)</label>
-    <input id="pemail" type="email" placeholder="you@example.com" autocomplete="email">
-    <div id="perr" class="err hidden"></div>
-    <button class="secondary" id="redeem">Create parent account</button>
-  </div>
-
-  <div class="card">
-    <h2>Just your own family?</h2>
-    <p class="small muted">
-      No club needed. You take the coach's place: you set what they work on,
-      write the messages they get, and see everything. Everything the app does
-      for a team works for a household.
-    </p>
-    <label for="fam-parent">Your name</label>
-    <input id="fam-parent" placeholder="Dana Pierce" autocomplete="name">
-    <label for="fam-name">Family name (optional)</label>
-    <input id="fam-name" placeholder="The Pierces">
-    <div id="ferr" class="err hidden"></div>
-    <button class="secondary" id="create-family">Create a family account</button>
-    <div id="fam-token" class="small hidden" style="margin-top:10px"></div>
-  </div>
-
-  <div class="card">
-    <h2>Starting a program?</h2>
-    <p class="small muted">
-      Set up your club or school here. Pick your sport and the app fits itself
-      around it &mdash; positions, the drills it suggests, and which other
-      sports it tells your athletes their training carries over into.
-    </p>
-    <label for="org-name">Program name</label>
-    <input id="org-name" placeholder="Northshore Lacrosse Club">
-    <label for="org-sport">Sport</label>
-    <select id="org-sport"></select>
-    <p class="small muted" id="org-sport-note" style="margin:-4px 0 8px"></p>
-    <label for="org-director">Your name</label>
-    <input id="org-director" placeholder="Dana Pierce" autocomplete="name">
-    <div id="oerr" class="err hidden"></div>
-    <button class="secondary" id="create-org">Create program</button>
-    <div id="org-token" class="small hidden" style="margin-top:10px"></div>
-  </div>
-
-  <p class="small muted" style="text-align:center">
-    Coaches and directors sign in with the same code and land on the dashboard.
-  </p>
+  </main>
 </div>
 
 <script type="module">
@@ -116,8 +176,6 @@ const tokenInput = document.getElementById('token');
   } catch { $('org-sport').innerHTML = '<option value="lacrosse">Lacrosse</option>'; }
 })();
 
-// Said up front rather than discovered later: a sport with no position model
-// still works, it just does not offer a position picker.
 function describeSport() {
   const chosen = $('org-sport').selectedOptions[0];
   if (!chosen) return;
@@ -142,7 +200,6 @@ $('create-family').addEventListener('click', async () => {
       method: 'POST',
       body: { parent_name: parent, family_name: $('fam-name').value.trim() },
     });
-    // Shown once and never retrievable -- only a hash is stored.
     $('fam-token').innerHTML =
       `You are set up. This is your code &mdash; copy it now, it is not shown
        again:<br><code style="word-break:break-all">${res.parent.token}</code>
@@ -168,7 +225,6 @@ $('create-org').addEventListener('click', async () => {
       method: 'POST',
       body: { name, sport: $('org-sport').value, director_name: director },
     });
-    // Shown once and never retrievable -- only a hash is stored.
     $('org-token').innerHTML =
       `<b>${name}</b> is set up. This is your director code &mdash; copy it now,
        it is not shown again:<br>
@@ -179,6 +235,7 @@ $('create-org').addEventListener('click', async () => {
     $('oerr').classList.remove('hidden');
   }
 });
+
 const errEl = document.getElementById('err');
 const goBtn = document.getElementById('go');
 
@@ -187,7 +244,8 @@ function showError(message) {
   errEl.classList.remove('hidden');
 }
 
-async function signIn() {
+document.getElementById('signin-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
   const token = tokenInput.value.trim();
   if (!token) return showError('Enter the code your coach gave you.');
 
@@ -196,77 +254,16 @@ async function signIn() {
   setToken(token);
   try {
     const me = await api('/api/me');
-    // One sign-in, three destinations.
     const home = { athlete: 'capture.html', guardian: 'parent.html' };
-    location.href = home[me.role] || 'coach.html';
+    const dest = home[me.role] || 'coach.html';
+    window.location.href = dest;
   } catch (e) {
-    setToken(null);
-    showError(e.message);
     goBtn.disabled = false;
-  }
-}
-
-goBtn.addEventListener('click', signIn);
-tokenInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') signIn(); });
-
-const claimBtn = document.getElementById('claim-btn');
-const cerr = document.getElementById('cerr');
-
-claimBtn.addEventListener('click', async () => {
-  const code = document.getElementById('claim').value.trim();
-  if (!code) return;
-  claimBtn.disabled = true;
-  cerr.classList.add('hidden');
-  try {
-    const res = await fetch('/api/claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'That code did not work.');
-    setToken(data.token);
-    location.href = 'capture.html';
-  } catch (e) {
-    cerr.textContent = e.message;
-    cerr.classList.remove('hidden');
-    claimBtn.disabled = false;
+    showError(e.message || 'Sign in failed. Check your code.');
   }
 });
 
-const redeemBtn = document.getElementById('redeem');
-const perr = document.getElementById('perr');
-
-redeemBtn.addEventListener('click', async () => {
-  const code = document.getElementById('invite').value.trim();
-  const name = document.getElementById('pname').value.trim();
-  if (!code || !name) {
-    perr.textContent = 'Enter the invite code and your name.';
-    perr.classList.remove('hidden');
-    return;
-  }
-  redeemBtn.disabled = true;
-  perr.classList.add('hidden');
-  try {
-    const res = await fetch('/api/guardians/redeem', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code,
-        display_name: name,
-        email: document.getElementById('pemail').value.trim() || null,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Could not use that code.');
-    setToken(data.token);
-    location.href = 'parent.html';
-  } catch (e) {
-    perr.textContent = e.message;
-    perr.classList.remove('hidden');
-    redeemBtn.disabled = false;
-  }
-});
+tokenInput?.focus();
 </script>
 </body>
 </html>
