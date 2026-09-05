@@ -192,12 +192,12 @@ STRINGS: dict[str, dict[str, str]] = {
     },
     "parent.cohort.why": {
         EN: ("Every squad in your child's birth year, ranked on work they "
-             "control: sessions done, weak-hand reps, days in a row, "
+             "control: sessions done, {weaker} reps, days in a row, "
              "improvement. Not ability, and not a prediction of next "
              "season's teams."),
         ES: ("Todos los equipos del a\u00f1o de nacimiento de su hijo o hija, "
              "ordenados por el trabajo que controlan: sesiones hechas, "
-             "repeticiones con la mano d\u00e9bil, d\u00edas seguidos, mejora. No la "
+             "repeticiones con {weaker}, d\u00edas seguidos, mejora. No la "
              "capacidad, ni una predicci\u00f3n de los equipos de la pr\u00f3xima "
              "temporada."),
     },

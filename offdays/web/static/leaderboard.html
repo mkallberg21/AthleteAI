@@ -94,10 +94,21 @@ const MEDALS = { 1: '\u{1F947}', 2: '\u{1F948}', 3: '\u{1F949}' };
 // A squad label has to be readable at a glance on a cohort board, because the
 // whole reason to look at one is to see which side of the split a name is on.
 // Colour comes from the squad's own name where the club used one.
+// Clubs name their squads after colours, and which colours is up to them:
+// Red and Blue here, Navy and White at the next club along. Reading the name
+// keeps the chip legible without the app having to be told, and a squad named
+// something else entirely still gets a readable neutral chip.
+const SQUAD_COLOURS = [
+  [/\b(red|scarlet|crimson|maroon)\b/, 'squad--red'],
+  [/\b(blue|navy|royal)\b/, 'squad--blue'],
+  [/\b(white|silver|grey|gray)\b/, 'squad--white'],
+  [/\b(black|charcoal)\b/, 'squad--black'],
+  [/\b(green|emerald)\b/, 'squad--green'],
+  [/\b(gold|yellow|amber)\b/, 'squad--gold'],
+];
 function squadClass(name) {
   const n = (name || '').toLowerCase();
-  if (n.includes('red')) return 'squad--red';
-  if (n.includes('blue')) return 'squad--blue';
+  for (const [re, cls] of SQUAD_COLOURS) if (re.test(n)) return cls;
   return '';
 }
 

@@ -1462,8 +1462,12 @@ code, .code, .claim-code {
   color: var(--muted);
   border: 1px solid var(--border);
 }
-.squad--red  { color: #E88; border-color: #7A3B3B; background: rgba(196,65,63,0.12); }
-.squad--blue { color: #7FBEF5; border-color: #2C5A80; background: rgba(0,139,253,0.12); }
+.squad--red   { color: #E88;     border-color: #7A3B3B; background: rgba(196,65,63,0.12); }
+.squad--blue  { color: #7FBEF5; border-color: #2C5A80; background: rgba(0,139,253,0.12); }
+.squad--white { color: #E4ECF4; border-color: #55657A; background: rgba(228,236,244,0.10); }
+.squad--black { color: #A9B7C6; border-color: #3C4757; background: rgba(20,26,34,0.55); }
+.squad--green { color: #6FD69B; border-color: #2A6B48; background: rgba(18,161,80,0.12); }
+.squad--gold  { color: #E7B45A; border-color: #7A5A22; background: rgba(199,119,0,0.14); }
 
 /* Your own child's row on the cohort board. A parent scanning two squads of
    names needs to find theirs without reading every line. */

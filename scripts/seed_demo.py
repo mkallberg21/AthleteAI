@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import random
 import sys
 from datetime import datetime, timedelta, timezone
@@ -127,14 +128,130 @@ DRILL_MIX = [
 ]
 
 
-def pick_drill(rng: random.Random) -> str:
+def pick_drill(rng: random.Random, mix=DRILL_MIX) -> str:
     roll = rng.random()
     cumulative = 0.0
-    for key, weight in DRILL_MIX:
+    for key, weight in mix:
         cumulative += weight
         if roll <= cumulative:
             return key
-    return DRILL_MIX[0][0]
+    return mix[0][0]
+
+
+# ---------------------------------------------------------------------------
+# The programs this seeder can build
+#
+# One club per sport, because a demo has to be a *particular* club to be worth
+# looking at: named athletes, a real split, and behaviour a coach recognises.
+# Everything sport-specific lives here rather than being scattered through
+# main(), so adding a third program is a dictionary entry.
+# ---------------------------------------------------------------------------
+
+SOCCER_FILM_SHELF = [
+    ("Defending the counter", "Watch the two centre backs, not the ball. Who drops and who steps.",
+     {"prompt": "The ball is turned over in midfield. What should the nearest centre back do first?",
+      "options": ["Sprint at the ball", "Drop to protect the space behind",
+                  "Push up to play offside", "Call for the keeper"],
+      "answer": 1,
+      "because": "Space behind beats a tackle you probably will not make."}),
+    ("Playing out from the back", "Where the third pass is going before the first one is made.",
+     {"prompt": "The keeper has it and both centre backs are marked. Who is the out?",
+      "options": ["Row Z", "The dropping midfielder",
+                  "The far full back", "The striker's feet"],
+      "answer": 1,
+      "because": "The dropping six turns a two-man press into a three-man problem."}),
+    ("Pressing as a unit", "Angles, not sprints. Watch how the front two shut one side off.", None),
+    ("The far post run", "The run that scores is made before the cross is struck.", None),
+    ("First touch out of pressure", "Where the touch goes, not how nice it looks.", None),
+]
+
+SOCCER_ROSTER = [
+    # Trains hard and never rests. The workload warning.
+    ("Diego Ramirez",   "midfielder", "right", 6.0, 0.46, 0,  dict(rom_cv=0.06, rom_scale=1.00, decay=0.97, offhand_deficit=0.06)),
+    # Doing it right: steady, balanced, a long streak.
+    ("Sam Whitfield",   "forward",    "left",  5.0, 0.42, 0,  dict(rom_cv=0.08, rom_scale=0.98, decay=0.94, offhand_deficit=0.10)),
+    # Volume with a badly neglected weak foot: the detector's whole reason.
+    ("Owen Marsh",      "midfielder", "right", 4.0, 0.14, 0,  dict(rom_cv=0.11, rom_scale=0.95, decay=0.90, offhand_deficit=0.35)),
+    # A sharp jump in load, which is the advisory.
+    ("Luca Bennett",    "forward",    "right", 3.0, 0.30, 1,  dict(rom_cv=0.10, rom_scale=0.92, decay=0.93, offhand_deficit=0.14)),
+    # Gone quiet for a fortnight.
+    ("Isaac Cole",      "defender",   "left",  2.0, 0.22, 12, dict(rom_cv=0.14, rom_scale=0.86, decay=0.88, offhand_deficit=0.18)),
+    # Half reps, form falling apart, then three weeks of nothing.
+    ("Mason Pryor",     "midfielder", "right", 1.0, 0.10, 21, dict(rom_cv=0.22, rom_scale=0.62, decay=0.74, offhand_deficit=0.22)),
+    # The best of the squad: volume and shape together.
+    ("Theo Lindqvist",  "forward",    "right", 5.5, 0.45, 0,  dict(rom_cv=0.05, rom_scale=1.02, decay=0.98, offhand_deficit=0.04)),
+    # Weekends only. A pattern, not a failing.
+    ("Caleb Nguyen",    "defender",   "right", 2.0, 0.28, 2,  dict(rom_cv=0.12, rom_scale=0.93, decay=0.91, offhand_deficit=0.16)),
+    # Visibly improving week on week.
+    ("Rhys Donovan",    "defender",   "right", 3.5, 0.34, 0,  dict(rom_cv=0.09, rom_scale=0.90, decay=0.95, offhand_deficit=0.12)),
+    # Bursts and gaps: the hardest kind to notice unaided.
+    ("Jonah Feldman",   "midfielder", "left",  2.5, 0.31, 6,  dict(rom_cv=0.15, rom_scale=0.88, decay=0.89, offhand_deficit=0.20)),
+    # Brand new this week, so almost no history.
+    ("Arlo Bright",     "forward",    "right", 4.0, 0.36, 0,  dict(rom_cv=0.13, rom_scale=0.89, decay=0.92, offhand_deficit=0.15)),
+    # Keeper. Quicker to one side than the other, which is a pattern to work
+    # on rather than a mark out of ten.
+    ("Nico Alvarez",    "goalkeeper", "right", 4.5, 0.40, 0,  dict(rom_cv=0.10, rom_scale=0.96, decay=0.94, offhand_deficit=0.26)),
+    # The other keeper: fewer sessions, even on both sides.
+    ("Ellis Barron",    "goalkeeper", "left",  3.0, 0.44, 3,  dict(rom_cv=0.08, rom_scale=0.94, decay=0.93, offhand_deficit=0.07)),
+]
+
+SOCCER_SECOND = [
+    ("Dane Whitlock",   "forward",    "right", 5.5, 0.46, 0,  dict(rom_cv=0.06, rom_scale=1.01, decay=0.97, offhand_deficit=0.05)),
+    ("Henry Ashford",   "midfielder", "left",  4.5, 0.41, 0,  dict(rom_cv=0.09, rom_scale=0.97, decay=0.95, offhand_deficit=0.09)),
+    ("Colton Reyes",    "defender",   "right", 3.5, 0.38, 1,  dict(rom_cv=0.11, rom_scale=0.93, decay=0.92, offhand_deficit=0.13)),
+    ("Harrison Vance",  "midfielder", "right", 2.0, 0.19, 5,  dict(rom_cv=0.16, rom_scale=0.85, decay=0.87, offhand_deficit=0.24)),
+]
+
+STATIC_TEAMS = pathlib.Path(__file__).resolve().parents[1] / "offdays" / "web" / "static" / "teams"
+
+PROGRAMS = {
+    "lacrosse": {
+        "club": "Nashville Dogs",
+        "logo": "nashville-dogs.png",
+        "teams": ("2031 Red", "2031 Blue"),
+        "age_group": "2031",
+        "coaches": ("Coach Tommy", "Coach Matt", "Coach Mike"),
+        "second_coach": "Coach Bryan",
+        "director": "Joel White",
+        "guardian": "Travis Anderson",
+        "shelf": FILM_SHELF,
+        "assignment": ("lax_wall_ball", "Wall Ball Week"),
+        "mix": DRILL_MIX,
+        "rosters": (ROSTER, BLUE_ROSTER),
+        # One athlete deliberately left without guardian consent, so the
+        # leaderboard's name-masking is visible in the demo.
+        "unconsented": "Gray Freeman",
+    },
+    "soccer": {
+        "club": "Tennessee Soccer Club",
+        # Used the moment the file exists. teams/README.md is explicit that
+        # this product ships no approximation of any club's badge: a drawing
+        # that is nearly somebody's logo is worse than their name set in our
+        # own type, which is what a program with nothing uploaded gets. So the
+        # club drops their real PNG in web/static/teams/ and it appears; until
+        # then the header carries their name and nothing is invented.
+        "logo": "tennessee-soccer.png",
+        "teams": ("2031 Navy", "2031 White"),
+        "age_group": "2031",
+        "coaches": ("Coach Rivera", "Coach Hale", "Coach Duffy"),
+        "second_coach": "Coach Odom",
+        "director": "Marcus Bell",
+        "guardian": "Renata Ramirez",
+        "shelf": SOCCER_FILM_SHELF,
+        "assignment": ("soc_wall_pass", "Wall Passing Week"),
+        "mix": [
+            ("soc_wall_pass", 0.34),
+            ("soc_juggle", 0.21),
+            ("soc_juggle_weak", 0.10),
+            ("gen_jump_rope", 0.10),
+            ("gen_high_knees", 0.09),
+            ("gen_squat", 0.08),
+            ("gen_split_squat", 0.08),
+        ],
+        "rosters": (SOCCER_ROSTER, SOCCER_SECOND),
+        "unconsented": "Owen Marsh",
+    },
+}
 
 
 def synth_reps(rng: random.Random, drill_key: str, offhand_bias: float, sloppy: bool,
@@ -148,6 +265,11 @@ def synth_reps(rng: random.Random, drill_key: str, offhand_bias: float, sloppy: 
     drill = get_drill(drill_key)
     counts = {
         "lax_wall_ball": (80, 260),
+        "soc_wall_pass": (70, 220),
+        "soc_juggle": (40, 160),
+        "soc_juggle_weak": (25, 90),
+        "gen_jump_rope": (80, 300),
+        "gen_split_squat": (16, 44),
         "gen_push_up": (20, 60),
         "gen_squat": (25, 70),
         "gen_high_knees": (60, 160),
@@ -201,6 +323,9 @@ def main() -> int:
     parser.add_argument("--db", default="data/demo.db", help="path to the demo database")
     parser.add_argument("--weeks", type=int, default=6, help="weeks of history to generate")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--sport", default="lacrosse", choices=sorted(PROGRAMS),
+        help="which demonstration program to build")
     args = parser.parse_args()
 
     db_path = Path(args.db)
@@ -210,21 +335,29 @@ def main() -> int:
     rng = random.Random(args.seed)
     store = Store(connect(db_path))
 
-    org_id = store.create_org("Nashville Dogs")
+    P = PROGRAMS[args.sport]
+    org_id = store.create_org(P["club"], sport=args.sport)
     # The club's own crest, as supplied by the club. It leads the header on
     # every screen this program sees; ours sits behind it as a credit line.
     # A program that has uploaded nothing gets its name in the same slot --
     # see teams/README.md for why there is no drawn stand-in.
-    store.set_org_logo(org_id, "nashville-dogs.png")
-    director = store.create_user(org_id, "director", "Joel White", email="director@example.com")
+    logo_file = STATIC_TEAMS / P["logo"] if P["logo"] else None
+    if logo_file is not None and logo_file.exists():
+        store.set_org_logo(org_id, P["logo"])
+    elif P["logo"]:
+        print(f"  (no {P['logo']} in web/static/teams/, so the header carries "
+              f"the club's name)")
+    director = store.create_user(
+        org_id, "director", P["director"], email="director@example.com")
     # Age-group squads rather than Varsity/JV: a 2031 birth-year group split
     # into a Red and a Blue side, which is how most youth clubs actually name
     # a roster.
     # Both squads carry the same age_group, which is what makes one cohort
     # board out of two rosters. Without it they are simply two teams that
     # happen to have a year in their names.
-    red = store.create_team(org_id, "2031 Red", "2026", age_group="2031")
-    blue = store.create_team(org_id, "2031 Blue", "2026", age_group="2031")
+    first_name, second_name = P["teams"]
+    red = store.create_team(org_id, first_name, "2026", age_group=P["age_group"])
+    blue = store.create_team(org_id, second_name, "2026", age_group=P["age_group"])
 
     # A director sees the whole program; a coach sees only the teams they are
     # assigned to. That difference is enforced on the Principal, not in the
@@ -233,8 +366,9 @@ def main() -> int:
     # Seeding real coaches rather than only a director is what makes it
     # visible -- Coach Tommy's dashboard cannot reach a team he is not on.
     coach_tokens = []
-    for coach_name, team in (("Coach Tommy", red), ("Coach Matt", red),
-                             ("Coach Mike", red), ("Coach Bryan", blue)):
+    staffing = [(name, red) for name in P["coaches"]]
+    staffing.append((P["second_coach"], blue))
+    for coach_name, team in staffing:
         coach = store.create_user(org_id, "coach", coach_name)
         store.assign_staff_to_team(coach["id"], team["id"])
         coach_tokens.append((coach_name, coach["token"]))
@@ -251,7 +385,7 @@ def main() -> int:
     athletes = []
 
     for i, (team, (name, position, hand, per_week, offhand, quiet_days, form)) in enumerate(
-        [(red, r) for r in ROSTER] + [(blue, r) for r in BLUE_ROSTER]
+        [(red, r) for r in P["rosters"][0]] + [(blue, r) for r in P["rosters"][1]]
     ):
         athlete = store.create_user(
             org_id, "athlete", name,
@@ -261,7 +395,7 @@ def main() -> int:
             dominant_hand=hand,
             # One athlete deliberately left without consent so the leaderboard's
             # name-masking is visible in the demo.
-            guardian_consent=(name != "Gray Freeman"),
+            guardian_consent=(name != P["unconsented"]),
         )
         store.join_team(team["join_code"], athlete["id"], jersey=str(10 + i),
                         position=position)
@@ -276,7 +410,7 @@ def main() -> int:
             if rng.random() > per_week / 7.0:
                 continue
             when = end_of_day - timedelta(days=day_offset, hours=rng.uniform(0, 14))
-            drill_key = pick_drill(rng)
+            drill_key = pick_drill(rng, P["mix"])
             sloppy = sloppy_athlete and rng.random() < 0.4
             reps, duration = synth_reps(
                 rng, drill_key, offhand if hand == "right" else 1 - offhand,
@@ -284,11 +418,27 @@ def main() -> int:
             )
 
             started = store.start_session(athlete["id"], drill_key)
+            # Ball drills are counted from ball contacts rather than from the
+            # body alone, so a session submitted without them lands in review
+            # every time. Lacrosse never noticed: its wall ball reads the
+            # throw-catch cycle off the arms. Soccer's signature drills all
+            # track the ball, so a seeder that ignores this fills the review
+            # queue with its own artifacts and the demo looks broken.
+            spec = get_drill(drill_key)
+            ball_args = {}
+            if spec.ball is not None and spec.ball.counts:
+                ball_args = {
+                    "track_quality": rng.uniform(0.62, 0.88),
+                    # One contact per counted rep, which is what a juggle or a
+                    # wall pass is, with the odd one the tracker lost.
+                    "ball_contacts": max(1, len(reps) - rng.randint(0, 2)),
+                    "ball_travel": rng.uniform(0.9, 2.1),
+                }
             store.submit_session(
                 athlete["id"], started["session_id"], started["nonce"],
                 duration_ms=duration, reps=reps,
                 mean_confidence=(rng.uniform(0.30, 0.46) if sloppy else rng.uniform(0.82, 0.94)),
-                client_version="seed", device_label="demo",
+                client_version="seed", device_label="demo", **ball_args,
             )
             # Backdate so the history spreads across the window instead of
             # landing entirely on today.
@@ -324,7 +474,7 @@ def main() -> int:
     # eleven-character id invented for a demo can collide with somebody's real
     # video, and .invalid is reserved precisely so it never resolves.
     clips = []
-    for title, focus, question in FILM_SHELF:
+    for title, focus, question in P["shelf"]:
         clips.append(store.create_clip(
             org_id,
             f"https://clips.example.invalid/{title.lower().replace(' ', '-')}",
@@ -378,8 +528,8 @@ def main() -> int:
             org_id=org_id,
             team_id=team["id"],
             created_by=director["id"],
-            drill_key="lax_wall_ball",
-            title=f"{team['name']} Wall Ball Week",
+            drill_key=P["assignment"][0],
+            title=f"{team['name']} {P['assignment'][1]}",
             notes="Both hands. Quality over speed.",
             starts_on=(today - timedelta(days=3)).isoformat(),
             due_on=(today + timedelta(days=3)).isoformat(),
@@ -398,7 +548,7 @@ def main() -> int:
         store.conn, first_athlete["id"], director["id"], email="parent@example.com"
     )
     guardian = guardians_mod.redeem_invite(
-        store.conn, invite["code"], "Travis Anderson", "parent@example.com"
+        store.conn, invite["code"], P["guardian"], "parent@example.com"
     )
     for scope in (guardians_mod.Scope.PARTICIPATION, guardians_mod.Scope.DATA_RETENTION):
         guardians_mod.set_consent(
@@ -425,11 +575,12 @@ def main() -> int:
     print(f"  assignments: {len(assignments_mod.list_for_org(store.conn, org_id))}")
     print(f"  form-scored: {scored} sessions")
     print(f"  notifications: {sum(generated.values())} scheduled + new-assignment alerts")
-    print(f"\n  Join code: 2031 Red={red['join_code']}  2031 Blue={blue['join_code']}")
+    print(f"\n  Join code: {red['name']}={red['join_code']}  "
+          f"{blue['name']}={blue['join_code']}")
     print(f"\n  Guardian invite (unredeemed, for {athletes[1][1]}): {pending['code']}")
     print("\n  Sign-in tokens")
-    print(f"    {'Joel White (director)':<26} {director['token']}")
-    print(f"    {'Travis Anderson (parent)':<26} {guardian['token']}")
+    print(f"    {P['director'] + ' (director)':<26} {director['token']}")
+    print(f"    {P['guardian'] + ' (parent)':<26} {guardian['token']}")
     for coach, token in coach_tokens:
         print(f"    {coach + ' (coach)':<26} {token}")
     for athlete, name, *_ in athletes:

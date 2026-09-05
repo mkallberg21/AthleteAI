@@ -2186,7 +2186,8 @@ def _side_words(store: Store, org_id: int) -> dict[str, str]:
     """
     words = sports_mod.side_words(_org_sport(store, org_id))
     return {"noun": words.noun, "label": words.label,
-            "weaker": words.weaker, "both": words.both}
+            "weaker": words.weaker, "both": words.both,
+            "weaker_es": words.weaker_es}
 
 
 class SeasonPhaseSetting(BaseModel):

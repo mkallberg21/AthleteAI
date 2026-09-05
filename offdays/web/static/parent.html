@@ -401,10 +401,21 @@ let cohortBoard = 'xp';
 let cohortGroup = null;
 let myAthleteIds = new Set();
 
+// Clubs name their squads after colours, and which colours is up to them:
+// Red and Blue here, Navy and White at the next club along. Reading the name
+// keeps the chip legible without the app having to be told, and a squad named
+// something else entirely still gets a readable neutral chip.
+const SQUAD_COLOURS = [
+  [/\b(red|scarlet|crimson|maroon)\b/, 'squad--red'],
+  [/\b(blue|navy|royal)\b/, 'squad--blue'],
+  [/\b(white|silver|grey|gray)\b/, 'squad--white'],
+  [/\b(black|charcoal)\b/, 'squad--black'],
+  [/\b(green|emerald)\b/, 'squad--green'],
+  [/\b(gold|yellow|amber)\b/, 'squad--gold'],
+];
 function squadClass(name) {
   const n = (name || '').toLowerCase();
-  if (n.includes('red')) return 'squad--red';
-  if (n.includes('blue')) return 'squad--blue';
+  for (const [re, cls] of SQUAD_COLOURS) if (re.test(n)) return cls;
   return '';
 }
 
@@ -412,10 +423,17 @@ async function loadCohort() {
   if (!cohortGroup) return;
   $('cohort-title').textContent =
     T('parent.cohort.title', `The ${cohortGroup} age group`).replace('{age_group}', cohortGroup);
+  // The one sentence on this card that names the weaker side, so it takes the
+  // program's own word for it rather than assuming hands.
   $('cohort-why').textContent = T('parent.cohort.why',
     "Every squad in your child's birth year, ranked on work they control: "
-    + 'sessions done, weak-hand reps, days in a row, improvement. Not ability, '
-    + "and not a prediction of next season's teams.");
+    + 'sessions done, {weaker} reps, days in a row, improvement. Not ability, '
+    + "and not a prediction of next season's teams.")
+    // The label form rather than the "weaker X" form: "weak foot reps" and
+    // "off-hand reps" both read as things a coach says, where "weaker foot
+    // reps" reads as a translation.
+    .replace('{weaker}', document.documentElement.lang === 'es' && SIDE.weaker_es
+      ? SIDE.weaker_es : SIDE.label.toLowerCase());
   $('cohort-masked').textContent = T('parent.cohort.masked',
     'Children whose families have not agreed to their name being shown appear '
     + 'as an initial. Yours is highlighted.');
