@@ -108,7 +108,7 @@ offdays/
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
-    catalog.py      The 98 shipped drills, filtered per sport by for_sport()
+    catalog.py      The 100 shipped drills, filtered per sport by for_sport()
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand

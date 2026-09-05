@@ -4896,7 +4896,122 @@ GEN_SINGLE_LEG_BALANCE = DrillSpec(
 )
 
 
+SOC_KEEPER_SET = DrillSpec(
+    key="soc_keeper_set",
+    name="Keeper Set Positions",
+    sport="soccer",
+    category=Category.SPEED,
+    stimulus=Stimulus.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "The app calls a spot, high, hip or low, either side, and you drive "
+        "both hands and your lead foot to it, then reset. There is no ball and "
+        "no striker: this trains the path to the spot, not reading a shot, and "
+        "it is not a save percentage. Reaching with one arm does not count, "
+        "because the app measures your hands together."
+    ),
+    signal=SignalSpec(kind=SignalKind.SAVE_REACH, smoothing=0.55),
+    counter=CounterSpec(
+        down_threshold=0.70,
+        up_threshold=0.95,
+        min_rep_ms=320,
+        max_rep_ms=2_200,
+        rising_completes=True,
+    ),
+    cues=CueSpec(
+        # Same omission as the lacrosse goalie for the same reason: a ball
+        # straight at the keeper needs the hands to come forward, and forward
+        # is the direction one phone camera reads worst. Still observable,
+        # never asked for.
+        zones=(
+            "high_left", "high_right",
+            "mid_left", "mid_right",
+            "low_left", "low_right", "low_centre",
+        ),
+        lead_in_ms=4_000,
+        period_ms=2_400,
+        show_ms=900,
+        quick_ms=700,
+        late_ms=1_600,
+    ),
+    scoring=ScoringSpec(xp_per_rep=1.5, daily_rep_cap=200, diminishing_after_reps=80),
+    validation=ValidationSpec(
+        max_reps_per_second=1.5,
+        min_reps_per_second=0.05,
+        min_reps=10,
+        min_duration_ms=40_000,
+    ),
+    tracks_handedness=True,
+    setup_hint=(
+        "Stand in your stance in the goal or against a wall, phone straight in "
+        "front of you at hip height, far enough back that your whole body and "
+        "both hands stay in frame. Face the phone square: turned sideways it "
+        "cannot tell your left from your right. Wait for the first call."
+    ),
+    quality=QualitySpec(
+        target_rom=0.75,
+        consistency_target=0.16,
+        tempo_min_ms=320,
+        tempo_max_ms=1_600,
+        w_consistency=0.30,
+        w_depth=0.30,
+        w_tempo=0.25,
+        w_endurance=0.15,
+        min_reps=12,
+    ),
+    load=LoadSpec(load_per_rep=0.9, throws_per_rep=0.0, tissue=Tissue.WHOLE_BODY),
+)
+
+SOC_STEP_OVER = DrillSpec(
+    key="soc_step_over",
+    name="Step-Overs",
+    sport="soccer",
+    category=Category.SKILL,
+    stimulus=Stimulus.QUICKNESS,
+    metric=Metric.REPS,
+    description=(
+        "Feet circling over the top of the ball, one then the other, staying "
+        "on your toes. The move is sold with the shoulders, but it is bought "
+        "with the feet, and the feet are the half you can practise alone."
+    ),
+    signal=SignalSpec(kind=SignalKind.STANCE_WIDTH, smoothing=0.45),
+    counter=CounterSpec(
+        # The one signal here that goes negative when the feet cross, which is
+        # exactly what a step-over is. The shuffles sit entirely in the
+        # positive band and never come near this one.
+        down_threshold=-0.20,
+        up_threshold=1.45,
+        min_rep_ms=280,
+        max_rep_ms=2_500,
+    ),
+    scoring=ScoringSpec(
+        xp_per_rep=0.8,
+        daily_rep_cap=500,
+        diminishing_after_reps=200,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(max_reps_per_second=3.0, min_reps=15, min_duration_ms=12_000),
+    setup_hint=(
+        "Phone facing you at hip height, far enough back to see both feet. "
+        "Face it square so it can tell your feet apart."
+    ),
+    quality=QualitySpec(
+        target_rom=1.98,
+        consistency_target=0.26,
+        consistency_ceiling=0.60,
+        tempo_min_ms=280,
+        tempo_max_ms=1_000,
+        w_consistency=0.35, w_depth=0.25, w_tempo=0.25, w_endurance=0.15,
+        min_reps=15,
+    ),
+    load=LoadSpec(load_per_rep=0.15, tissue=Tissue.LOWER_BODY),
+    tracks_handedness=True,
+)
+
+
 ALL_DRILLS: tuple[DrillSpec, ...] = (
+    SOC_KEEPER_SET,
+    SOC_STEP_OVER,
     GEN_JUMP_ROPE,
     GEN_HIP_HINGE,
     GEN_V_UP,

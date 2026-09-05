@@ -64,6 +64,38 @@ class Cue:
 # The fix has to name the body part and the feeling, which is the part a
 # template cannot do.
 CUES: dict[str, tuple[Cue, ...]] = {
+    "soc_keeper_set": (
+        Cue("depth", "Drive both hands all the way to the spot. A half reach "
+                     "is a goal in a game and it does not register here.",
+            "the app measures your hands together, so one arm moves it half as far"),
+        Cue("tempo", "Go as the call lands rather than after you have thought "
+                     "about it. Set early, then move.",
+            "the time from the call is the measurement"),
+        Cue("consistency", "Same shape to every corner. Most keepers are "
+                           "noticeably slower to one side.",
+            "strikers find the slow side inside a half"),
+        Cue("endurance", "Stop when you start arriving with your hands low.",
+            "tired reps teach the shape you do not want"),
+        Cue("offhand", "Give the weak side the same number of calls. It will "
+                       "feel slower and later, and that is the point of doing it.",
+            "the side you avoid is the side you get beaten on"),
+    ),
+    "soc_step_over": (
+        Cue("depth", "Take the foot right over the top of the ball, not around "
+                     "the side of it.",
+            "a small circle does not move a defender"),
+        Cue("tempo", "Quick feet. Two touches of the floor between step-overs "
+                     "and it stops looking like anything.",
+            "the speed is what sells it"),
+        Cue("consistency", "Same size circle each foot. One side is usually "
+                           "much tidier than the other.",
+            "defenders show you your weak side on purpose"),
+        Cue("endurance", "Stop when your feet start dragging over the ball.",
+            "a dragged step-over is a trip waiting to happen"),
+        Cue("offhand", "Do the same number leading with each foot. Almost "
+                       "nobody practises the second one.",
+            "a move you can only do one way is a move a defender can read"),
+    ),
     # --- the second wave of general work ---
     "gen_jump_rope": (
         Cue("tempo", "One bounce per turn of the rope. If you are hopping "

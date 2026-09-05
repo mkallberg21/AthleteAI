@@ -45,6 +45,17 @@ class Transfer:
 
 
 TRANSFERS: dict[str, tuple[Transfer, ...]] = {
+    "soc_keeper_set": (
+        Transfer("Handball", "the same job with bigger hands"),
+        Transfer("Hockey", "a goalie's job is the same job: get the body part "
+                           "nearest the ball to it first"),
+        Transfer("Volleyball", "getting low and wide to dig a hard ball"),
+    ),
+    "soc_step_over": (
+        Transfer("Basketball", "selling a direction with your feet"),
+        Transfer("Rugby", "the footwork half of a side step"),
+        Transfer("Tennis", "quick feet in a small space"),
+    ),
     "gen_jump_rope": (
         Transfer("Basketball", "landing and going again without a pause"),
         Transfer("Soccer", "quick feet in a crowd"),

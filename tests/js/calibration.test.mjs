@@ -64,6 +64,11 @@ const SWEEP = {
   gen_dead_bug:      { lo: 92,    hi: 168,  kind: 'hip' },
   // Ready position out to a committed save and back, in torso lengths.
   lax_goalie_saves:  { lo: 0.40,  hi: 1.18, kind: 'reach' },
+  // The same measurement for a keeper with no stick in their hands.
+  soc_keeper_set:    { lo: 0.40,  hi: 1.18, kind: 'reach' },
+  // Feet crossing over the ball: the one sweep that goes negative,
+  // which is what separates a step-over from a shuffle on this signal.
+  soc_step_over:     { lo: -0.35, hi: 1.75, kind: 'stance' },
   // Defensive stance out to a full slide step and back, measured at the feet.
   bkb_slide:         { lo: 1.22,  hi: 2.00, kind: 'stance' },
   // Shooting pocket to release, in degrees of elbow extension.

@@ -113,6 +113,10 @@ BALL_FILL: dict[str, str] = {
 #: borrow. Named rather than defaulted: a black puck drawn orange is the kind
 #: of wrong a child notices immediately and an adult never does.
 BALL_FILL_BY_SPORT: dict[str, str] = {
+    # Soccer's other drills all track the ball and carry their own colour.
+    # Step-overs do not track it, but the demonstration is meaningless without
+    # one drawn at the feet, so the sport needs an entry here too.
+    "soccer": "#F2F5F8",
     "hockey": "#2B3038",    # a puck
     "football": "#8B5A2B",
     "rugby": "#F2F5F8",
@@ -764,6 +768,42 @@ DEMOS: dict[str, Demo] = {
                   knee_far=(60, 74), ankle_far=(60, 90), toe_far=(54, 90),
                   stick_butt=(55, 28), stick_head=(72, 12),
                   ball=((66, 18)),),
+        ),
+    ),
+    "soc_keeper_set": Demo(
+        caption='In your stance. The app calls a spot and you drive both hands and your lead foot to it, then reset. No ball, no striker.',
+        scenery='floor',
+        view='front',
+        frames=(
+            _pose(head=(50, 16), neck=(50, 27), hip=(50, 54),
+                  elbow_near=(41, 38), wrist_near=(37, 30),
+                  elbow_far=(59, 38), wrist_far=(63, 30),
+                  knee_near=(45, 70), ankle_near=(43, 90), toe_near=(43, 94),
+                  knee_far=(55, 70), ankle_far=(57, 90), toe_far=(57, 94)),
+            _pose(head=(48, 20), neck=(48, 31), hip=(50, 57),
+                  elbow_near=(34, 44), wrist_near=(22, 56),
+                  elbow_far=(58, 42), wrist_far=(64, 50),
+                  knee_near=(38, 72), ankle_near=(30, 90), toe_near=(30, 94),
+                  knee_far=(58, 70), ankle_far=(62, 90), toe_far=(62, 94)),
+        ),
+    ),
+    "soc_step_over": Demo(
+        caption='Circle one foot over the top of the ball, then the other, staying up on your toes.',
+        scenery='floor',
+        view='front',
+        frames=(
+            _pose(head=(50, 13), neck=(50, 25), hip=(50, 53),
+                  elbow_near=(43, 40), wrist_near=(40, 52),
+                  elbow_far=(57, 40), wrist_far=(60, 52),
+                  knee_near=(45, 70), ankle_near=(44, 89), toe_near=(44, 93),
+                  knee_far=(55, 70), ankle_far=(56, 89), toe_far=(56, 93),
+                  ball=(50, 92)),
+            _pose(head=(50, 13), neck=(50, 25), hip=(50, 53),
+                  elbow_near=(43, 40), wrist_near=(40, 52),
+                  elbow_far=(57, 40), wrist_far=(60, 52),
+                  knee_near=(51, 68), ankle_near=(58, 82), toe_near=(58, 86),
+                  knee_far=(55, 70), ankle_far=(56, 89), toe_far=(56, 93),
+                  ball=(50, 92)),
         ),
     ),
     "lax_goalie_saves": Demo(
