@@ -26,6 +26,7 @@ from . import rewatch
 from . import notifications
 from . import recognition
 from . import leaderboard as leaderboard_mod
+from . import library
 from .drills.catalog import ALL_DRILLS
 from . import family
 from . import film
@@ -209,6 +210,10 @@ class Store:
     def __init__(self, conn: sqlite3.Connection | None = None) -> None:
         self.conn = conn or connect()
         init_db(self.conn)
+        # Coaches' own drills are real DrillSpecs and have to resolve by key
+        # before anything asks for one, or an athlete's own history breaks the
+        # moment they open it.
+        library.load_all(self.conn)
 
     # ------------------------------------------------------------------
     # Multi-sport participation

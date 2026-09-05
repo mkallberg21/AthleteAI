@@ -475,6 +475,53 @@ CREATE TABLE IF NOT EXISTS xp_ledger (
 );
 CREATE INDEX IF NOT EXISTS idx_xp_athlete_day ON xp_ledger(athlete_id, day);
 
+-- Which library drills a program actually offers.
+--
+-- The default is drills.for_sport(): the program's own sport plus the general
+-- work. This table only records departures from that -- a drill a coach turned
+-- off because they have no wall, or one they reached across sports for. Absent
+-- means default, which keeps a club that never opens the library at zero rows.
+CREATE TABLE IF NOT EXISTS org_drill_prefs (
+    org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    drill_key   TEXT NOT NULL,
+    offered     INTEGER NOT NULL,
+    set_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    set_at      TEXT NOT NULL,
+    PRIMARY KEY (org_id, drill_key)
+);
+
+-- A coach's own drills.
+--
+-- Every one borrows a movement from the catalog. That is not a limitation
+-- worked around, it is the honest shape of the thing: the counter reads one
+-- pose signal with tuned thresholds, and no text a coach types can conjure a
+-- detector for a movement nobody has calibrated. So a custom drill is a
+-- coach's name, words and setup for a movement the app already knows how to
+-- count -- "Keeper Reaction Squats" counted as squats -- and it scores exactly
+-- what the movement scores.
+--
+-- The alternative, a free-text drill the athlete self-certifies, already
+-- exists for one narrow purpose (adaptive.may_self_report) and is deliberately
+-- per-athlete. Opening it to every coach would make the cheapest route to a
+-- streak an uncounted drill, which is the one thing the integrity layer is
+-- for.
+CREATE TABLE IF NOT EXISTS custom_drills (
+    id          INTEGER PRIMARY KEY,
+    org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    -- Namespaced by org, so two clubs can both have a "Wall Work" and the
+    -- sessions table never has to guess which one it means.
+    drill_key   TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    setup_hint  TEXT NOT NULL DEFAULT '',
+    -- The catalog drill whose signal, thresholds and scoring this borrows.
+    based_on    TEXT NOT NULL,
+    created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL,
+    active      INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_custom_drills_org ON custom_drills(org_id);
+
 CREATE TABLE IF NOT EXISTS badges (
     id          INTEGER PRIMARY KEY,
     athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

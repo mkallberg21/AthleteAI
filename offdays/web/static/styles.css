@@ -1671,3 +1671,47 @@ tr.mine td { border-color: var(--accent-dim); }
   text-transform: uppercase;
   color: var(--text-dim);
 }
+
+/* ---------------------------------------------------------------
+   DRILL LIBRARY
+
+   A hundred rows a coach scans to decide what their athletes are
+   offered, so the row has to be readable at a glance and the
+   checkbox has to be the obvious thing to hit on a phone.
+   --------------------------------------------------------------- */
+.lib-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.lib-row:last-child { border-bottom: 0; }
+.lib-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: inherit;
+  color: inherit;
+}
+.lib-toggle input { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.lib-toggle b { font-weight: 600; }
+.lib-toggle .small { display: block; margin-top: 2px; }
+.lib-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  vertical-align: 1px;
+}
+.lib-tag.alt { color: var(--accent); border-color: var(--accent-dim); }

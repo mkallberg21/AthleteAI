@@ -291,6 +291,44 @@
     <div id="clip-list" style="margin-top:12px"></div>
   </div>
 
+  <div class="card" id="library-card">
+    <h2>Drill library</h2>
+    <p class="small muted">
+      Your athletes are offered your sport's drills plus the general work.
+      Turn off anything you have no room or kit for, and reach across sports
+      for anything you want. Changes show up on their phones immediately.
+    </p>
+
+    <div class="tabs" id="lib-filters"></div>
+    <input id="lib-search" placeholder="Search the whole library" autocomplete="off"
+           style="margin-top:8px">
+    <p class="small muted" id="lib-count" style="margin:8px 0 0"></p>
+    <div id="lib-list" style="margin-top:8px"></div>
+
+    <details style="margin-top:16px">
+      <summary class="small muted" style="cursor:pointer">Add a drill of your own</summary>
+      <p class="small muted" style="margin-top:8px">
+        Your drill is counted as a movement the app already knows how to count.
+        The counter reads one signal from the camera against thresholds
+        somebody tuned on real video, so a name alone cannot teach it a new
+        movement. Pick the closest one and it scores exactly what that scores.
+      </p>
+      <label for="cd-name">What do you call it?</label>
+      <input id="cd-name" placeholder="Keeper Reaction Squats" maxlength="60">
+      <label for="cd-based">Counted as</label>
+      <select id="cd-based"></select>
+      <label for="cd-desc">What should they do?</label>
+      <textarea id="cd-desc" rows="2"
+        placeholder="Ten squats, then set and drive to a corner."></textarea>
+      <label for="cd-hint">Where should the phone go?</label>
+      <input id="cd-hint" placeholder="Side-on at hip height, whole body in frame.">
+      <button class="secondary" id="cd-save" style="margin-top:8px">Add drill</button>
+      <div id="cd-note" class="small hidden" style="margin-top:8px"></div>
+    </details>
+
+    <div id="cd-list" style="margin-top:12px"></div>
+  </div>
+
   <div class="card" id="iq-card">
     <h2 id="iq-title">Film IQ</h2>
     <p class="small muted" id="iq-note"></p>
@@ -2526,6 +2564,146 @@ $('signout').addEventListener('click', logout);
 // above. The role beneath our wordmark is whatever this person actually is:
 // it was hardcoded to "Coach", so a director signing in was told they were a
 // coach on every screen of their own program.
+
+
+/* ------------------------------------------------------------------ library
+ *
+ * Two jobs on one card: choose which of the hundred catalog drills this
+ * program offers, and add drills of the coach's own.
+ *
+ * The whole catalog is shown rather than this sport's slice. Reaching across
+ * sports is half the point -- a soccer club that wants the basketball
+ * defensive slide cannot ask for a drill it has never been shown -- and the
+ * rows say which state they are in so a coach can see what they changed.
+ */
+let LIB = null;
+let libFilter = 'offered';
+
+const LIB_FILTERS = [
+  ['offered', 'Offered'],
+  ['sport', 'This sport'],
+  ['general', 'General'],
+  ['other', 'Other sports'],
+  ['all', 'Everything'],
+];
+
+function libRows() {
+  const q = ($('lib-search').value || '').trim().toLowerCase();
+  return LIB.drills.filter((d) => {
+    if (q && !(`${d.name} ${d.sport} ${d.description}`.toLowerCase().includes(q))) return false;
+    if (libFilter === 'offered') return d.offered;
+    if (libFilter === 'sport') return d.sport === LIB.sport;
+    if (libFilter === 'general') return d.sport === 'general';
+    if (libFilter === 'other') return d.sport !== LIB.sport && d.sport !== 'general';
+    return true;
+  });
+}
+
+const LIB_STATE_NOTE = {
+  default: '', added: 'added by you', hidden: 'turned off by you', off: '',
+};
+
+function renderLibrary() {
+  $('lib-filters').innerHTML = LIB_FILTERS.map(([k, label]) =>
+    `<button data-lf="${k}" aria-selected="${k === libFilter}">${esc(label)}</button>`).join('');
+  $('lib-filters').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => { libFilter = b.dataset.lf; renderLibrary(); }));
+
+  const rows = libRows();
+  const on = LIB.drills.filter((d) => d.offered).length;
+  $('lib-count').textContent =
+    `${on} of ${LIB.drills.length} offered to your athletes. Showing ${rows.length}.`;
+
+  $('lib-list').innerHTML = rows.length ? rows.map((d) => `
+    <div class="lib-row">
+      <label class="lib-toggle">
+        <input type="checkbox" data-lib="${esc(d.key)}"${d.offered ? ' checked' : ''}>
+        <span>
+          <b>${esc(d.name)}</b>
+          <span class="lib-tag">${esc(d.sport === 'general' ? 'general' : d.sport)}</span>
+          ${LIB_STATE_NOTE[d.state]
+            ? `<span class="lib-tag alt">${esc(LIB_STATE_NOTE[d.state])}</span>` : ''}
+          <span class="small muted">${esc(d.description)}</span>
+        </span>
+      </label>
+    </div>`).join('')
+    : '<p class="small muted">Nothing matches that.</p>';
+
+  $('lib-list').querySelectorAll('[data-lib]').forEach((box) =>
+    box.addEventListener('change', async () => {
+      const key = box.dataset.lib;
+      box.disabled = true;
+      try {
+        await api(`/api/coach/library/${encodeURIComponent(key)}`,
+                  { method: 'POST', body: { offered: box.checked } });
+        await loadLibrary();
+      } catch (e) {
+        box.checked = !box.checked;
+        showError(e.message);
+      } finally { box.disabled = false; }
+    }));
+
+  $('cd-based').innerHTML = LIB.movements.map((m) =>
+    `<option value="${esc(m.key)}">${esc(m.name)} (${esc(m.metric === 'hold' ? 'timed hold' : 'reps')})</option>`).join('');
+
+  $('cd-list').innerHTML = LIB.custom.length ? `
+    <p class="small muted" style="margin:0 0 6px">
+      Your own drills (${LIB.custom.length} of ${LIB.max_custom})</p>
+    ${LIB.custom.map((d) => `
+      <div class="lib-row">
+        <span><b>${esc(d.name)}</b>
+          <span class="small muted">${esc(d.description)}</span></span>
+        <button class="secondary inline" data-retire="${esc(d.key)}">Retire</button>
+      </div>`).join('')}` : '';
+
+  $('cd-list').querySelectorAll('[data-retire]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        await api(`/api/coach/drills/${encodeURIComponent(b.dataset.retire)}`,
+                  { method: 'DELETE' });
+        await loadLibrary();
+      } catch (e) { showError(e.message); b.disabled = false; }
+    }));
+}
+
+async function loadLibrary() {
+  LIB = await api('/api/coach/library');
+  renderLibrary();
+}
+
+$('cd-save').addEventListener('click', async () => {
+  const note = $('cd-note');
+  const name = $('cd-name').value.trim();
+  if (!name) { note.className = 'small err'; note.classList.remove('hidden');
+               note.textContent = 'Give it a name first.'; return; }
+  $('cd-save').disabled = true;
+  try {
+    const made = await api('/api/coach/drills', { method: 'POST', body: {
+      name,
+      based_on: $('cd-based').value,
+      description: $('cd-desc').value.trim(),
+      setup_hint: $('cd-hint').value.trim(),
+    }});
+    note.className = 'small'; note.classList.remove('hidden');
+    // Say plainly what it will be counted as. A coach who finds that out
+    // later feels misled; a coach told now can pick a closer movement.
+    note.textContent =
+      `Added. "${made.name}" is counted as ${made.counted_as.name}, and scores what that scores.`;
+    $('cd-name').value = ''; $('cd-desc').value = ''; $('cd-hint').value = '';
+    await loadLibrary();
+  } catch (e) {
+    note.className = 'small err'; note.classList.remove('hidden');
+    note.textContent = e.message;
+  } finally { $('cd-save').disabled = false; }
+});
+
+$('lib-search').addEventListener('input', () => { if (LIB) renderLibrary(); });
+
+loadLibrary().catch(() => {
+  // A library that will not load must not take the dashboard with it.
+  $('library-card').classList.add('hidden');
+});
 
 </script>
 </body>

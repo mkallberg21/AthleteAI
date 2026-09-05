@@ -71,6 +71,7 @@ from . import wellness as wellness_mod
 from . import transfer as transfer_mod
 from . import film as film_mod
 from . import guardians as guardians_mod
+from . import library
 from . import portability as portability_mod
 from . import practice as practice_mod
 from . import absence as absence_mod
@@ -386,10 +387,111 @@ def my_drills(
                 **transfer_mod.describe(d.key, sport),
                 **wellness_mod.drill_availability(status, d.key, d.load.tissue),
             }
-            for d in drills_for_sport(sport)
+            for d in library.offered(store.conn, principal.org_id, sport)
         ],
         "wellness": status.to_dict(),
     }
+
+
+class LibraryToggle(BaseModel):
+    offered: bool
+
+
+class CustomDrill(BaseModel):
+    name: str = Field(min_length=2, max_length=60)
+    based_on: str = Field(min_length=1, max_length=60)
+    description: str = Field(default="", max_length=600)
+    setup_hint: str = Field(default="", max_length=300)
+
+
+@app.get("/api/coach/library")
+def coach_library(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Every drill in the catalog, and whether this program offers it.
+
+    The whole library rather than this sport's slice: reaching across sports
+    is half of what this screen is for, and a coach cannot ask for a drill
+    they cannot see.
+    """
+    sport = _org_sport(store, principal.org_id)
+    return {
+        "sport": sport,
+        "drills": library.shelf(store.conn, principal.org_id, sport),
+        "custom": [
+            {"key": d.key, "name": d.name, "description": d.description,
+             "setup_hint": d.setup_hint, "metric": d.metric.value}
+            for d in library.customs(store.conn, principal.org_id)
+        ],
+        # What a coach's own drill may be counted as. Holds and rep drills
+        # are listed apart because borrowing across the two would give a
+        # coach a timed drill that counts reps, or the reverse.
+        "movements": [
+            {"key": d.key, "name": d.name, "metric": d.metric.value,
+             "sport": d.sport, "description": d.description}
+            for d in ALL_DRILLS
+        ],
+        "max_custom": library.MAX_PER_ORG,
+    }
+
+
+@app.post("/api/coach/library/{drill_key}")
+def set_library_drill(
+    drill_key: str,
+    body: LibraryToggle,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    sport = _org_sport(store, principal.org_id)
+    try:
+        library.set_offered(
+            store.conn, principal.org_id, drill_key, body.offered, sport,
+            set_by=principal.id)
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"drill_key": drill_key, "offered": body.offered}
+
+
+@app.post("/api/coach/drills", status_code=201)
+def create_custom_drill(
+    body: CustomDrill,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Add a drill of the coach's own, counted as a movement the app knows.
+
+    The borrowing is the honest part and is not hidden from them: the response
+    says what it will be counted as, in the same words the form asked in.
+    """
+    try:
+        spec = library.create(
+            store.conn, principal.org_id,
+            name=body.name, based_on=body.based_on,
+            description=body.description, setup_hint=body.setup_hint,
+            created_by=principal.id)
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    base = DRILLS_BY_KEY[body.based_on]
+    return {
+        "key": spec.key,
+        "name": spec.name,
+        "counted_as": {"key": base.key, "name": base.name,
+                       "metric": base.metric.value},
+    }
+
+
+@app.delete("/api/coach/drills/{drill_key}")
+def retire_custom_drill(
+    drill_key: str,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    try:
+        library.retire(store.conn, principal.org_id, drill_key)
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"drill_key": drill_key, "retired": True}
 
 
 @app.get("/api/drills/{drill_key}")
