@@ -167,6 +167,12 @@ class Demo:
     #: Set from the drill's sport when the catalog is loaded. A football is
     #: oblong in every drill it appears in, so this is not a per-pose choice.
     oval_ball: bool = False
+    #: What sits on the end of the shaft, set from the sport the same way.
+    #: A bare line is a broom handle: it is the head that says which sport
+    #: this is, and in lacrosse it is also the part the drill is about, since
+    #: everything the athlete does happens in the pocket rather than the hands.
+    implement: str = ""
+
     #: Seconds for one cycle. Filled from the drill's own tempo when absent.
     seconds: float | None = None
 
@@ -187,6 +193,47 @@ def _pose(**joints: tuple[float, float]) -> dict[str, tuple[float, float]]:
 # Postures. Hand-authored, because the spec cannot know which way up a body is.
 # Coordinates are a 100x100 box, y downwards, figure facing right.
 # ---------------------------------------------------------------------------
+#: Wall ball, and the three drills that are wall ball with a different hand
+#: order. Three frames rather than two, because the drill is a round trip:
+#: loaded with the ball in the pocket, released, and the ball at the wall.
+#: Played forward and back that is throw, wall, catch, which is the rep.
+#:
+#: The stick is held in two hands a shaft apart, and the shaft is drawn long
+#: enough to be a lacrosse stick rather than a wand -- roughly half the
+#: figure's height, which is what a short stick is against a twelve-year-old.
+#: The earlier drawing had a short grey stub crossing the head and a ball
+#: floating unattached beside it, which is not a picture of anything.
+_WALL_BALL_FRAMES = (
+    # Loaded. Stick cocked back beside the ear, ball sitting in the pocket.
+    # The shaft is angled clear of the head rather than through it.
+    _pose(head=(58, 18), neck=(57, 29), hip=(56, 58),
+          elbow_near=(62, 29), wrist_near=(65, 25),
+          elbow_far=(64, 38), wrist_far=(69, 45),
+          knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
+          knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
+          stick_butt=(70, 50), stick_head=(64, 14),
+          ball=(63, 10)),
+    # Released. The stick has come through and points at the wall; the ball
+    # has just left the pocket.
+    _pose(head=(56, 19), neck=(55, 30), hip=(55, 58),
+          elbow_near=(52, 30), wrist_near=(46, 34),
+          elbow_far=(58, 37), wrist_far=(60, 43),
+          knee_near=(53, 74), ankle_near=(53, 90), toe_near=(47, 90),
+          knee_far=(57, 74), ankle_far=(57, 90), toe_far=(51, 90),
+          stick_butt=(63, 46), stick_head=(37, 27),
+          ball=(30, 22)),
+    # The ball is at the wall and the stick is already coming back up to
+    # receive it. Nothing else moves: at this point the athlete is waiting.
+    _pose(head=(56, 19), neck=(55, 30), hip=(55, 58),
+          elbow_near=(53, 29), wrist_near=(49, 27),
+          elbow_far=(59, 37), wrist_far=(62, 43),
+          knee_near=(53, 74), ankle_near=(53, 90), toe_near=(47, 90),
+          knee_far=(57, 74), ankle_far=(57, 90), toe_far=(51, 90),
+          stick_butt=(64, 46), stick_head=(44, 16),
+          ball=(14, 20)),
+)
+
+
 DEMOS: dict[str, Demo] = {
     "gen_jump_rope": Demo(
         caption='Small, quick bounces on the balls of your feet, turning the rope with your wrists rather than your arms.',
@@ -599,99 +646,42 @@ DEMOS: dict[str, Demo] = {
     "lax_wall_ball": Demo(
         caption='Side-on to a wall. Throw, catch what comes back, throw again. One throw and one catch is a rep.',
         scenery='wall',
-        frames=(
-            _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
-                  elbow_near=(63, 26), wrist_near=(59, 17),
-                  elbow_far=(64, 27), wrist_far=(60, 18),
-                  knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
-                  knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
-                  stick_butt=(60, 24), stick_head=(78, 7),
-                  ball=((62, 12)),),
-            _pose(head=(55, 22), neck=(52, 32), hip=(55, 58),
-                  elbow_near=(43, 30), wrist_near=(34, 25),
-                  elbow_far=(44, 31), wrist_far=(35, 26),
-                  knee_near=(52, 74), ankle_near=(53, 90), toe_near=(47, 90),
-                  knee_far=(56, 74), ankle_far=(57, 90), toe_far=(51, 90),
-                  stick_butt=(37, 27), stick_head=(19, 14),
-                  ball=((12, 18)),),
-        ),
+        frames=_WALL_BALL_FRAMES,
     ),
     "lax_wall_ball_strong": Demo(
         caption='Wall ball with your strong hand on top of the stick every rep. Same picture as plain wall ball. The hand order is the drill.',
         scenery='wall',
-        frames=(
-            _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
-                  elbow_near=(63, 26), wrist_near=(59, 17),
-                  elbow_far=(64, 27), wrist_far=(60, 18),
-                  knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
-                  knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
-                  stick_butt=(60, 24), stick_head=(78, 7),
-                  ball=((62, 12)),),
-            _pose(head=(55, 22), neck=(52, 32), hip=(55, 58),
-                  elbow_near=(43, 30), wrist_near=(34, 25),
-                  elbow_far=(44, 31), wrist_far=(35, 26),
-                  knee_near=(52, 74), ankle_near=(53, 90), toe_near=(47, 90),
-                  knee_far=(56, 74), ankle_far=(57, 90), toe_far=(51, 90),
-                  stick_butt=(37, 27), stick_head=(19, 14),
-                  ball=((12, 18)),),
-        ),
+        frames=_WALL_BALL_FRAMES,
     ),
     "lax_wall_ball_offhand": Demo(
         caption='Wall ball with your weaker hand on top every rep. It will feel wrong, and that is the point.',
         scenery='wall',
-        frames=(
-            _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
-                  elbow_near=(63, 26), wrist_near=(59, 17),
-                  elbow_far=(64, 27), wrist_far=(60, 18),
-                  knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
-                  knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
-                  stick_butt=(60, 24), stick_head=(78, 7),
-                  ball=((62, 12)),),
-            _pose(head=(55, 22), neck=(52, 32), hip=(55, 58),
-                  elbow_near=(43, 30), wrist_near=(34, 25),
-                  elbow_far=(44, 31), wrist_far=(35, 26),
-                  knee_near=(52, 74), ankle_near=(53, 90), toe_near=(47, 90),
-                  knee_far=(56, 74), ankle_far=(57, 90), toe_far=(51, 90),
-                  stick_butt=(37, 27), stick_head=(19, 14),
-                  ball=((12, 18)),),
-        ),
+        frames=_WALL_BALL_FRAMES,
     ),
     "lax_quick_stick": Demo(
         caption='Stand closer and catch and release in one motion, with no cradle and no wind-up. Faster than wall ball, same shape.',
         scenery='wall',
-        frames=(
-            _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
-                  elbow_near=(63, 26), wrist_near=(59, 17),
-                  elbow_far=(64, 27), wrist_far=(60, 18),
-                  knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
-                  knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
-                  stick_butt=(60, 24), stick_head=(78, 7),
-                  ball=((62, 12)),),
-            _pose(head=(55, 22), neck=(52, 32), hip=(55, 58),
-                  elbow_near=(43, 30), wrist_near=(34, 25),
-                  elbow_far=(44, 31), wrist_far=(35, 26),
-                  knee_near=(52, 74), ankle_near=(53, 90), toe_near=(47, 90),
-                  knee_far=(56, 74), ankle_far=(57, 90), toe_far=(51, 90),
-                  stick_butt=(37, 27), stick_head=(19, 14),
-                  ball=((12, 18)),),
-        ),
+        frames=_WALL_BALL_FRAMES,
     ),
     "lax_wall_ball_one_hand": Demo(
         caption='Bottom hand off the stick. Short, controlled throws with the top hand only, standing close to the wall.',
         scenery='wall',
         frames=(
-            _pose(head=(60, 20), neck=(57, 30), hip=(56, 58),
-                  elbow_near=(62, 26), wrist_near=(58, 17),
-                  elbow_far=(48, 40), wrist_far=(42, 50),
+            # One hand on the shaft and the other hanging free: that is the
+            # whole drill, so the grip has to be visibly on the stick. The
+            # earlier pose had neither hand near it.
+            _pose(head=(58, 19), neck=(57, 30), hip=(56, 58),
+                  elbow_near=(63, 31), wrist_near=(66, 27),
+                  elbow_far=(50, 42), wrist_far=(46, 53),
                   knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
                   knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
-                  stick_butt=(59, 24), stick_head=(76, 9), ball=(61, 14)),
-            _pose(head=(56, 22), neck=(53, 32), hip=(55, 58),
-                  elbow_near=(44, 30), wrist_near=(36, 26),
-                  elbow_far=(46, 42), wrist_far=(40, 52),
+                  stick_butt=(70, 46), stick_head=(62, 16), ball=(61, 12)),
+            _pose(head=(55, 21), neck=(54, 32), hip=(55, 58),
+                  elbow_near=(50, 33), wrist_near=(45, 37),
+                  elbow_far=(49, 44), wrist_far=(45, 55),
                   knee_near=(52, 74), ankle_near=(53, 90), toe_near=(47, 90),
                   knee_far=(56, 74), ankle_far=(57, 90), toe_far=(51, 90),
-                  stick_butt=(38, 28), stick_head=(21, 16), ball=(13, 20)),
+                  stick_butt=(60, 46), stick_head=(34, 28), ball=(16, 22)),
                 ),
     ),
     "lax_wall_ball_cross": Demo(
@@ -716,38 +706,48 @@ DEMOS: dict[str, Demo] = {
         caption='Catch, plant your foot and split dodge, then throw from the new hand. Footwork and hands in one rep.',
         scenery='wall',
         frames=(
-            _pose(head=(58, 20), neck=(55, 30), hip=(56, 58),
-                  elbow_near=(63, 26), wrist_near=(59, 17),
-                  elbow_far=(64, 27), wrist_far=(60, 18),
+            _pose(head=(58, 18), neck=(57, 29), hip=(56, 58),
+                  elbow_near=(62, 29), wrist_near=(65, 25),
+                  elbow_far=(64, 38), wrist_far=(69, 45),
                   knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
                   knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
-                  stick_butt=(60, 24), stick_head=(78, 7)),
-            _pose(head=(50, 24), neck=(48, 34), hip=(54, 60),
-                  elbow_near=(40, 32), wrist_near=(32, 28),
-                  elbow_far=(41, 33), wrist_far=(33, 29),
+                  stick_butt=(70, 50), stick_head=(64, 14)),
+            # The plant and the change of direction. The stick crosses to the
+            # other side of the body, which is the half of this drill the
+            # feet do not do.
+            _pose(head=(48, 24), neck=(47, 34), hip=(54, 60),
+                  elbow_near=(43, 36), wrist_near=(38, 40),
+                  elbow_far=(50, 43), wrist_far=(53, 48),
                   knee_near=(40, 74), ankle_near=(34, 90), toe_near=(28, 90),
                   knee_far=(62, 74), ankle_far=(66, 90), toe_far=(72, 90),
-                  stick_butt=(35, 30), stick_head=(18, 17)),
+                  stick_butt=(58, 52), stick_head=(28, 32)),
         ),
     ),
     "lax_ground_ball": Demo(
         caption='Roll the ball out in front of you, get low and scoop through it, then come up ready. Do not stab at it.',
         scenery='floor',
         frames=(
-            _pose(head=(44, 42), neck=(48, 50), hip=(60, 64),
-                  elbow_near=(44, 58), wrist_near=(38, 72),
-                  elbow_far=(45, 59), wrist_far=(39, 73),
-                  knee_near=(66, 76), ankle_near=(74, 90), toe_near=(80, 90),
-                  knee_far=(58, 76), ankle_far=(50, 90), toe_far=(44, 90),
-                  stick_butt=(40, 74), stick_head=(24, 86),
-                  ball=((18, 88)),),
-            _pose(head=(52, 20), neck=(52, 31), hip=(56, 58),
-                  elbow_near=(58, 30), wrist_near=(56, 20),
-                  elbow_far=(59, 31), wrist_far=(57, 21),
-                  knee_near=(54, 74), ankle_near=(54, 90), toe_near=(48, 90),
-                  knee_far=(58, 74), ankle_far=(58, 90), toe_far=(52, 90),
-                  stick_butt=(57, 26), stick_head=(74, 10),
-                  ball=((70, 14)),),
+            # Low, hands apart, the head of the stick flat on the floor behind
+            # the ball. The old drawing had the shaft as a short stub down by
+            # the ankles, which is the one thing a scoop is not: the stick has
+            # to be long and nearly along the ground or the athlete is
+            # stabbing at it, which is what the caption warns against.
+            _pose(head=(50, 32), neck=(53, 40), hip=(62, 58),
+                  elbow_near=(55, 52), wrist_near=(55, 61),
+                  elbow_far=(61, 45), wrist_far=(64, 49),
+                  knee_near=(66, 74), ankle_near=(72, 90), toe_near=(78, 90),
+                  knee_far=(58, 74), ankle_far=(52, 90), toe_far=(46, 90),
+                  stick_butt=(68, 44), stick_head=(36, 84),
+                  ball=(32, 88)),
+            # Coming up with it. Ball in the pocket, stick back up in front of
+            # the shoulder, ready to do something with.
+            _pose(head=(56, 22), neck=(56, 32), hip=(57, 57),
+                  elbow_near=(59, 35), wrist_near=(60, 40),
+                  elbow_far=(62, 42), wrist_far=(65, 46),
+                  knee_near=(55, 74), ankle_near=(55, 90), toe_near=(49, 90),
+                  knee_far=(59, 74), ankle_far=(59, 90), toe_far=(53, 90),
+                  stick_butt=(68, 50), stick_head=(46, 20),
+                  ball=(44, 17)),
         ),
     ),
     "lax_faceoff_clamp": Demo(
@@ -1185,12 +1185,15 @@ DEMOS: dict[str, Demo] = {
                   knee_far=(56, 72), ankle_far=(56, 90), toe_far=(62, 90),
                   stick_butt=(70, 42), stick_head=(84, 54),
                   ball=(44, 8)),
+            # Contact. The shaft stops short of the top edge because the
+            # racquet face is drawn beyond the tip: pointed at the corner the
+            # old pose used, the face itself fell off the picture.
             _pose(head=(52, 20), neck=(52, 31), hip=(54, 56),
-                  elbow_near=(56, 20), wrist_near=(58, 9),
+                  elbow_near=(56, 22), wrist_near=(58, 13),
                   elbow_far=(44, 38), wrist_far=(40, 48),
                   knee_near=(50, 72), ankle_near=(50, 90), toe_near=(56, 90),
                   knee_far=(56, 72), ankle_far=(56, 90), toe_far=(62, 90),
-                  stick_butt=(59, 8), stick_head=(70, 2),
+                  stick_butt=(59, 14), stick_head=(66, 8),
                   ball=(30, 14)),
         ),
     ),
@@ -1763,10 +1766,26 @@ NEEDS_FILM: dict[str, str] = {
 
 DRILLS_BY_KEY = {d.key: d for d in ALL_DRILLS}
 
-# Stamp the ball shape onto each demo from its drill's sport, once, here.
+#: What the shaft ends in, per sport. A lacrosse head and a hockey blade are
+#: different enough that drawing either one for both would be worse than the
+#: bare line it replaces.
+IMPLEMENTS = {
+    "lacrosse": "lacrosse",
+    "hockey": "hockey",
+    "tennis": "racquet",
+    "baseball": "bat",
+    "softball": "bat",
+}
+
+# Stamp the ball shape and the implement onto each demo from its drill's
+# sport, once, here.
 for _key, _spec in DEMOS.items():
-    if _key in DRILLS_BY_KEY and DRILLS_BY_KEY[_key].sport in OVAL_BALL_SPORTS:
-        object.__setattr__(_spec, "oval_ball", True)
+    if _key in DRILLS_BY_KEY:
+        _sport = DRILLS_BY_KEY[_key].sport
+        if _sport in OVAL_BALL_SPORTS:
+            object.__setattr__(_spec, "oval_ball", True)
+        if _sport in IMPLEMENTS:
+            object.__setattr__(_spec, "implement", IMPLEMENTS[_sport])
 
 
 #: No demonstration cycles faster than this, however fast the drill is. Below
@@ -1806,6 +1825,100 @@ def _points(pose: dict[str, tuple[float, float]], chain: tuple[str, ...]) -> str
     return " ".join(f"{pose[j][0]:.1f},{pose[j][1]:.1f}" for j in chain)
 
 
+def _head_shape(butt, tip, implement):
+    """The business end of the shaft, drawn along its own direction.
+
+    A shaft on its own is a broom handle, and the sport is in the end of it.
+    In lacrosse it is more than identification: the pocket is where the ball
+    lives for the whole rep, so a wall ball drawn without a head shows none of
+    what the drill is actually about.
+
+    The shape is built from the shaft's own vector rather than a rotation
+    transform, so it stays attached under SMIL animation. A transform would
+    need its own animation values kept in step with the shaft's, and the two
+    drift apart the first time a pose is edited.
+
+    Returns "" for a sport with nothing on the end, and for a bat, which is a
+    taper rather than a head and reads correctly as the plain shaft already.
+    """
+    if implement in ("", "bat"):
+        return ""
+    bx, by = butt
+    tx, ty = tip
+    dx, dy = tx - bx, ty - by
+    length = (dx * dx + dy * dy) ** 0.5 or 1.0
+    # Unit vector along the shaft, and its perpendicular.
+    ux, uy = dx / length, dy / length
+    px, py = -uy, ux
+
+    def at(along, across):
+        """A point `along` units past the tip and `across` units off-axis."""
+        return (tx + ux * along + px * across, ty + uy * along + py * across)
+
+    if implement == "lacrosse":
+        # A head: narrow at the throat, wider at the mouth, closed with a
+        # scoop. Drawn as an outline so the pocket reads as somewhere a ball
+        # can sit rather than a solid paddle.
+        a, b = at(-1.0, -2.1), at(-1.0, 2.1)
+        c, d = at(7.5, -3.4), at(7.5, 3.4)
+        return (f'<path class="stick-head" d="M{a[0]:.1f},{a[1]:.1f} '
+                f'L{c[0]:.1f},{c[1]:.1f} L{d[0]:.1f},{d[1]:.1f} '
+                f'L{b[0]:.1f},{b[1]:.1f} Z"/>')
+    if implement == "hockey":
+        # A blade: short, offset to one side of the shaft, and solid.
+        a, b = at(-0.5, -0.6), at(-0.5, 2.6)
+        c, d = at(6.0, 2.6), at(6.0, -0.6)
+        return (f'<path class="stick-blade" d="M{a[0]:.1f},{a[1]:.1f} '
+                f'L{b[0]:.1f},{b[1]:.1f} L{c[0]:.1f},{c[1]:.1f} '
+                f'L{d[0]:.1f},{d[1]:.1f} Z"/>')
+    if implement == "racquet":
+        # An oval face, walked out as a polygon in the shaft's own frame. Two
+        # SVG arcs were tried first and met in a lump at the join; a polygon
+        # is longer to write and comes out round.
+        import math
+        pts = []
+        for i in range(16):
+            a = 2 * math.pi * i / 16
+            pts.append(at(5.6 + 5.2 * math.cos(a), 3.9 * math.sin(a)))
+        d = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+        return f'<polygon class="stick-face" points="{d}"/>'
+    return ""
+
+
+def _grip_marks(frame):
+    """The two hands, where a pose puts them on the shaft.
+
+    Wall ball is a two-handed action and the hands being apart on the shaft is
+    most of what makes it read as one. Drawn as short bands across the shaft
+    rather than as blobs, because a circle on a line reads as a joint.
+    """
+    if "stick_butt" not in frame:
+        return ""
+    out = []
+    for key in ("wrist_near", "wrist_far"):
+        if key not in frame:
+            continue
+        wx, wy = frame[key]
+        bx, by = frame["stick_butt"]
+        tx, ty = frame["stick_head"]
+        dx, dy = tx - bx, ty - by
+        length = (dx * dx + dy * dy) ** 0.5 or 1.0
+        ux, uy = dx / length, dy / length
+        # Only mark a hand that is actually on the shaft. A pose whose wrist
+        # is nowhere near it is holding nothing, and inventing a grip there
+        # would draw a hand in mid-air.
+        t = ((wx - bx) * ux + (wy - by) * uy)
+        if not -1.5 <= t <= length + 1.5:
+            continue
+        cx, cy = bx + ux * t, by + uy * t
+        if ((wx - cx) ** 2 + (wy - cy) ** 2) ** 0.5 > 4.0:
+            continue
+        px, py = -uy * 2.3, ux * 2.3
+        out.append(f'<line class="grip" x1="{cx - px:.1f}" y1="{cy - py:.1f}" '
+                   f'x2="{cx + px:.1f}" y2="{cy + py:.1f}"/>')
+    return "".join(out)
+
+
 #: The ground sits at y=90 and poses rest their contact points on it. Figures
 #: that floated above the line read as falling rather than holding, which was
 #: the first thing anyone noticed about the earlier drafts.
@@ -1838,6 +1951,14 @@ STYLE = (
     # own dark surface, where ink on ink is 1.0:1 and a hockey player was
     # holding nothing at all.
     ".stick{fill:none;stroke:#6E7C8C;stroke-width:2.6;stroke-linecap:round}"
+    # The head is outlined rather than filled so a ball sitting in the
+    # pocket is still visible through it. The blade is solid because a
+    # hockey blade has nothing behind it to see.
+    ".stick-head{fill:none;stroke:#6E7C8C;stroke-width:2.0;stroke-linejoin:round}"
+    ".stick-blade{fill:#6E7C8C;stroke:none}"
+    ".stick-face{fill:none;stroke:#6E7C8C;stroke-width:1.6}"
+    # A grip is a band across the shaft. A dot would read as a joint.
+    ".grip{stroke:#0B1524;stroke-width:3.0;stroke-linecap:round}"
     ".ball{stroke:#7E8B99;stroke-width:0.8}"
 )
 
@@ -1854,6 +1975,8 @@ def _still(demo: Demo, frame: dict[str, tuple[float, float]], fill: str) -> str:
         b, h = frame["stick_butt"], frame["stick_head"]
         parts.append(f'<polyline class="stick" points="{b[0]:.1f},{b[1]:.1f} '
                      f'{h[0]:.1f},{h[1]:.1f}"/>')
+        parts.append(_head_shape(b, h, demo.implement))
+        parts.append(_grip_marks(frame))
     if "ball" in frame:
         bx, by = frame["ball"]
         if demo.oval_ball:
@@ -1919,6 +2042,10 @@ def svg(drill_key: str) -> str:
         # rendered on the app's own dark surface, where ink on ink is 1.0:1
         # and a hockey player was holding nothing at all.
         ".stick{fill:none;stroke:#6E7C8C;stroke-width:2.6;stroke-linecap:round}"
+        ".stick-head{fill:none;stroke:#6E7C8C;stroke-width:2.0;stroke-linejoin:round}"
+        ".stick-blade{fill:#6E7C8C;stroke:none}"
+        ".stick-face{fill:none;stroke:#6E7C8C;stroke-width:1.6}"
+        ".grip{stroke:#0B1524;stroke-width:3.0;stroke-linecap:round}"
         ".ball{stroke:#7E8B99;stroke-width:0.8}"
         "</style>",
         SCENERY.get(demo.scenery, ""),
@@ -1949,6 +2076,54 @@ def svg(drill_key: str) -> str:
             f'{h[0]:.1f},{h[1]:.1f}">'
             f'<animate attributeName="points" dur="{dur}" '
             f'repeatCount="indefinite" values="{values}"/></polyline>')
+
+        # The head and the grips are rebuilt per frame and animated by their
+        # own path data, so they stay welded to the shaft. Animating a
+        # rotation instead needs angles kept in step with the shaft's own
+        # values by hand, and they come apart the first time a pose is edited.
+        if demo.implement not in ("", "bat"):
+            shapes = [_head_shape(f["stick_butt"], f["stick_head"], demo.implement)
+                      for f in frames]
+            if shapes[0]:
+                import re as _re
+                # A head is a <path d="...">, a racquet face a <polygon
+                # points="...">. Both animate the same way; only the element
+                # and the geometry attribute differ.
+                tag = _re.match(r"<(\w+)", shapes[0]).group(1)
+                attr = "points" if tag == "polygon" else "d"
+                geo = [_re.search(attr + r'="([^"]+)"', sh).group(1)
+                       for sh in shapes]
+                cls = _re.search(r'class="([^"]+)"', shapes[0]).group(1)
+                parts.append(
+                    f'<{tag} class="{cls}" {attr}="{geo[0]}">'
+                    f'<animate attributeName="{attr}" dur="{dur}" '
+                    f'repeatCount="indefinite" values="{";".join(geo)}"/>'
+                    f'</{tag}>')
+
+        # A grip only exists on frames whose pose puts a hand on the shaft, so
+        # it is animated only where every frame has one. Otherwise the band
+        # would have nowhere to be on the frames that do not.
+        per_frame = [_grip_marks(f) for f in frames]
+        if all(per_frame):
+            import re as _re
+            counts = {sh.count("<line") for sh in per_frame}
+            if len(counts) == 1:
+                for i in range(counts.pop()):
+                    coords = []
+                    for sh in per_frame:
+                        line = _re.findall(r"<line[^>]*/>", sh)[i]
+                        coords.append(tuple(
+                            _re.search(f'{a}="([-0-9.]+)"', line).group(1)
+                            for a in ("x1", "y1", "x2", "y2")))
+                    attrs = "".join(
+                        f'<animate attributeName="{a}" dur="{dur}" '
+                        f'repeatCount="indefinite" '
+                        f'values="{";".join(c[j] for c in coords)}"/>'
+                        for j, a in enumerate(("x1", "y1", "x2", "y2")))
+                    c0 = coords[0]
+                    parts.append(
+                        f'<line class="grip" x1="{c0[0]}" y1="{c0[1]}" '
+                        f'x2="{c0[2]}" y2="{c0[3]}">{attrs}</line>')
 
     if all("ball" in f for f in frames):
         b0 = frames[0]["ball"]

@@ -325,3 +325,129 @@ def test_a_demo_reaches_the_athlete_before_the_drill():
     for key in list(demo.DEMOS)[:3]:
         ref = technique.reference(key)
         assert ref, key
+
+
+# ---------------------------------------------------------------------------
+# The end of the shaft
+#
+# A bare grey line is a broom handle. What makes a wall ball drawing legible
+# as lacrosse is the head on it, and in lacrosse that is not just labelling:
+# the ball lives in the pocket for the whole rep, so a stick without a head
+# shows none of what the drill is about.
+# ---------------------------------------------------------------------------
+
+def test_a_stick_sport_draws_the_end_of_the_stick():
+    for key, spec in demo.DEMOS.items():
+        if not any("stick_butt" in f for f in spec.frames):
+            continue
+        sport = demo.DRILLS_BY_KEY[key].sport
+        if sport not in demo.IMPLEMENTS:
+            continue
+        markup = demo.svg(key)
+        assert "stick-head" in markup or "stick-blade" in markup \
+            or "stick-face" in markup, f"{key} draws a bare shaft"
+
+
+def test_the_implement_matches_the_sport():
+    for key, spec in demo.DEMOS.items():
+        sport = demo.DRILLS_BY_KEY[key].sport
+        assert spec.implement == demo.IMPLEMENTS.get(sport, ""), key
+
+
+def test_the_head_sits_on_the_end_of_the_shaft():
+    """Built from the shaft's own vector, so it cannot drift off the end.
+
+    An earlier draft rotated a fixed shape by an angle carried separately
+    from the shaft's coordinates, which is two sources of truth for one
+    joint. This pins the geometry instead of the technique: whatever the
+    head is drawn from, its points must land near the tip.
+    """
+    for key, spec in demo.DEMOS.items():
+        if spec.implement in ("", "bat"):
+            continue
+        for frame in spec.frames:
+            if "stick_butt" not in frame:
+                continue
+            butt, tip = frame["stick_butt"], frame["stick_head"]
+            shape = demo._head_shape(butt, tip, spec.implement)
+            coords = [float(v) for v in re.findall(r"-?\d+\.?\d*", shape)]
+            pts = list(zip(coords[::2], coords[1::2]))
+            assert pts, key
+            for x, y in pts:
+                near = ((x - tip[0]) ** 2 + (y - tip[1]) ** 2) ** 0.5
+                assert near < 14, f"{key}: head point {x},{y} is adrift of {tip}"
+
+
+def test_the_head_stays_inside_the_frame():
+    """A head drawn off the edge of the 100x100 box is a stick with no end."""
+    for key, spec in demo.DEMOS.items():
+        if spec.implement in ("", "bat"):
+            continue
+        for frame in spec.frames:
+            if "stick_butt" not in frame:
+                continue
+            shape = demo._head_shape(
+                frame["stick_butt"], frame["stick_head"], spec.implement)
+            coords = [float(v) for v in re.findall(r"-?\d+\.?\d*", shape)]
+            for x, y in zip(coords[::2], coords[1::2]):
+                assert -1 <= x <= 101 and -1 <= y <= 101, \
+                    f"{key}: head point {x},{y} is outside the box"
+
+
+def test_a_grip_is_only_drawn_where_a_hand_is_on_the_shaft():
+    """Otherwise the figure is gripping thin air.
+
+    A one-handed drill has a hand nowhere near the stick on purpose, and
+    drawing a band for it would contradict the one thing that drill is
+    about.
+    """
+    off = demo.DEMOS["lax_wall_ball_one_hand"].frames[0]
+    assert demo._grip_marks(off).count("<line") == 1
+
+    two = demo.DEMOS["lax_wall_ball"].frames[0]
+    assert demo._grip_marks(two).count("<line") == 2
+
+
+def test_wall_ball_sends_the_ball_to_the_wall_and_back():
+    """The drill is a round trip, so the drawing has to make one.
+
+    Two frames could only show the ball in two places. Played forward and
+    back, three show it leave, arrive and return, which is the rep.
+    """
+    frames = demo.DEMOS["lax_wall_ball"].frames
+    assert len(frames) == 3
+    xs = [f["ball"][0] for f in frames]
+    assert xs[0] > xs[1] > xs[2], "the ball does not travel toward the wall"
+    # The wall is drawn at x=8; the ball has to actually reach it.
+    assert xs[-1] < 20, f"the ball stops at x={xs[-1]}, short of the wall"
+
+
+def test_the_stick_is_long_enough_to_be_a_stick():
+    """The first drawing had a stub about a third of the figure's height.
+
+    A short stick is about two thirds of a twelve-year-old. Drawn much
+    under half, it reads as a wand and the drill stops being recognisable.
+    """
+    for key in ("lax_wall_ball", "lax_wall_ball_split", "lax_ground_ball"):
+        for frame in demo.DEMOS[key].frames:
+            butt, tip = frame["stick_butt"], frame["stick_head"]
+            length = ((tip[0] - butt[0]) ** 2 + (tip[1] - butt[1]) ** 2) ** 0.5
+            height = frame["ankle_near"][1] - frame["head"][1]
+            assert length / height > 0.45, \
+                f"{key}: stick is {length / height:.0%} of the figure"
+
+
+def test_the_shaft_does_not_run_through_the_head():
+    """A stick drawn through the skull was the first thing anyone noticed."""
+    for key in ("lax_wall_ball", "lax_wall_ball_split"):
+        for i, frame in enumerate(demo.DEMOS[key].frames):
+            hx, hy = frame["head"]
+            bx, by = frame["stick_butt"]
+            tx, ty = frame["stick_head"]
+            dx, dy = tx - bx, ty - by
+            length = (dx * dx + dy * dy) ** 0.5
+            # Distance from the head's centre to the shaft segment.
+            t = max(0.0, min(1.0, ((hx - bx) * dx + (hy - by) * dy) / length ** 2))
+            cx, cy = bx + t * dx, by + t * dy
+            gap = ((hx - cx) ** 2 + (hy - cy) ** 2) ** 0.5
+            assert gap > 5.0, f"{key} frame {i}: shaft passes through the head"
