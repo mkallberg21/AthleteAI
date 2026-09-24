@@ -48,11 +48,10 @@ from __future__ import annotations
 import hashlib
 import secrets
 import sqlite3
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .db import fresh_token, hash_token, new_token, transaction
+from .db import fresh_token, hash_token, transaction
 
 # The terms a guardian is agreeing to. Stored with each consent so a later
 # policy change cannot be applied retroactively to an agreement made under

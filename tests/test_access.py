@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from offdays.config import CONFIG, Config
+from offdays.config import Config
 from offdays.db import connect
 from offdays.store import Store, StoreError
 

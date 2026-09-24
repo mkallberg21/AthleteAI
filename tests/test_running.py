@@ -23,7 +23,7 @@ import pytest
 
 from offdays import curriculum, film, load, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
-from offdays.drills.base import EXPLOSIVE, Metric, Stimulus
+from offdays.drills.base import EXPLOSIVE, Metric
 from offdays.positions import BY_SPORT
 from offdays.store import Store, StoreError
 

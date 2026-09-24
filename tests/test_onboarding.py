@@ -7,7 +7,6 @@ because a checklist that was true once is worse than none.
 
 import random
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest

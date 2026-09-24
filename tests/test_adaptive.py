@@ -25,7 +25,6 @@ import pytest
 from offdays import adaptive
 from offdays.adaptive import AdaptiveError
 from offdays.db import connect
-from offdays.drills import DRILLS_BY_KEY
 from offdays.integrity import IntegrityResult
 from offdays.store import Store, StoreError
 

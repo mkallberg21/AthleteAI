@@ -31,7 +31,6 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from .config import CONFIG
 
 
 @dataclass

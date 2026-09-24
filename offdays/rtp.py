@@ -33,7 +33,7 @@ deliberate rather than a tap on the way to the pitch.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 from .drills.base import Tissue

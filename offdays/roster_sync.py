@@ -33,7 +33,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from . import roster as roster_mod

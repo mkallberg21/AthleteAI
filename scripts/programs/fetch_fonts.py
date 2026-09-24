@@ -7,7 +7,7 @@ only notice once the document is printed.
 
 Run once; the output is cached and reused by build.py.
 """
-import base64, pathlib, re, subprocess, sys
+import base64, pathlib, re, subprocess
 
 HERE = pathlib.Path(__file__).parent
 OUT = HERE / "fonts-inline.css"

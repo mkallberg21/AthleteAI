@@ -28,8 +28,8 @@ import pytest
 
 from offdays import curriculum, film, sweep, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
-from offdays.drills.base import Metric, SignalKind
-from offdays.positions import ALL_POSITIONS, BY_SPORT
+from offdays.drills.base import SignalKind
+from offdays.positions import BY_SPORT
 
 HOCKEY = [d for d in ALL_DRILLS if d.sport == "hockey"]
 HOCKEY_KEYS = [d.key for d in HOCKEY]

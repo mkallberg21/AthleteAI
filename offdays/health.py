@@ -23,14 +23,13 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
-import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from . import __version__
 from .config import CONFIG
-from .db import connect, init_db, SCHEMA_VERSION, migrate
+from .db import connect, SCHEMA_VERSION, migrate
 
 # ---------------------------------------------------------------------------
 # One probe connection. Created at import time so the health endpoint can

@@ -370,7 +370,6 @@ class TestSnsIntegration:
     def test_a_revoked_signing_certificate_is_refused(self):
         """The whole point: a valid signature from a revoked key is not enough."""
         import base64
-        import json
 
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import padding

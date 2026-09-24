@@ -14,7 +14,6 @@ enforced, and a clip over it is silently never shown.
 """
 from __future__ import annotations
 
-import tempfile
 
 import pytest
 

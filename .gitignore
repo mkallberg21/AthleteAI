@@ -17,3 +17,8 @@ node_modules/
 
 # Playwright, needed only by scripts/programs/capture_dashboard.py
 node_modules/
+screenshots/
+
+# Local run artifacts
+*.log
+*.stackdump

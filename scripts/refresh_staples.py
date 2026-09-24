@@ -26,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from offdays import chain as chain_mod  # noqa: E402
 from offdays import sns as sns_mod  # noqa: E402
 from offdays import staple as staple_mod  # noqa: E402
-from offdays.config import CONFIG  # noqa: E402
 from offdays.db import connect, init_db  # noqa: E402
 
 

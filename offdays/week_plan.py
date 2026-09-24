@@ -12,7 +12,6 @@ from dataclasses import dataclass
 
 from . import benchmarks as benchmarks_mod
 from .assignments import for_athlete as assignments_for
-from .assignments import progress_for_athlete
 
 
 @dataclass
@@ -106,13 +105,11 @@ def _compose_line(
 
     band = budget.get("band", {})
     band_min_age = band.get("min_age")
-    band_max_age = band.get("max_age")
     budget_status = budget.get("status", Status.UNKNOWN)
     budget_minutes = budget.get("minutes", 0)
     budget_target = band.get("weekly_target", 0)
     budget_max = band.get("weekly_max", 0)
     budget_days_target = band.get("days_target", 0)
-    session_max = band.get("session_max", 0)
     band_label = band.get("label", "")
 
     effective_age = age if age is not None else band_min_age

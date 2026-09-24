@@ -5,7 +5,6 @@ so the browser cannot be trusted with them. A ball payload is easier to fake
 than a pose one -- a contact is a timestamp and a speed, not a skeleton.
 """
 
-import pytest
 
 from offdays import ball as B
 from offdays.drills.catalog import ALL_DRILLS, DRILLS_BY_KEY

@@ -27,7 +27,7 @@ import pytest
 
 from offdays import curriculum, film, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
-from offdays.drills.base import Category, Metric, SignalKind, Tissue
+from offdays.drills.base import Metric, SignalKind, Tissue
 from offdays.positions import BY_SPORT
 
 JUDGED = ("gymnastics", "cheer", "dance")

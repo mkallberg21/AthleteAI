@@ -20,7 +20,7 @@ import pytest
 
 from offdays import curriculum, film, load, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
-from offdays.drills.base import Metric, Stimulus, Tissue
+from offdays.drills.base import Metric, Tissue
 from offdays.positions import BY_SPORT
 from offdays.store import Store, StoreError
 

@@ -15,7 +15,6 @@ import pytest
 
 from offdays import curriculum, film, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
-from offdays.drills.base import Metric
 from offdays.positions import ALL_POSITIONS
 
 SOC = [d for d in ALL_DRILLS if d.sport == "soccer"]

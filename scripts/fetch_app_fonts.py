@@ -17,7 +17,6 @@ from __future__ import annotations
 import pathlib
 import re
 import subprocess
-import sys
 
 OUT = pathlib.Path(__file__).parent.parent / "offdays" / "web" / "static" / "fonts"
 CA = "/root/.ccr/ca-bundle.crt"

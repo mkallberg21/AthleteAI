@@ -216,7 +216,7 @@ def build(shots: pathlib.Path, webp: dict[str, str] | None) -> str:
     </section>""")
 
     # ------------------------------------------------------------- privacy
-    add(f"""<section class="page dark">
+    add("""<section class="page dark">
       <p class="eyebrow">Why this one is different</p>
       <div class="rule"></div>
       <h2 style="color:#fff">The video never leaves the phone.</h2>

@@ -394,7 +394,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- Form quality, 0-100. NULL when the session was too short to judge or the
     -- client reported no per-rep shape data.
     quality_score    INTEGER,
-    quality_json     TEXT
+    quality_json     TEXT,
+    -- Marked for ever on a session the camera could not count. Kept out of
+    -- any statistic that needs a measured number, counted for turning up.
+    self_reported    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_athlete ON sessions(athlete_id, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
@@ -1046,6 +1049,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("peak", "REAL"),
         ("rom", "REAL"),
         ("cycle_ms", "INTEGER"),
+        ("zone", "TEXT"),
+        ("crossed", "INTEGER"),
+        ("flare", "REAL"),
     ],
     "users": [
         ("external_id", "TEXT"),
@@ -1056,6 +1062,10 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # English-speaking club is the common case, not the edge one.
         ("locale", "TEXT NOT NULL DEFAULT 'en'"),
     ],
+    # One entry per table. A dict literal keeps only the LAST duplicate key,
+    # so a second "organizations" block here would silently drop the first
+    # one's columns from every upgraded deployment -- which is exactly what
+    # happened once. tests/test_db_upgrade.py guards against it.
     "organizations": [
         ("position_emphasis_min_age", "INTEGER NOT NULL DEFAULT 15"),
         ("voice_name", "TEXT NOT NULL DEFAULT ''"),
@@ -1063,34 +1073,25 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("kind", "TEXT NOT NULL DEFAULT 'program'"),
         ("sibling_compare", "INTEGER NOT NULL DEFAULT 0"),
         ("season_phase", "TEXT NOT NULL DEFAULT 'preseason'"),
-    ],
-    "notifications": [
-        # Which wording went out, so the next athlete can be given a
-        # different one. Null on everything that is not recognition.
-        ("variant", "INTEGER"),
-    ],
-    "organizations": [
         # A club's own badge. The file lives under web/static/teams/ and this
         # is its name -- a path rather than a blob, because a logo is served
         # to every screen on every load and a database is the wrong place to
         # read an image from a thousand times a day.
         ("logo_file", "TEXT"),
     ],
-    "recognition_templates": [
-        ("from_voice", "TEXT NOT NULL DEFAULT 'coach'"),
-    ],
     "notifications": [
+        # Which wording went out, so the next athlete can be given a
+        # different one. Null on everything that is not recognition.
+        ("variant", "INTEGER"),
         ("about_athlete_id", "INTEGER"),
         ("is_copy", "INTEGER NOT NULL DEFAULT 0"),
         ("from_name", "TEXT NOT NULL DEFAULT ''"),
     ],
+    "recognition_templates": [
+        ("from_voice", "TEXT NOT NULL DEFAULT 'coach'"),
+    ],
     "discomfort_reports": [
         ("previous_severity", "TEXT"),
-    ],
-    "rep_events": [
-        ("zone", "TEXT"),
-        ("crossed", "INTEGER"),
-        ("flare", "REAL"),
     ],
     "clip_watches": [
         ("looks", "INTEGER NOT NULL DEFAULT 1"),

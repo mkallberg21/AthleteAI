@@ -20,38 +20,9 @@ from fastapi.responses import (
     PlainTextResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp, Scope, Receive, Send
-
-
-class _NoCacheMiddleware(BaseHTTPMiddleware):
-    """Strip any cache headers off static files so phones always fetch fresh."""
-
-    async def dispatch(self, request: Request, call_next: ASGIApp) -> Response:
-        response = await call_next(request)
-        path = request.url.path
-        # Only strip caches for static app assets (including HTML).
-        if path.startswith("/app/") and (
-            path.endswith(".css") or path.endswith(".js") or path.endswith(".png")
-            or path.endswith(".svg") or path.endswith(".woff2") or path.endswith(".html")
-        ):
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            response.headers["Pragma"] = "no-cache"
-            response.headers["Expires"] = "0"
-        return response
 from pydantic import BaseModel, Field
-
-class TokenLoginRequest(BaseModel):
-    """POST body for the non-JavaScript sign-in fallback.
-
-    Mirrors what the JS flow does via GET /api/me with a Bearer header, so a
-    phone whose module failed to load can still sign in through a plain form
-    post. The JS path stays preferred where it works.
-    """
-    token: str = Field(min_length=1, max_length=64)
-    org_id: int | None = Field(default=None, description="Home org when the person holds roles in several.")
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 
 from . import __version__
 from .config import CONFIG
@@ -96,7 +67,7 @@ from .team_goals import GoalError
 from .billing import BillingError
 from .guardians import GuardianError
 from .roster import RosterError
-from .drills import ALL_DRILLS, DRILLS_BY_KEY, for_sport as drills_for_sport
+from .drills import ALL_DRILLS, DRILLS_BY_KEY
 from .drills.base import CUE_CELLS, CUE_UNREADABLE
 from .leaderboard import (
     age_group_of,
@@ -111,6 +82,37 @@ from .leaderboard import (
 from .store import Principal, Store, StoreError, transaction
 
 logger = logging.getLogger(__name__)
+
+
+class _NoCacheMiddleware(BaseHTTPMiddleware):
+    """Strip any cache headers off static files so phones always fetch fresh."""
+
+    async def dispatch(self, request: Request, call_next: ASGIApp) -> Response:
+        response = await call_next(request)
+        path = request.url.path
+        # Only strip caches for static app assets (including HTML).
+        if path.startswith("/app/") and (
+            path.endswith(".css") or path.endswith(".js") or path.endswith(".png")
+            or path.endswith(".svg") or path.endswith(".woff2") or path.endswith(".html")
+        ):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+
+class TokenLoginRequest(BaseModel):
+    """POST body for the non-JavaScript sign-in fallback.
+
+    Mirrors what the JS flow does via GET /api/me with a Bearer header, so a
+    phone whose module failed to load can still sign in through a plain form
+    post. The JS path stays preferred where it works.
+    """
+
+    token: str = Field(min_length=1, max_length=64)
+    org_id: int | None = Field(
+        default=None, description="Home org when the person holds roles in several."
+    )
 
 
 @asynccontextmanager
@@ -167,7 +169,7 @@ def _close_store() -> None:
         try:
             _store.close()
         except Exception:
-            log.exception("offdays: error closing store on shutdown")
+            logger.exception("offdays: error closing store on shutdown")
         finally:
             _store = None
 
@@ -1566,8 +1568,7 @@ async def email_webhook(
             raise HTTPException(status_code=401, detail="unauthorized") from None
         # Verified but unreadable: accept it so the provider does not disable
         # the endpoint over a shape we have not seen, and log it for us.
-        log = __import__("logging").getLogger(__name__)
-        log.warning("unreadable %s webhook: %s", provider, message)
+        logger.warning("unreadable %s webhook: %s", provider, message)
         return JSONResponse(status_code=202, content={"accepted": True, "note": message})
 
     return JSONResponse(status_code=200, content=result)

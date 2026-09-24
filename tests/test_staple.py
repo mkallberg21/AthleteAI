@@ -387,7 +387,6 @@ class TestMaintenance:
         assert S.summary(conn)["total"] == 0
 
     def test_the_whole_chain_can_be_stapled(self, conn, ca):
-        from cryptography.x509 import ocsp
 
         intermediate_key, intermediate = issue(
             "Intermediate", ca["root_key"], ca["root"], ca=True

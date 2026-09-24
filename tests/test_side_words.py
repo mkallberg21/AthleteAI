@@ -167,14 +167,18 @@ class TestBothHalvesOfTheSplit:
         assert sports.side_words("soccer").strong == "Strong foot"
 
     def test_the_two_shares_are_exact_complements(self, store):
+        from datetime import datetime, timezone
+
         from offdays.leaderboard import coach_roster
         org, athlete = program(store, "lacrosse")
+        # The roster's split is computed over the current week, so the
+        # session must be dated now rather than on a fixed calendar day.
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         store.conn.execute(
             "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, "
             "status, reps_total, reps_left, reps_right, submitted_at) "
             "VALUES (?,?,?,?,'counted',?,?,?,?)",
-            (athlete, "lax_wall_ball", "n1", "2026-09-01T10:00:00Z",
-             100, 30, 70, "2026-09-01T10:00:00Z"))
+            (athlete, "lax_wall_ball", "n1", now, 100, 30, 70, now))
         store.conn.commit()
         rows = [r for r in coach_roster(store.conn, org) if r["athlete_id"] == athlete]
         assert rows, "the athlete should be on their own roster"

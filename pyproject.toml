@@ -10,6 +10,9 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    # The sign-in endpoint accepts a form body (see requirements.txt); FastAPI
+    # refuses to import the app without this.
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

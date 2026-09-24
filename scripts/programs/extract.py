@@ -11,9 +11,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from offdays.drills import ALL_DRILLS
 from offdays.positions import BY_SPORT, BILATERAL_SPORTS
 from offdays.curriculum import BY_SPORT as FILM_BY_SPORT
-from offdays.load import THROW_CEILING_BY_AGE, CONFIG
 import offdays.sports as SPORTS
-import offdays.film as FILM
 
 DRILL = {d.key: d for d in ALL_DRILLS}
 SPORT_META = {s.key: s for s in SPORTS.CATALOG}

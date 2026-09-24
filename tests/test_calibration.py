@@ -20,7 +20,6 @@ So the module stratifies and refuses to pool. These tests are that refusal.
 
 from __future__ import annotations
 
-import pytest
 
 from offdays import calibration as C
 

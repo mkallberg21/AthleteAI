@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 from .drills import DrillSpec, Metric

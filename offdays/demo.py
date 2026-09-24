@@ -78,7 +78,7 @@ lifted heel is the entire movement.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .drills import ALL_DRILLS
 
