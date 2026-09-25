@@ -6,6 +6,9 @@ uvicorn>=0.29
 # the case where a missing dependency would not be noticed until it mattered.
 python-multipart>=0.0.9
 
+# Verifies email-webhook (SES/SNS, SendGrid) and OCSP/CRL signatures.
+cryptography>=42
+
 # Storage is stdlib sqlite3 -- no database driver needed.
 
 # Testing

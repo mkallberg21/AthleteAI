@@ -13,6 +13,11 @@ dependencies = [
     # The sign-in endpoint accepts a form body (see requirements.txt); FastAPI
     # refuses to import the app without this.
     "python-multipart>=0.0.9",
+    # Verifies signatures on inbound email webhooks (SES/SNS, SendGrid) and
+    # OCSP/CRL revocation checks -- see chain.py, revocation.py, sns.py,
+    # staple.py, webhooks.py. Without it, a real bounce webhook 500s instead
+    # of being verified.
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]
