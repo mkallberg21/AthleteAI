@@ -60,6 +60,7 @@ from . import technique as technique_mod
 from . import roster_sync
 from . import notifications as notify
 from . import health as health_mod
+from . import throttle
 from .assignments import AssignmentError
 from .absence import AbsenceError
 from .adaptive import AdaptiveError
@@ -187,7 +188,26 @@ def get_store() -> Store:
     return _store
 
 
+def _client_host(request: Request) -> str | None:
+    """Where the request came from, for guess throttling.
+
+    uvicorn is started with proxy_headers on, so behind the reverse proxy this
+    is the real client rather than the proxy. Missing (some test clients) is
+    tolerated: the per-code counter still applies.
+    """
+    return request.client.host if request.client else None
+
+
+def _throttled(exc: throttle.Throttled) -> HTTPException:
+    return HTTPException(
+        status_code=429,
+        detail=str(exc),
+        headers={"Retry-After": str(exc.retry_after)},
+    )
+
+
 def _principal(
+    request: Request,
     authorization: str | None = Header(default=None),
     x_org_id: int | None = Header(default=None, alias="X-Org-Id"),
     store: Store = Depends(get_store),
@@ -196,17 +216,30 @@ def _principal(
 
     The active program comes from an X-Org-Id header, defaulting to their home
     org. Someone with roles in two clubs is one account, not two logins.
+
+    Wrong tokens are counted per source and per token (see throttle.py), so a
+    script walking the code space through this header is shut out the same as
+    one walking it through the sign-in form.
     """
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
+    attempt = throttle.Attempt.for_code(_client_host(request), token)
     try:
-        return store.authenticate(token, org_id=x_org_id)
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        principal = store.authenticate(token, org_id=x_org_id)
     except StoreError as exc:
         # A token that is valid but not for that program is a 403, not a 401 --
-        # re-authenticating would not help.
-        status = 403 if "access to that program" in str(exc) else 401
-        raise HTTPException(status_code=status, detail=str(exc)) from exc
+        # re-authenticating would not help, and it was not a wrong guess.
+        if "access to that program" in str(exc):
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    throttle.record_success(store.conn, attempt)
+    return principal
 
 
 def _staff(principal: Principal = Depends(_principal)) -> Principal:
@@ -753,6 +786,7 @@ def me(
     
 @app.post("/api/me/login", status_code=200)
 def login_post(
+    request: Request,
     token: str = Form(...),
     org_id: int | None = Form(None),
     store: Store = Depends(get_store),
@@ -762,11 +796,18 @@ def login_post(
     Accepts form-encoded body (what HTML forms send) so a phone that can't
     load api.js can still sign in through a plain form post.
     """
+    attempt = throttle.Attempt.for_code(_client_host(request), token)
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
     try:
         principal = store.authenticate(token, org_id=org_id)
     except StoreError as exc:
+        throttle.record_failure(store.conn, attempt)
         raise HTTPException(
             status_code=401, detail="invalid or inactive code") from exc
+    throttle.record_success(store.conn, attempt)
 
     if principal.role == "athlete":
         return {
@@ -1952,12 +1993,22 @@ class ClaimRequest(BaseModel):
 
 
 @app.post("/api/claim")
-def claim_account(body: ClaimRequest, store: Store = Depends(get_store)) -> dict[str, Any]:
+def claim_account(
+    body: ClaimRequest, request: Request, store: Store = Depends(get_store)
+) -> dict[str, Any]:
     """Exchange a printed claim code for a login token. Unauthenticated by design."""
+    attempt = throttle.Attempt.for_code(_client_host(request), body.code)
     try:
-        return store.claim_account(body.code)
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        result = store.claim_account(body.code)
     except StoreError as exc:
+        throttle.record_failure(store.conn, attempt)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    throttle.record_success(store.conn, attempt)
+    return result
 
 
 # ----------------------------------------------------------------------
@@ -2033,12 +2084,23 @@ class RedeemRequest(BaseModel):
 
 @app.post("/api/guardians/redeem", status_code=201)
 def redeem_guardian_invite(
-    body: RedeemRequest, store: Store = Depends(get_store)
+    body: RedeemRequest, request: Request, store: Store = Depends(get_store)
 ) -> dict[str, Any]:
     """Create a guardian account from an invite code. Unauthenticated by design."""
-    return guardians_mod.redeem_invite(
-        store.conn, body.code, body.display_name, body.email, body.relationship
-    )
+    attempt = throttle.Attempt.for_code(_client_host(request), body.code)
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        result = guardians_mod.redeem_invite(
+            store.conn, body.code, body.display_name, body.email, body.relationship
+        )
+    except GuardianError:
+        throttle.record_failure(store.conn, attempt)
+        raise
+    throttle.record_success(store.conn, attempt)
+    return result
 
 
 class LinkRequest(BaseModel):
@@ -2049,13 +2111,28 @@ class LinkRequest(BaseModel):
 @app.post("/api/guardians/link")
 def link_another_athlete(
     body: LinkRequest,
+    request: Request,
     principal: Principal = Depends(_guardian),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """Attach a second child to an existing guardian account."""
-    athlete_id = guardians_mod.link_existing(
-        store.conn, body.code, principal.id, body.relationship
-    )
+    """Attach a second child to an existing guardian account.
+
+    Authenticated, but the code is still a guess at another family's invite,
+    so it is throttled like the unauthenticated paths.
+    """
+    attempt = throttle.Attempt.for_code(_client_host(request), body.code)
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        athlete_id = guardians_mod.link_existing(
+            store.conn, body.code, principal.id, body.relationship
+        )
+    except GuardianError:
+        throttle.record_failure(store.conn, attempt)
+        raise
+    throttle.record_success(store.conn, attempt)
     return {"athlete_id": athlete_id, "linked": True}
 
 

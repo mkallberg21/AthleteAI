@@ -25,12 +25,13 @@ from offdays import curriculum, film, load, technique, transfer
 from offdays.drills import ALL_DRILLS, get_drill
 from offdays.drills.base import EXPLOSIVE, Metric
 from offdays.positions import BY_SPORT
+from offdays.db import connect
 from offdays.store import Store, StoreError
 
 
 @pytest.fixture()
-def athlete():
-    store = Store()
+def athlete(tmp_path):
+    store = Store(connect(tmp_path / "t.db"))
     org = store.create_org("Harriers", "cross_country")
     return store, store.create_user(org, "athlete", "Runner", birth_year=2010)["id"]
 
@@ -50,11 +51,11 @@ class TestTheModelCanNowSeeRunning:
         assert before == 0
         assert after > 0, "logged running never reached the load model"
 
-    def test_a_big_week_and_a_small_week_no_longer_look_alike(self, athlete):
+    def test_a_big_week_and_a_small_week_no_longer_look_alike(self, athlete, tmp_path):
         store, aid = athlete
         _log_week(store, aid, minutes=25, days=6)
         small = store.load_state(aid).acute
-        store2 = Store()
+        store2 = Store(connect(tmp_path / "t2.db"))
         org = store2.create_org("H2", "cross_country")
         aid2 = store2.create_user(org, "athlete", "R2", birth_year=2010)["id"]
         _log_week(store2, aid2, minutes=90, days=6)

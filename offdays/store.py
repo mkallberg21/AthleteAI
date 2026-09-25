@@ -215,6 +215,16 @@ class Store:
         # moment they open it.
         library.load_all(self.conn)
 
+    def close(self) -> None:
+        """Release the connection. Safe to call twice.
+
+        No checkpoint here: health.py owns WAL maintenance, and a checkpoint
+        on close contends with any other open handle on the same file.
+        """
+        conn, self.conn = self.conn, None
+        if conn is not None:
+            conn.close()
+
     # ------------------------------------------------------------------
     # Multi-sport participation
     # ------------------------------------------------------------------

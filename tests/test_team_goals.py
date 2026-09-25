@@ -286,8 +286,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("OFFDAYS_DB", str(tmp_path / "api.db"))
+def client():
     from offdays import api
 
     api.app.dependency_overrides.clear()

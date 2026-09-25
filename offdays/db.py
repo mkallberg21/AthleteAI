@@ -944,6 +944,16 @@ CREATE TABLE IF NOT EXISTS ocsp_staples (
 );
 CREATE INDEX IF NOT EXISTS idx_staples_next ON ocsp_staples(next_update);
 
+-- Wrong guesses at codes, per source address and per code. See throttle.py.
+-- Rows are short-lived: cleared on a successful sign-in, pruned after a quiet
+-- window. Never holds a code, only a hash prefix of the guess.
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    key              TEXT PRIMARY KEY,
+    failures         INTEGER NOT NULL DEFAULT 0,
+    first_failure_at TEXT NOT NULL,
+    locked_until     TEXT
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

@@ -43,6 +43,15 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
     setToken(null);
     throw new Error('Your sign-in expired. Enter your athlete code again.');
   }
+  if (res.status === 429) {
+    // Too many wrong codes from this phone or at this code. Say how long,
+    // and do not drop the stored token: the code may well be right.
+    const wait = parseInt(res.headers.get('Retry-After') || '30', 10);
+    const err = new Error(`Too many tries. Wait ${wait} seconds and try again.`);
+    err.status = 429;
+    err.permanent = false;
+    throw err;
+  }
   if (!res.ok) {
     let detail = `Request failed (${res.status})`;
     try {

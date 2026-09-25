@@ -314,5 +314,23 @@ class Config:
     def smtp_configured(self) -> bool:
         return bool(self.smtp_host)
 
+    # Guess throttling for every endpoint that accepts a short code (sign-in,
+    # claim, guardian invite). The code space is small so a kid can type it;
+    # this is what makes that safe. See throttle.py.
+    auth_max_failures: int = field(
+        default_factory=lambda: int(os.environ.get("OFFDAYS_AUTH_MAX_FAILURES", "8"))
+    )
+    # First lockout length; doubles with each further failure, up to the max.
+    auth_lockout_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("OFFDAYS_AUTH_LOCKOUT_SECONDS", "30"))
+    )
+    auth_lockout_max_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("OFFDAYS_AUTH_LOCKOUT_MAX_SECONDS", "3600"))
+    )
+    # Failures older than this, with no lock in force, are forgotten.
+    auth_failure_window_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("OFFDAYS_AUTH_FAILURE_WINDOW_SECONDS", "900"))
+    )
+
 
 CONFIG = Config()
