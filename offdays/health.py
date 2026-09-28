@@ -21,6 +21,7 @@ than no probe.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 from contextlib import contextmanager
@@ -29,7 +30,7 @@ from typing import Any
 
 from . import __version__
 from .config import CONFIG
-from .db import connect, SCHEMA_VERSION, migrate
+from .db import connect, SCHEMA_VERSION, init_db
 
 # ---------------------------------------------------------------------------
 # One probe connection. Created at import time so the health endpoint can
@@ -46,6 +47,11 @@ try:
     _db_ok = True
 except Exception as exc:
     _probe_err = str(exc)
+
+
+#: The commit the running image was built from (set by infra/Containerfile).
+#: Lets a deploy, or a person, confirm what is actually live.
+GIT_SHA = os.environ.get("OFFDAYS_GIT_SHA", "unknown")
 
 
 # Thresholds an operator cares about — stated once so the health endpoint and
@@ -206,6 +212,7 @@ def health_summary() -> dict[str, Any]:
         "status": "ok" if not issues else "degraded",
         "issues": issues,
         "version": __version__,
+        "git_sha": GIT_SHA,
         "db": db,
         "disk": disk,
         "utc_now": _utcnow_iso(),
@@ -281,22 +288,28 @@ def clean_stuck_sessions() -> dict[str, Any]:
 
 
 def migrate_if_needed() -> dict[str, Any]:
-    """Apply missing columns / schema upgrades if this start sees a stale DB.
+    """Create or upgrade the schema so this start sees a current DB.
 
     Called from the lifespan startup hook so a deployed instance upgrades itself
     on restart rather than requiring a separate migration command. Idempotent.
+
+    Runs init_db rather than migrate alone: migrate assumes the tables already
+    exist, so on a brand-new database file it failed on the missing meta table
+    and the schema was not created until the first real request built a Store.
+    Until then /api/ready said "not ready", which on a fresh deploy is exactly
+    when a monitor is watching.
     """
     if not _db_ok:
         return {"migrate": "skipped", "reason": _probe_err or "db unreachable"}
     try:
         before = _schema_version()
-        migrate(_probe_conn)
+        init_db(_probe_conn)
         after = _schema_version()
-        _probe_conn.commit()
         return {
             "migrate": "ok",
             "schema_version_before": before,
             "schema_version_after": after,
+            "created": before is None,
             "upgraded": after is not None and before is not None and after > before,
         }
     except Exception as exc:

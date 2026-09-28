@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .venv/
 .env
+infra/.env.prod
 
 # Local databases (including the seeded demo)
 data/

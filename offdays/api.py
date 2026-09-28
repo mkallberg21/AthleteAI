@@ -372,7 +372,7 @@ def live() -> dict[str, Any]:
     Does not touch the DB. A process that has lost its DB can still be "live"
     while no longer being "ready" — that distinction is what /api/ready is for.
     """
-    return {"live": True, "version": __version__}
+    return {"live": True, "version": __version__, "git_sha": health_mod.GIT_SHA}
 
 
 @app.get("/api/drills")

@@ -1,0 +1,54 @@
+# 0FFDAYS: one image for the web app and the scheduled jobs.
+#
+#   podman build -f infra/Containerfile -t offdays:latest --build-arg GIT_SHA=$(git rev-parse --short HEAD) .
+#
+# The cron jobs (health_reap, run_notifications, run_roster_sync) run inside the
+# *same* running container via `podman exec`, so they always see the same code,
+# the same environment and the same database file as the server.
+FROM docker.io/library/python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    OFFDAYS_DB_PATH=/data/offdays.db
+
+WORKDIR /app
+
+# Dependency layer first so a code change does not reinstall everything.
+# pywebpush is optional in the codebase (push degrades to in-app only without
+# it), but a production image should be able to reach a locked phone once VAPID
+# keys are set, so it is installed here.
+COPY requirements.txt ./
+RUN pip install -r requirements.txt pywebpush
+
+COPY offdays/ ./offdays/
+COPY scripts/ ./scripts/
+COPY pyproject.toml README.md ./
+
+# The commit this image was built from. Last, so a new commit does not
+# invalidate the dependency layer.
+ARG GIT_SHA=unknown
+ENV OFFDAYS_GIT_SHA=$GIT_SHA
+
+# Health probe as a file: podman-compose 1.0.x mangles inline exec-form
+# healthchecks (learned on UtiliTrust, same host).
+RUN printf '%s\n' \
+    'import sys, urllib.request' \
+    'r = urllib.request.urlopen("http://127.0.0.1:8000/api/live", timeout=4)' \
+    'sys.exit(0 if r.status == 200 else 1)' \
+    > /usr/local/bin/healthcheck.py
+
+# Non-root. /data is the only writable path and is a named volume.
+RUN useradd --system --uid 10001 --create-home appuser \
+    && mkdir -p /data/backups && chown -R appuser /data
+USER appuser
+VOLUME ["/data"]
+
+EXPOSE 8000
+
+# One worker on purpose: SQLite is single-writer and the app keeps one
+# module-level connection. --proxy-headers so the guess throttle sees the real
+# client address nginx passes in X-Forwarded-For.
+CMD ["uvicorn", "offdays.api:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*", "--workers", "1"]

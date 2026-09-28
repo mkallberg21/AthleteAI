@@ -507,3 +507,43 @@ class TestTheScheduledSweep:
         roster_sync.run_due(store)
         last = store.roster_link(program["team"]["id"], "stub")["last_result"]
         assert last["error"] == "They rejected the token."
+
+
+class TestTheCronEntryPoint:
+    """scripts/run_roster_sync.py is what makes the auto-sync switch do
+    anything: run_due existed and was tested, but nothing called it."""
+
+    def _run(self, db_path):
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        return subprocess.run(
+            [sys.executable, str(root / "scripts" / "run_roster_sync.py"),
+             "--db", str(db_path)],
+            capture_output=True, text=True, timeout=60,
+        )
+
+    def test_nothing_due_is_a_clean_exit(self, tmp_path):
+        done = self._run(tmp_path / "empty.db")
+        assert done.returncode == 0, done.stderr
+        assert "0 ran, 0 failed" in done.stdout
+
+    def test_every_due_link_failing_is_a_nonzero_exit(self, tmp_path):
+        """One expired token is normal; all of them failing is the network, and
+        that is what a cron log watcher needs to hear about."""
+        db = tmp_path / "failing.db"
+        store = Store(connect(db))
+        org = store.create_org("Club", "lacrosse")
+        team = store.create_team(org, "U14")
+        # Unreachable on purpose: https to a reserved TLD fails fast in the
+        # subprocess, which cannot see this process's monkeypatched providers.
+        store.link_roster(org, team["id"], "csv_url", "", "https://roster.invalid/r.csv")
+        store.conn.execute("UPDATE roster_links SET auto_sync = 1")
+        store.conn.commit()
+        store.close()
+
+        done = self._run(db)
+        assert done.returncode == 1
+        assert "0 ran, 1 failed" in done.stdout or "1 ran, 1 failed" in done.stdout

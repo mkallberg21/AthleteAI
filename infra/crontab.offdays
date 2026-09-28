@@ -1,0 +1,22 @@
+# 0FFDAYS scheduled jobs on k6-server. Installed into the deploying user's
+# crontab by infra/deploy.sh (idempotently, between the BEGIN/END markers), so
+# the schedule is versioned here rather than living only on the box.
+#
+# Every job runs inside the running container with `podman exec`, so it uses
+# the same code, env and database as the server. Output is appended to
+# ~/offdays-logs/, rotated by the host's logrotate (see ops/PRODUCTION_CHECKLIST.md).
+#
+# Times are UTC (the server clock).
+# BEGIN offdays
+PATH=/usr/local/bin:/usr/bin:/bin
+# WAL checkpoint, abandoned-session cleanup, disk alarm.
+*/15 * * * * podman exec offdays_app_1 python scripts/health_reap.py --quiet >> $HOME/offdays-logs/health_reap.log 2>&1
+# Nudges, parent reports, retention purges, Monday digest, mail flush, push.
+5 * * * * podman exec offdays_app_1 python scripts/run_notifications.py --quiet >> $HOME/offdays-logs/notifications.log 2>&1
+# Roster links that a coach switched to auto-sync.
+30 */6 * * * podman exec offdays_app_1 python scripts/run_roster_sync.py >> $HOME/offdays-logs/roster_sync.log 2>&1
+# Nightly online backup + integrity check, copied off the container (and off the box if OFFSITE is set).
+47 3 * * * $HOME/offdays/infra/backup.sh >> $HOME/offdays-logs/backup.log 2>&1
+# Only needed once SES/SNS webhooks are live and OFFDAYS_SNS_REVOCATION_STRICT=1.
+# */30 * * * * podman exec offdays_app_1 python scripts/refresh_staples.py >> $HOME/offdays-logs/staples.log 2>&1
+# END offdays

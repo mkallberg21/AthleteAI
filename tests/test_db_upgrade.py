@@ -135,3 +135,38 @@ def test_old_database_upgrades_to_every_column():
 
     # Second run must be a no-op, not a "duplicate column name" error.
     migrate(conn)
+
+
+def test_a_fresh_deploy_is_ready_before_its_first_request(tmp_path):
+    """A brand-new database file must come up at the current schema from the
+    startup hook alone.
+
+    The startup hook used to call migrate(), which assumes the tables exist, so
+    on a first deploy it failed quietly and /api/ready reported "not ready"
+    until some request happened to build a Store. Found by smoke-testing the
+    production image, where a monitor is the first thing to call it.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "from offdays import health\n"
+        "result = health.migrate_if_needed()\n"
+        "assert result['migrate'] == 'ok', result\n"
+        "assert result['created'] is True, result\n"
+        "summary = health.health_summary()\n"
+        "assert summary['db']['schema_current'], summary\n"
+        "assert summary['status'] == 'ok', summary\n"
+        "again = health.migrate_if_needed()\n"
+        "assert again['migrate'] == 'ok' and again['created'] is False, again\n"
+    )
+    # A subprocess, because health opens its probe connection at import time
+    # against whatever OFFDAYS_DB_PATH says.
+    import os
+
+    env = {**os.environ, "OFFDAYS_DB_PATH": str(tmp_path / "fresh.db")}
+    done = subprocess.run(
+        [sys.executable, "-c", probe], env=env, capture_output=True, text=True,
+        cwd=str(Path(__file__).resolve().parent.parent), timeout=60,
+    )
+    assert done.returncode == 0, done.stderr

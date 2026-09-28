@@ -80,6 +80,14 @@ class TestReference:
     def test_health(self, client):
         assert client.get("/api/health").json()["status"] == "ok"
 
+    def test_live_and_health_report_the_deployed_commit(self, client):
+        # deploy.sh waits for /api/live to show the sha it just built; without
+        # the field a deploy could not tell the new container from the old one.
+        from offdays import health
+
+        assert client.get("/api/live").json()["git_sha"] == health.GIT_SHA
+        assert client.get("/api/health").json()["git_sha"] == health.GIT_SHA
+
     def test_drill_catalog_is_served_with_counting_specs(self, client):
         drills = client.get("/api/drills").json()["drills"]
         assert len(drills) >= 10

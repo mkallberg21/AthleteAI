@@ -1,0 +1,27 @@
+# Single-container production stack for 0FFDAYS on k6-server.
+#
+# Co-tenant with UtiliTrust: that stack owns 127.0.0.1:8801-8806, this one
+# binds 127.0.0.1:8810. TLS and the public listener are the host nginx's job
+# (see nginx.offdays.conf). Nothing here listens on a public interface.
+
+name: offdays
+
+services:
+  app:
+    image: localhost/offdays:latest
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      OFFDAYS_DB_PATH: /data/offdays.db
+    volumes:
+      - offdays_data:/data
+    ports:
+      - "127.0.0.1:${PORT_APP:-8810}:8000"
+    healthcheck:
+      test: ["CMD", "python", "/usr/local/bin/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  offdays_data:

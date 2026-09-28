@@ -1,0 +1,62 @@
+# Tests on every push and PR. Deployment is a separate workflow (deploy.yml)
+# that only runs after this one passes on main, so a red build cannot ship.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    name: Python (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Test
+        run: python -m pytest -q -p no:cacheprovider
+
+  js:
+    name: JS (counter, ball, calibration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Export drill specs
+        run: |
+          python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))' > "$RUNNER_TEMP/specs.json"
+      - name: Test
+        run: DRILL_SPECS_FILE="$RUNNER_TEMP/specs.json" node --test tests/js/*.test.mjs
+
+  image:
+    name: Container builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -f infra/Containerfile -t offdays:ci --build-arg GIT_SHA=${GITHUB_SHA::7} .
+      - name: Smoke
+        run: |
+          docker run -d --name smoke -p 8000:8000 -e OFFDAYS_DB_PATH=/data/offdays.db offdays:ci
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8000/api/ready && exit 0
+            sleep 1
+          done
+          docker logs smoke; exit 1

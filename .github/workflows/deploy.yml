@@ -1,0 +1,73 @@
+# Deploys 0FFDAYS to k6-server. Runs only after CI passes on main (so a red
+# build cannot ship), or by hand to re-deploy an unchanged commit.
+#
+# Deploys the *checked-out commit*, never a laptop's working tree, so what is
+# live always equals something in git. /api/live reports the sha to prove it.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   DEPLOY_SSH_KEY      private key whose public half is in ~jason/.ssh/authorized_keys
+#   DEPLOY_KNOWN_HOSTS  output of: ssh-keyscan -p 2222 178.156.233.148
+#   DEPLOY_HOST         178.156.233.148
+#   DEPLOY_PORT         2222
+#   DEPLOY_USER         jason
+# The same values UtiliTrust's deploy uses; a separate key per repo is better.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Never let two deploys interleave on one box; queue them.
+concurrency:
+  group: offdays-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to k6-server
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # For workflow_run, the commit CI tested, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pinned host key: otherwise the runner trusts whatever answers.
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<CFG
+          Host k6-server
+            HostName ${{ secrets.DEPLOY_HOST }}
+            Port ${{ secrets.DEPLOY_PORT }}
+            User ${{ secrets.DEPLOY_USER }}
+            IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
+          CFG
+          chmod 600 ~/.ssh/config
+
+      - name: Back up the database first
+        # First deploy has no container yet; that is the only case this skips.
+        run: |
+          ssh k6-server 'if podman container exists offdays_app_1; then ~/offdays/infra/backup.sh; else echo "no running container yet; skipping pre-deploy backup"; fi'
+
+      - name: Deploy
+        run: ./infra/deploy.sh k6-server
+
+      - name: Report what is live
+        run: |
+          ssh k6-server '
+            curl -s http://127.0.0.1:8810/api/health | python3 -c "import json,sys; h=json.load(sys.stdin); print(\"status:\", h[\"status\"], \"sha:\", h[\"git_sha\"], \"issues:\", h[\"issues\"])"
+            podman ps --filter name=offdays --format "  {{.Names}} {{.Status}}"
+          '
