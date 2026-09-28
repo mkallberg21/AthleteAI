@@ -30,8 +30,8 @@ Five sports have skill drills that watch the **ball** rather than the body —
 soccer juggling, basketball dribbling, volleyball setting, baseball wall throws,
 tennis wall rallies — counted on the phone by the same on-device pipeline, with
 nothing but timestamps leaving it. Lacrosse came first and still has the
-stick-skill drills, which count wall-ball throw/catch cycles and attribute each
-to the hand on top of the stick. Everything else is built on eighteen bodyweight movements
+stick-skill drills, which count wall-ball throw/catch cycles by the sound of
+the ball on the wall and attribute each to the hand on top of the stick. Everything else is built on eighteen bodyweight movements
 that work for any sport, and the app tells athletes which *other* sports each
 one carries over into — because a twelve-year-old doing lateral bounds should
 know that is a basketball slide and a tennis recovery step too.
@@ -59,6 +59,12 @@ structurally true rather than a policy promise:
   device.
 - **No footage of minors** in anyone's S3 bucket, which is the liability that
   ends youth-sports products.
+- **Wall ball listens, and keeps nothing.** Wall-ball drills also ask for the
+  microphone, because they count by the sound of the ball (below). The audio
+  is reduced to one loudness figure every 10ms as it arrives and discarded;
+  what leaves the phone is the time of each rep, as for every other drill. The
+  microphone is its own stream, never added to the camera's, so a clip sent to
+  a coach has no sound. Refused, the drill counts from the camera as before.
 
 The tradeoff is real and worth stating: with no footage retained, a disputed
 count cannot be settled by watching the clip. That is why the integrity layer
@@ -89,10 +95,10 @@ Coaches land on the dashboard, athletes on the capture screen.
 ### Tests
 
 ```bash
-python -m pytest tests/ -q          # 4174 tests
+python -m pytest tests/ -q          # 4226 tests
 
 python -c 'import json;from offdays.drills import ALL_DRILLS;print(json.dumps([d.to_dict() for d in ALL_DRILLS]))' > /tmp/specs.json
-DRILL_SPECS_FILE=/tmp/specs.json node --test tests/js/*.test.mjs   # 269 tests
+DRILL_SPECS_FILE=/tmp/specs.json node --test tests/js/*.test.mjs   # 288 tests
 ```
 
 The JS tests drive the counter with synthetic pose streams built from known rep
@@ -221,6 +227,64 @@ Two safeguards make it usable in a driveway:
 
 Both are covered by tests (`counter.test.mjs`), including a case that parks the
 signal on the threshold with noise and asserts zero reps.
+
+#### Counting by ear
+
+The first real footage showed how badly that travels. A fifteen-year-old's
+wall ball, filmed on a phone and counted by hand, scored:
+
+| Clip | Real reps | Pose counted | Sound counted |
+|---|---|---|---|
+| Net rebounder, strong hand, camera directly behind | 15 | **0** | 15 (+1, below) |
+| Net rebounder, off hand, camera behind and to the side | 15 | **3** | **15** |
+| Brick wall, camera far behind | 11 | – | **11** |
+| Brick wall, moving between catches | 8 | – | **8** |
+
+From behind, the body hides the stick-side wrist for the whole session, and
+pose credited every frame it could read to the *bottom* hand. From the side,
+this athlete's off-hand releases peak at shoulder height and never reach a
+threshold set on a textbook overhead throw. Both clips were obvious to a
+person, and just as obvious to the ear: the ball on the rebounder is one sharp
+sound per rep, evenly spaced, well clear of everything else in the yard.
+
+So wall-ball drills carry a `SoundSpec`, and where the phone grants the
+microphone the count comes from `web/static/sound.js`:
+
+- **Onsets relative to the yard.** A sharp rise in high-passed energy against a
+  running estimate of the background, so a quiet garden and a road-side wall
+  both work.
+- **Throws, not sounds.** Plenty besides the throw makes a noise. On a net,
+  with the phone on the stick side, the catch is a softer knock about 430ms
+  after each impact; on a brick wall the ball comes back slower and the catch
+  lands 60% of the way to the next throw; a wind-up can knock the stick. The
+  athlete's cycle is found from the spacing that best explains every pair of
+  sounds, and the throws are then chosen by dynamic programming, in the manner
+  of a beat tracker, as the subsequence that is loudest *and* most evenly
+  spaced. A catch taken as a rep splits one cheap gap into two expensive ones;
+  a genuinely quick throw only trades one small irregularity for another.
+  Loudness counts relative to the session's other sounds, and is capped so it
+  can choose between sounds but never overrule the rhythm.
+
+  Two simpler versions failed on real clips, which is why it is this one. A
+  gate ("a new rep only once 60% of a cycle has passed") got both brick-wall
+  counts right but timed a rep on the catch or the stick tap and folded the
+  real impact behind it. Taking the rhythm as the median gap between
+  provisional reps let enough catches through on one audio channel to drag it
+  down, and counted 20 for 15.
+- **Pose still says which hand.** Each rep takes the top hand from the highest
+  frame of the throw before it. A lone visible wrist is only credited as the
+  top hand when it is up near the shoulder line; lower down it could be either,
+  and the rep is sent with no hand — counted, but paid no off-hand premium.
+
+The one miscount is instructive: the first clip starts with the athlete
+catching a ball thrown before the recording began, and that catch counts. In
+the app a session starts before the first throw, so it does not arise.
+
+Rebounder impacts are also far more regular than pose-timed reps: that
+off-hand clip's cadence variation is 0.021, under the 0.03 floor that marks a
+pose session "too even to be human". Reps timed by ear are timed to the
+millisecond, so a session of them is held to its own floor of 0.008 — which a
+payload of identical gaps still fails.
 
 ---
 
@@ -4080,7 +4144,7 @@ Every submission is therefore treated as a *claim* and re-scored server-side:
 | Check | Catches |
 |---|---|
 | Rep rate vs the drill's physical ceiling | "500 wall balls in 30 seconds" |
-| Cadence variance (too even) | Generated payloads — humans are never metronomic |
+| Cadence variance (too even) | Generated payloads — humans are rarely metronomic (reps timed by ear get a lower floor; a practised player on a rebounder nearly is) |
 | Cadence variance (too erratic) | Detector firing on background motion |
 | Timestamps past session end / negative | Hand-edited payloads |
 | Single-use nonce per session | Replaying a captured submission |

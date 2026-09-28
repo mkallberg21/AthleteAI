@@ -435,9 +435,28 @@ export function wallBallSignal(landmarks) {
   let top = lw, hand = 'left';
   if (!lw || (rw && rw.y < lw.y)) { top = rw; hand = 'right'; }
   if (!top) return null;
+  const value = -(top.y - shoulders.y) / torso;
 
-  return { value: -(top.y - shoulders.y) / torso, hand };
+  // With one wrist hidden, the one that is visible is only known to be the top
+  // hand if it is up where a top hand goes. Filmed from behind, a player's
+  // body hides the stick-side wrist and leaves the bottom hand in view; this
+  // used to credit every rep of a right-hander's session to the left hand --
+  // and so pay his ordinary reps the off-hand premium. On a two-handed grip
+  // the bottom hand sits well below the top one, so a lone wrist near or above
+  // the shoulder line is the top hand and one lower down could be either.
+  if (!lw || !rw) {
+    return { value, hand: value >= LONE_WRIST_TOP_MIN ? hand : 'none' };
+  }
+  return { value, hand };
 }
+
+/**
+ * How high a lone visible wrist must be, in torso lengths above the shoulder
+ * line, to be credited as the top hand. Measured on real footage: a top hand
+ * at release peaked between -0.17 and +0.37, and a bottom hand in view never
+ * rose above -0.47. A hand's width below the shoulder line splits them.
+ */
+export const LONE_WRIST_TOP_MIN = -0.2;
 
 /**
  * Two-threshold state machine converting a signal stream into reps.

@@ -110,6 +110,12 @@ class IntegrityConfig:
     # suspiciously metronomic.
     min_cadence_cv: float = 0.03
 
+    # The same floor for reps timed by the sound of the ball. Measured on real
+    # footage: a fifteen-year-old's honest off-hand wall ball ran at 0.021,
+    # which the pose floor above would have held as a generated payload. A
+    # loop that emits identical gaps still sits far below this.
+    min_sound_cadence_cv: float = 0.008
+
     # Above this, the "reps" are more likely to be detector noise than a
     # consistent drill.
     max_cadence_cv: float = 1.10

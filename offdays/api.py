@@ -686,6 +686,10 @@ class RepPayload(BaseModel):
     # number here. Explicit null when the athlete was side-on, which is a
     # different fact from a good elbow and must not collapse into one.
     flare: float | None = Field(default=None, ge=0.0, le=10.0)
+    # What timed this rep. 'sound' when the phone heard the ball on the wall;
+    # absent for everything timed off video frames, which is every rep an
+    # older client sends.
+    source: Literal["sound"] | None = None
 
 
 class SubmitSessionRequest(BaseModel):

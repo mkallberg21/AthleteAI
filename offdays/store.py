@@ -2914,6 +2914,7 @@ class Store:
                     crossed=(None if r.get("crossed") is None
                              else bool(r["crossed"])),
                     flare=_opt_float(r.get("flare")),
+                    source=(str(r["source"]) if r.get("source") else None),
                 )
                 for r in reps
             ],

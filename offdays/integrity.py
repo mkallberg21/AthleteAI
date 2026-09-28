@@ -44,6 +44,9 @@ class RepEvent:
     # Shooting drills only: elbow offset from the wrist at release, in torso
     # lengths. None when the release was unreadable.
     flare: float | None = None
+    # What timed this rep: 'sound' for a ball heard on the wall, otherwise
+    # None (pose or ball tracking, which are timed off video frames).
+    source: str | None = None
 
 
 @dataclass
@@ -205,8 +208,13 @@ def evaluate(
                     score -= 0.55
 
         # Cadence regularity, only meaningful with enough reps to measure.
+        # A rep timed by ear is timed to the millisecond, where one timed off
+        # video frames carries a frame of jitter, and a practised player on a
+        # rebounder really is that steady -- so the floor is lower for them.
+        timed_by_sound = reps_total > 0 and all(r.source == "sound" for r in reps)
+        min_cv = cfg.min_sound_cadence_cv if timed_by_sound else cfg.min_cadence_cv
         if reps_total >= 8:
-            if cv < cfg.min_cadence_cv:
+            if cv < min_cv:
                 notes.append(
                     f"Rep timing is near-perfectly even (variation {cv:.3f}), "
                     "which real movement rarely is."

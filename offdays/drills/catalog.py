@@ -33,6 +33,7 @@ from .base import (
     Tissue,
     SignalKind,
     SignalSpec,
+    SoundSpec,
     ValidationSpec,
 )
 
@@ -82,6 +83,20 @@ LACROSSE_BALL = BallSpec(
 #: policing would throw away every second contact.
 LACROSSE_BALL_FAST = replace(LACROSSE_BALL, min_gap_ms=250)
 
+#: Wall ball is counted by ear where the phone has a microphone -- the ball on
+#: the rebounder or wall is one sharp sound per rep, and it is heard whichever
+#: way the athlete is facing. Pose still decides which hand was on top.
+#:
+#: 700ms is the shortest a full throw, flight both ways and catch can take at
+#: rebounder distance; it only matters for the first few reps, after which the
+#: athlete's own rhythm sets the gate. Real clips ran at 1.35-1.45s a cycle.
+WALL_BALL_SOUND = SoundSpec(min_cycle_ms=700)
+
+#: Quick stick and one-handed come faster, and a quick-stick catch *is* the
+#: release, so there is often only one sound per rep anyway. Not yet checked
+#: against real footage of either.
+WALL_BALL_SOUND_FAST = SoundSpec(min_cycle_ms=400)
+
 WALL_BALL = DrillSpec(
     key="lax_wall_ball",
     name="Wall Ball",
@@ -126,9 +141,11 @@ WALL_BALL = DrillSpec(
     ),
     tracks_handedness=True,
     ball=LACROSSE_BALL,
+    sound=WALL_BALL_SOUND,
     setup_hint=(
-        "Prop the phone up so it can see you and the wall. Side-on reads hands "
-        "best, but any angle counts."
+        "Prop the phone up side-on, stick side towards it, where it can see "
+        "you and hear the wall. Reps are counted by the sound of the ball; "
+        "the camera works out which hand is on top."
     ),
     quality=QualitySpec(
         # Top hand travels from roughly a hand's width below the shoulder line
@@ -183,6 +200,7 @@ QUICK_STICK = DrillSpec(
     ),
     tracks_handedness=True,
     ball=LACROSSE_BALL_FAST,
+    sound=WALL_BALL_SOUND_FAST,
     setup_hint="Closer to the wall than wall ball. No cradle, catch and go.",
     quality=QualitySpec(
         target_rom=0.28,
@@ -246,6 +264,7 @@ WALL_BALL_STRONG = DrillSpec(
     ),
     tracks_handedness=True,
     ball=LACROSSE_BALL,
+    sound=WALL_BALL_SOUND,
     setup_hint="Side-on to the phone. Dominant hand on top every rep.",
     quality=QualitySpec(
         target_rom=0.47, tempo_min_ms=550, tempo_max_ms=2_200,
@@ -287,6 +306,7 @@ WALL_BALL_OFFHAND = DrillSpec(
     ),
     tracks_handedness=True,
     ball=LACROSSE_BALL,
+    sound=WALL_BALL_SOUND,
     setup_hint="Weak hand on top. It will feel wrong; that is the point.",
     quality=QualitySpec(
         # Deliberately the same target as the strong hand. Scoring a shorter
@@ -332,6 +352,7 @@ WALL_BALL_ONE_HAND = DrillSpec(
     pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL_FAST,
+    sound=WALL_BALL_SOUND_FAST,
     setup_hint="One hand only, close to the wall. Short and controlled.",
     quality=QualitySpec(
         # A one-handed throw is a shorter motion by design, so the target is
@@ -375,6 +396,7 @@ WALL_BALL_CROSS = DrillSpec(
     pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL,
+    sound=WALL_BALL_SOUND,
     setup_hint="Catch one side, switch, throw the other. Alternate every rep.",
     quality=QualitySpec(
         target_rom=0.44,
@@ -419,6 +441,7 @@ WALL_BALL_BTB = DrillSpec(
     pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL,
+    sound=WALL_BALL_SOUND,
     setup_hint="Wrap behind the back and release. Slow is fine.",
     quality=QualitySpec(
         # The hand never gets as high behind the back, so the target reflects
@@ -465,6 +488,7 @@ WALL_BALL_SPLIT = DrillSpec(
     pattern_verified=False,
     tracks_handedness=True,
     ball=LACROSSE_BALL,
+    sound=WALL_BALL_SOUND,
     setup_hint="Catch, plant, split, throw from the other hand. Sell the dodge.",
     quality=QualitySpec(
         target_rom=0.46,

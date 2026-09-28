@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v5';
+const CACHE = 'offdays-shell-v6';
 
 const SHELL = [
   './',
@@ -31,6 +31,10 @@ const SHELL = [
   'fonts/jetbrains-mono-400-latin.woff2',
   'api.js',
   'counter.js',
+  // Wall ball counts by ear. The worklet is only fetched the first time a
+  // wall-ball drill opens the microphone, which may well be in a driveway.
+  'sound.js',
+  'sound-worklet.js',
   'review.js',
   'offline.js',
   'manifest.webmanifest',

@@ -97,6 +97,7 @@
 
 <script type="module">
 import { RepCounter } from './counter.js';
+import { SoundRepCounter } from './sound.js';
 
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/'
@@ -183,6 +184,9 @@ $('run').addEventListener('click', async () => {
   const lm = await ensureLandmarker();
 
   const counter = new RepCounter(drill);
+  // Sound drills: the clip's own audio track, decoded here and listened to by
+  // the same detector the capture screen uses. Nothing leaves the page.
+  const sound = drill.sound ? await listenToFile(drill, counter, queue[at]) : null;
   let frames = 0, lost = 0;
   video.currentTime = 0;
   await video.play();
@@ -198,7 +202,10 @@ $('run').addEventListener('click', async () => {
       frames += 1;
       const pts = out.landmarks && out.landmarks[0];
       if (!pts) lost += 1;
-      else counter.push(pts.map((p) => ({ ...p, visibility: p.visibility ?? 1 })), t);
+      else {
+        const lms = pts.map((p) => ({ ...p, visibility: p.visibility ?? 1 }));
+        if (sound) sound.pushPose(lms, t); else counter.push(lms, t);
+      }
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -222,7 +229,15 @@ $('run').addEventListener('click', async () => {
     median_rom: measured === null ? null : Math.round(measured * 1000) / 1000,
     target_rom: target,
     ratio: (measured !== null && target) ? Math.round((measured / target) * 100) / 100 : null,
+    ...(sound ? {
+      sound_counted: sound.count,
+      sound_hands: sound.handCounts(),
+      sound_unattributed: sound.count - sound.handCounts().left - sound.handCounts().right,
+      sounds_heard: sound.detector.onsets.length,
+      sound_period_ms: sound.grouping.periodMs,
+    } : {}),
   };
+  const soundRecall = sound && lastRun.truth ? sound.count / lastRun.truth : null;
 
   const recall = lastRun.truth ? counted / lastRun.truth : null;
   const movements = counted + counter.tooFast + counter.tooSlow;
@@ -235,8 +250,13 @@ $('run').addEventListener('click', async () => {
   $('out').innerHTML = `
 <table>
 <tr><th>Measure</th><th>Value</th><th>Reads as</th></tr>
-<tr><td>Reps counted / by eye</td><td>${counted} / ${lastRun.truth ?? '–'}</td>
+<tr><td>Reps counted ${sound ? 'by pose ' : ''}/ by eye</td><td>${counted} / ${lastRun.truth ?? '–'}</td>
     <td class="verdict ${cls(recall, 0.95, 1.05)}">${recall === null ? 'enter a hand count' : (recall * 100).toFixed(0) + '% of the real reps'}</td></tr>
+${sound ? `<tr><td>Reps counted by sound / by eye</td><td>${sound.count} / ${lastRun.truth ?? '–'}</td>
+    <td class="verdict ${cls(soundRecall, 0.95, 1.05)}">${soundRecall === null ? 'enter a hand count' : (soundRecall * 100).toFixed(0) + '% of the real reps'}
+    · ${lastRun.sounds_heard} sounds heard, ${lastRun.sounds_heard - sound.count} folded into a rep as catches</td></tr>
+<tr><td>Hand on top, by sound rep</td><td>${lastRun.sound_hands.left} left · ${lastRun.sound_hands.right} right</td>
+    <td>${lastRun.sound_unattributed} the camera could not attribute</td></tr>` : ''}
 <tr><td>Median range of motion</td><td>${lastRun.median_rom ?? '–'}</td>
     <td>against a declared target of ${target ?? 'none, because this drill is not form-scored'}</td></tr>
 <tr><td>Ratio to target_rom</td><td>${lastRun.ratio ?? '–'}</td>
@@ -251,6 +271,25 @@ $('run').addEventListener('click', async () => {
 </table>`;
   $('save').disabled = false;
 });
+
+/** Decode a clip's audio and run it through a sound counter wrapping `counter`. */
+async function listenToFile(drill, counter, file) {
+  try {
+    const ctx = new AudioContext();
+    const audio = await ctx.decodeAudioData(await file.arrayBuffer());
+    ctx.close();
+    const sc = new SoundRepCounter(drill, counter, { sampleRate: audio.sampleRate });
+    const samples = audio.getChannelData(0);
+    const block = 128;
+    for (let i = 0; i < samples.length; i += block) {
+      sc.pushAudio(samples.subarray(i, i + block), (i / audio.sampleRate) * 1000);
+    }
+    return sc;
+  } catch {
+    // A clip with no audio track, or a codec this browser cannot decode.
+    return null;
+  }
+}
 
 function renderSet() {
   $('dump').disabled = collected.length === 0;
