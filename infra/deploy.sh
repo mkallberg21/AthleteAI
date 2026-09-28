@@ -50,17 +50,21 @@ say "Verifying the host's .env.prod"
 # A missing secret does not crash the app -- it quietly ships a weaker product
 # (forgeable unsubscribe links, a coach seeing the whole program). So the deploy
 # is where it gets caught.
+#
+# Read with grep, never sourced: it is a podman env-file, where values are
+# literal. `OFFDAYS_SMTP_FROM=0FFDAYS <no-reply@...>` is correct there and a
+# syntax error to a shell, and quoting it for the shell would put the quotes
+# into the From header.
 ssh "$HOST" "set -eu
   f=$REMOTE_DIR/infra/.env.prod
   test -f \$f || { echo \"missing \$f: create it from infra/.env.prod.example\"; exit 1; }
-  set -a; . \$f; set +a
+  get() { grep -E \"^\$1=\" \$f | tail -1 | cut -d= -f2-; }
   for v in OFFDAYS_SECRET OFFDAYS_BASE_URL; do
-    eval \"val=\\\${\$v:-}\"
-    [ -n \"\$val\" ] || { echo \"  \$v is blank in .env.prod; refusing to deploy\"; exit 1; }
+    [ -n \"\$(get \$v)\" ] || { echo \"  \$v is blank in .env.prod; refusing to deploy\"; exit 1; }
   done
-  [ \"\${OFFDAYS_STRICT_TEAM_SCOPE:-}\" = 1 ] || echo '  WARNING: OFFDAYS_STRICT_TEAM_SCOPE is not 1'
-  [ -n \"\${OFFDAYS_SMTP_HOST:-}\" ] || echo '  note: SMTP unset, mail is composed but not sent'
-  [ -n \"\${OFFDAYS_VAPID_PRIVATE_KEY:-}\" ] || echo '  note: VAPID unset, push is in-app only'
+  [ \"\$(get OFFDAYS_STRICT_TEAM_SCOPE)\" = 1 ] || echo '  WARNING: OFFDAYS_STRICT_TEAM_SCOPE is not 1'
+  [ -n \"\$(get OFFDAYS_SMTP_HOST)\" ] || echo '  note: SMTP unset, mail is composed but not sent'
+  [ -n \"\$(get OFFDAYS_VAPID_PRIVATE_KEY)\" ] || echo '  note: VAPID unset, push is in-app only'
   echo '  ok'"
 
 say "Building the image on the host"
