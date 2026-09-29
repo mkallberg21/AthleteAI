@@ -388,6 +388,7 @@ import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
          sampleColour, MIN_SAMPLE_SHARE }
   from './ballvision.js';
 import { RepCounter } from './counter.js';
+import { SoundRepCounter, openMicrophone } from './sound.js';
 import { cueAt, cueCount, label as cueLabel, sequence as cueSequenceFor } from './cues.js';
 import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
@@ -437,6 +438,10 @@ let calibrating = false;
 let ballScale = null;
 let stream = null;
 let counter = null;
+// Wall ball, when the microphone is open: counts from the sound of the ball
+// and wraps `counter` for hands and confidence. Null means pose counts.
+let soundCounter = null;
+let mic = null;
 let session = null;
 let running = false;
 let rafId = null;
@@ -1385,6 +1390,31 @@ async function ensureLandmarker() {
   return landmarker;
 }
 
+/**
+ * Wall ball is counted by ear where it can be. Asked for only on drills that
+ * use it, and never fatal: refused or missing, the drill counts from the
+ * camera exactly as it did before sound counting existed.
+ */
+async function startListening() {
+  stopListening();
+  try {
+    setBanner('Starting the microphone…');
+    mic = await openMicrophone((block, tMs) => {
+      if (running && soundCounter) soundCounter.pushAudio(block, tMs - startedAt);
+    });
+  } catch {
+    mic = null;
+    setBanner('Microphone is off, so reps are counted from the camera. '
+      + 'Allow the microphone for a more accurate count.', true);
+  }
+}
+
+function stopListening() {
+  if (mic) mic.stop();
+  mic = null;
+  soundCounter = null;
+}
+
 async function openCapture(drill) {
   activeDrill = drill;
   counter = new RepCounter(drill);
@@ -1467,9 +1497,13 @@ async function openCapture(drill) {
     setBanner('Loading the pose model…');
     await ensureLandmarker();
 
+    if (drill.sound) await startListening();
+
     // No distances, no angles. The traffic light says when it is ready, and
     // an athlete should be training rather than reading setup rules.
-    setBanner('Prop the phone up so it can see you, then press Start.');
+    // A refused microphone has already said so, and that is the more useful
+    // thing to leave on screen.
+    if (!drill.sound || mic) setBanner('Prop the phone up so it can see you, then press Start.');
     describeOrientation();
     $('startstop').disabled = false;
     renderLoop();
@@ -1528,7 +1562,11 @@ function renderLoop() {
     const landmarks = result.landmarks && result.landmarks[0];
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!landmarks) {
-      if (running) setBanner('Nobody in frame, so counting is paused.', true);
+      if (running) {
+        setBanner(soundCounter
+          ? 'Nobody in frame. Reps still count by sound, but not which hand.'
+          : 'Nobody in frame, so counting is paused.', true);
+      }
       return;
     }
     // Kept for the vision detector, which needs the torso to know how big the
@@ -1562,9 +1600,9 @@ function renderLoop() {
       if (detection) drawBall(ctx, detection, canvas.width, canvas.height);
       updateBallReadout();
       // In confirm mode the body is still what counts. The ball is watching.
-      if (ballConfirms) counter.push(landmarks, t);
+      if (ballConfirms) pushPose(landmarks, t);
     } else {
-      counter.push(landmarks, t);
+      pushPose(landmarks, t);
     }
     if (activeDrill.cues) updateCue(t);
     if (recorder) recorder.samplePose(landmarks, t);
@@ -1581,9 +1619,10 @@ function renderLoop() {
     } else if (activeDrill.metric === 'hold') {
       $('reps').textContent = Math.floor(counter.holdMs / 1000);
     } else {
-      $('reps').textContent = counter.count;
+      const live = soundCounter || counter;
+      $('reps').textContent = live.count;
       if (activeDrill.tracks_handedness) {
-        const { left, right } = counter.handCounts();
+        const { left, right } = live.handCounts();
         const l = $('h-left'), r = $('h-right');
         if (l) l.textContent = left;
         if (r) r.textContent = right;
@@ -1600,6 +1639,12 @@ function renderLoop() {
     }
   };
   step();
+}
+
+/** Pose into whichever counter is counting. The sound counter passes it on. */
+function pushPose(landmarks, t) {
+  if (soundCounter) soundCounter.pushPose(landmarks, t);
+  else counter.push(landmarks, t);
 }
 
 const BONES = [
@@ -1947,6 +1992,8 @@ async function startSession() {
   }
 
   counter.reset();
+  soundCounter = mic ? new SoundRepCounter(activeDrill, counter, { sampleRate: mic.sampleRate }) : null;
+  if (mic) mic.resume().catch(() => {});
   startedAt = performance.now();
 
   if (activeDrill.cues) {
@@ -1986,7 +2033,7 @@ async function finishSession() {
 
   // Whichever counter was actually running. A ball drill never fed the pose
   // counter, so submitting from it would post an empty session.
-  const source = ballConfirms ? counter : (ballCounter || counter);
+  const source = ballConfirms ? (soundCounter || counter) : (ballCounter || soundCounter || counter);
   const payload = source.toSubmission(session.session_id, session.nonce, duration, {
     // Confirm mode merges the ball's corroboration into the pose counter's
     // submission; the reps stay the pose counter's.
@@ -2015,15 +2062,15 @@ async function finishSession() {
     if (err && err.permanent) {
       await flush(api);
       showResult({
-        status: 'rejected', reps_total: counter.count, reps_left: 0, reps_right: 0,
+        status: 'rejected', reps_total: source.count, reps_left: 0, reps_right: 0,
         xp_awarded: 0, notes: [err.message], xp_breakdown: [], new_badges: [],
       });
     } else {
       // Offline or the server is down. It is saved; say so plainly rather than
       // showing an error for work the athlete actually did.
-      const { left, right } = counter.handCounts();
+      const { left, right } = source.handCounts();
       showResult({
-        status: 'queued', reps_total: counter.count,
+        status: 'queued', reps_total: source.count,
         reps_left: left, reps_right: right,
         xp_awarded: 0, notes: [], xp_breakdown: [], new_badges: [],
       });
@@ -2040,6 +2087,7 @@ function stopCamera({ keepRecording = false } = {}) {
     stream.getTracks().forEach((t) => t.stop());
     stream = null;
   }
+  stopListening();
   // Null-guarded, the way discardRecording() already is. This runs from the
   // pagehide handler, by which point the document may be torn down and
   // getElementById returns null -- and the throw landed *before*

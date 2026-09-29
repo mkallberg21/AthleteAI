@@ -497,6 +497,25 @@ class BallSpec:
         }
 
 
+@dataclass(frozen=True)
+class SoundSpec:
+    """Count this drill's reps from the sound of the ball, where there is one.
+
+    Wall ball is the case this exists for. On real footage the pose counter
+    got 0 of 16 and 3 of 15 on clips a person could count at a glance, because
+    the stick hand was hidden or the releases were lower than a textbook
+    throw; the rebounder's thump was on every rep and nothing else was close.
+    The browser does the listening, on the phone, and sends only the times it
+    heard -- see `web/static/sound.js`. Pose keeps running alongside for which
+    hand was on top, and takes over if the microphone is refused.
+    """
+
+    #: A new cycle is not opened by a sound sooner than this after the last
+    #: one, until the athlete's own rhythm has been measured. The floor that
+    #: keeps a catch from counting as a second rep in the opening seconds.
+    min_cycle_ms: int = 700
+
+
 # The nine cells a cued drill can place the hands in: three height bands by
 # three lateral bands. Named neutrally on purpose -- `low_centre` is what the
 # geometry measures, and "five hole" is what a lacrosse coach calls it, so the
@@ -622,6 +641,10 @@ class DrillSpec:
     # drill is read from the body alone, which is every drill shipped before
     # ball tracking existed.
     ball: BallSpec | None = None
+    # Present only on drills whose reps are counted by ear when a microphone
+    # is available. Absent means pose (or the ball tracker) counts, which is
+    # every drill shipped before sound counting existed.
+    sound: SoundSpec | None = None
     # Present only on drills where the app calls the target rather than the
     # athlete choosing it. Absent means self-paced, which is every drill
     # shipped before goalie work existed.
