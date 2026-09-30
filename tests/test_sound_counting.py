@@ -50,7 +50,7 @@ class TestCatalog:
 
     def test_the_browser_receives_the_sound_spec(self, offhand):
         assert offhand.to_dict()["sound"] == {
-            "min_cycle_ms": 700, "hand_from": "wall_ball",
+            "min_cycle_ms": 700, "hand_from": "wall_ball", "measures_release": True,
         }
 
     def test_wall_ball_still_takes_its_hand_from_the_stick(self):
