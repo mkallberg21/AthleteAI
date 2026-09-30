@@ -107,6 +107,8 @@ def review(
         return _review_confirmation(
             spec, reps, track_quality, ball_contacts, ball_travel, result,
         )
+    if _heard(reps):
+        return _review_heard(result, track_quality)
 
     if track_quality is None:
         result.flag(
@@ -225,6 +227,37 @@ def _review_alternation(
             "meant to stay on the one hand, which is the whole reason it is "
             "worth doing."
         )
+
+
+def _heard(reps: list[dict[str, Any]]) -> bool:
+    """Whether this session was counted by ear rather than by the camera.
+
+    A count-mode ball drill with a `SoundSpec` counts from the sound of the
+    ball when the microphone is open, and every rep then says so. The tracker
+    still runs, but only to say which hand -- so the checks above, all of which
+    are about whether the *camera's* count can be believed, are about a count
+    that was not the one submitted.
+    """
+    return bool(reps) and all(r.get("source") == "sound" for r in reps)
+
+
+def _review_heard(result: BallReview, track_quality: float | None) -> BallReview:
+    """Count mode, but the reps were heard: the ball only says which hand.
+
+    Never flags. A dribble is audible from the far side of a gym whatever the
+    camera saw, and a tracker that lost the ball in bad light has cost the
+    athlete their left/right split, not their session. The generated-payload
+    check for heard reps is the integrity layer's own cadence floor for sound,
+    which is where it belongs.
+    """
+    if track_quality is None:
+        return result
+    if result.quality < HARD_QUALITY_FLOOR:
+        result.note(
+            "Counted by sound. The camera barely saw the ball, so it could not "
+            "tell which hand each rep was."
+        )
+    return result
 
 
 def summarise(reps: list[dict[str, Any]]) -> dict[str, Any]:

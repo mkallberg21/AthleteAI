@@ -132,14 +132,14 @@ def test_no_pose_was_lost_from_the_shared_library():
     """A count, so a deletion fails loudly rather than shrinking quietly."""
     drawn = [d.key for d in ALL_DRILLS
              if d.sport == "general" and d.key in demo.DEMOS]
-    assert len(drawn) == 27, (
-        f"expected 27 drawn general drills, found {len(drawn)}: "
+    assert len(drawn) == 28, (
+        f"expected 28 drawn general drills, found {len(drawn)}: "
         "raise this deliberately when adding one, never to make a loss pass")
 
 
 def test_the_whole_catalog_is_drawn_but_for_a_named_few():
     """A count, so a silent loss fails instead of shrinking quietly."""
-    assert len(demo.DEMOS) == 92
+    assert len(demo.DEMOS) == 94
     assert len(demo.NEEDS_FILM) == 8
 
 

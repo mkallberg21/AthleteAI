@@ -769,7 +769,7 @@ TENNIS: tuple[Position, ...] = (
     _pos("singles", "Singles", "tennis", "court",
          ("singles", "single", "baseline", "baseliner"),
          mix(ten_alternate=4, ten_one_wing=4, ten_wall_rally=3, ten_recovery=3,
-             ten_split_step=3, ten_serve=2, ten_volley=1,
+             ten_split_step=3, ten_serve=2, ten_volley=1, ten_racket_bounce=1,
              gen_lateral_bound=3, gen_side_plank=2, gen_lunge=2,
              gen_high_knees=2, gen_glute_bridge=1),
          "Cover the width of the court, then hit a ball while balanced.",
@@ -779,7 +779,7 @@ TENNIS: tuple[Position, ...] = (
          # The net position, so volleys lead and the long grooving rallies give
          # way to reactions inside two steps.
          mix(ten_volley=5, ten_split_step=4, ten_serve=3, ten_alternate=2,
-             ten_wall_rally=2, ten_recovery=2, ten_one_wing=1,
+             ten_wall_rally=2, ten_recovery=2, ten_one_wing=1, ten_racket_bounce=1,
              gen_lateral_bound=3, gen_squat_jump=2, gen_side_plank=2,
              gen_lunge=2, gen_push_up=1, gen_wall_sit=1),
          "Short, sharp, reactive. Most of it happens inside two steps.",

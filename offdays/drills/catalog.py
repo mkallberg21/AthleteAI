@@ -90,12 +90,150 @@ LACROSSE_BALL_FAST = replace(LACROSSE_BALL, min_gap_ms=250)
 #: 700ms is the shortest a full throw, flight both ways and catch can take at
 #: rebounder distance; it only matters for the first few reps, after which the
 #: athlete's own rhythm sets the gate. Real clips ran at 1.35-1.45s a cycle.
-WALL_BALL_SOUND = SoundSpec(min_cycle_ms=700)
+WALL_BALL_SOUND = SoundSpec(min_cycle_ms=700, measures_release=True)
 
 #: Quick stick and one-handed come faster, and a quick-stick catch *is* the
 #: release, so there is often only one sound per rep anyway. Not yet checked
 #: against real footage of either.
-WALL_BALL_SOUND_FAST = SoundSpec(min_cycle_ms=400)
+WALL_BALL_SOUND_FAST = SoundSpec(min_cycle_ms=400, measures_release=True)
+
+# --------------------------------------------------------------------------
+# Sound beyond lacrosse
+#
+# The rule wall ball earned: count by ear only where one sharp sound IS one
+# rep, and nothing else in the drill is louder or more regular. The tracker in
+# sound.js keeps the loud, evenly spaced sounds and folds the rest, so a
+# softer second sound per cycle (a catch, a racket) is tolerable; a drill with
+# no impact at all, or several equal ones, is not.
+#
+# `min_cycle_ms` is the floor below which two sounds can never be two reps,
+# for the whole session -- so each is set from the *shortest* honest full
+# cycle of that drill, not its typical one, and always below the ball
+# tracker's own refractory gap where there is one. Set too high it silently
+# drops real reps; too low only matters for the first few seconds, before the
+# athlete's rhythm is learned.
+#
+# `hand_from`: the lacrosse drills take the hand from the stick's top-hand
+# reading. Nothing else here holds a stick, so every drill below takes it
+# from the ball tracker's side attribution ('ball') where the drill already
+# has one, or reports no hand at all ('none').
+#
+# NONE of these has been checked against real footage or real audio. They
+# are reasoned from the physics of each drill in the same way WALL_BALL_SOUND
+# was before its clips existed, and are the numbers most worth revisiting
+# once a recording of each is in hand.
+#
+# Given sound, and why:
+#   gen_jump_rope      -- the rope slaps the ground once per jump.
+#   bkb_dribble, bkb_crossover, bkb_between_legs, bkb_pound_weak,
+#   bkb_pound_low      -- one floor bounce per rep, the loudest sound in a
+#                         driveway; the hand catching it is near-silent.
+#   bkb_wall_pass      -- ball on the wall; the two-hand catch is a soft
+#                         second sound that folds like a lacrosse catch.
+#   bb_wall_throw, bb_quick_hands
+#                      -- ball on the wall, then a glove catch. TWO sounds
+#                         per cycle; the rep is the wall.
+#   ten_wall_rally, ten_alternate, ten_one_wing, ten_volley
+#                      -- TWO sharp sounds per cycle, racket then wall, plus
+#                         a floor bounce on groundstrokes. See TENNIS_SOUND.
+#   soc_wall_pass      -- ball on the wall; a controlled first touch on the
+#                         return is soft and folds.
+#   vb_set_wall        -- ball on the wall; a set is a soft catch-and-push
+#                         with the fingers, far quieter than the wall.
+#
+# Deliberately NOT given sound:
+#   * Juggling of every kind (soc_juggle*, soc_thigh, soc_toe_taps, vb_set,
+#     vb_pass): a touch on a foot, thigh or forearm is quiet, often inaudible
+#     from a propped-up phone, and toe taps are a sole resting on the ball.
+#     The ball tracker already counts these and sound would add false reps.
+#   * Serves and full throws/kicks/swings (vb_serve, ten_serve, bb_long_toss,
+#     bb_tee_swing, fb_*, hoc_shot, sb_windmill): one rep a few seconds apart
+#     with the ball landing somewhere far away, or no ball at all. The rep is
+#     the motion, which pose already reads well; the landing sound is
+#     unreliable and sometimes another person's.
+#   * Stances, slides, shuffles, holds, bodyweight and plyometric work (every
+#     gen_* but the rope, bkb_slide/stance, hoc_*, *_shuffle, ten_recovery,
+#     ten_split_step, bb_fielding, bb_catcher_stance, lax_goalie_saves):
+#     no impact per rep. Feet landing are neither loud nor one per rep, and
+#     a pogo or a tuck jump heard on a wooden floor versus grass would be two
+#     different drills.
+#   * Rugby passing and lacrosse ground balls/face-offs: the rep is a hand
+#     path or a scoop; the ball on a wall, where there is one, is sometimes
+#     never reached because the drill is about the catch, and a face-off
+#     clamp is a stick on turf the phone cannot tell from a step.
+# --------------------------------------------------------------------------
+
+#: One slap of the rope per jump. Honest single unders run 300-500ms a turn
+#: and a quick skipper touches 250; 200 is the floor so that no real jump is
+#: ever merged into the one before it. There is no second sound to fold, so
+#: nothing is lost by the floor being low. No hand -- the rope is two-handed.
+JUMP_ROPE_SOUND = SoundSpec(min_cycle_ms=200, hand_from="none")
+
+#: A double under is ONE jump with TWO turns of the rope, so two slaps come
+#: per jump -- except that on a true double the rope usually clears the floor
+#: on the first pass and only slaps on the second, and the two land ~150-200ms
+#: apart when both are heard. So the rep is the jump: the floor sits above the
+#: gap between the two slaps of one jump and below the quickest honest
+#: double-under cycle (~450ms), and the quieter slap folds into the rep.
+#: Consecutive doubles run 450-700ms.
+DOUBLE_UNDER_SOUND = SoundSpec(min_cycle_ms=300, hand_from="none")
+
+#: One bounce per dribble. A fast youth dribble is 3-4 a second and a hard low
+#: pound reaches 6 (167ms). Each variant's floor equals its ball tracker's own
+#: refractory gap (120ms here for the low pound, 130-200ms on the others,
+#: set per drill), so the ear never keeps a bounce the eye would have refused
+#: -- the server's ball review flags gaps under three-quarters of that gap. There is no second
+#: sound to fold -- the hand meeting the ball is near-silent. Hand from the
+#: ball tracker, which attributes every bounce to the nearest wrist: that is
+#: how crossovers and the weak hand are checked today, and the ear does not
+#: change it.
+DRIBBLE_SOUND = SoundSpec(min_cycle_ms=120, hand_from="ball")
+
+#: Ball on the wall. A chest pass from two metres and back is typically
+#: 0.7-1.5s; the catch is a soft second sound that folds. The floor matches
+#: the ball tracker's 350ms gap -- a two-hand catch is well past that.
+BASKETBALL_WALL_SOUND = SoundSpec(min_cycle_ms=350, hand_from="none")
+
+#: Ball on the wall then in the glove: TWO sounds per cycle, and the glove pop
+#: can be as loud as the wall. The rep is the wall, and on a quick-hands cycle
+#: the pop lands 300-500ms after it. The tracker picks the evenly spaced
+#: stream, and the floor keeps a pop from opening a new rep before the rhythm
+#: is known. Quick hands overrides it to 550ms: its cycle is at least 625ms
+#: (the drill's 1.6/s ceiling) and the pop lands inside the first 500.
+DIAMOND_WALL_SOUND = SoundSpec(min_cycle_ms=450, hand_from="ball")
+
+#: TWO sharp sounds per cycle on a wall rally: racket, then wall -- and a floor
+#: bounce between wall and racket on a groundstroke. The rep is ONE of each
+#: repeating pair; which one the tracker locks onto does not change the count,
+#: since both repeat once per shot at the same period. The floor is set above
+#: the racket-to-wall flight (150-300ms at rally distance) and below the
+#: quickest rally cycle (400ms is the drill's own rate ceiling, 600ms+ is
+#: usual standing back), so neither sound can split a rep in the opening
+#: seconds. Matches the ball tracker's 350ms gap on the plain rally.
+TENNIS_SOUND = SoundSpec(min_cycle_ms=350, hand_from="ball")
+
+#: Volleys are quick -- 300-500ms a cycle two metres off the wall -- and the
+#: racket and wall are then only ~100-150ms apart, inside the detector's own
+#: 150ms debounce, so the pair usually merges into one event anyway. A floor
+#: at 180 keeps a genuine 250ms volley exchange.
+TENNIS_VOLLEY_SOUND = SoundSpec(min_cycle_ms=180, hand_from="ball")
+
+#: Soccer wall pass: strike, wall, and a first touch on the return. The strike
+#: and the wall are both loud; the touch is soft. Two metres out a firm pass is
+#: back in 400ms, so the full cycle is at least ~800ms and the floor sits under
+#: the ball tracker's own 500ms gap.
+SOCCER_WALL_SOUND = SoundSpec(min_cycle_ms=450, hand_from="ball")
+
+#: Wall setting a metre out: 300-600ms a cycle, the wall much louder than the
+#: fingers. Two-handed, so no hand.
+VOLLEYBALL_WALL_SOUND = SoundSpec(min_cycle_ms=250, hand_from="none")
+
+#: Ball bounced up off the strings. Each touch is one tick and nothing else in
+#: the drill makes a sound. A 10cm bounce is ~290ms in the air, a 5cm one
+#: ~200ms; the floor sits under the lowest bounce a child is likely to keep
+#: going. One-handed, but it is the same hand the whole time and the pose has
+#: nothing to add, so no hand.
+RACKET_BOUNCE_SOUND = SoundSpec(min_cycle_ms=180, hand_from="none")
 
 WALL_BALL = DrillSpec(
     key="lax_wall_ball",
@@ -2055,6 +2193,7 @@ SOC_WALL_PASS = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.5, load_per_minute=1.4, tissue=Tissue.LOWER_BODY),
     tracks_handedness=True,
+    sound=SOCCER_WALL_SOUND,
 )
 
 SOC_TOE_TAPS = DrillSpec(
@@ -2192,6 +2331,7 @@ BKB_DRIBBLE = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.15, load_per_minute=1.4, tissue=Tissue.WHOLE_BODY),
     tracks_handedness=True,
+    sound=DRIBBLE_SOUND,
 )
 
 
@@ -2224,6 +2364,7 @@ BKB_CROSSOVER = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.2, load_per_minute=1.6, tissue=Tissue.WHOLE_BODY),
     tracks_handedness=True,
+    sound=replace(DRIBBLE_SOUND, min_cycle_ms=170),
 )
 
 BKB_BETWEEN_LEGS = DrillSpec(
@@ -2257,6 +2398,7 @@ BKB_BETWEEN_LEGS = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.25, load_per_minute=1.7, tissue=Tissue.WHOLE_BODY),
     tracks_handedness=True,
+    sound=replace(DRIBBLE_SOUND, min_cycle_ms=200),
 )
 
 BKB_POUND_WEAK = DrillSpec(
@@ -2292,6 +2434,7 @@ BKB_POUND_WEAK = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.2, load_per_minute=1.8, tissue=Tissue.WHOLE_BODY),
     tracks_handedness=True,
+    sound=replace(DRIBBLE_SOUND, min_cycle_ms=130),
 )
 
 BKB_POUND_LOW = DrillSpec(
@@ -2327,6 +2470,7 @@ BKB_POUND_LOW = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.2, load_per_minute=2.0, tissue=Tissue.WHOLE_BODY),
     tracks_handedness=True,
+    sound=DRIBBLE_SOUND,
 )
 
 BKB_WALL_PASS = DrillSpec(
@@ -2365,6 +2509,7 @@ BKB_WALL_PASS = DrillSpec(
         throws_per_rep=0.0, tissue=Tissue.UPPER_BODY,
     ),
     tracks_handedness=False,
+    sound=BASKETBALL_WALL_SOUND,
 )
 
 
@@ -2883,6 +3028,7 @@ VB_SET_WALL = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.3, load_per_minute=1.8, tissue=Tissue.UPPER_BODY),
     tracks_handedness=False,
+    sound=VOLLEYBALL_WALL_SOUND,
 )
 
 
@@ -2966,6 +3112,7 @@ BB_WALL_THROW = DrillSpec(
         tissue=Tissue.THROWING,
     ),
     tracks_handedness=True,
+    sound=DIAMOND_WALL_SOUND,
 )
 
 BB_LONG_TOSS = DrillSpec(
@@ -3042,6 +3189,7 @@ BB_QUICK_HANDS = DrillSpec(
         throws_per_rep=0.4, tissue=Tissue.THROWING,
     ),
     tracks_handedness=True,
+    sound=replace(DIAMOND_WALL_SOUND, min_cycle_ms=550),
 )
 
 BB_TEE_SWING = DrillSpec(
@@ -3306,6 +3454,7 @@ TEN_WALL_RALLY = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.5, load_per_minute=1.8, tissue=Tissue.UPPER_BODY),
     tracks_handedness=True,
+    sound=TENNIS_SOUND,
 )
 
 TEN_ALTERNATE = DrillSpec(
@@ -3336,6 +3485,7 @@ TEN_ALTERNATE = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.6, load_per_minute=1.9, tissue=Tissue.UPPER_BODY),
     tracks_handedness=True,
+    sound=TENNIS_SOUND,
 )
 
 TEN_ONE_WING = DrillSpec(
@@ -3365,6 +3515,7 @@ TEN_ONE_WING = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.6, load_per_minute=1.9, tissue=Tissue.UPPER_BODY),
     tracks_handedness=True,
+    sound=TENNIS_SOUND,
 )
 
 TEN_VOLLEY = DrillSpec(
@@ -3399,6 +3550,54 @@ TEN_VOLLEY = DrillSpec(
     quality=None,
     load=LoadSpec(load_per_rep=0.3, load_per_minute=2.0, tissue=Tissue.UPPER_BODY),
     tracks_handedness=True,
+    sound=TENNIS_VOLLEY_SOUND,
+)
+
+#: Sound-first. Nothing else in the drill makes a sound but the ball on the
+#: strings, so it is the cleanest case for the ear in the whole sport.
+TEN_RACKET_BOUNCE = DrillSpec(
+    key="ten_racket_bounce",
+    name="Racket Bounces",
+    sport="tennis",
+    category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Bounce the ball straight up off your strings, low and steady, as "
+        "many times as you can without letting it drop. Counted by the tick "
+        "of the ball on the strings where the phone can hear it, and by the "
+        "ball otherwise. Pickleball players can do it with a paddle."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.4),
+    counter=CounterSpec(
+        down_threshold=0.0, up_threshold=1.0, min_rep_ms=180, max_rep_ms=3_000,
+    ),
+    # The ball barely leaves the racket head, so contact speed is low and the
+    # gap is short. Same ball as every other tennis drill.
+    ball=replace(TENNIS, min_gap_ms=180, min_speed=0.20),
+    scoring=ScoringSpec(
+        # The lowest-paid tennis ball drill: touch and control, a warm-up
+        # rather than a stroke. Below the rally, so bouncing it on the spot
+        # is never the best-paying way to spend time against a wall.
+        xp_per_rep=0.4, daily_rep_cap=800, diminishing_after_reps=300,
+    ),
+    validation=ValidationSpec(
+        max_reps_per_second=5.0,
+        # A ball kept going on the strings comes back at least this often.
+        # Slower than this, it was being caught between touches.
+        min_reps_per_second=1.2,
+        min_reps=20, min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Phone within a few metres, where it can see the racket and hear the "
+        "ball. Racket face flat, ball no higher than your head."
+    ),
+    quality=None,
+    load=LoadSpec(load_per_rep=0.05, load_per_minute=0.8, tissue=Tissue.UPPER_BODY),
+    # One hand holds the racket the whole time, and which one is the
+    # athlete's choice rather than something to measure.
+    tracks_handedness=False,
+    sound=RACKET_BOUNCE_SOUND,
 )
 
 TEN_SERVE = DrillSpec(
@@ -4619,6 +4818,82 @@ GEN_JUMP_ROPE = DrillSpec(
     # exactly what the movement earns.
     pattern_verified=False,
     tracks_handedness=False,
+    sound=JUMP_ROPE_SOUND,
+)
+
+#: Sound-first. See DOUBLE_UNDER_SOUND for what the rep is by ear.
+GEN_DOUBLE_UNDER = DrillSpec(
+    key="gen_double_under",
+    name="Double Unders",
+    sport="general",
+    category=Category.CONDITIONING,
+    stimulus=Stimulus.ENDURANCE,
+    metric=Metric.REPS,
+    description=(
+        "The rope goes under twice for every jump. Jump a little higher than "
+        "for single unders, stay tall, and let fast wrists do the work. "
+        "Counted by the sound of the rope where the phone can hear it; one "
+        "rep is one jump."
+    ),
+    signal=SignalSpec(kind=SignalKind.BODY_HEIGHT, smoothing=0.55),
+    counter=CounterSpec(
+        # Above single unders at the top, because the rope needs twice the
+        # airtime; the same shallow dip at the bottom. Every double under is
+        # therefore also a single-under rep, which is why the two pay the
+        # same (see scoring).
+        down_threshold=0.87,
+        up_threshold=1.09,
+        min_rep_ms=380,
+        max_rep_ms=2_000,
+        rising_completes=True,
+    ),
+    scoring=ScoringSpec(
+        # Identical to single unders and pogo hops, on purpose. Neither the
+        # camera nor the ear can confirm the rope went round twice: a high
+        # single under looks the same, and a clean double often slaps the
+        # floor only once. So the name earns nothing the movement does not.
+        xp_per_rep=0.6,
+        daily_rep_cap=600,
+        diminishing_after_reps=200,
+        diminishing_rate=0.35,
+    ),
+    validation=ValidationSpec(
+        # 380ms is about the quickest a youth double under repeats.
+        max_reps_per_second=2.6,
+        # Doubles strung together cannot be done slowly; a session far under
+        # this rate was single jumps with rests.
+        min_reps_per_second=0.60,
+        min_reps=15,
+        min_duration_ms=15_000,
+    ),
+    setup_hint=(
+        "Phone side-on at hip height, on the floor or a step where it can "
+        "hear the rope land. Whole body in frame. Reps count by the sound of "
+        "the rope, one per jump."
+    ),
+    quality=QualitySpec(
+        # NOT measured. Scaled from single unders (a 0.23 sweep measures 0.22
+        # at the same smoothing) to this drill's 0.32 sweep in
+        # calibration.test.mjs; the JS harness could not be run when this was
+        # written, so run it and replace this with the measured figure.
+        target_rom=0.29,
+        consistency_target=0.06,
+        consistency_ceiling=0.18,
+        tempo_min_ms=380,
+        tempo_max_ms=1_000,
+        w_consistency=0.40,
+        w_depth=0.10,
+        w_tempo=0.25,
+        w_endurance=0.25,
+        min_reps=15,
+    ),
+    # Higher landings than single unders, and calves and Achilles take them.
+    load=LoadSpec(load_per_rep=0.14, throws_per_rep=0.0, tissue=Tissue.LOWER_BODY),
+    # Same reason as jump rope: the rope is not in the skeleton, and the ear
+    # hears a jump, not how many times the rope went round.
+    pattern_verified=False,
+    tracks_handedness=False,
+    sound=DOUBLE_UNDER_SOUND,
 )
 
 GEN_HIP_HINGE = DrillSpec(
@@ -5037,6 +5312,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     SOC_KEEPER_SET,
     SOC_STEP_OVER,
     GEN_JUMP_ROPE,
+    GEN_DOUBLE_UNDER,
     GEN_HIP_HINGE,
     GEN_V_UP,
     GEN_SPLIT_SQUAT,
@@ -5080,6 +5356,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     TEN_ALTERNATE,
     TEN_ONE_WING,
     TEN_VOLLEY,
+    TEN_RACKET_BOUNCE,
     TEN_SERVE,
     TEN_SPLIT_STEP,
     TEN_RECOVERY,

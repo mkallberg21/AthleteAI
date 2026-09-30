@@ -38,14 +38,25 @@ class TestCatalog:
             assert drill.sound.min_cycle_ms > 0
 
     def test_nothing_else_asks_for_the_microphone(self):
-        # The permission prompt is a cost. Only drills with a ball that makes
-        # one sound per rep against something should ask for it.
+        # The permission prompt is a cost. Only drills where one sharp sound
+        # is one rep should ask for it -- the wall-ball family, and a short
+        # list of other drills argued for one by one in catalog.py. That list
+        # is pinned exactly in test_sound_catalog.py; here, only that none of
+        # them borrows the stick's top-hand reading, which means nothing
+        # without a stick.
         for drill in ALL_DRILLS:
-            if drill.signal.kind is not SignalKind.WALL_BALL_CYCLE:
-                assert drill.sound is None, drill.key
+            if drill.signal.kind is not SignalKind.WALL_BALL_CYCLE and drill.sound:
+                assert drill.sound.hand_from != "wall_ball", drill.key
 
     def test_the_browser_receives_the_sound_spec(self, offhand):
-        assert offhand.to_dict()["sound"] == {"min_cycle_ms": 700}
+        assert offhand.to_dict()["sound"] == {
+            "min_cycle_ms": 700, "hand_from": "wall_ball",
+        }
+
+    def test_wall_ball_still_takes_its_hand_from_the_stick(self):
+        for drill in ALL_DRILLS:
+            if drill.signal.kind is SignalKind.WALL_BALL_CYCLE:
+                assert drill.sound.hand_from == "wall_ball", drill.key
 
     def test_the_setup_hint_no_longer_promises_any_angle_works(self):
         # From behind, the body hides the stick hand. It was measured.

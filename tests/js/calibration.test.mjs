@@ -116,6 +116,8 @@ const SWEEP = {
   // A rope jump: a little deeper and a little slower than a pogo, and to the
   // camera that difference is the only one there is.
   gen_jump_rope:     { lo: 0.84,  hi: 1.07, kind: 'body' },
+  // Same bounce, higher: the rope needs twice the airtime.
+  gen_double_under:  { lo: 0.82,  hi: 1.14, kind: 'body' },
   // Hips back with a long back. The widest hip excursion of the standing
   // drills, which is what separates it from a sit-up on the same signal.
   gen_hip_hinge:     { lo: 90,    hi: 178,  kind: 'hip' },

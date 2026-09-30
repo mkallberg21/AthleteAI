@@ -1600,7 +1600,9 @@ function renderLoop() {
       if (detection) drawBall(ctx, detection, canvas.width, canvas.height);
       updateBallReadout();
       // In confirm mode the body is still what counts. The ball is watching.
-      if (ballConfirms) pushPose(landmarks, t);
+      // Counted by ear, the body is fed too: the sound counter's confidence
+      // and framing checks come from pose, and without frames they read zero.
+      if (ballConfirms || soundCounter) pushPose(landmarks, t);
     } else {
       pushPose(landmarks, t);
     }
@@ -1608,7 +1610,7 @@ function renderLoop() {
     if (recorder) recorder.samplePose(landmarks, t);
     renderDebug();
 
-    if (ballCounter && !ballConfirms) {
+    if (ballCounter && !ballConfirms && !soundCounter) {
       $('reps').textContent = ballCounter.count;
       if (activeDrill.tracks_handedness) {
         const { left, right } = ballCounter.handCounts();
@@ -1992,7 +1994,9 @@ async function startSession() {
   }
 
   counter.reset();
-  soundCounter = mic ? new SoundRepCounter(activeDrill, counter, { sampleRate: mic.sampleRate }) : null;
+  soundCounter = mic
+    ? new SoundRepCounter(activeDrill, counter, { sampleRate: mic.sampleRate, ballCounter })
+    : null;
   if (mic) mic.resume().catch(() => {});
   startedAt = performance.now();
 
@@ -2032,12 +2036,19 @@ async function finishSession() {
   $('startstop').textContent = 'Saving…';
 
   // Whichever counter was actually running. A ball drill never fed the pose
-  // counter, so submitting from it would post an empty session.
-  const source = ballConfirms ? (soundCounter || counter) : (ballCounter || soundCounter || counter);
+  // counter, so submitting from it would post an empty session. Heard reps win
+  // over the ball tracker's: when the microphone is open the ear counted.
+  const source = ballConfirms
+    ? (soundCounter || counter)
+    : (soundCounter || ballCounter || counter);
   const payload = source.toSubmission(session.session_id, session.nonce, duration, {
     // Confirm mode merges the ball's corroboration into the pose counter's
     // submission; the reps stay the pose counter's.
     ...(ballConfirms && ballCounter ? ballCounter.confirmation() : {}),
+    // Counted by ear on a ball drill: the tracker only said which hand, but
+    // its quality is still reported so the server can say so honestly.
+    ...(!ballConfirms && soundCounter && ballCounter
+      ? { track_quality: Math.round(ballCounter.trackQuality * 1000) / 1000 } : {}),
     client_version: CLIENT_VERSION,
     device_label: navigator.platform || '',
     // The device's own clock decides which day this counts for. A session
@@ -2423,6 +2434,51 @@ function renderQuality(quality, fix) {
   </div>`;
 }
 
+/**
+ * The rhythm card for a session counted by ear: one tick per rep across the
+ * session, coloured by hand, with the stops marked, and the two hands' pace
+ * side by side. Drawn from what the server sent back, so a coach looking at
+ * the same session later sees the same picture.
+ */
+function renderRhythm(rhythm) {
+  if (!rhythm || !rhythm.strip || !rhythm.strip.length) return '';
+  const pts = rhythm.strip;
+  const t0 = pts[0][0];
+  const span = Math.max(1, pts[pts.length - 1][0] - t0);
+  const x = (t) => ((t - t0) / span) * 100;
+  const handClass = { L: 'rh-l', R: 'rh-r' };
+  const ticks = pts.map(([t, h]) =>
+    `<i class="rh-tick ${handClass[h] || 'rh-n'}" style="left:${x(t).toFixed(2)}%"></i>`).join('');
+  const stops = (rhythm.break_intervals || []).map(([a, b]) =>
+    `<i class="rh-stop" style="left:${x(a).toFixed(2)}%;width:${Math.max(0.5, x(b) - x(a)).toFixed(2)}%"></i>`).join('');
+
+  const sideName = (s) => ({
+    strong: 'Strong hand', off: 'Off hand', a: 'Left hand', b: 'Right hand',
+  }[s.side] || s.side);
+  const secs = (ms) => (ms ? `${(ms / 1000).toFixed(2)}s` : '–');
+  const sides = (rhythm.sides || []).filter((s) => s.reps > 0);
+  const split = sides.length === 2
+    ? `<div class="hand-split">${sides.map((s) => `
+         <div><b>${secs(s.median_gap_ms)}</b><span>${esc(sideName(s))} · ${s.reps} reps${
+           s.median_release_ms ? ` · ${secs(s.median_release_ms)} to release` : ''}</span></div>`).join('')}
+       </div>`
+    : '';
+
+  const facts = [];
+  if (rhythm.median_gap_ms) facts.push(`${secs(rhythm.median_gap_ms)} per rep`);
+  if (rhythm.release_median_ms) facts.push(`${secs(rhythm.release_median_ms)} catch to release`);
+  if (rhythm.breaks) facts.push(`${rhythm.breaks} stop${rhythm.breaks === 1 ? '' : 's'}`);
+  if (rhythm.fade && rhythm.fade >= 1.05) facts.push(`${Math.round((rhythm.fade - 1) * 100)}% slower at the end`);
+
+  return `<div class="quality rhythm">
+    <div class="small muted" style="margin-bottom:6px"><b>Your rhythm</b>${facts.length ? ' · ' + esc(facts.join(' · ')) : ''}</div>
+    <div class="rh-strip" role="img" aria-label="One mark per rep across the session">${stops}${ticks}</div>
+    <div class="rh-legend small muted"><span><i class="rh-l"></i>Left</span><span><i class="rh-r"></i>Right</span><span><i class="rh-stop-key"></i>Stop</span></div>
+    ${split}
+    ${rhythm.note ? `<div class="coach-note">${esc(rhythm.note)}</div>` : ''}
+  </div>`;
+}
+
 function showResult(result) {
   show('result');
   // Offered only when there is something to watch: a session too short to
@@ -2465,7 +2521,7 @@ function showResult(result) {
     .join('');
 
   $('r-quality').innerHTML = result.status === 'counted'
-    ? renderQuality(result.quality, result.technique) : '';
+    ? renderQuality(result.quality, result.technique) + renderRhythm(result.rhythm) : '';
 
   if (result.status === 'queued') {
     $('r-quality').innerHTML = '';

@@ -508,12 +508,63 @@ class SoundSpec:
     The browser does the listening, on the phone, and sends only the times it
     heard -- see `web/static/sound.js`. Pose keeps running alongside for which
     hand was on top, and takes over if the microphone is refused.
+
+    Other sports use it where one sharp sound is one rep -- a rope on the
+    ground, a basketball on the floor, a ball on a wall or on strings. See the
+    "Sound beyond lacrosse" block in `catalog.py` for which drills qualify and,
+    as importantly, which do not.
     """
 
     #: A new cycle is not opened by a sound sooner than this after the last
     #: one, until the athlete's own rhythm has been measured. The floor that
     #: keeps a catch from counting as a second rep in the opening seconds.
+    #:
+    #: It is also the shortest gap the beat tracker will ever accept between
+    #: two reps, for the whole session, so it must sit below the quickest
+    #: honest cycle of the drill -- not just its typical one.
     min_cycle_ms: int = 700
+
+    #: Where each sound rep's hand comes from. The ear hears *when*, never
+    #: *which hand*, so this has to be borrowed from something that can see:
+    #:
+    #: 'wall_ball' -- the pose's top-hand reading (`wallBallSignal` in
+    #:                counter.js): the highest top hand in the throw window
+    #:                before the impact. The default, and correct only for a
+    #:                two-handed stick, which is what that signal was written
+    #:                for. On a dribble, a racket or a glove it would credit
+    #:                whichever wrist happened to be higher -- a confident
+    #:                answer to a question the drill never asked.
+    #: 'ball'      -- the side the ball tracker attributed to its nearest
+    #:                contact, on drills that track the ball with
+    #:                `attribute_side`. 'none' where the tracker saw nothing.
+    #: 'none'      -- every rep is hand 'none'. Honest wherever the side does
+    #:                not matter or nothing can see it.
+    hand_from: str = "wall_ball"
+
+    #: Whether catch-to-next-throw ("release time") means anything on this
+    #: drill. The phone offers a release for every heard rep that had a softer
+    #: sound before it; only where that softer sound is a *catch* the athlete
+    #: then throws from is it the time they held the ball. On a racket it is
+    #: the racket hit, on a glove drill the pop can be louder than the wall and
+    #: take the rep's place, and a dribble or a rope has no catch at all -- so
+    #: the server ignores release there rather than coach a number that is not
+    #: what it says. Lacrosse wall ball only, until another drill has real
+    #: recordings to prove it.
+    measures_release: bool = False
+
+    def __post_init__(self) -> None:
+        if self.min_cycle_ms <= 0:
+            raise ValueError("min_cycle_ms must be positive")
+        if self.hand_from not in SOUND_HAND_SOURCES:
+            raise ValueError(f"unknown sound hand source: {self.hand_from!r}")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"min_cycle_ms": self.min_cycle_ms, "hand_from": self.hand_from,
+                "measures_release": self.measures_release}
+
+
+#: Where a sound-counted rep may take its hand from. See SoundSpec.hand_from.
+SOUND_HAND_SOURCES = ("wall_ball", "ball", "none")
 
 
 # The nine cells a cued drill can place the hands in: three height bands by
@@ -683,6 +734,8 @@ class DrillSpec:
         data["load"]["tissue"] = self.load.tissue.value
         if self.ball is not None:
             data["ball"] = self.ball.to_dict()
+        if self.sound is not None:
+            data["sound"] = self.sound.to_dict()
         if self.cues is not None:
             data["cues"] = self.cues.to_dict()
         return data

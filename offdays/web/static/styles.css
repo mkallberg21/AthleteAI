@@ -1736,3 +1736,44 @@ tr.mine td { border-color: var(--accent-dim); }
   vertical-align: 1px;
 }
 .lib-tag.alt { color: var(--accent); border-color: var(--accent-dim); }
+
+/* Rhythm strip on a session counted by ear: one tick per rep across the
+   session in the brand's hand colours, with the stops shaded behind. */
+.rh-strip {
+  position: relative;
+  height: 34px;
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.rh-tick {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text-dim);
+}
+.rh-tick.rh-l { background: var(--left); }
+.rh-tick.rh-r { background: var(--right); }
+.rh-stop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(199, 119, 0, 0.22);
+  border-left: 1px solid var(--warn);
+  border-right: 1px solid var(--warn);
+}
+.rh-legend { display: flex; gap: 14px; margin: 6px 0 2px; }
+.rh-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.rh-legend .rh-l { background: var(--left); }
+.rh-legend .rh-r { background: var(--right); }
+.rh-legend .rh-stop-key { background: rgba(199, 119, 0, 0.45); }

@@ -93,6 +93,15 @@ export const RHYTHM_MIN = 4;
  */
 export const THROW_WINDOW_MS = 1100;
 
+/**
+ * How far from a heard rep the ball tracker's contact may be and still be the
+ * same contact, on drills that take the hand from the ball. The camera times a
+ * contact to the frame the velocity changed on -- 33ms at 30fps, and the
+ * tracker needs a frame either side to see it -- so a few frames covers it.
+ * Wider would start reaching the next bounce on a fast dribble (~150ms apart).
+ */
+export const BALL_HAND_WINDOW_MS = 90;
+
 // ---------------------------------------------------------------------------
 
 /**
@@ -330,6 +339,98 @@ export function estimatePeriod(onsets, minCycleMs) {
 }
 
 /**
+ * A catch is at least this long after the impact before it. The detector
+ * already merges anything inside DEBOUNCE_MS into the impact, but a ball
+ * rattling on in the net or the stick clipping the frame on the follow-through
+ * can land just past that; the fastest real catch in the reference clips was
+ * about 430ms after the impact on a net, so 150ms leaves a wide margin.
+ */
+export const CATCH_MIN_AFTER_MS = 150;
+
+/**
+ * And at least this long before the next impact. The ball has to travel from
+ * stick to wall after the release, and the brick-wall catches sat 60% of the
+ * way through a cycle -- 500ms and more before the next impact -- so anything
+ * nearer the next impact than this is the wind-up or the throw itself (the
+ * stick knocking on the way through), not the ball arriving.
+ */
+export const CATCH_MIN_BEFORE_MS = 200;
+
+/**
+ * A gap between throws longer than this many periods is a pause -- a drink,
+ * a dropped ball -- and the time from that catch to the next throw says
+ * nothing about how quickly the athlete gets rid of the ball, so no release
+ * time is given for it. Two periods keeps a merely slow rep and drops a break.
+ */
+export const RELEASE_MAX_PERIODS = 2;
+
+/**
+ * Longest release time ever reported, whatever the period. Matches the
+ * server's bound on `release_ms`, so a rep is never rejected for carrying one.
+ */
+export const RELEASE_MAX_MS = 5000;
+
+/**
+ * Which of the folded sounds was the catch, for each throw.
+ *
+ * For every throw `cycles[i]` that has a next throw, looks between the two
+ * for at most one folded sound that is plausibly the ball arriving back in
+ * the stick: at least CATCH_MIN_AFTER_MS after this impact and at least
+ * CATCH_MIN_BEFORE_MS before the next one. Of those, the loudest is taken
+ * (earliest on a tie, or when strengths are unknown). Loudest rather than
+ * earliest because the other sounds that survive the window are a stick
+ * tapped in the wind-up or the ball scraping on the pick-up, and a catch --
+ * the ball landing in the pocket -- was the louder of those in every reference
+ * clip; earliest would prefer a stray knock just past the window instead.
+ *
+ * Returns an array the length of `cycles`: the catch time in ms, or null
+ * where none was heard, where the gap is a pause (over RELEASE_MAX_PERIODS
+ * periods, when the period is known), and always for the last throw, which
+ * has no next throw to measure to. Reads its inputs, never changes them, so
+ * the count is exactly what `groupCycles` said it was.
+ */
+export function catchesFor(cycles, folded, periodMs) {
+  const out = new Array(cycles.length).fill(null);
+  if (!folded.length) return out;
+  const sorted = [...folded].sort((a, b) => a.t_ms - b.t_ms);
+  let k = 0;
+  for (let i = 0; i + 1 < cycles.length; i += 1) {
+    const from = cycles[i].t_ms, to = cycles[i + 1].t_ms;
+    if (periodMs && to - from > periodMs * RELEASE_MAX_PERIODS) continue;
+    const lo = from + CATCH_MIN_AFTER_MS, hi = to - CATCH_MIN_BEFORE_MS;
+    while (k < sorted.length && sorted[k].t_ms < lo) k += 1;
+    let best = null;
+    for (let j = k; j < sorted.length && sorted[j].t_ms <= hi; j += 1) {
+      const o = sorted[j];
+      if (o.t_ms <= from || o.t_ms >= to) continue;
+      if (!best || (o.strength || 0) > (best.strength || 0)) best = o;
+    }
+    if (best) out[i] = best.t_ms;
+  }
+  return out;
+}
+
+/**
+ * Release time for each rep: from the catch heard after the previous throw
+ * to this throw's impact, in ms, or null. Index-aligned with `cycles`, so the
+ * first rep never has one.
+ *
+ * It runs from the catch to the next impact on the wall, so it includes the ball's flight
+ * from stick to wall as well as the time the athlete held it. Flight depends
+ * on the distance to the wall and how hard it was thrown, which the phone
+ * cannot know -- so this compares one rep with another in the same session
+ * and setup (is she getting rid of it faster at the end than the start?),
+ * not one athlete or one yard with another.
+ */
+export function releaseTimes(cycles, catches) {
+  return cycles.map((c, i) => {
+    if (i === 0 || catches[i - 1] === null || catches[i - 1] === undefined) return null;
+    const ms = Math.round(c.t_ms - catches[i - 1]);
+    return ms >= 0 && ms <= RELEASE_MAX_MS ? ms : null;
+  });
+}
+
+/**
  * The wall-ball counter when a microphone is available.
  *
  * Wraps the ordinary pose `RepCounter` rather than replacing it: pose still
@@ -343,11 +444,21 @@ export function estimatePeriod(onsets, minCycleMs) {
  * which one it is holding.
  */
 export class SoundRepCounter {
-  constructor(spec, poseCounter, { sampleRate }) {
+  /**
+   * `ballCounter` is the drill's `BallRepCounter`, when it has one. It is only
+   * read, never counted from: on drills whose hand comes from the ball
+   * (`sound.hand_from === 'ball'`) each heard rep takes the side the tracker
+   * gave its nearest contact.
+   */
+  constructor(spec, poseCounter, { sampleRate, ballCounter = null } = {}) {
     this.spec = spec;
     this.pose = poseCounter;
+    this.ball = ballCounter;
     this.detector = new ImpactDetector({ sampleRate });
     this.minCycleMs = (spec.sound && spec.sound.min_cycle_ms) || 700;
+    // Where a heard rep's hand comes from. Missing means an older spec, which
+    // was always lacrosse wall ball.
+    this.handFrom = (spec.sound && spec.sound.hand_from) || 'wall_ball';
     // Recent top-hand readings, only as far back as a throw window reaches.
     // Each sound's hand is decided once, from these, and then kept on the
     // sound -- the live screen asks for the count every frame, and rescanning
@@ -367,6 +478,9 @@ export class SoundRepCounter {
   /** Video: one frame of landmarks at tMs on the session clock. */
   pushPose(landmarks, tMs) {
     this.pose.push(landmarks, tMs);
+    // The stick's top-hand signal means something only on a two-handed stick.
+    // On a dribble or a racket it would credit whichever wrist was higher.
+    if (this.handFrom !== 'wall_ball') return;
     const sig = wallBallSignal(landmarks);
     this.frames.push({ t: tMs, hand: sig ? sig.hand : 'none', value: sig ? sig.value : null });
     // A sound is settled once the video has caught up with it.
@@ -394,6 +508,23 @@ export class SoundRepCounter {
     return best ? best.hand : 'none';
   }
 
+  /**
+   * The side the ball tracker gave the contact nearest a heard rep, within
+   * BALL_HAND_WINDOW_MS. The camera sees a contact a frame or two either side
+   * of the sound, so the window is a few frames wide; further than that and
+   * it is a different contact. 'none' when the tracker saw nothing near it.
+   */
+  ballHandFor(tMs) {
+    const reps = this.ball && this.ball.reps;
+    if (!reps || !reps.length) return 'none';
+    let best = null;
+    for (const r of reps) {
+      const d = Math.abs(r.t_ms - tMs);
+      if (d <= BALL_HAND_WINDOW_MS && (!best || d < best.d)) best = { d, hand: r.hand };
+    }
+    return best && (best.hand === 'left' || best.hand === 'right') ? best.hand : 'none';
+  }
+
   get grouping() {
     if (!this.cached) this.cached = groupCycles(this.detector.onsets, this.minCycleMs);
     return this.cached;
@@ -401,16 +532,45 @@ export class SoundRepCounter {
 
   /** A sound's hand, settling it now if the video never caught up with it. */
   _hand(o) {
-    if (!this.spec.tracks_handedness) return 'none';
+    if (!this.spec.tracks_handedness || this.handFrom === 'none') return 'none';
+    // Read fresh each time: the tracker may confirm a contact a frame after
+    // the sound arrived, and a side decided too early would stay wrong.
+    if (this.handFrom === 'ball') return this.ballHandFor(o.t_ms);
     if (o.hand === undefined) o.hand = this.handFor(o.t_ms);
     return o.hand;
   }
 
+  /**
+   * Release time per cycle (see `releaseTimes`), cached with the grouping.
+   * Derived from the grouping, never fed back into it: hearing catches
+   * changes what each rep says, not how many there are.
+   */
+  get releases() {
+    const g = this.grouping;
+    if (!g.releases) g.releases = releaseTimes(g.cycles, catchesFor(g.cycles, g.folded, g.periodMs));
+    return g.releases;
+  }
+
   get reps() {
     const confidence = Math.round(this.pose.meanConfidence * 1000) / 1000;
-    return this.grouping.cycles.map((c) => ({
-      t_ms: c.t_ms, hand: this._hand(c), confidence, source: 'sound',
-    }));
+    const releases = this.releases;
+    return this.grouping.cycles.map((c, i) => {
+      const rep = { t_ms: c.t_ms, hand: this._hand(c), confidence, source: 'sound' };
+      // Omitted, not null, when no catch was heard: a phone on the far side
+      // from the stick never hears one, and that is not a slow release.
+      if (releases[i] !== null) rep.release_ms = releases[i];
+      return rep;
+    });
+  }
+
+  /**
+   * Share of reps that carry a release time -- how much of the session the
+   * phone could hear the catches for. The first rep never can, so a perfect
+   * session reads (n-1)/n. 0 with no reps.
+   */
+  get catchCoverage() {
+    const r = this.releases;
+    return r.length ? r.filter((x) => x !== null).length / r.length : 0;
   }
 
   get count() { return this.grouping.cycles.length; }
@@ -420,8 +580,11 @@ export class SoundRepCounter {
   handCounts() {
     let left = 0, right = 0;
     for (const c of this.grouping.cycles) {
-      // Unsettled sounds are not counted for a side yet rather than guessed.
-      const hand = this.spec.tracks_handedness ? c.hand : 'none';
+      // Wall ball: unsettled sounds are not counted for a side yet rather
+      // than guessed. Ball: read from the tracker as it stands now.
+      let hand = 'none';
+      if (this.spec.tracks_handedness && this.handFrom === 'wall_ball') hand = c.hand;
+      else if (this.spec.tracks_handedness && this.handFrom === 'ball') hand = this.ballHandFor(c.t_ms);
       if (hand === 'left') left += 1;
       else if (hand === 'right') right += 1;
     }
@@ -437,6 +600,7 @@ export class SoundRepCounter {
       sounds: this.detector.onsets.length,
       folded: g.folded.length,
       period_ms: g.periodMs,
+      catch_coverage: Math.round(this.catchCoverage * 100) / 100,
     };
   }
 
