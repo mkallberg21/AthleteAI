@@ -198,6 +198,9 @@ class TestNoDrillOutEarnsOneItCannotBeToldApartFrom:
             # is the only arrangement where picking the nicer-sounding name
             # gains an athlete nothing.
             "gen_jump_rope",
+            # The same, twice over: neither the camera nor the ear can tell
+            # the rope went round twice, so it pays what a single under does.
+            "gen_double_under",
         }, unverified
 
     def test_the_off_hand_premium_survives_and_is_measured(self):

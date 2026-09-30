@@ -62,6 +62,11 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Tennis", "the split step, which is this exact bounce"),
         Transfer("Boxing", "it is most of what the footwork is"),
     ),
+    "gen_double_under": (
+        Transfer("Basketball", "a quick second jump for a rebound"),
+        Transfer("Volleyball", "landing and loading again for the next block"),
+        Transfer("Boxing", "fast feet that stay light for a whole round"),
+    ),
     "gen_hip_hinge": (
         Transfer("Track", "the shape a sprint start is loaded in"),
         Transfer("Rowing", "the drive is a hinge with a handle in your hands"),
@@ -311,6 +316,11 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
     "ten_volley": (
         Transfer("Volleyball", "blocking hands, quick and without a swing"),
         Transfer("Basketball", "catch and release with no wasted motion"),
+    ),
+    "ten_racket_bounce": (
+        Transfer("Pickleball", "soft hands at the kitchen line, the same touch"),
+        Transfer("Lacrosse", "cradling -- the ball stays on the stick by feel"),
+        Transfer("Hockey", "soft hands with a puck on the blade"),
     ),
     "ten_serve": (
         Transfer("Volleyball", "a serve is this motion without a racket"),

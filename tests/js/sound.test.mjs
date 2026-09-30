@@ -12,6 +12,7 @@ import assert from 'node:assert';
 import { test } from 'node:test';
 import {
   ImpactDetector, SoundRepCounter, estimatePeriod, groupCycles, trackBeats,
+  catchesFor, releaseTimes, CATCH_MIN_AFTER_MS,
 } from '../../offdays/web/static/sound.js';
 import { LANDMARKS, RepCounter, wallBallSignal, LONE_WRIST_TOP_MIN } from '../../offdays/web/static/counter.js';
 import { SPECS } from './specs.mjs';
@@ -246,4 +247,193 @@ test('sound: a microphone that opens on silence does not count its own start', (
   const d = detect(samples, sr);
   assert.strictEqual(d.onsets.length, IMPACTS.length);
   assert.ok(d.onsets[0].t_ms > 1000, `first onset at ${d.onsets[0].t_ms}`);
+});
+
+// --- release time -------------------------------------------------------------
+
+/** A sound counter fed onsets directly, as the detector would have heard them. */
+function counterFor(onsets) {
+  const drill = spec('lax_wall_ball_offhand');
+  const sc = new SoundRepCounter(drill, new RepCounter(drill), { sampleRate: 48000 });
+  sc.detector.onsets.push(...onsets.map((o) => ({ ...o })));
+  return sc;
+}
+
+/** Impacts every `period` ms, loud; optional softer extras at `offsets` after each. */
+function steady(n, period, offsets = [], { start = 500, impact = 30, extra = 10 } = {}) {
+  const out = [];
+  for (let i = 0; i < n; i += 1) {
+    const t = start + i * period;
+    out.push({ t_ms: t, strength: impact });
+    for (const off of offsets) if (i < n - 1) out.push({ t_ms: Math.round(t + off), strength: extra });
+  }
+  return out.sort((a, b) => a.t_ms - b.t_ms);
+}
+
+test('release: rebounder, catch 430ms after each impact -> ~970ms release on every rep', () => {
+  const sc = counterFor(steady(15, 1400, [430]));
+  assert.strictEqual(sc.count, 15);
+  const reps = sc.reps;
+  assert.ok(!('release_ms' in reps[0]), 'the first rep has no catch before it');
+  for (const r of reps.slice(1)) assert.ok(Math.abs(r.release_ms - 970) <= 5, `release ${r.release_ms}`);
+  reps.slice(1).forEach((r) => assert.ok(Number.isInteger(r.release_ms)));
+  assert.ok(sc.catchCoverage >= 14 / 15 - 1e-9, `coverage ${sc.catchCoverage}`);
+});
+
+test('release: brick wall, catch 60% of the way through the cycle', () => {
+  const sc = counterFor(steady(12, 1400, [840]));
+  assert.strictEqual(sc.count, 12);
+  for (const r of sc.reps.slice(1)) assert.ok(Math.abs(r.release_ms - 560) <= 5, `release ${r.release_ms}`);
+  assert.ok(sc.catchCoverage > 0.9);
+});
+
+test('release: real brick-wall onsets (IMG_9808) give releases without changing the count', () => {
+  const sc = counterFor(WALL_9808);
+  assert.deepStrictEqual(sc.reps.map((r) => r.t_ms), WALL_9808_THROWS);
+  // 9.28s is the catch before 10.26s; 13.37s before 14.22s.
+  const at = Object.fromEntries(sc.reps.map((r) => [r.t_ms, r.release_ms]));
+  assert.strictEqual(at[10260], 980);
+  assert.strictEqual(at[14220], 850);
+});
+
+test('release: no catches heard -> no release_ms, coverage 0', () => {
+  const sc = counterFor(steady(10, 1400));
+  assert.strictEqual(sc.count, 10);
+  assert.ok(sc.reps.every((r) => !('release_ms' in r)));
+  assert.strictEqual(sc.catchCoverage, 0);
+  assert.strictEqual(counterFor([]).catchCoverage, 0);
+});
+
+test('release: a stick tap just after the impact is not the catch', () => {
+  // Tap only: nothing else between the throws, so no catch at all.
+  const tapOnly = steady(10, 1400, [CATCH_MIN_AFTER_MS - 50], { extra: 25 });
+  const g = groupCycles(tapOnly, 700);
+  assert.strictEqual(g.cycles.length, 10);
+  assert.ok(catchesFor(g.cycles, g.folded, g.periodMs).every((c) => c === null));
+  assert.strictEqual(counterFor(tapOnly).catchCoverage, 0);
+  // Tap plus a real catch: the catch is taken even though the tap is louder.
+  const both = steady(10, 1400, [100, 430], { extra: 10 });
+  for (const o of both) if ((o.t_ms - 500) % 1400 === 100) o.strength = 25;
+  const sc = counterFor(both);
+  assert.strictEqual(sc.count, 10);
+  for (const r of sc.reps.slice(1)) assert.strictEqual(r.release_ms, 970);
+});
+
+test('release: a stick tapped late in the wind-up is not the catch either', () => {
+  // 150ms before the next impact is the throw itself, not the ball arriving.
+  const g = groupCycles(steady(10, 1400, [1250], { extra: 25 }), 700);
+  assert.ok(catchesFor(g.cycles, g.folded, g.periodMs).every((c) => c === null));
+});
+
+test('release: of two sounds in the window the louder is the catch', () => {
+  const cycles = [{ t_ms: 0 }, { t_ms: 1400 }];
+  const folded = [{ t_ms: 500, strength: 6 }, { t_ms: 700, strength: 12 }];
+  assert.deepStrictEqual(catchesFor(cycles, folded, 1400), [700, null]);
+  // Unknown strengths: the earliest.
+  assert.deepStrictEqual(catchesFor(cycles, [{ t_ms: 700 }, { t_ms: 500 }], 1400), [500, null]);
+});
+
+test('release: a pause between throws gives no release for the rep after it', () => {
+  const cycles = [{ t_ms: 0 }, { t_ms: 1400 }, { t_ms: 9000 }];
+  const folded = [{ t_ms: 430, strength: 9 }, { t_ms: 1830, strength: 9 }];
+  const catches = catchesFor(cycles, folded, 1400);
+  assert.deepStrictEqual(catches, [430, null, null]);
+  assert.deepStrictEqual(releaseTimes(cycles, catches), [null, 970, null]);
+});
+
+test('release: hearing catches does not change the count or the reps chosen', () => {
+  // The same impacts with and without catches: identical throws either way.
+  const bare = counterFor(steady(15, 1400));
+  const heard = counterFor(steady(15, 1400, [430]));
+  assert.deepStrictEqual(heard.reps.map((r) => r.t_ms), bare.reps.map((r) => r.t_ms));
+  assert.strictEqual(heard.count, bare.count);
+  // And from real audio: the IMG_6827 impacts with their catches.
+  const events = [
+    ...IMPACTS.map((t) => ({ t, level: 0.3 })),
+    ...CATCHES.map((t) => ({ t, level: 0.25 })),
+  ].sort((a, b) => a.t - b.t);
+  const sr = 48000;
+  const drill = spec('lax_wall_ball_offhand');
+  const sc = new SoundRepCounter(drill, new RepCounter(drill), { sampleRate: sr });
+  const audio = track(21500, events);
+  for (let i = 0; i < audio.length; i += 128) sc.pushAudio(audio.subarray(i, i + 128), (i / sr) * 1000);
+  const g = groupCycles(sc.detector.onsets, 700);
+  assert.strictEqual(sc.count, IMPACTS.length);
+  assert.deepStrictEqual(sc.reps.map((r) => r.t_ms), g.cycles.map((c) => c.t_ms));
+  // Every catch in CATCHES lands before a next throw except none; each gives one release.
+  const withRelease = sc.reps.filter((r) => 'release_ms' in r);
+  assert.strictEqual(withRelease.length, CATCHES.length);
+  for (const r of withRelease) {
+    const prevCatch = Math.max(...CATCHES.filter((c) => c < r.t_ms));
+    assert.ok(Math.abs(r.release_ms - (r.t_ms - prevCatch)) <= 25, `release ${r.release_ms}`);
+  }
+  assert.ok(Math.abs(sc.catchCoverage - CATCHES.length / IMPACTS.length) < 1e-9);
+});
+
+test('submission: a release time is a number, and still nothing audio-shaped leaves', () => {
+  const sc = counterFor(steady(10, 1400, [430]));
+  const payload = sc.toSubmission(1, 'n', 15000);
+  for (const r of payload.reps.slice(1)) {
+    assert.deepStrictEqual(Object.keys(r).sort(), ['confidence', 'hand', 'release_ms', 'source', 't_ms']);
+    assert.strictEqual(typeof r.release_ms, 'number');
+  }
+  assert.ok(!JSON.stringify(payload).match(/sample|audio|wav/i));
+});
+
+// --- where a heard rep's hand comes from ---------------------------------------
+
+/** A sound counter on any drill, fed onsets directly, with an optional ball tracker. */
+function heardOn(key, onsets, ballCounter = null) {
+  const drill = spec(key);
+  const sc = new SoundRepCounter(drill, new RepCounter(drill), { sampleRate: 48000, ballCounter });
+  sc.detector.onsets.push(...onsets.map((o) => ({ ...o })));
+  return sc;
+}
+
+test('hand_from ball: each heard dribble takes the side of the nearest tracked contact', () => {
+  const drill = spec('bkb_crossover');
+  assert.strictEqual(drill.sound.hand_from, 'ball');
+  // Crossovers at 400ms, alternating hands; the camera times each contact a
+  // frame or so off the sound, as a 30fps tracker would.
+  const bounces = steady(20, 400);
+  const tracked = { reps: bounces.map((o, i) => ({ t_ms: o.t_ms + (i % 2 ? 33 : -40), hand: i % 2 ? 'left' : 'right' })) };
+  const sc = heardOn('bkb_crossover', bounces, tracked);
+  assert.strictEqual(sc.count, 20);
+  const hands = sc.reps.map((r) => r.hand);
+  assert.deepStrictEqual(hands.slice(0, 4), ['right', 'left', 'right', 'left']);
+  assert.deepStrictEqual(sc.handCounts(), { left: 10, right: 10 });
+  assert.ok(sc.reps.every((r) => r.source === 'sound'));
+});
+
+test('hand_from ball: a bounce the camera never saw has no hand rather than a guessed one', () => {
+  const bounces = steady(12, 400);
+  // The tracker only caught every third bounce, and one far off in time.
+  const tracked = { reps: [
+    ...bounces.filter((_, i) => i % 3 === 0).map((o) => ({ t_ms: o.t_ms, hand: 'right' })),
+    { t_ms: bounces[1].t_ms + 250, hand: 'left' }, // outside the window
+  ] };
+  const sc = heardOn('bkb_dribble', bounces, tracked);
+  assert.strictEqual(sc.count, 12);
+  const hands = sc.reps.map((r) => r.hand);
+  assert.strictEqual(hands.filter((h) => h === 'right').length, 4);
+  assert.strictEqual(hands.filter((h) => h === 'left').length, 0);
+  assert.ok(hands.filter((h) => h === 'none').length >= 8);
+});
+
+test('hand_from none: jump rope never claims a hand, whatever pose sees', () => {
+  const drill = spec('gen_jump_rope');
+  assert.strictEqual(drill.sound.hand_from, 'none');
+  const sc = heardOn('gen_jump_rope', steady(30, 420));
+  // Feeding pose must not start collecting a stick signal it would misuse.
+  sc.pushPose(skeleton({ right: 0.3 }), 1000);
+  assert.strictEqual(sc.frames.length, 0);
+  assert.strictEqual(sc.count, 30);
+  assert.ok(sc.reps.every((r) => r.hand === 'none'));
+  assert.deepStrictEqual(sc.handCounts(), { left: 0, right: 0 });
+});
+
+test('hand_from wall_ball is still the default for lacrosse', () => {
+  assert.strictEqual(spec('lax_wall_ball').sound.hand_from, 'wall_ball');
+  const sc = heardOn('lax_wall_ball', steady(6, 1400));
+  assert.strictEqual(sc.handFrom, 'wall_ball');
 });

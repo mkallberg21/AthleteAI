@@ -690,6 +690,12 @@ class RepPayload(BaseModel):
     # absent for everything timed off video frames, which is every rep an
     # older client sends.
     source: Literal["sound"] | None = None
+    # Sound reps only: ms from the catch heard after the previous throw to this
+    # throw's impact on the wall. Includes the ball's flight, so it compares
+    # reps within one session and setup, not athletes. Absent when the phone
+    # did not hear a catch. Bounded like every other client-supplied number;
+    # 5s matches the client's own cap (a longer gap is a pause, not a release).
+    release_ms: int | None = Field(default=None, ge=0, le=5000)
 
 
 class SubmitSessionRequest(BaseModel):

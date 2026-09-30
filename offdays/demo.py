@@ -250,6 +250,23 @@ DEMOS: dict[str, Demo] = {
                   knee_far=(52, 65), ankle_far=(52, 82), toe_far=(58, 85)),
         ),
     ),
+    # Same figure as single unders, a touch higher off the floor: the rope
+    # needs twice the airtime and the body is otherwise identical.
+    "gen_double_under": Demo(
+        caption='The rope goes under twice for every jump. Jump a little higher than for singles and spin it with fast wrists.',
+        frames=(
+            _pose(head=(50, 12), neck=(50, 24), hip=(50, 52),
+                  elbow_near=(46, 40), wrist_near=(44, 50),
+                  elbow_far=(54, 40), wrist_far=(56, 50),
+                  knee_near=(49, 71), ankle_near=(49, 90), toe_near=(55, 90),
+                  knee_far=(52, 71), ankle_far=(52, 90), toe_far=(58, 90)),
+            _pose(head=(50, 4), neck=(50, 16), hip=(50, 44),
+                  elbow_near=(46, 32), wrist_near=(43, 42),
+                  elbow_far=(54, 32), wrist_far=(57, 42),
+                  knee_near=(49, 62), ankle_near=(49, 79), toe_near=(55, 82),
+                  knee_far=(52, 62), ankle_far=(52, 79), toe_far=(58, 82)),
+        ),
+    ),
     "gen_hip_hinge": Demo(
         caption='Push your hips back with a long flat back and soft knees, feel it behind your thighs, then stand tall.',
         frames=(
@@ -1172,6 +1189,26 @@ DEMOS: dict[str, Demo] = {
                   knee_far=(54, 72), ankle_far=(54, 90), toe_far=(60, 90),
                   stick_butt=(38, 38), stick_head=(24, 28),
                   ball=(12, 32)),
+        ),
+    ),
+    "ten_racket_bounce": Demo(
+        caption='Bounce the ball straight up off your strings, low and steady. Racket face flat, feet moving under it.',
+        view="front",
+        frames=(
+            _pose(head=(50, 18), neck=(50, 29), hip=(50, 55),
+                  elbow_near=(60, 40), wrist_near=(64, 48),
+                  elbow_far=(42, 40), wrist_far=(40, 52),
+                  knee_near=(46, 72), ankle_near=(44, 90), toe_near=(40, 90),
+                  knee_far=(54, 72), ankle_far=(56, 90), toe_far=(60, 90),
+                  stick_butt=(64, 48), stick_head=(80, 46),
+                  ball=(80, 40)),
+            _pose(head=(50, 18), neck=(50, 29), hip=(50, 55),
+                  elbow_near=(60, 42), wrist_near=(64, 50),
+                  elbow_far=(42, 40), wrist_far=(40, 52),
+                  knee_near=(46, 72), ankle_near=(44, 90), toe_near=(40, 90),
+                  knee_far=(54, 72), ankle_far=(56, 90), toe_far=(60, 90),
+                  stick_butt=(64, 50), stick_head=(80, 48),
+                  ball=(80, 24)),
         ),
     ),
     "ten_serve": Demo(

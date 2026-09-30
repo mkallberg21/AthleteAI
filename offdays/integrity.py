@@ -47,6 +47,9 @@ class RepEvent:
     # What timed this rep: 'sound' for a ball heard on the wall, otherwise
     # None (pose or ball tracking, which are timed off video frames).
     source: str | None = None
+    # Sound reps only: ms from the catch heard after the previous throw to
+    # this throw's impact. None when no catch was heard. Read by rhythm.py.
+    release_ms: int | None = None
 
 
 @dataclass

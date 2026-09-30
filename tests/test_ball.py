@@ -268,3 +268,42 @@ class TestConfirmingWallBall:
             duration_ms=48_000, ball_contacts=30,
         )
         assert result.ok
+
+
+class TestCountedByEar:
+    """A count-mode ball drill whose reps were heard, not tracked.
+
+    The tracker only said which hand, so the checks about whether the camera's
+    count can be believed are about a count that was not submitted.
+    """
+
+    DRIBBLE = DRILLS_BY_KEY["bkb_dribble"]
+
+    @staticmethod
+    def heard(n=40, gap=420):
+        return [
+            {"t_ms": 500 + i * gap + (i * 37) % 23, "hand": "left" if i % 2 else "right",
+             "source": "sound"}
+            for i in range(n)
+        ]
+
+    def test_the_drill_really_is_count_mode_with_sound(self):
+        assert self.DRIBBLE.ball.mode == "count" and self.DRIBBLE.sound is not None
+
+    def test_a_ball_the_camera_never_saw_does_not_hold_a_heard_session(self):
+        result = B.review(self.DRIBBLE, self.heard(), track_quality=0.02, duration_ms=20_000)
+        assert result.ok and not result.hold
+        assert any("sound" in n.lower() for n in result.notes)
+
+    def test_no_track_quality_at_all_is_fine_when_heard(self):
+        result = B.review(self.DRIBBLE, self.heard(), track_quality=None, duration_ms=20_000)
+        assert result.ok and not result.hold
+
+    def test_a_decent_track_adds_no_note(self):
+        result = B.review(self.DRIBBLE, self.heard(), track_quality=0.6, duration_ms=20_000)
+        assert result.ok and not result.notes
+
+    def test_seen_reps_are_still_checked_as_before(self):
+        seen = [dict(r, source=None) for r in self.heard()]
+        result = B.review(self.DRIBBLE, seen, track_quality=0.05, duration_ms=20_000)
+        assert not result.ok and result.hold

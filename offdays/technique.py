@@ -111,6 +111,20 @@ CUES: dict[str, tuple[Cue, ...]] = {
                          "trip. Rest, then go again.",
             "a clean thirty seconds beats a ragged two minutes"),
     ),
+    "gen_double_under": (
+        Cue("tempo", "Fast wrists, not a faster jump. The rope speeds up; "
+                     "your bounce stays the same rhythm.",
+            "jumping faster to catch the rope is how double unders fall apart"),
+        Cue("depth", "Jump a little higher than for singles, then stop there. "
+                     "No tucking your knees up to buy time.",
+            "a tuck is a different jump and it wrecks your landings"),
+        Cue("consistency", "Land in the same spot every time, tall and quiet, "
+                           "on the balls of your feet.",
+            "every double under after the first depends on the landing before it"),
+        Cue("endurance", "Stop when you start whipping your shins. Rest, then "
+                         "go again.",
+            "a missed rope is a tired rope, and a tired set teaches the miss"),
+    ),
     "gen_hip_hinge": (
         Cue("depth", "Push your hips back further, not down. You should feel "
                      "it stretch behind your thighs before you stand up.",
@@ -668,6 +682,20 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "a net player gets attacked on the wing they avoid"),
         Cue("endurance", "Stop when your racket head starts dropping.",
             "the arm tires before the legs here, and it shows first in the head"),
+    ),
+    "ten_racket_bounce": (
+        Cue("depth", "Keep it low, no higher than your head. A high bounce is "
+                     "easier to lose than a low one.",
+            "control is the point, and height hides a lack of it"),
+        Cue("tempo", "Same rhythm every touch. Listen to it, tick, tick, "
+                     "tick, and keep the gaps even.",
+            "an even beat means the racket face is doing the same thing each time"),
+        Cue("consistency", "Racket face flat and still. Move your feet under "
+                           "the ball rather than chasing it with the racket.",
+            "a tilted face is where every mishit starts"),
+        Cue("endurance", "When it starts drifting away from you, catch it and "
+                         "start again rather than lunging.",
+            "a lunge to save it grooves exactly the wrong reach"),
     ),
     "ten_serve": (
         Cue("depth", "Reach up and hit it at full stretch. A serve struck "

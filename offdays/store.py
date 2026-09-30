@@ -21,6 +21,7 @@ from . import ball as ball_mod
 from . import footwork
 from . import shooting
 from . import sweep
+from . import rhythm
 from . import goalie
 from . import rewatch
 from . import notifications
@@ -2915,6 +2916,7 @@ class Store:
                              else bool(r["crossed"])),
                     flare=_opt_float(r.get("flare")),
                     source=(str(r["source"]) if r.get("source") else None),
+                    release_ms=_opt_int(r.get("release_ms")),
                 )
                 for r in reps
             ],
@@ -3011,6 +3013,25 @@ class Store:
             sweep_report = sweep.analyze(
                 [{"peak": r.peak, "rom": r.rom} for r in claim.reps],
             )
+
+        # A drill counted by ear has a clock good to ~10ms, which is good
+        # enough to read rhythm, hand split, fade and stops off the gaps.
+        # Pose-timed reps carry a frame of jitter per gap, so rhythm.analyze
+        # declines them and nothing is attached. Counted, never scored.
+        rhythm_report = None
+        if getattr(drill, "sound", None) is not None:
+            # Release is passed on only where the softer sound before a throw
+            # really is a catch (SoundSpec.measures_release); elsewhere the
+            # phone's figure would be a racket hit or a glove pop.
+            keep_release = drill.sound.measures_release
+            rhythm_report = rhythm.analyze(
+                [{"t_ms": r.t_ms, "hand": r.hand, "source": r.source,
+                  "release_ms": r.release_ms if keep_release else None}
+                 for r in claim.reps],
+                dominant_hand=hand,
+            )
+            if not rhythm_report.applicable:
+                rhythm_report = None
 
         # Form quality reads the same rep stream the counting did, so it costs
         # nothing extra to collect and is the half of the signal a rep count
@@ -3117,6 +3138,7 @@ class Store:
             **({"footwork": footwork_report.to_dict()} if footwork_report else {}),
             **({"shooting": shot_report.to_dict()} if shot_report else {}),
             **({"sweep": sweep_report.to_dict()} if sweep_report else {}),
+            **({"rhythm": rhythm_report.to_dict()} if rhythm_report else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,
