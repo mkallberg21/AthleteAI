@@ -34,12 +34,14 @@ def store(tmp_path):
 @pytest.fixture
 def club(store):
     org = store.create_org("Tennessee Soccer Club", sport="soccer")
+    director = store.create_user(org, "director", "Director Dana")
     coach = store.create_user(org, "coach", "Coach Bryan")
     team = store.create_team(org, "2031 Blue", "2026", age_group="2031")
     athlete = store.create_user(
         org, "athlete", "Kid", birth_year=2013, dominant_hand="right")
     store.join_team(team["join_code"], athlete["id"])
-    return {"org": org, "coach": coach, "athlete": athlete["id"], "sport": "soccer"}
+    return {"org": org, "director": director, "coach": coach, "team": team,
+            "athlete": athlete["id"], "sport": "soccer"}
 
 
 class TestTheDefaultStaysTheDefault:
@@ -233,6 +235,7 @@ class TestOverTheWire:
         yield {
             "client": TestClient(api_module.app),
             "coach": {"Authorization": f"Bearer {club['coach']['token']}"},
+            "director": {"Authorization": f"Bearer {club['director']['token']}"},
             "club": club,
         }
         api_module._store = None
@@ -243,17 +246,24 @@ class TestOverTheWire:
         assert len(body["drills"]) > 90
         assert body["movements"], "a coach needs something to borrow from"
 
-    def test_a_coach_can_turn_a_drill_off_over_the_wire(self, wired):
-        c, h = wired["client"], wired["coach"]
+    def test_a_director_can_turn_a_drill_off_over_the_wire(self, wired):
+        c, h = wired["client"], wired["director"]
         assert c.post("/api/coach/library/soc_juggle",
                       json={"offered": False}, headers=h).status_code == 200
         shelf = {r["key"]: r for r in c.get("/api/coach/library", headers=h).json()["drills"]}
         assert shelf["soc_juggle"]["offered"] is False
 
+    def test_a_coach_cannot_change_the_program_list(self, wired):
+        """The program list is the menu every team picks from; it is the
+        director's. A coach shapes their own team's list instead."""
+        r = wired["client"].post("/api/coach/library/soc_juggle",
+                                 json={"offered": False}, headers=wired["coach"])
+        assert r.status_code == 403
+
     def test_creating_one_says_what_it_will_be_counted_as(self, wired):
         """A coach told afterwards feels misled. Told now, they can pick a
         closer movement."""
-        r = wired["client"].post("/api/coach/drills", headers=wired["coach"], json={
+        r = wired["client"].post("/api/coach/drills", headers=wired["director"], json={
             "name": "Keeper Reaction Squats", "based_on": "gen_squat"})
         assert r.status_code == 201
         assert r.json()["counted_as"]["name"] == "Bodyweight Squats"

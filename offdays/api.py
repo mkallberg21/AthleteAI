@@ -12,6 +12,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
+import anyio
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Query, Request, Response
 from fastapi.responses import (
     FileResponse,
@@ -21,6 +22,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -126,6 +128,15 @@ async def _lifespan(app: FastAPI):
     logged, not turned into a startup crash.
     """
     # ---- startup ----
+    # One database connection is shared by every request (see get_store), and
+    # sync endpoints run on a thread pool of 40. SQLite connections are not
+    # safe to use from several threads at once: two requests arriving
+    # together -- a phone opening the coach page fires a dozen -- raced on the
+    # connection and one got "InterfaceError: bad parameter or other API
+    # misuse", a 500. Serialising request work onto one thread at a time is
+    # the fix that matches a single SQLite file; each request is milliseconds,
+    # and reading an upload body happens on the event loop, outside it.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 1
     logger.info("offdays startup: running DB integrity + migration pass")
     mig = health_mod.migrate_if_needed()
     integ = health_mod.run_integrity_check()
@@ -422,7 +433,8 @@ def my_drills(
                 **transfer_mod.describe(d.key, sport),
                 **wellness_mod.drill_availability(status, d.key, d.load.tissue),
             }
-            for d in library.offered(store.conn, principal.org_id, sport)
+            for d in library.athlete_offered(
+                store.conn, principal.org_id, sport, principal.id)
         ],
         "wellness": status.to_dict(),
     }
@@ -478,6 +490,16 @@ def set_library_drill(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    """Put a drill on, or take it off, the program's list. Director only.
+
+    The program list is the menu every team's coach picks from, so it belongs
+    to the person responsible for the whole program.
+    """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can change the program's drill list",
+        )
     sport = _org_sport(store, principal.org_id)
     try:
         library.set_offered(
@@ -498,7 +520,14 @@ def create_custom_drill(
 
     The borrowing is the honest part and is not hidden from them: the response
     says what it will be counted as, in the same words the form asked in.
+    Director only: a program's own drill goes on the program list, which is
+    the director's to shape.
     """
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can add drills to the program's list",
+        )
     try:
         spec = library.create(
             store.conn, principal.org_id,
@@ -522,11 +551,118 @@ def retire_custom_drill(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403,
+            detail="only a director can take drills off the program's list",
+        )
     try:
         library.retire(store.conn, principal.org_id, drill_key)
     except library.LibraryError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"drill_key": drill_key, "retired": True}
+
+
+# ---------------------------------------------------------------------------
+# A team's own drills, picked by its coach from the program's list
+# ---------------------------------------------------------------------------
+
+
+def _may_pick_for(store: Store, principal: Principal, team_id: int) -> str | None:
+    """Why this caller may not set this team's drills, or None if they may."""
+    if principal.is_director:
+        return None
+    if not principal.can_see_team(team_id):
+        return "you are not assigned to that team"
+    if not library.coach_may_pick(store.conn, principal.org_id, principal.id):
+        return ("your director chooses the drills for your teams. Ask them to "
+                "change the list, or to let you choose.")
+    return None
+
+
+@app.get("/api/coach/teams/{team_id}/drills")
+def team_drills(
+    team_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What this team's players see, and what the coach can pick from.
+
+    `strict` is true once the team has a list of its own: its players then see
+    those drills and nothing else. `can_edit` says whether this caller may
+    change it, so the screen can explain rather than fail on save.
+    """
+    if not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    sport = _org_sport(store, principal.org_id)
+    picked = library.team_drill_keys(store.conn, team_id)
+    program = library.offered(store.conn, principal.org_id, sport)
+    reason = _may_pick_for(store, principal, team_id)
+    return {
+        "team_id": team_id,
+        "strict": bool(picked),
+        "selected": picked,
+        "can_edit": reason is None,
+        "why_not": reason,
+        "choices": [
+            {"key": d.key, "name": d.name, "sport": d.sport,
+             "category": d.category.value, "metric": d.metric.value,
+             "description": d.description, "selected": d.key in picked}
+            for d in program
+        ],
+    }
+
+
+class TeamDrillsBody(BaseModel):
+    # Empty clears the team's list, so its players see the program list again.
+    drill_keys: list[str] = Field(default_factory=list, max_length=200)
+
+
+@app.put("/api/coach/teams/{team_id}/drills")
+def set_team_drills(
+    team_id: int,
+    body: TeamDrillsBody,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Set exactly which drills this team's players see."""
+    reason = _may_pick_for(store, principal, team_id)
+    if reason:
+        raise HTTPException(status_code=403, detail=reason)
+    sport = _org_sport(store, principal.org_id)
+    try:
+        keys = library.set_team_drills(
+            store.conn, principal.org_id, sport, team_id, body.drill_keys,
+            set_by=principal.id)
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"team_id": team_id, "strict": bool(keys), "selected": keys}
+
+
+class CoachPickSwitch(BaseModel):
+    user_id: int
+    allowed: bool
+
+
+@app.post("/api/coach/staff/drill-choice")
+def set_coach_drill_choice(
+    body: CoachPickSwitch,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Director's switch: may this coach choose their own teams' drills?"""
+    if not principal.is_director:
+        raise HTTPException(
+            status_code=403, detail="only a director can change this for a coach")
+    member = store.conn.execute(
+        "SELECT role FROM memberships WHERE user_id = ? AND org_id = ? AND active = 1",
+        (body.user_id, principal.org_id),
+    ).fetchone()
+    if member is None or member["role"] != "coach":
+        raise HTTPException(status_code=404, detail="that person is not a coach in this program")
+    library.set_coach_may_pick(
+        store.conn, principal.org_id, body.user_id, body.allowed, set_by=principal.id)
+    return {"user_id": body.user_id, "can_choose_drills": body.allowed}
 
 
 @app.get("/api/drills/{drill_key}")
@@ -990,6 +1126,17 @@ def create_assignment(
 ) -> dict[str, Any]:
     if not principal.can_see_team(body.team_id):
         raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    # An assignment is what the team must do this week; the team's list is
+    # what it may do at all. A drill off the list would be assigned work the
+    # players cannot open.
+    team_list = library.team_offered(
+        store.conn, principal.org_id, _org_sport(store, principal.org_id), body.team_id)
+    if body.drill_key not in {d.key for d in team_list}:
+        raise HTTPException(
+            status_code=400,
+            detail="that drill is not on this team's list. Add it to the team's "
+                   "drills first, then assign it.",
+        )
     assignment_id = assignments_mod.create(
         store.conn,
         org_id=principal.org_id,
@@ -1415,7 +1562,10 @@ def list_staff(
                 (row["id"], principal.org_id),
             )
         ]
-        out.append({**dict(row), "teams": teams, "sees_whole_program": not teams})
+        out.append({**dict(row), "teams": teams, "sees_whole_program": not teams,
+                    "can_choose_drills": (row["role"] == "director"
+                                          or library.coach_may_pick(
+                                              store.conn, principal.org_id, row["id"]))})
     return {"staff": out}
 
 
@@ -1608,8 +1758,12 @@ async def email_webhook(
         raise HTTPException(status_code=413, detail="payload too large")
 
     try:
-        result = webhooks_mod.handle(
-            provider, dict(request.headers), body, secret, store.conn
+        # Through the same one-at-a-time worker as every sync endpoint: this
+        # handler is async, so without this it would touch the shared
+        # connection from the event loop while a worker thread is using it.
+        result = await run_in_threadpool(
+            webhooks_mod.handle,
+            provider, dict(request.headers), body, secret, store.conn,
         )
     except webhooks_mod.WebhookError as exc:
         message = str(exc)

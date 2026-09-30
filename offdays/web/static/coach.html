@@ -291,12 +291,33 @@
     <div id="clip-list" style="margin-top:12px"></div>
   </div>
 
-  <div class="card" id="library-card">
-    <h2>Drill library</h2>
+  <div class="card" id="team-drills-card">
+    <h2>Team drills</h2>
     <p class="small muted">
-      Your athletes are offered your sport's drills plus the general work.
-      Turn off anything you have no room or kit for, and reach across sports
-      for anything you want. Changes show up on their phones immediately.
+      Pick the drills this team trains, so the whole squad does the same work.
+      Once a team has a list, its players see those drills and nothing else.
+      With no list, they see everything on the program list below.
+    </p>
+    <label for="td-team">Team</label>
+    <select id="td-team"></select>
+    <p class="small" id="td-status" style="margin:8px 0 0"></p>
+    <input id="td-search" placeholder="Search the program list" autocomplete="off"
+           style="margin-top:8px">
+    <div id="td-list" style="margin-top:8px"></div>
+    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+      <button id="td-save">Save team list</button>
+      <button class="secondary" id="td-clear">Use the whole program list</button>
+    </div>
+    <div id="td-note" class="small hidden" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card" id="library-card">
+    <h2>Program drill list</h2>
+    <p class="small muted" id="lib-lede">
+      Every drill your program offers. Your sport's drills and the general work
+      are on by default. Turn off anything you have no room or kit for, and
+      reach across sports for anything you want. Each team's coach picks their
+      team's drills from this list.
     </p>
 
     <div class="tabs" id="lib-filters"></div>
@@ -799,8 +820,28 @@ async function loadStaff(isDirector) {
             <option value="">Add team…</option>${options}
           </select>` : ''}
       </span>
+      ${person.role === 'coach' ? `
+        <label class="small" style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <input type="checkbox" data-pick="${person.id}"${person.can_choose_drills ? ' checked' : ''}>
+          Can choose this coach's team drills
+        </label>` : ''}
     </div>`;
   }).join('');
+
+  $('staff-list').querySelectorAll('[data-pick]').forEach((box) => {
+    box.addEventListener('change', async () => {
+      box.disabled = true;
+      try {
+        await api('/api/coach/staff/drill-choice', {
+          method: 'POST',
+          body: { user_id: Number(box.dataset.pick), allowed: box.checked },
+        });
+      } catch (e) {
+        box.checked = !box.checked;
+        showError(e.message);
+      } finally { box.disabled = false; }
+    });
+  });
 
   $('staff-list').querySelectorAll('[data-assign]').forEach((sel) => {
     sel.addEventListener('change', async () => {
@@ -2599,6 +2640,7 @@ $('signout').addEventListener('click', logout);
 
     await loadBilling();
     await loadSetup();
+    IS_DIRECTOR = orgs.role === 'director';
     await loadStaff(orgs.role === 'director');
     await loadPositionSettings(orgs.role === 'director');
     await loadSeason(orgs.role === 'director');
@@ -2608,6 +2650,14 @@ $('signout').addEventListener('click', logout);
     await loadDrillOptions();
     defaultAssignmentDates();
     defaultGoalDates();
+    // After the role is known: both cards differ for a director and a coach.
+    initTeamDrills().catch(() => {
+      // A card that will not load must not take the dashboard with it.
+      $('team-drills-card').classList.add('hidden');
+    });
+    loadLibrary().catch(() => {
+      $('library-card').classList.add('hidden');
+    });
     await loadAll();
   } catch (e) { showError(e.message); }
 })();
@@ -2629,6 +2679,9 @@ $('signout').addEventListener('click', logout);
  * rows say which state they are in so a coach can see what they changed.
  */
 let LIB = null;
+// Set once the role is known. The program list and the team-drill card both
+// behave differently for a director and a coach.
+let IS_DIRECTOR = false;
 let libFilter = 'offered';
 
 const LIB_FILTERS = [
@@ -2722,6 +2775,16 @@ function renderLibrary() {
 async function loadLibrary() {
   LIB = await api('/api/coach/library');
   renderLibrary();
+  // The program list is the director's. A coach sees it, but changes their
+  // own team's list above instead.
+  if (!IS_DIRECTOR) {
+    $('lib-list').querySelectorAll('[data-lib]').forEach((b) => { b.disabled = true; });
+    $('library-card').querySelectorAll('details').forEach((d) => d.classList.add('hidden'));
+    $('cd-list').querySelectorAll('[data-retire]').forEach((b) => b.classList.add('hidden'));
+    $('lib-lede').textContent =
+      'Every drill your program offers, set by your director. Pick your team\'s '
+      + 'drills from these in Team drills above.';
+  }
 }
 
 $('cd-save').addEventListener('click', async () => {
@@ -2752,10 +2815,91 @@ $('cd-save').addEventListener('click', async () => {
 
 $('lib-search').addEventListener('input', () => { if (LIB) renderLibrary(); });
 
-loadLibrary().catch(() => {
-  // A library that will not load must not take the dashboard with it.
-  $('library-card').classList.add('hidden');
+// ------------------------------------------------------------- team drills
+
+let TD = null;          // the selected team's view from the server
+let tdPicked = new Set();
+
+function renderTeamDrills() {
+  if (!TD) return;
+  const q = ($('td-search').value || '').trim().toLowerCase();
+  const editable = TD.can_edit;
+  $('td-status').innerHTML = !editable
+    ? `<span style="color:var(--warn)">${esc(TD.why_not || 'You cannot change this list.')}</span>`
+    : TD.strict
+      ? `Players on this team see <b>only</b> these ${TD.selected.length} drill${TD.selected.length === 1 ? '' : 's'}.`
+      : 'No team list yet, so players see the whole program list. Tick drills and save to set one.';
+  const rows = TD.choices.filter((d) =>
+    !q || `${d.name} ${d.sport} ${d.description}`.toLowerCase().includes(q))
+    // What the team already trains goes first, so a coach sees their list
+    // without scrolling past forty drills to find it.
+    .sort((a, b) => Number(tdPicked.has(b.key)) - Number(tdPicked.has(a.key)));
+  $('td-list').innerHTML = rows.length ? rows.map((d) => `
+    <div class="lib-row">
+      <label class="lib-toggle">
+        <input type="checkbox" data-td="${esc(d.key)}"${tdPicked.has(d.key) ? ' checked' : ''}${editable ? '' : ' disabled'}>
+        <span>
+          <b>${esc(d.name)}</b>
+          <span class="lib-tag">${esc(d.sport)}</span>
+          <span class="small muted">${esc(d.description)}</span>
+        </span>
+      </label>
+    </div>`).join('') : '<p class="small muted">Nothing matches that.</p>';
+  $('td-list').querySelectorAll('[data-td]').forEach((box) =>
+    box.addEventListener('change', () => {
+      if (box.checked) tdPicked.add(box.dataset.td); else tdPicked.delete(box.dataset.td);
+    }));
+  $('td-save').disabled = !editable;
+  $('td-clear').disabled = !editable || !TD.strict;
+}
+
+async function loadTeamDrills(teamId) {
+  TD = await api(`/api/coach/teams/${teamId}/drills`);
+  tdPicked = new Set(TD.selected);
+  $('td-note').classList.add('hidden');
+  renderTeamDrills();
+}
+
+async function saveTeamDrills(keys) {
+  const note = $('td-note');
+  const teamId = $('td-team').value;
+  $('td-save').disabled = true;
+  try {
+    const res = await api(`/api/coach/teams/${teamId}/drills`,
+      { method: 'PUT', body: { drill_keys: keys } });
+    note.className = 'small'; note.classList.remove('hidden');
+    note.textContent = res.strict
+      ? `Saved. Players on this team now see these ${res.selected.length} drills only.`
+      : 'Saved. This team now sees the whole program list.';
+    await loadTeamDrills(teamId);
+  } catch (e) {
+    note.className = 'small err'; note.classList.remove('hidden');
+    note.textContent = e.message;
+    $('td-save').disabled = false;
+  }
+}
+
+$('td-save').addEventListener('click', () => {
+  if (!tdPicked.size) {
+    const note = $('td-note');
+    note.className = 'small err'; note.classList.remove('hidden');
+    note.textContent = 'Tick at least one drill, or use the whole program list instead.';
+    return;
+  }
+  saveTeamDrills([...tdPicked]);
 });
+$('td-clear').addEventListener('click', () => saveTeamDrills([]));
+$('td-search').addEventListener('input', renderTeamDrills);
+$('td-team').addEventListener('change', () => loadTeamDrills($('td-team').value)
+  .catch((e) => showError(e.message)));
+
+async function initTeamDrills() {
+  const { teams } = await api('/api/coach/teams');
+  if (!teams.length) { $('team-drills-card').classList.add('hidden'); return; }
+  $('td-team').innerHTML = teams
+    .map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  await loadTeamDrills(teams[0].id);
+}
 
 </script>
 </body>
