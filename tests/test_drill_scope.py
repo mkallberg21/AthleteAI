@@ -107,9 +107,12 @@ class TestTheAthleteEndpointUsesIt:
         body = client.get("/api/me/drills", headers=athlete["headers"]).json()
         assert body["sport"] == "lacrosse"
         sports = {d["sport"] for d in body["drills"]}
-        assert sports == {"lacrosse", "general"}, sorted(sports)
+        # A new team starts on the lacrosse starter drills; general work is on
+        # the menu for a coach to switch on, and other sports never are.
+        assert sports == {"lacrosse"}, sorted(sports)
         keys = {d["key"] for d in body["drills"]}
-        assert "lax_ground_ball" in keys
+        assert keys == {"lax_ground_ball_everyday", "lax_wall_ball_strong",
+                        "lax_wall_ball_offhand", "lax_shooting"}
         assert "soc_juggle" not in keys
 
     def test_the_public_reference_catalog_is_still_complete(self, client):

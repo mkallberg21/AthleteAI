@@ -295,8 +295,8 @@
     <h2>Team drills</h2>
     <p class="small muted">
       Pick the drills this team trains, so the whole squad does the same work.
-      Once a team has a list, its players see those drills and nothing else.
-      With no list, they see everything on the program list below.
+      Players see the ticked drills and nothing else. A new team starts on the
+      starter drills; tick anything else from the program list to turn it on.
     </p>
     <label for="td-team">Team</label>
     <select id="td-team"></select>
@@ -306,7 +306,7 @@
     <div id="td-list" style="margin-top:8px"></div>
     <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
       <button id="td-save">Save team list</button>
-      <button class="secondary" id="td-clear">Use the whole program list</button>
+      <button class="secondary" id="td-clear">Back to the starter drills</button>
     </div>
     <div id="td-note" class="small hidden" style="margin-top:8px"></div>
   </div>
@@ -2854,7 +2854,9 @@ function renderTeamDrills() {
     ? `<span style="color:var(--warn)">${esc(TD.why_not || 'You cannot change this list.')}</span>`
     : TD.strict
       ? `Players on this team see <b>only</b> these ${TD.selected.length} drill${TD.selected.length === 1 ? '' : 's'}.`
-      : 'No team list yet, so players see the whole program list. Tick drills and save to set one.';
+      : TD.starter
+        ? `Players start on these ${TD.selected.length} starter drills. Tick anything else you want them doing and save.`
+        : 'No team list yet, so players see the whole program list. Tick drills and save to set one.';
   const rows = TD.choices.filter((d) =>
     !q || `${d.name} ${d.sport} ${d.description}`.toLowerCase().includes(q))
     // What the team already trains goes first, so a coach sees their list
@@ -2876,7 +2878,7 @@ function renderTeamDrills() {
       if (box.checked) tdPicked.add(box.dataset.td); else tdPicked.delete(box.dataset.td);
     }));
   $('td-save').disabled = !editable;
-  $('td-clear').disabled = !editable || !TD.strict;
+  $('td-clear').disabled = !editable || !TD.strict;  // already on the starters otherwise
 }
 
 async function loadTeamDrills(teamId) {
@@ -2896,7 +2898,7 @@ async function saveTeamDrills(keys) {
     note.className = 'small'; note.classList.remove('hidden');
     note.textContent = res.strict
       ? `Saved. Players on this team now see these ${res.selected.length} drills only.`
-      : 'Saved. This team now sees the whole program list.';
+      : 'Saved. This team is back on the starter drills.';
     await loadTeamDrills(teamId);
   } catch (e) {
     note.className = 'small err'; note.classList.remove('hidden');
@@ -2909,7 +2911,7 @@ $('td-save').addEventListener('click', () => {
   if (!tdPicked.size) {
     const note = $('td-note');
     note.className = 'small err'; note.classList.remove('hidden');
-    note.textContent = 'Tick at least one drill, or use the whole program list instead.';
+    note.textContent = 'Tick at least one drill, or go back to the starter drills.';
     return;
   }
   saveTeamDrills([...tdPicked]);
