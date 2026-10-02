@@ -841,6 +841,13 @@ class RepPayload(BaseModel):
     impact_t_ms: int | None = Field(default=None, ge=0, le=24 * 3_600_000)
 
 
+class FootworkPayload(BaseModel):
+    """Footwork drills: what the phone saw of the movement. Numbers only."""
+
+    direction_changes: int = Field(default=0, ge=0, le=5_000)
+    ground_torsos: float = Field(default=0.0, ge=0.0, le=50_000.0)
+
+
 class SubmitSessionRequest(BaseModel):
     session_id: int
     nonce: str
@@ -868,6 +875,10 @@ class SubmitSessionRequest(BaseModel):
     # Clocked shooting drills only: the distance the athlete set before
     # shooting, in yards. Checked against the drill's own range on the server.
     shot_distance_yd: float | None = Field(default=None, ge=0.0, le=100.0)
+    # Footwork drills only: direction changes and ground covered (in torso
+    # lengths, so it means the same whatever the distance to the phone).
+    # Bounded like every other client-supplied number.
+    footwork: FootworkPayload | None = None
 
 
 @app.post("/api/sessions/submit")
@@ -893,6 +904,7 @@ def submit_session(
             ball_contacts=body.ball_contacts,
             ball_travel=body.ball_travel,
             shot_distance_yd=body.shot_distance_yd,
+            movement_summary=body.footwork.model_dump() if body.footwork else None,
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

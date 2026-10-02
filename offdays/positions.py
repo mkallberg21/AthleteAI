@@ -122,7 +122,8 @@ LACROSSE: tuple[Position, ...] = (
         key="attack", label="Attack", sport="lacrosse", group="offense",
         aliases=("attack", "attackman", "attackmen", "attacker", "att", "a",
                  "offense", "offence", "forward"),
-        # Ground balls sit at the same 16 for every position on the field.
+        # Ground balls sit at the same 16 for every position on the field,
+        # split 11 standing scoops and 5 everyday ground balls on the move.
         # They are the one part of lacrosse that belongs to nobody in
         # particular, and a plan that gave an attacker a third of a defender's
         # share was quietly teaching that picking the ball up is somebody
@@ -133,7 +134,7 @@ LACROSSE: tuple[Position, ...] = (
         # change of direction before it is anything, which is why the high
         # knees are here rather than only the jumps.
         emphasis=mix(
-            lax_ground_ball=16, lax_wall_ball_offhand=13, lax_quick_stick=10,
+            lax_ground_ball=11, lax_ground_ball_everyday=5, lax_wall_ball_offhand=13, lax_quick_stick=10,
             lax_wall_ball_split=9, gen_lateral_bound=9, lax_wall_ball=5,
             # Finishing is the attacker's job, but every shot is a maximal
             # throw: a small share, with the throwing ceiling watching it.
@@ -152,7 +153,7 @@ LACROSSE: tuple[Position, ...] = (
         aliases=("midfield", "midfielder", "midfielders", "middie", "middy",
                  "mid", "mids", "m", "mf", "midi"),
         emphasis=mix(
-            lax_ground_ball=16, lax_wall_ball_offhand=11, gen_high_knees=9,
+            lax_ground_ball=11, lax_ground_ball_everyday=5, lax_wall_ball_offhand=11, gen_high_knees=9,
             lax_wall_ball=9, lax_wall_ball_split=8, gen_squat_jump=7,
             lax_wall_ball_cross=4, gen_lateral_bound=6, gen_squat=6,
             lax_quick_stick=3, gen_burpee=5, lax_wall_ball_strong=5,
@@ -170,7 +171,7 @@ LACROSSE: tuple[Position, ...] = (
                  "defencemen", "defensemen", "d", "def", "close d",
                  "close defense", "close defence", "pole", "dpole", "d pole"),
         emphasis=mix(
-            gen_lateral_bound=16, lax_ground_ball=16,
+            gen_lateral_bound=16, lax_ground_ball=11, lax_ground_ball_everyday=5,
             lax_wall_ball_offhand=12, gen_squat=12, gen_high_knees=8,
             lax_wall_ball=7, lax_wall_ball_one_hand=6, gen_push_up=6,
             gen_plank=6, gen_pull_up=6, lax_wall_ball_strong=5,
@@ -185,7 +186,7 @@ LACROSSE: tuple[Position, ...] = (
                  "long pole midfield", "d mid", "dmid", "d midfield",
                  "defensive midfield", "defensive midfielder"),
         emphasis=mix(
-            gen_lateral_bound=16, lax_ground_ball=16,
+            gen_lateral_bound=16, lax_ground_ball=11, lax_ground_ball_everyday=5,
             lax_wall_ball_offhand=10, gen_high_knees=10, gen_squat=10,
             lax_wall_ball=9, gen_burpee=8, gen_squat_jump=7,
             lax_wall_ball_one_hand=5, lax_wall_ball_strong=4, gen_plank=3,
@@ -201,7 +202,7 @@ LACROSSE: tuple[Position, ...] = (
         # The fastest hands and feet in the sport, decided inside a second --
         # so the plan needed something training the feet, not only the clamp.
         emphasis=mix(
-            lax_faceoff_clamp=26, lax_ground_ball=16, lax_quick_stick=10,
+            lax_faceoff_clamp=26, lax_ground_ball=11, lax_ground_ball_everyday=5, lax_quick_stick=10,
             gen_squat_jump=8, lax_wall_ball_one_hand=7, gen_high_knees=6,
             gen_pull_up=5, gen_plank=5, lax_wall_ball_offhand=4,
             lax_wall_ball=3, lax_wall_ball_strong=3, gen_push_up=3,
@@ -229,7 +230,7 @@ LACROSSE: tuple[Position, ...] = (
         # the hands are anything, and this plan had jumps in it but nothing
         # that asked a foot to leave the floor quickly.
         emphasis=mix(
-            lax_goalie_saves=23, lax_ground_ball=16, lax_quick_stick=10,
+            lax_goalie_saves=23, lax_ground_ball=11, lax_ground_ball_everyday=5, lax_quick_stick=10,
             gen_lateral_bound=10, lax_wall_ball_offhand=8, gen_pogo=6,
             gen_plank=5, lax_wall_ball_one_hand=5, lax_wall_ball=4,
             lax_wall_ball_strong=4, gen_squat_jump=4, gen_squat=3,
