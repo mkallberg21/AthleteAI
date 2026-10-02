@@ -597,18 +597,24 @@ def team_drills(
         raise HTTPException(status_code=403, detail="you are not assigned to that team")
     sport = _org_sport(store, principal.org_id)
     picked = library.team_drill_keys(store.conn, team_id)
+    # What the players see right now: the coach's picks, else the starter list.
+    showing = library.effective_team_keys(store.conn, principal.org_id, sport, team_id)
     program = library.offered(store.conn, principal.org_id, sport)
     reason = _may_pick_for(store, principal, team_id)
+    shown = set(showing) if showing is not None else {d.key for d in program}
     return {
         "team_id": team_id,
         "strict": bool(picked),
-        "selected": picked,
+        # True while the team is on the sport's starter drills: nobody has
+        # picked yet, and the ticks below are the default, not a choice.
+        "starter": not picked and showing is not None,
+        "selected": list(showing) if showing is not None else [],
         "can_edit": reason is None,
         "why_not": reason,
         "choices": [
             {"key": d.key, "name": d.name, "sport": d.sport,
              "category": d.category.value, "metric": d.metric.value,
-             "description": d.description, "selected": d.key in picked}
+             "description": d.description, "selected": d.key in shown}
             for d in program
         ],
     }

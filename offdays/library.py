@@ -47,6 +47,7 @@ from typing import Any
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
 from .drills.base import DrillSpec
 from .drills.catalog import for_sport as catalog_for_sport
+from .drills.catalog import starter_for as catalog_starter_for
 
 
 class LibraryError(Exception):
@@ -357,8 +358,13 @@ def retire(conn: sqlite3.Connection, org_id: int, drill_key: str) -> None:
 # The program list above is the menu. A team's list is what its coach puts on
 # the table from it, so a squad trains the same work instead of two players on
 # jump rope and three on something else. Strict: a team with a list sees only
-# that list. A team with no list sees the whole program list, which is what
-# every team saw before this existed, so nothing changes until a coach picks.
+# that list.
+#
+# A team with no list of its own starts on the sport's STARTER_DRILLS (for
+# lacrosse: everyday ground balls, wall ball with each hand on top, shooting),
+# not the whole program list. Everything else is on the menu for a coach or
+# director to switch on. A sport with no starter list offers its whole
+# program list until a coach picks, as every team did before this existed.
 #
 # Who may pick: the director always; a coach for the teams they are assigned
 # to, unless the director has turned that off for them. On by default --
@@ -379,20 +385,46 @@ def team_drill_keys(conn: sqlite3.Connection, team_id: int) -> list[str]:
     return [r["drill_key"] for r in rows]
 
 
+def default_team_keys(conn: sqlite3.Connection, org_id: int, sport: str) -> list[str] | None:
+    """What a team with no list of its own offers: the sport's starter drills
+    that are on this program's list, in starter order. None means the whole
+    program list (a sport with no starter list, or a program that has taken
+    every starter drill off its list)."""
+    starter = catalog_starter_for(sport)
+    if not starter:
+        return None
+    on_menu = {d.key for d in offered(conn, org_id, sport)}
+    keys = [k for k in starter if k in on_menu]
+    return keys or None
+
+
+def effective_team_keys(
+    conn: sqlite3.Connection, org_id: int, sport: str, team_id: int,
+) -> list[str] | None:
+    """The keys this team's players see: the coach's picks, else the starter
+    list, else None for the whole program list."""
+    picked = team_drill_keys(conn, team_id)
+    if picked:
+        return picked
+    return default_team_keys(conn, org_id, sport)
+
+
 def team_offered(
     conn: sqlite3.Connection, org_id: int, sport: str, team_id: int,
 ) -> list[DrillSpec]:
     """What one team's players see.
 
-    The team's own picks, still filtered through the program list: a drill the
-    director later takes off the program list drops off every team's list with
-    it, rather than lingering on a team the director may not know picked it.
+    The team's own picks or its starter list, always filtered through the
+    program list: a drill the director later takes off the program list drops
+    off every team's list with it, rather than lingering on a team the
+    director may not know picked it.
     """
     program = offered(conn, org_id, sport)
-    picked = set(team_drill_keys(conn, team_id))
-    if not picked:
+    keys = effective_team_keys(conn, org_id, sport, team_id)
+    if keys is None:
         return program
-    return [d for d in program if d.key in picked]
+    wanted = set(keys)
+    return [d for d in program if d.key in wanted]
 
 
 def athlete_offered(
@@ -400,9 +432,8 @@ def athlete_offered(
 ) -> list[DrillSpec]:
     """What an athlete sees across every team they are on in this program.
 
-    A player on two teams sees both teams' drills together. If any of their
-    teams has no list of its own, that team is offering the whole program list,
-    so that is what they see.
+    A player on two teams sees both teams' drills together. An athlete on no
+    team sees what a team with no list would: the starter drills.
     """
     team_ids = [
         r["team_id"] for r in conn.execute(
@@ -412,14 +443,11 @@ def athlete_offered(
         )
     ]
     program = offered(conn, org_id, sport)
-    if not team_ids:
+    per_team = ([effective_team_keys(conn, org_id, sport, t) for t in team_ids]
+                if team_ids else [default_team_keys(conn, org_id, sport)])
+    if any(keys is None for keys in per_team):
         return program
-    wanted: set[str] = set()
-    for team_id in team_ids:
-        keys = team_drill_keys(conn, team_id)
-        if not keys:
-            return program
-        wanted.update(keys)
+    wanted = {k for keys in per_team for k in keys}
     return [d for d in program if d.key in wanted]
 
 

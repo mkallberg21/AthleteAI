@@ -52,6 +52,17 @@ def program(client):
         a["headers"] = {"Authorization": f"Bearer {a['token']}"}
         athletes.append(a)
 
+    # A new team starts on the sport's starter drills. These tests assign and
+    # train the wider catalog (plain wall ball, squats), so the team is opened
+    # to the whole program list the way a coach would before doing that.
+    from offdays import library
+    from offdays.drills.catalog import for_sport
+    import offdays.api as api_module
+    library.set_team_drills(
+        api_module._store.conn, org["org_id"], "lacrosse", team["id"],
+        [d.key for d in for_sport("lacrosse")],
+    )
+
     return {"org": org, "director": director, "team": team, "athletes": athletes}
 
 

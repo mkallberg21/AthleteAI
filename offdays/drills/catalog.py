@@ -5560,6 +5560,29 @@ DRILLS_BY_KEY: dict[str, DrillSpec] = {d.key: d for d in ALL_DRILLS}
 GENERAL = "general"
 
 
+#: What a team's players see on day one, before any coach has picked: a short
+#: starter list rather than the sport's whole shelf. Everything else on the
+#: program list -- jump rope, the conditioning work, the wall-ball variants --
+#: is there for a coach or director to switch on for a team. Chosen by the
+#: club (2026-10): the everyday ground-ball routine, wall ball with each hand
+#: on top, and shooting. A sport not listed here keeps the old behaviour and
+#: offers its whole program list until a coach picks.
+STARTER_DRILLS: dict[str, tuple[str, ...]] = {
+    "lacrosse": (
+        "lax_ground_ball_everyday",
+        "lax_wall_ball_strong",
+        "lax_wall_ball_offhand",
+        "lax_shooting",
+    ),
+}
+
+
+def starter_for(sport: str | None) -> tuple[str, ...] | None:
+    """The drill keys a team in this sport starts with, or None to start with
+    everything the program offers."""
+    return STARTER_DRILLS.get(sport or "")
+
+
 def for_sport(sport: str | None) -> tuple[DrillSpec, ...]:
     """The drills a program of this sport should actually be offered.
 

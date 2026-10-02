@@ -60,9 +60,32 @@ def keys(drills):
 
 
 class TestTheLibrary:
-    def test_a_team_with_no_list_sees_the_program_list(self, store, club):
+    def test_a_new_team_starts_on_the_starter_drills(self, store, club):
+        """Everyday ground balls, wall ball with each hand on top, shooting.
+        Everything else is for a coach or director to switch on."""
         assert keys(library.team_offered(store.conn, club["org"], SPORT, club["red"])) \
-            == keys(library.offered(store.conn, club["org"], SPORT))
+            == ["lax_ground_ball_everyday", "lax_shooting",
+                "lax_wall_ball_strong", "lax_wall_ball_offhand"]
+
+    def test_jump_rope_is_on_the_menu_but_off_until_turned_on(self, store, club):
+        menu = keys(library.offered(store.conn, club["org"], SPORT))
+        team = keys(library.team_offered(store.conn, club["org"], SPORT, club["red"]))
+        assert "gen_jump_rope" in menu and "gen_jump_rope" not in team
+        library.set_team_drills(store.conn, club["org"], SPORT, club["red"],
+                                list(team) + ["gen_jump_rope"])
+        assert "gen_jump_rope" in keys(
+            library.team_offered(store.conn, club["org"], SPORT, club["red"]))
+
+    def test_a_starter_the_director_takes_off_the_menu_drops_off(self, store, club):
+        library.set_offered(store.conn, club["org"], "lax_shooting", False, SPORT)
+        assert "lax_shooting" not in keys(
+            library.team_offered(store.conn, club["org"], SPORT, club["red"]))
+
+    def test_a_sport_with_no_starter_list_offers_the_whole_menu(self, store):
+        org = store.create_org("Soccer Club", sport="soccer")
+        team = store.create_team(org, "U12", "2026")
+        assert keys(library.team_offered(store.conn, org, "soccer", team["id"])) \
+            == keys(library.offered(store.conn, org, "soccer"))
 
     def test_a_team_with_a_list_sees_only_that_list(self, store, club):
         library.set_team_drills(store.conn, club["org"], SPORT, club["red"],
@@ -107,10 +130,11 @@ class TestWhatAthletesSee:
             store.conn, club["org"], SPORT, club["both"]["id"]))) \
             == {"lax_wall_ball", "gen_jump_rope"}
 
-    def test_one_team_without_a_list_means_the_program_list(self, store, club):
+    def test_one_team_on_its_starters_adds_them_to_the_other_teams_picks(self, store, club):
         library.set_team_drills(store.conn, club["org"], SPORT, club["red"], ["lax_wall_ball"])
-        seen = keys(library.athlete_offered(store.conn, club["org"], SPORT, club["both"]["id"]))
-        assert seen == keys(for_sport(SPORT))
+        seen = set(keys(library.athlete_offered(store.conn, club["org"], SPORT, club["both"]["id"])))
+        assert seen == {"lax_wall_ball", "lax_ground_ball_everyday", "lax_shooting",
+                        "lax_wall_ball_strong", "lax_wall_ball_offhand"}
 
     def test_over_the_wire(self, api, store, club):
         client, h = api
@@ -206,8 +230,15 @@ class TestAssignmentsStayOnTheList:
                         headers=h("coach"))
         assert r.status_code == 201
 
-    def test_a_team_without_a_list_can_be_assigned_any_program_drill(self, api, club):
+    def test_a_new_team_can_be_assigned_a_starter_drill(self, api, club):
+        client, h = api
+        r = client.post("/api/coach/assignments",
+                        json=self.body(club["red"], "lax_wall_ball_offhand"),
+                        headers=h("coach"))
+        assert r.status_code == 201
+
+    def test_a_new_team_cannot_be_assigned_a_drill_not_yet_turned_on(self, api, club):
         client, h = api
         r = client.post("/api/coach/assignments", json=self.body(club["red"], "gen_squat"),
                         headers=h("coach"))
-        assert r.status_code == 201
+        assert r.status_code == 400
