@@ -160,6 +160,18 @@ class SignalKind(str, Enum):
     # a single threshold crossing cannot distinguish a throw from a catch.
     WALL_BALL_CYCLE = "wall_ball_cycle"
 
+    # How much the athlete is moving, frame to frame: hips across the frame
+    # plus hands up and down, in torso lengths per second, averaged over the
+    # last second. For timed movement drills (metric HOLD_SECONDS) the clock
+    # runs while this sits inside the counter's band -- i.e. while they are
+    # actually working -- and stops while they stand still.
+    #
+    # Built for a ground-ball drill whose touches are wrist and stick work the
+    # camera cannot see on the body (measured on reference footage: the stick
+    # head was at the ball for 6-8 touches in a span where the hands dipped
+    # twice). What one camera CAN see honestly is the footwork around them.
+    FOOTWORK_MOTION = "footwork_motion"
+
 
 # MediaPipe Pose landmark names, indexed as the model emits them. Kept here so
 # drill specs reference readable names and the client maps them to indices.

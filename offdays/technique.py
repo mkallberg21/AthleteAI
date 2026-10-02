@@ -1410,6 +1410,14 @@ CUES: dict[str, tuple[Cue, ...]] = {
             "tired legs raise the stance, and a high stance loses the low "
             "corners first"),
     ),
+    "lax_ground_ball_everyday": (
+        Cue("position", "Stick head low and out in front, hands soft, knees bent. "
+                        "Stay over the ball so it never gets away from you.",
+            "a ball that rolls past your stick is a ground ball someone else gets"),
+        Cue("endurance", "Keep the ball moving the whole time: scoop, push it, "
+                         "kick it, chase it. When your feet stop, the set is over.",
+            "game ground balls happen on the move, never standing still"),
+    ),
     "lax_ground_ball": (
         Cue("depth", "Get low, bend your knees and drop your hips, do not "
                      "just reach down with your hands.",

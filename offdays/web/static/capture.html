@@ -2505,6 +2505,29 @@ function renderQuality(quality, fix) {
 }
 
 /**
+ * The movement card for a footwork drill: how long they were moving, how often
+ * they changed direction, roughly how much ground they covered. From what the
+ * server worked out, with the plain limits underneath.
+ */
+function renderMovement(m) {
+  if (!m) return '';
+  const mins = Math.floor(m.moving_seconds / 60);
+  const secs = String(m.moving_seconds % 60).padStart(2, '0');
+  return `<div class="quality">
+    <div class="small muted" style="margin-bottom:6px"><b>Your movement</b></div>
+    <div class="quality-top">
+      <div class="qscore">${mins}:${secs}<small>moving</small></div>
+      <div class="qscore">${m.direction_changes}<small>direction changes</small></div>
+      <div class="qscore">~${m.ground_yards}<small>yards covered</small></div>
+    </div>
+    ${m.note ? `<div class="coach-note">${esc(m.note)}</div>` : ''}
+    <ul class="small muted" style="margin:8px 0 0;padding-left:18px">
+      ${(m.limits || []).map((l) => `<li>${esc(l)}</li>`).join('')}
+    </ul>
+  </div>`;
+}
+
+/**
  * Shot speeds for a clocked shooting session: the typical and best speed, a
  * bar per shot, and the plain limits. Built from what the server worked out,
  * never the phone's own figure. Shown to the athlete only; nothing here is
@@ -2628,7 +2651,7 @@ function showResult(result) {
 
   $('r-quality').innerHTML = result.status === 'counted'
     ? renderQuality(result.quality, result.technique) + renderRhythm(result.rhythm)
-      + renderShotSpeed(result.shot_speed) : '';
+      + renderShotSpeed(result.shot_speed) + renderMovement(result.movement) : '';
 
   if (result.status === 'queued') {
     $('r-quality').innerHTML = '';

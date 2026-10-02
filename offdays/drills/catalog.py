@@ -761,6 +761,72 @@ GROUND_BALL = DrillSpec(
 )
 
 
+#: The everyday ground-ball routine: one ball, hands and feet for minutes on
+#: end -- scoop, push it along ("goose" it), kick it, chase it, in every
+#: direction and at every speed. Timed rather than counted, on purpose.
+#:
+#: Measured on reference footage before this was written: the touches are
+#: wrist and stick work, and in a 3.3-second close-up the stick head was at
+#: the ball 6-8 times while the hands dipped twice. A pose counter would credit
+#: a kid doing it properly with a fraction of their work. What one camera can
+#: see honestly is the movement around the ball, so the clock runs while they
+#: are moving, and the session reports how many times they changed direction
+#: and how much ground they covered. Getting low is the plain Ground Balls
+#: drill's job; this one is hands and feet.
+EVERYDAY_GROUND_BALLS = DrillSpec(
+    key="lax_ground_ball_everyday",
+    name="Everyday Ground Balls",
+    sport="lacrosse",
+    category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
+    metric=Metric.HOLD_SECONDS,
+    description=(
+        "One ball, a few minutes, keep it moving: scoop it, push it along the "
+        "ground with your stick, kick it, chase it, go forward, back and side "
+        "to side at different speeds. The clock runs while you are moving. It "
+        "counts your direction changes and ground covered, not pickups, "
+        "because the camera cannot see the ball go into the stick."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.FOOTWORK_MOTION,
+        joints=("left_hip", "right_hip", "left_wrist", "right_wrist"),
+        # Light smoothing: the signal is already a one-second average, and a
+        # heavier hand here makes the clock lag a kid who starts moving.
+        smoothing=0.5,
+    ),
+    counter=CounterSpec(
+        # The band the clock runs in, in torso lengths per second. Below 0.55
+        # is standing about (measured 0.1-0.4); the ceiling only rules out a
+        # camera being swung around, which reads as impossible speed.
+        down_threshold=0.55,
+        up_threshold=12.0,
+        min_rep_ms=1_000,
+        max_rep_ms=600_000,
+    ),
+    scoring=ScoringSpec(xp_per_rep=0.0, xp_per_minute=22.0),
+    validation=ValidationSpec(min_reps=0, min_duration_ms=60_000),
+    tracks_handedness=False,
+    # The shared lacrosse ball, in confirm mode as on every lacrosse drill: it
+    # can corroborate that a ball was there and never blocks a session.
+    ball=LACROSSE_BALL,
+    setup_hint=(
+        "Prop the phone far enough back to see you from head to feet across a "
+        "few steps of space. Keep the ball moving the whole time: scoop, push, "
+        "kick, chase, every direction."
+    ),
+    quality=QualitySpec(
+        target_rom=1.0,
+        tempo_min_ms=1_000,
+        tempo_max_ms=600_000,
+        w_consistency=0.30, w_depth=0.40, w_tempo=0.0, w_endurance=0.30,
+    ),
+    # Constant low-level stepping and bending for minutes: real leg work, no
+    # throwing at all, so it must not touch the throwing ceiling.
+    load=LoadSpec(load_per_rep=0.0, load_per_minute=6.0, throws_per_rep=0.0,
+                  tissue=Tissue.LOWER_BODY),
+)
+
+
 FACEOFF_CLAMP = DrillSpec(
     key="lax_faceoff_clamp",
     name="Face-Off Clamp",
@@ -5463,6 +5529,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     # picker scrolled past every one of them to reach the skill that decides
     # most youth games. Order here is the order they see.
     GROUND_BALL,
+    EVERYDAY_GROUND_BALLS,
     SHOOTING,
     QUICK_STICK,
     WALL_BALL_STRONG,

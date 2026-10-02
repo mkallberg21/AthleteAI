@@ -1787,6 +1787,10 @@ DEMOS: dict[str, Demo] = {
 #: poses so the two halves of the answer stay in one place, and so a drill
 #: can never quietly end up with neither a demonstration nor a plan for one.
 NEEDS_FILM: dict[str, str] = {
+    "lax_ground_ball_everyday": "Several minutes of continuous scooping, pushing "
+                                "and chasing in every direction. Two frames of "
+                                "a stick figure cannot show that; the club is "
+                                "filming its own demonstration.",
     "gen_dead_bug": "Supine, seen side-on. Two attempts at the drawing and it "
                     "still reads as an abstraction rather than a body.",
     "gen_glute_bridge": "Supine. The lift is real but the starting shape is "

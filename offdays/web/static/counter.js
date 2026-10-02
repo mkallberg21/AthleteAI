@@ -459,6 +459,23 @@ export function wallBallSignal(landmarks) {
 export const LONE_WRIST_TOP_MIN = -0.2;
 
 /**
+ * Footwork drills. Measured on reference ground-ball footage, as torso
+ * lengths per second of hip travel plus hand height change, averaged over a
+ * second: a player standing and talking sat at 0.1-0.4, and the drill at 0.55
+ * and above in every window, close-up and wide alike.
+ */
+export const MOTION_WINDOW_MS = 1000;
+
+/**
+ * Hip travel across the frame, in torso lengths, before a stretch counts as a
+ * move rather than a sway. A youth shuffle step is about half a torso.
+ */
+export const MOVE_MIN_TORSOS = 0.5;
+
+/** A frame-to-frame change in torso size beyond this is a camera move or a cut. */
+export const MOTION_SCALE_JUMP = 0.15;
+
+/**
  * Two-threshold state machine converting a signal stream into reps.
  *
  * Hysteresis matters more than it sounds: with a single threshold, a signal
@@ -493,6 +510,14 @@ export class RepCounter {
     this.confidenceSum = 0;
     this.confidenceFrames = 0;
     this.holdMs = 0;
+    // Footwork drills only: the last pose sample, a one-second window of
+    // movement speeds, and the moves (direction changes) seen so far.
+    this.motionPrev = null;
+    this.motionWindow = [];
+    this.moveDir = 0;
+    this.moveStart = null;
+    this.moveEdge = null;
+    this.moves = [];
     this.lastFrameAt = null;
     this.lastRaw = null;
     this.pendingHand = 'none';
@@ -606,7 +631,9 @@ export class RepCounter {
     this.confidenceSum += conf;
     this.confidenceFrames += 1;
 
-    const raw = computeSignal(landmarks, this.spec);
+    const raw = this.spec.signal.kind === 'footwork_motion'
+      ? this._motionSignal(landmarks, tMs)
+      : computeSignal(landmarks, this.spec);
     const dt = this.lastFrameAt === null ? 0 : tMs - this.lastFrameAt;
     this.lastFrameAt = tMs;
     if (raw === null) return null;
@@ -813,6 +840,78 @@ export class RepCounter {
     return null;
   }
 
+  /**
+   * Footwork drills: how much the athlete is moving, averaged over the last
+   * second, in torso lengths per second. Hips across the frame plus the
+   * stick hand's height relative to the hips.
+   *
+   * Also records the moves: a stretch of travel in one direction across the
+   * frame, ended by a change of direction. A shuffle left then back right is
+   * two moves. Only travel of at least MOVE_MIN_TORSOS counts, so swaying in
+   * place is not a move.
+   */
+  _motionSignal(landmarks, tMs) {
+    const hips = midpoint(lm(landmarks, 'left_hip'), lm(landmarks, 'right_hip'));
+    const torso = torsoLength(landmarks);
+    if (!hips || !torso) { this.motionPrev = null; return null; }
+    const wrists = [lm(landmarks, 'left_wrist'), lm(landmarks, 'right_wrist')].filter(Boolean);
+    const handLow = wrists.length ? Math.max(...wrists.map((w) => w.y)) : hips.y;
+    const x = hips.x / torso;
+    const hand = (handLow - hips.y) / torso;
+    const prev = this.motionPrev;
+    this.motionPrev = { t: tMs, x, hand, torso };
+    if (!prev) return null;
+    const dt = (tMs - prev.t) / 1000;
+    // A sudden change of scale is the phone being moved or a cut in a clip,
+    // not the athlete covering ground. The move being tracked is abandoned
+    // rather than carried across the cut, and starts again from here: hip
+    // position before and after are in different frames of reference.
+    if (dt <= 0 || dt > 0.5 || Math.abs(torso - prev.torso) / torso > MOTION_SCALE_JUMP) {
+      this.moveDir = 0;
+      this.moveStart = x;
+      this.moveEdge = x;
+      return null;
+    }
+
+    const speed = Math.abs(x - prev.x) / dt + Math.abs(hand - prev.hand) / dt;
+    this.motionWindow.push({ t: tMs, v: speed });
+    while (this.motionWindow.length && this.motionWindow[0].t < tMs - MOTION_WINDOW_MS) {
+      this.motionWindow.shift();
+    }
+    this._trackMove(x, tMs);
+    return this.motionWindow.reduce((s, w) => s + w.v, 0) / this.motionWindow.length;
+  }
+
+  _trackMove(x, tMs) {
+    if (this.moveEdge === null) { this.moveEdge = x; this.moveStart = x; return; }
+    const dir = Math.sign(x - this.moveEdge);
+    if (this.moveDir === 0) {
+      if (Math.abs(x - this.moveStart) >= MOVE_MIN_TORSOS) this.moveDir = Math.sign(x - this.moveStart);
+      this.moveEdge = x;
+      return;
+    }
+    if (dir === this.moveDir || dir === 0) { this.moveEdge = x; return; }
+    // Turned back: the move ends at the furthest point it reached, once the
+    // turn itself is big enough not to be a wobble.
+    if (Math.abs(x - this.moveEdge) >= MOVE_MIN_TORSOS) {
+      this.moves.push({ t_ms: Math.round(tMs), dist: round3(Math.abs(this.moveEdge - this.moveStart)) });
+      this.moveStart = this.moveEdge;
+      this.moveEdge = x;
+      this.moveDir = dir;
+    }
+  }
+
+  /** Footwork summary sent with the session. Numbers only. */
+  footworkSummary() {
+    const open = this.moveDir !== 0 && this.moveEdge !== null
+      ? Math.abs(this.moveEdge - this.moveStart) : 0;
+    const covered = this.moves.reduce((s, m) => s + m.dist, 0) + open;
+    return {
+      direction_changes: this.moves.length,
+      ground_torsos: round3(covered),
+    };
+  }
+
   /** The payload posted to /api/sessions/submit. Counts only. */
   toSubmission(sessionId, nonce, durationMs, extra = {}) {
     return {
@@ -822,6 +921,8 @@ export class RepCounter {
       reps: this.reps,
       hold_ms: Math.round(this.holdMs),
       mean_confidence: Math.round(this.meanConfidence * 1000) / 1000,
+      ...(this.spec.signal.kind === 'footwork_motion'
+        ? { footwork: this.footworkSummary() } : {}),
       ...extra,
     };
   }

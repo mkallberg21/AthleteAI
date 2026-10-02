@@ -23,6 +23,7 @@ from . import shooting
 from . import sweep
 from . import rhythm
 from . import shotspeed
+from . import movement
 from . import goalie
 from . import rewatch
 from . import notifications
@@ -2872,6 +2873,7 @@ class Store:
         ball_contacts: int | None = None,
         ball_travel: float | None = None,
         shot_distance_yd: float | None = None,
+        footwork: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Validate, score, and record a completed session.
 
@@ -3035,6 +3037,14 @@ class Store:
             if not rhythm_report.applicable:
                 rhythm_report = None
 
+        # A footwork drill reports what the camera saw of the movement: how
+        # long they were moving, how often they changed direction, and how
+        # much ground they covered. Counted, never scored.
+        moving_report = None
+        if drill.signal.kind is SignalKind.FOOTWORK_MOTION:
+            moving_report = movement.summarise(footwork, hold_ms=hold_ms,
+                                               duration_ms=duration_ms)
+
         # A clocked shooting drill carries an approximate speed per shot,
         # worked out here from the raw release and impact times rather than
         # taken from the phone. Counted, never scored, and never ranked.
@@ -3160,6 +3170,7 @@ class Store:
             **({"sweep": sweep_report.to_dict()} if sweep_report else {}),
             **({"rhythm": rhythm_report.to_dict()} if rhythm_report else {}),
             **({"shot_speed": speed_report.to_dict()} if speed_report else {}),
+            **({"movement": moving_report} if moving_report else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,
