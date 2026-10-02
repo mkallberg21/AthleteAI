@@ -60,7 +60,7 @@ name-masking is visible rather than merely claimed.
 
 ## Drills
 
-A lacrosse program is offered **47** of the 103 shipped drills: its own 12 plus
+A lacrosse program is offered **48** of the 104 shipped drills: its own 13 plus
 the 35 general conditioning drills, its own sport first. Other sports' work is
 not offered at all. See `drills.for_sport()`.
 

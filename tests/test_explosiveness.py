@@ -178,8 +178,12 @@ class TestTheStimulusAxisIsHonest:
             assert get_drill(key).stimulus is Stimulus.QUICKNESS, key
 
     def test_every_holding_drill_is_strength(self):
-        from offdays.drills.base import Metric
+        from offdays.drills.base import Metric, SignalKind
         for drill in ALL_DRILLS:
+            # A timed footwork drill runs its clock while the athlete is
+            # moving, not while they hold still. It is timed, not a hold.
+            if drill.signal.kind is SignalKind.FOOTWORK_MOTION:
+                continue
             if drill.metric is Metric.HOLD_SECONDS:
                 assert drill.stimulus is Stimulus.STRENGTH, drill.key
 

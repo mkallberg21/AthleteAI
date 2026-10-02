@@ -2873,7 +2873,7 @@ class Store:
         ball_contacts: int | None = None,
         ball_travel: float | None = None,
         shot_distance_yd: float | None = None,
-        footwork: dict[str, Any] | None = None,
+        movement_summary: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Validate, score, and record a completed session.
 
@@ -3042,7 +3042,7 @@ class Store:
         # much ground they covered. Counted, never scored.
         moving_report = None
         if drill.signal.kind is SignalKind.FOOTWORK_MOTION:
-            moving_report = movement.summarise(footwork, hold_ms=hold_ms,
+            moving_report = movement.summarise(movement_summary, hold_ms=hold_ms,
                                                duration_ms=duration_ms)
 
         # A clocked shooting drill carries an approximate speed per shot,

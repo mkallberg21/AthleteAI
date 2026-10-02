@@ -904,7 +904,7 @@ def submit_session(
             ball_contacts=body.ball_contacts,
             ball_travel=body.ball_travel,
             shot_distance_yd=body.shot_distance_yd,
-            footwork=body.footwork.model_dump() if body.footwork else None,
+            movement_summary=body.footwork.model_dump() if body.footwork else None,
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
