@@ -150,3 +150,76 @@ export async function renderBranding(slot, subtitle = "") {
     </div></div>${centre}`;
   return brand;
 }
+
+/**
+ * Shot speed history, the same picture for the athlete, their parent and
+ * their coach: recent clocked shooting sessions, newest first, with the
+ * typical and best speed of each and the plain limits underneath. Built from
+ * what the server worked out at the time. Never ranked against anyone.
+ */
+export function renderShotHistory(data, { viewer = 'athlete' } = {}) {
+  const rows = (data && data.sessions) || [];
+  const standing = renderShotStanding(data && data.standing, { viewer });
+  if (!rows.length) {
+    return '<p class="small muted">No timed shooting sessions yet. Shot speed '
+      + 'comes from the Shooting drill with the microphone on.</p>';
+  }
+  const best = Math.max(...rows.map((r) => r.best_mph || 0));
+  const body = rows.map((r) => {
+    const day = (r.completed_at || '').slice(0, 10);
+    const hands = r.by_hand || {};
+    const split = hands.left && hands.right
+      ? ` &middot; L ${Math.round(hands.left)} / R ${Math.round(hands.right)}` : '';
+    return `<tr>
+      <td class="small muted">${esc(day)}</td>
+      <td class="num"><b>${Math.round(r.median_mph)}</b> <span class="small muted">typical</span></td>
+      <td class="num">${Math.round(r.best_mph)}${r.best_mph === best ? ' &#9733;' : ''}
+        <span class="small muted">best</span></td>
+      <td class="small muted">${r.timed}/${r.shots} timed &middot; ${r.distance_yd} yd${split}</td>
+    </tr>`;
+  }).join('');
+  const limits = ((data && data.limits) || []).map((l) => `<li>${esc(l)}</li>`).join('');
+  return `${standing}<table style="margin-top:8px"><tbody>${body}</tbody></table>
+    <p class="small muted" style="margin:8px 0 0">All speeds in mph, approximate.
+    Compare a session with earlier ones from the same distance.</p>
+    <ul class="small muted" style="margin:4px 0 0;padding-left:18px">${limits}</ul>`;
+}
+
+/**
+ * Where an athlete's shot speed sits: a percentile among teammates, and among
+ * same-age athletes nationally once there are enough of them. Only this
+ * athlete's own percentile -- never anyone else's speed, name or rank.
+ *
+ * A percentile is drawn as a marker on a plain bar, worded as "faster than
+ * about N% of ...". When a group is too small to say anything without
+ * identifying the other kids in it, it says so instead.
+ */
+export function renderShotStanding(s, { viewer = 'athlete' } = {}) {
+  if (!s || s.speed_mph === null || s.speed_mph === undefined) return '';
+  // Worded for whoever is looking: "you" to the athlete, "they" to a parent
+  // or coach reading about someone else's child.
+  const own = viewer === 'athlete';
+  const bar = (pct) => `<div class="pct-bar" role="img"
+      aria-label="Faster than about ${pct}%"><i style="left:${pct}%"></i></div>`;
+  const line = (label, g, groupWord) => {
+    if (g.available) {
+      return `<div class="pct-row"><div class="small"><b>${label}</b>
+        <span class="muted">faster than about ${g.percentile}% of ${groupWord}</span></div>
+        ${bar(g.percentile)}</div>`;
+    }
+    const more = Math.max(0, (g.needed || 0) - (g.peers || 0));
+    return `<div class="pct-row"><div class="small"><b>${label}</b>
+      <span class="muted">shows once ${more} more ${groupWord} ${more === 1 ? 'has' : 'have'}
+      a timed session, so it never points at anyone.</span></div></div>`;
+  };
+  const age = s.age || {};
+  const ageWord = age.birth_year ? `kids born in ${age.birth_year}` : 'kids the same age';
+  return `<div class="pct-card">
+    <div class="small muted">Best typical speed in the last ${s.window_days} days:
+      <b>${Math.round(s.speed_mph)} mph</b></div>
+    ${line(own ? 'On your team' : 'On their team', s.team || {}, 'teammates')}
+    ${age.birth_year ? line('Across the country', age, ageWord) : ''}
+    <div class="small muted" style="margin-top:6px">Rounded to the nearest 5%.
+      No other player's name or speed is shown, here or anywhere.</div>
+  </div>`;
+}

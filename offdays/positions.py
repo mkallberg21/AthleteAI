@@ -134,8 +134,13 @@ LACROSSE: tuple[Position, ...] = (
         # knees are here rather than only the jumps.
         emphasis=mix(
             lax_ground_ball=16, lax_wall_ball_offhand=13, lax_quick_stick=10,
-            lax_wall_ball_split=9, gen_lateral_bound=9, lax_wall_ball=8,
-            lax_wall_ball_one_hand=6, gen_high_knees=6, gen_squat=5,
+            lax_wall_ball_split=9, gen_lateral_bound=9, lax_wall_ball=5,
+            # Finishing is the attacker's job, but every shot is a maximal
+            # throw: a small share, with the throwing ceiling watching it.
+            # Taken from plain and one-handed wall ball, which a shot is the
+            # hardest version of, so the plan still totals 100.
+            lax_shooting=6,
+            lax_wall_ball_one_hand=3, gen_high_knees=6, gen_squat=5,
             lax_wall_ball_strong=5, gen_squat_jump=4, gen_plank=3,
             gen_push_up=3, lax_wall_ball_btb=3,
         ),
@@ -149,8 +154,11 @@ LACROSSE: tuple[Position, ...] = (
         emphasis=mix(
             lax_ground_ball=16, lax_wall_ball_offhand=11, gen_high_knees=9,
             lax_wall_ball=9, lax_wall_ball_split=8, gen_squat_jump=7,
-            lax_wall_ball_cross=6, gen_lateral_bound=6, gen_squat=6,
-            lax_quick_stick=5, gen_burpee=5, lax_wall_ball_strong=5,
+            lax_wall_ball_cross=4, gen_lateral_bound=6, gen_squat=6,
+            lax_quick_stick=3, gen_burpee=5, lax_wall_ball_strong=5,
+            # Taken from crossover wall ball and quick stick, so the plan
+            # still totals 100 and ground balls keep their 16.
+            lax_shooting=4,
             gen_plank=3, gen_push_up=2, lax_wall_ball_btb=2,
         ),
         plural_label="midfielders",

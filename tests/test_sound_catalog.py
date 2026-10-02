@@ -197,6 +197,11 @@ class TestReleaseIsLacrosseOnly:
 
     def test_every_lacrosse_wall_ball_drill_measures_release(self):
         for drill in ALL_DRILLS:
+            # Shooting reads the same stick signal but has no catch, so it is
+            # the one wall-ball-signal drill that rightly has no release time.
+            if drill.shot is not None:
+                assert not drill.sound.measures_release, drill.key
+                continue
             if drill.sound is not None and drill.sound.hand_from == "wall_ball":
                 assert drill.sound.measures_release, drill.key
 

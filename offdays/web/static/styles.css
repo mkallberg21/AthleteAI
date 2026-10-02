@@ -1777,3 +1777,32 @@ tr.mine td { border-color: var(--accent-dim); }
 .rh-legend .rh-l { background: var(--left); }
 .rh-legend .rh-r { background: var(--right); }
 .rh-legend .rh-stop-key { background: rgba(199, 119, 0, 0.45); }
+
+/* Shot speed: one bar per shot, height relative to the session's best.
+   Untimed shots show as a short grey stub so the count still reads right. */
+.sp-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 64px;
+  margin-top: 10px;
+  padding: 6px;
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+}
+.sp-bar {
+  flex: 1;
+  min-width: 3px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+.sp-bar.sp-none { height: 6%; background: var(--text-dim); opacity: .5; }
+
+/* Shot-speed percentile: a single marker on a bar. No other athletes drawn. */
+.pct-card { margin-top: 8px; padding: 10px 12px; border-radius: var(--radius-sm);
+            background: var(--surface-3); }
+.pct-row { margin-top: 8px; }
+.pct-bar { position: relative; height: 8px; margin-top: 6px; border-radius: 4px;
+           background: linear-gradient(90deg, var(--surface-2), var(--accent-dim)); }
+.pct-bar i { position: absolute; top: -4px; width: 4px; height: 16px; margin-left: -2px;
+             border-radius: 2px; background: var(--text); }

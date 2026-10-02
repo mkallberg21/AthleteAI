@@ -105,7 +105,7 @@
 </div>
 
 <script type="module">
-import { api, esc, getToken, logout, renderBranding } from './api.js';
+import { api, esc, getToken, logout, renderBranding, renderShotHistory } from './api.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -199,6 +199,12 @@ function renderAthlete(a) {
         Everything they have trained
       </summary>
       <div class="drill-log">Loading&hellip;</div>
+    </details>
+    <details style="margin-top:10px" data-shots="${a.athlete_id}">
+      <summary class="small muted" style="cursor:pointer">
+        Shot speed
+      </summary>
+      <div class="shot-log">Loading&hellip;</div>
     </details>
     ${badges ? `<h3 style="margin:18px 0 8px;font-size:.95rem">Recent badges</h3>
                 <div class="badge-grid">${badges}</div>` : ''}
@@ -657,6 +663,19 @@ function wireDetails() {
               esc(sn.status)}</td>
           </tr>`).join('')}
           </tbody></table>`;
+      } catch (e) { target.textContent = e.message; }
+    });
+  });
+
+  document.querySelectorAll('[data-shots]').forEach((box) => {
+    box.addEventListener('toggle', async () => {
+      if (!box.open || box.dataset.loaded) return;
+      box.dataset.loaded = '1';
+      const target = box.querySelector('.shot-log');
+      try {
+        target.innerHTML = renderShotHistory(
+          await api(`/api/parent/athletes/${box.dataset.shots}/shot-speed`),
+          { viewer: 'parent' });
       } catch (e) { target.textContent = e.message; }
     });
   });

@@ -22,6 +22,7 @@ from . import footwork
 from . import shooting
 from . import sweep
 from . import rhythm
+from . import shotspeed
 from . import goalie
 from . import rewatch
 from . import notifications
@@ -2870,6 +2871,7 @@ class Store:
         track_quality: float | None = None,
         ball_contacts: int | None = None,
         ball_travel: float | None = None,
+        shot_distance_yd: float | None = None,
     ) -> dict[str, Any]:
         """Validate, score, and record a completed session.
 
@@ -3033,6 +3035,19 @@ class Store:
             if not rhythm_report.applicable:
                 rhythm_report = None
 
+        # A clocked shooting drill carries an approximate speed per shot,
+        # worked out here from the raw release and impact times rather than
+        # taken from the phone. Counted, never scored, and never ranked.
+        speed_report = None
+        if drill.shot is not None:
+            speed_report = shotspeed.analyze(
+                [{"release_t_ms": r.get("release_t_ms"), "impact_t_ms": r.get("impact_t_ms"),
+                  "hand": r.get("hand")} for r in reps],
+                shot_distance_yd,
+                min_distance_yd=drill.shot.min_distance_yd,
+                max_distance_yd=drill.shot.max_distance_yd,
+            )
+
         # Form quality reads the same rep stream the counting did, so it costs
         # nothing extra to collect and is the half of the signal a rep count
         # throws away.
@@ -3117,6 +3132,11 @@ class Store:
         new_badges = self._sync_badges(athlete_id)
         notify.notify_badges(self.conn, athlete_id, new_badges)
 
+        # A counted clocked session's typical speed is kept for standings. A
+        # held one is not, until a coach approves it (review_session).
+        if speed_report is not None and verdict.status == "counted":
+            shotspeed.record(self.conn, session_id, athlete_id, today, speed_report)
+
         # Recognition fires here rather than in a nightly job: "well done" an
         # hour after a driveway session lands, and the same words the next
         # morning are a report. Only a counted session earns it -- a held one
@@ -3139,6 +3159,7 @@ class Store:
             **({"shooting": shot_report.to_dict()} if shot_report else {}),
             **({"sweep": sweep_report.to_dict()} if sweep_report else {}),
             **({"rhythm": rhythm_report.to_dict()} if rhythm_report else {}),
+            **({"shot_speed": speed_report.to_dict()} if speed_report else {}),
             "reps_total": verdict.reps_total,
             "reps_left": verdict.reps_left,
             "reps_right": verdict.reps_right,
@@ -3217,6 +3238,15 @@ class Store:
                     ),
                 )
         self._sync_badges(athlete_id)
+        # A clocked session held then approved now counts toward standings,
+        # from the speed the server worked out at submit time.
+        if drill.shot is not None and row["result_json"]:
+            stored = json.loads(row["result_json"]).get("shot_speed") or {}
+            if stored.get("median_mph") is not None:
+                shotspeed.record(self.conn, session_id, athlete_id, day, shotspeed.ShotReport(
+                    shots=stored.get("shots", 0), timed=stored.get("timed", 0),
+                    distance_yd=stored.get("distance_yd"),
+                    median_mph=stored.get("median_mph")))
         return {"session_id": session_id, "status": "counted", "xp_awarded": awarded}
 
     # ------------------------------------------------------------------

@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v6';
+const CACHE = 'offdays-shell-v7';
 
 const SHELL = [
   './',
@@ -35,6 +35,9 @@ const SHELL = [
   // wall-ball drill opens the microphone, which may well be in a driveway.
   'sound.js',
   'sound-worklet.js',
+  // Shooting speed is imported by the capture screen, so a missing copy
+  // would stop the whole screen loading offline, not just shooting.
+  'shotspeed.js',
   'review.js',
   'offline.js',
   'manifest.webmanifest',

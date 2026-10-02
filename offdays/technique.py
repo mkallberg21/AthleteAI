@@ -438,6 +438,23 @@ CUES: dict[str, tuple[Cue, ...]] = {
         Cue("endurance", "Stop when your throws start dropping short.",
             "tired reps groove a tired throw"),
     ),
+    "lax_shooting": (
+        Cue("depth", "Load the stick back behind your head, then snap it all the "
+                     "way through to the target. Hands finish low across your body.",
+            "a short push has no speed in it, and speed is what this drill shows you"),
+        Cue("tempo", "Reset fully between shots: walk back to your spot, set your "
+                     "feet, then shoot. No rushing the next one.",
+            "a rushed shot is a sloppy shot, and the speed number will show it"),
+        Cue("consistency", "Same spot, same distance, same target corner. Change "
+                           "one thing at a time.",
+            "the speed only means something if the distance stays the same"),
+        Cue("offhand", "Shoot some from your weak hand too. Expect them to be "
+                       "slower, and track that gap closing over the weeks.",
+            "a shooter who can only score one way is easy to defend"),
+        Cue("endurance", "When your speed starts dropping, you are done for "
+                         "today. Stop there.",
+            "tired shoulders are how young throwers get hurt"),
+    ),
     "lax_wall_ball_strong": (
         Cue("depth", "Take the stick back past your ear and follow through at "
                      "the target, every rep.",

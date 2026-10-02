@@ -779,6 +779,45 @@ CREATE TABLE IF NOT EXISTS team_staff (
 );
 CREATE INDEX IF NOT EXISTS idx_team_staff_user ON team_staff(user_id);
 
+-- One row per clocked shooting session: the session's typical shot speed,
+-- kept so an athlete's standing among teammates and peers can be worked out
+-- without reopening every stored result. Only the session median is held --
+-- never a ranked list -- and it goes when the session or the athlete does.
+CREATE TABLE IF NOT EXISTS shot_speeds (
+    session_id  INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day         TEXT NOT NULL,
+    median_mph  REAL NOT NULL,
+    timed       INTEGER NOT NULL,
+    distance_yd REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shot_speeds_athlete ON shot_speeds(athlete_id, day);
+
+-- The drills one team trains, picked from the program's list by its coach.
+--
+-- Strict: a team with any rows here sees exactly these drills and nothing
+-- else, so a squad trains the same work rather than a couple of players on
+-- jump rope and a few on something else. A team with no rows sees the whole
+-- program list, which is how every team worked before this existed.
+CREATE TABLE IF NOT EXISTS team_drills (
+    team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    drill_key  TEXT NOT NULL,
+    set_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    set_at     TEXT NOT NULL,
+    PRIMARY KEY (team_id, drill_key)
+);
+
+-- A director's decision that a coach may NOT choose their teams' drills.
+-- Absent means they may, which is the default. Only the exception is stored,
+-- the same way org_drill_prefs stores only departures from the default.
+CREATE TABLE IF NOT EXISTS coach_drill_locks (
+    org_id     INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    set_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    set_at     TEXT NOT NULL,
+    PRIMARY KEY (org_id, user_id)
+);
+
 -- One row per program. Absent means the free plan.
 -- A club's sponsorship fund: credit earned on what they have paid, and drawn
 -- down when they cover a family who cannot afford the season.

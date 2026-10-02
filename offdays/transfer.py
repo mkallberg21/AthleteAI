@@ -241,6 +241,11 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Baseball", "hands soft enough to catch something coming in hard"),
         Transfer("Hockey", "the same two-handed stick control"),
     ),
+    "lax_shooting": (
+        Transfer("Baseball", "the same hip-shoulder snap that puts speed on a throw"),
+        Transfer("Hockey", "a shot that is all hips and wrists, not arm"),
+        Transfer("Tennis", "the same uncoiling into a serve"),
+    ),
     "lax_wall_ball_strong": (
         Transfer("Baseball", "hands soft enough to catch something coming in hard"),
         Transfer("Hockey", "the same two-handed stick control"),
