@@ -567,6 +567,36 @@ class SoundSpec:
 SOUND_HAND_SOURCES = ("wall_ball", "ball", "none")
 
 
+@dataclass(frozen=True)
+class ShotSpec:
+    """A shooting drill that gives each shot an approximate speed.
+
+    Speed is the flight: the release, read from the stick hand, to the ball
+    hitting the net or the wall, heard by the microphone, over a distance the
+    athlete marked out. See `web/static/shotspeed.js` for the reasoning and
+    `offdays/shotspeed.py` for the server's own check of it.
+
+    A shot with no impact heard -- wide of everything, or the microphone
+    refused -- still counts as a shot. It just has no speed.
+    """
+
+    #: Distance the athlete is asked to shoot from, in yards. 8 is standard
+    #: youth shooting distance and the number on most club practice plans.
+    default_distance_yd: float = 8.0
+    #: The range the athlete may set. Closer than 4 yards the flight is under
+    #: 100ms and a frame of release error is a third of it; past 15 a phone
+    #: beside the shooter starts to miss the impact on a windy day.
+    min_distance_yd: float = 4.0
+    max_distance_yd: float = 15.0
+
+    def __post_init__(self) -> None:
+        if not 0 < self.min_distance_yd <= self.default_distance_yd <= self.max_distance_yd:
+            raise ValueError("shot distances must be min <= default <= max, all positive")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 # The nine cells a cued drill can place the hands in: three height bands by
 # three lateral bands. Named neutrally on purpose -- `low_centre` is what the
 # geometry measures, and "five hole" is what a lacrosse coach calls it, so the
@@ -700,6 +730,9 @@ class DrillSpec:
     # athlete choosing it. Absent means self-paced, which is every drill
     # shipped before goalie work existed.
     cues: CueSpec | None = None
+    # Present only on shooting drills that clock each shot. Absent means no
+    # speed is measured, which is every drill shipped before shot speed.
+    shot: ShotSpec | None = None
 
     #: Whether the app can actually confirm the athlete did *this* pattern
     #: rather than a simpler one sharing the same signal.
@@ -738,6 +771,8 @@ class DrillSpec:
             data["sound"] = self.sound.to_dict()
         if self.cues is not None:
             data["cues"] = self.cues.to_dict()
+        if self.shot is not None:
+            data["shot"] = self.shot.to_dict()
         return data
 
     @property

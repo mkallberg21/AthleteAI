@@ -680,6 +680,14 @@ DEMOS: dict[str, Demo] = {
         scenery='wall',
         frames=_WALL_BALL_FRAMES,
     ),
+    # A shot is the wall-ball load and release, thrown hard and at a target
+    # rather than to be caught. The speed comes from the ball hitting the net,
+    # which a still figure cannot show; the motion it can.
+    "lax_shooting": Demo(
+        caption='From a spot 8 yards out, load the stick back and snap it through to the goal. Each shot is timed from your release to the ball hitting the net.',
+        scenery='wall',
+        frames=_WALL_BALL_FRAMES,
+    ),
     "lax_wall_ball_one_hand": Demo(
         caption='Bottom hand off the stick. Short, controlled throws with the top hand only, standing close to the wall.',
         scenery='wall',

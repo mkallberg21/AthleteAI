@@ -538,6 +538,9 @@ def erase_athlete(
         for sql in (
             "DELETE FROM rep_events WHERE session_id IN "
             "(SELECT id FROM sessions WHERE athlete_id = ?)",
+            # Also cascades from sessions; named so a reader of the erasure
+            # sees every place a child's numbers are kept.
+            "DELETE FROM shot_speeds WHERE athlete_id = ?",
             "DELETE FROM sessions WHERE athlete_id = ?",
             "DELETE FROM xp_ledger WHERE athlete_id = ?",
             "DELETE FROM badges WHERE athlete_id = ?",

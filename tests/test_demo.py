@@ -139,7 +139,7 @@ def test_no_pose_was_lost_from_the_shared_library():
 
 def test_the_whole_catalog_is_drawn_but_for_a_named_few():
     """A count, so a silent loss fails instead of shrinking quietly."""
-    assert len(demo.DEMOS) == 94
+    assert len(demo.DEMOS) == 95
     assert len(demo.NEEDS_FILM) == 8
 
 

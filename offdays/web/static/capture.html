@@ -137,6 +137,16 @@
       </details>
     </div>
 
+    <!-- Your own shot speeds and where they sit on your team. Its own card,
+         shown only to athletes whose program offers shooting, and never
+         dependent on the training budget loading. -->
+    <div class="card hidden" id="shots-card">
+      <details id="shots-details">
+        <summary style="cursor:pointer"><b>Your shot speed</b></summary>
+        <div id="shots-history" style="margin-top:8px"></div>
+      </details>
+    </div>
+
     <div class="card hidden" id="load-card">
       <div class="load-top">
         <h2 style="margin:0">Training load</h2>
@@ -240,6 +250,7 @@
         </div>
         <div class="hud">
           <div class="repcount"><span id="reps">0</span><small id="rep-label">reps</small></div>
+          <div class="repcount hidden" id="shot-live"><span id="shot-mph">&ndash;</span><small>mph, last shot</small></div>
           <div class="hands" id="hands"></div>
         </div>
       </div>
@@ -254,6 +265,21 @@
       </div>
 
       <div class="small muted" id="hint" style="margin-top:10px"></div>
+
+      <!-- Clocked shooting only. The speed is distance over flight time, so
+           the distance has to be what the athlete actually shot from. -->
+      <div id="shot-setup" class="hidden" style="margin-top:10px">
+        <label class="small" for="shot-distance"><b>How far are you shooting from?</b></label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <input id="shot-distance" type="number" inputmode="decimal" step="0.5"
+                 style="width:6em" aria-describedby="shot-distance-note">
+          <span class="small">yards</span>
+        </div>
+        <div class="small muted" id="shot-distance-note" style="margin-top:4px">
+          Pace it out or measure it, then shoot from that spot every time. The
+          speed is only as right as this number.
+        </div>
+      </div>
 
       <!-- Diagnostics. Hidden unless ?debug=1, because an athlete should
            never see this and a child who found it would learn exactly which
@@ -382,13 +408,14 @@
 </div>
 
 <script type="module">
-import { accent, api, esc, fmtDate, getToken, logout, renderBranding } from './api.js';
+import { accent, api, esc, fmtDate, getToken, logout, renderBranding, renderShotHistory } from './api.js';
 import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
 import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
          sampleColour, MIN_SAMPLE_SHARE }
   from './ballvision.js';
 import { RepCounter } from './counter.js';
 import { SoundRepCounter, openMicrophone } from './sound.js';
+import { ShotSpeedCounter } from './shotspeed.js';
 import { cueAt, cueCount, label as cueLabel, sequence as cueSequenceFor } from './cues.js';
 import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
@@ -538,6 +565,15 @@ async function loadHome(prefetched) {
     : '<tr><td class="muted small">Nothing yet.</td></tr>';
 }
 
+// Your own shot speeds: fetched only when opened, and fresh each time it is
+// opened, so a session just finished shows up.
+$('shots-details').addEventListener('toggle', async () => {
+  if (!$('shots-details').open) return;
+  try {
+    $('shots-history').innerHTML = renderShotHistory(await api('/api/me/shot-speed'));
+  } catch (e) { $('shots-history').textContent = e.message; }
+});
+
 async function loadDrills() {
   // The sport is passed so the athlete's own is left out of the transfer
   // notes: telling a lacrosse player that wall ball helps at lacrosse is
@@ -546,6 +582,8 @@ async function loadDrills() {
   // rested. Sore drills are marked, sorted last, and still openable.
   const data = await api('/api/me/drills');
   drills = data.drills;
+  // Only an athlete who can open a clocked drill gets the shot-speed card.
+  $('shots-card').classList.toggle('hidden', !drills.some((d) => d.shot));
   const ordered = [...drills.keys()].sort(
     (a, b) => (drills[a].available === false) - (drills[b].available === false),
   );
@@ -1457,7 +1495,22 @@ async function openCapture(drill) {
   $('hint').textContent = drill.setup_hint;
   loadTechnique(drill.key);
   $('reps').textContent = '0';
-  $('rep-label').textContent = drill.metric === 'hold' ? 'seconds' : 'reps';
+  $('rep-label').textContent = drill.metric === 'hold' ? 'seconds'
+    : drill.shot ? 'shots' : 'reps';
+  // Clocked shooting: the distance picker, remembered per phone, and the
+  // live last-shot readout.
+  $('shot-setup').classList.toggle('hidden', !drill.shot);
+  $('shot-live').classList.add('hidden');
+  $('shot-mph').textContent = '\u2013';
+  if (drill.shot) {
+    let saved = null;
+    try { saved = Number(localStorage.getItem('offdays.shot.distance')); } catch { /* private */ }
+    const inRange = (v) => v >= drill.shot.min_distance_yd && v <= drill.shot.max_distance_yd;
+    const input = $('shot-distance');
+    input.min = drill.shot.min_distance_yd;
+    input.max = drill.shot.max_distance_yd;
+    input.value = inRange(saved) ? saved : drill.shot.default_distance_yd;
+  }
   $('hands').innerHTML = drill.tracks_handedness
     ? `<div class="hand-chip left"><b id="h-left">0</b><span>Left</span></div>
        <div class="hand-chip right"><b id="h-right">0</b><span>Right</span></div>`
@@ -1623,6 +1676,10 @@ function renderLoop() {
     } else {
       const live = soundCounter || counter;
       $('reps').textContent = live.count;
+      if (soundCounter && soundCounter.lastMph !== undefined) {
+        const mph = soundCounter.lastMph;
+        $('shot-mph').textContent = mph === null ? '\u2013' : Math.round(mph);
+      }
       if (activeDrill.tracks_handedness) {
         const { left, right } = live.handCounts();
         const l = $('h-left'), r = $('h-right');
@@ -1997,6 +2054,19 @@ async function startSession() {
   soundCounter = mic
     ? new SoundRepCounter(activeDrill, counter, { sampleRate: mic.sampleRate, ballCounter })
     : null;
+  // Clocked shooting wraps the sound counter: the ear counts each shot and
+  // the stick hand gives its release. Without a microphone there is no
+  // impact to time, so shots are counted by the camera with no speed.
+  if (soundCounter && activeDrill.shot) {
+    const wanted = Number($('shot-distance').value);
+    const ok = wanted >= activeDrill.shot.min_distance_yd
+      && wanted <= activeDrill.shot.max_distance_yd;
+    const distanceYd = ok ? wanted : activeDrill.shot.default_distance_yd;
+    $('shot-distance').value = distanceYd;
+    try { localStorage.setItem('offdays.shot.distance', String(distanceYd)); } catch { /* private */ }
+    soundCounter = new ShotSpeedCounter(activeDrill, soundCounter, { distanceYd });
+    $('shot-live').classList.remove('hidden');
+  }
   if (mic) mic.resume().catch(() => {});
   startedAt = performance.now();
 
@@ -2435,6 +2505,42 @@ function renderQuality(quality, fix) {
 }
 
 /**
+ * Shot speeds for a clocked shooting session: the typical and best speed, a
+ * bar per shot, and the plain limits. Built from what the server worked out,
+ * never the phone's own figure. Shown to the athlete only; nothing here is
+ * ranked against anyone else.
+ */
+function renderShotSpeed(s) {
+  if (!s) return '';
+  const speeds = s.speeds || [];
+  const top = Math.max(1, ...speeds.filter((v) => v !== null));
+  const bars = speeds.map((v, i) => v === null
+    ? `<i class="sp-bar sp-none" title="Shot ${i + 1}: not timed"></i>`
+    : `<i class="sp-bar" style="height:${Math.max(8, (v / top) * 100).toFixed(0)}%"
+          title="Shot ${i + 1}: ${v} mph"></i>`).join('');
+  const hands = s.by_hand || {};
+  const handLine = hands.left && hands.right
+    ? `<div class="small muted" style="margin-top:6px">Left hand about ${Math.round(hands.left)} mph, right about ${Math.round(hands.right)} mph.</div>`
+    : '';
+  const head = s.median_mph
+    ? `<div class="quality-top"><div class="qscore">${Math.round(s.median_mph)}<small>mph typical</small></div>
+         <div class="qscore">${Math.round(s.best_mph)}<small>mph best</small></div>
+         <div class="small muted" style="align-self:center">${s.timed} of ${s.shots} shots timed
+           from ${s.distance_yd} yd</div></div>`
+    : '';
+  return `<div class="quality">
+    <div class="small muted" style="margin-bottom:6px"><b>Shot speed</b> &middot; approximate</div>
+    ${head}
+    ${speeds.length && s.timed ? `<div class="sp-bars" role="img" aria-label="Speed of each shot">${bars}</div>` : ''}
+    ${handLine}
+    ${s.note ? `<div class="coach-note">${esc(s.note)}</div>` : ''}
+    <ul class="small muted" style="margin:8px 0 0;padding-left:18px">
+      ${(s.limits || []).map((l) => `<li>${esc(l)}</li>`).join('')}
+    </ul>
+  </div>`;
+}
+
+/**
  * The rhythm card for a session counted by ear: one tick per rep across the
  * session, coloured by hand, with the stops marked, and the two hands' pace
  * side by side. Drawn from what the server sent back, so a coach looking at
@@ -2521,7 +2627,8 @@ function showResult(result) {
     .join('');
 
   $('r-quality').innerHTML = result.status === 'counted'
-    ? renderQuality(result.quality, result.technique) + renderRhythm(result.rhythm) : '';
+    ? renderQuality(result.quality, result.technique) + renderRhythm(result.rhythm)
+      + renderShotSpeed(result.shot_speed) : '';
 
   if (result.status === 'queued') {
     $('r-quality').innerHTML = '';

@@ -349,3 +349,142 @@ def retire(conn: sqlite3.Connection, org_id: int, drill_key: str) -> None:
         raise LibraryError("that is not one of this program's drills")
     conn.commit()
     CUSTOM.pop(drill_key, None)
+
+
+# ---------------------------------------------------------------------------
+# A team's own drills
+#
+# The program list above is the menu. A team's list is what its coach puts on
+# the table from it, so a squad trains the same work instead of two players on
+# jump rope and three on something else. Strict: a team with a list sees only
+# that list. A team with no list sees the whole program list, which is what
+# every team saw before this existed, so nothing changes until a coach picks.
+#
+# Who may pick: the director always; a coach for the teams they are assigned
+# to, unless the director has turned that off for them. On by default --
+# the coach is the one standing in front of the team -- and stored only as
+# the exception, the same way the program list stores only departures.
+# ---------------------------------------------------------------------------
+
+def team_drill_keys(conn: sqlite3.Connection, team_id: int) -> list[str]:
+    """The keys a team's coach picked, in the order they were picked. Empty
+    means the team has no list of its own."""
+    try:
+        rows = conn.execute(
+            "SELECT drill_key FROM team_drills WHERE team_id = ? ORDER BY set_at, drill_key",
+            (team_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [r["drill_key"] for r in rows]
+
+
+def team_offered(
+    conn: sqlite3.Connection, org_id: int, sport: str, team_id: int,
+) -> list[DrillSpec]:
+    """What one team's players see.
+
+    The team's own picks, still filtered through the program list: a drill the
+    director later takes off the program list drops off every team's list with
+    it, rather than lingering on a team the director may not know picked it.
+    """
+    program = offered(conn, org_id, sport)
+    picked = set(team_drill_keys(conn, team_id))
+    if not picked:
+        return program
+    return [d for d in program if d.key in picked]
+
+
+def athlete_offered(
+    conn: sqlite3.Connection, org_id: int, sport: str, athlete_id: int,
+) -> list[DrillSpec]:
+    """What an athlete sees across every team they are on in this program.
+
+    A player on two teams sees both teams' drills together. If any of their
+    teams has no list of its own, that team is offering the whole program list,
+    so that is what they see.
+    """
+    team_ids = [
+        r["team_id"] for r in conn.execute(
+            "SELECT tm.team_id FROM team_members tm JOIN teams t ON t.id = tm.team_id "
+            "WHERE tm.user_id = ? AND t.org_id = ?",
+            (athlete_id, org_id),
+        )
+    ]
+    program = offered(conn, org_id, sport)
+    if not team_ids:
+        return program
+    wanted: set[str] = set()
+    for team_id in team_ids:
+        keys = team_drill_keys(conn, team_id)
+        if not keys:
+            return program
+        wanted.update(keys)
+    return [d for d in program if d.key in wanted]
+
+
+def coach_may_pick(conn: sqlite3.Connection, org_id: int, user_id: int) -> bool:
+    """Whether the director has left this coach free to choose team drills."""
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM coach_drill_locks WHERE org_id = ? AND user_id = ?",
+            (org_id, user_id),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return True
+    return row is None
+
+
+def set_coach_may_pick(
+    conn: sqlite3.Connection, org_id: int, user_id: int, allowed: bool,
+    set_by: int | None = None,
+) -> None:
+    """The director's switch. Only the 'not allowed' exception is stored."""
+    if allowed:
+        conn.execute(
+            "DELETE FROM coach_drill_locks WHERE org_id = ? AND user_id = ?",
+            (org_id, user_id),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO coach_drill_locks(org_id, user_id, set_by, set_at) "
+            "VALUES (?,?,?,?) ON CONFLICT(org_id, user_id) DO UPDATE SET "
+            "set_by = excluded.set_by, set_at = excluded.set_at",
+            (org_id, user_id, set_by, _now()),
+        )
+    conn.commit()
+
+
+def set_team_drills(
+    conn: sqlite3.Connection,
+    org_id: int,
+    sport: str,
+    team_id: int,
+    drill_keys: list[str],
+    set_by: int | None = None,
+) -> list[str]:
+    """Replace a team's list. An empty list means "use the program list".
+
+    Every key must be on the program list: the director owns the menu, and a
+    coach picks from it. Replaced whole rather than toggled one at a time, so
+    what the coach saved is exactly what the team gets.
+    """
+    team = conn.execute("SELECT org_id FROM teams WHERE id = ?", (team_id,)).fetchone()
+    if team is None or team["org_id"] != org_id:
+        raise LibraryError("no such team in this program")
+    allowed = {d.key for d in offered(conn, org_id, sport)}
+    keys = list(dict.fromkeys(k for k in drill_keys if k))
+    outside = [k for k in keys if k not in allowed]
+    if outside:
+        raise LibraryError(
+            "not on the program's drill list: " + ", ".join(outside)
+            + ". Ask your director to add it to the program list first."
+        )
+    stamp = _now()
+    conn.execute("DELETE FROM team_drills WHERE team_id = ?", (team_id,))
+    conn.executemany(
+        "INSERT INTO team_drills(team_id, drill_key, set_by, set_at) VALUES (?,?,?,?)",
+        [(team_id, k, set_by, stamp) for k in keys],
+    )
+    conn.commit()
+    return keys

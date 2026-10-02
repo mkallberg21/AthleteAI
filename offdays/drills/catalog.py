@@ -33,6 +33,7 @@ from .base import (
     Tissue,
     SignalKind,
     SignalSpec,
+    ShotSpec,
     SoundSpec,
     ValidationSpec,
 )
@@ -638,6 +639,71 @@ WALL_BALL_SPLIT = DrillSpec(
     # Legs are doing real work here as well as the shoulder, so it carries
     # more load per rep than a standing throw.
     load=LoadSpec(load_per_rep=0.70, throws_per_rep=1.0, tissue=Tissue.THROWING),
+)
+
+#: Shooting is one impact per rep, like wall ball, but far fewer and far
+#: harder, a few seconds apart while the shooter collects the next ball. The
+#: floor sits under the quickest honest reload; it only matters before the
+#: athlete's own rhythm is learned. Release time means nothing here -- there is
+#: no catch -- and hand comes from the stick, as for wall ball.
+SHOOTING_SOUND = SoundSpec(min_cycle_ms=1_200)
+
+SHOOTING = DrillSpec(
+    key="lax_shooting",
+    name="Shooting",
+    sport="lacrosse",
+    category=Category.SKILL,
+    stimulus=Stimulus.SKILL,
+    metric=Metric.REPS,
+    description=(
+        "Shoot at a goal, net or wall from a marked spot. Counts each shot "
+        "and, with the microphone on, gives every shot an approximate speed: "
+        "the time from your release to the ball hitting the net, over the "
+        "distance you shot from. It cannot see whether a shot went in."
+    ),
+    signal=SignalSpec(
+        kind=SignalKind.WALL_BALL_CYCLE,
+        joints=("left_wrist", "right_wrist", "left_shoulder", "right_shoulder"),
+        smoothing=0.30,
+    ),
+    counter=CounterSpec(
+        # The same top-hand reading as wall ball: a shot comes from the same
+        # load-and-release, harder. Reps are slower and further apart.
+        down_threshold=-0.05,
+        up_threshold=0.18,
+        min_rep_ms=1_000,
+        max_rep_ms=20_000,
+        rising_completes=True,
+    ),
+    # Pays what wall ball pays. Both read the same top-hand signal, so a
+    # higher rate here would pay a child to pick "Shooting" and do wall ball
+    # (test_drills enforces it). Capped well below wall ball and tapered
+    # early: the throwing ceiling is what actually protects the arm.
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=150, diminishing_after_reps=60),
+    validation=ValidationSpec(
+        max_reps_per_second=0.8, min_reps_per_second=0.01, min_reps=5,
+        min_duration_ms=20_000,
+    ),
+    tracks_handedness=True,
+    ball=LACROSSE_BALL,
+    sound=SHOOTING_SOUND,
+    shot=ShotSpec(),
+    setup_hint=(
+        "Mark a spot 8 yards from the goal or wall and shoot from it. Prop the "
+        "phone beside you, side-on, so it sees you and hears the net. Each "
+        "shot's speed comes from that sound."
+    ),
+    quality=QualitySpec(
+        target_rom=0.55,
+        consistency_target=0.20,
+        tempo_min_ms=1_000, tempo_max_ms=12_000,
+        w_consistency=0.40, w_depth=0.35, w_tempo=0.05, w_endurance=0.20,
+        min_reps=8,
+    ),
+    # Every shot is a maximal overhead throw: the heaviest throw this app
+    # counts, and the one a throwing ceiling exists for. It counts toward the
+    # day's throws exactly like wall ball, and weighs more load per rep.
+    load=LoadSpec(load_per_rep=1.2, throws_per_rep=1.0, tissue=Tissue.THROWING),
 )
 
 GROUND_BALL = DrillSpec(
@@ -5397,6 +5463,7 @@ ALL_DRILLS: tuple[DrillSpec, ...] = (
     # picker scrolled past every one of them to reach the skill that decides
     # most youth games. Order here is the order they see.
     GROUND_BALL,
+    SHOOTING,
     QUICK_STICK,
     WALL_BALL_STRONG,
     WALL_BALL_OFFHAND,

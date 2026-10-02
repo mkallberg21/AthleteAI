@@ -114,7 +114,7 @@ offdays/
   db.py             SQLite schema; tokens stored hashed, never in the clear
   drills/
     base.py         DrillSpec: the declarative counting contract
-    catalog.py      The 102 shipped drills, filtered per sport by for_sport()
+    catalog.py      The 103 shipped drills, filtered per sport by for_sport()
   integrity.py      Server-side plausibility scoring of submitted sessions
   scoring.py        XP, levels, streaks, badges
   quality.py        Form scoring: consistency, range, tempo, fatigue, off-hand
@@ -2739,11 +2739,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 31 modules across 432 call sites.
-store.py holds 39% of them.
+SQL lives in 32 modules across 447 call sites.
+store.py holds 36% of them.
 
-924 occurrences are mechanical (search-and-replace with tests behind it).
-72 need judgement.
+1011 occurrences are mechanical (search-and-replace with tests behind it).
+73 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...
