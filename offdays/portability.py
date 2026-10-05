@@ -189,11 +189,12 @@ def _tables(conn: sqlite3.Connection, org_id: int) -> list[Table]:
             "sessions",
             ["session_id", "athlete_id", "drill_key", "started_at",
              "submitted_at", "completed_at", "duration_ms", "reps_total",
-             "reps_left", "reps_right", "hold_ms", "xp_awarded",
+             "reps_left", "reps_right", "reps_seen", "hold_ms", "xp_awarded",
              "quality_score", "integrity_score", "status", "self_reported"],
             q("SELECT s.id AS session_id, s.athlete_id, s.drill_key, "
               "  s.started_at, s.submitted_at, s.completed_at, s.duration_ms, "
-              "  s.reps_total, s.reps_left, s.reps_right, s.hold_ms, "
+              "  s.reps_total, s.reps_left, s.reps_right, "
+              "  COALESCE(s.reps_seen, s.reps_total) AS reps_seen, s.hold_ms, "
               "  s.xp_awarded, s.quality_score, s.integrity_score, s.status, "
               "  s.self_reported "
               "FROM sessions s JOIN users u ON u.id = s.athlete_id "

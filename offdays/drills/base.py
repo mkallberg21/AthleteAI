@@ -258,6 +258,13 @@ class ScoringSpec:
     diminishing_after_reps: int = 300
     diminishing_rate: float = 0.35
 
+    # Drills that are the same work under different names share one day's rep
+    # budget. Without this a wall-ball cap is a wall-ball-variant cap, and an
+    # athlete working through seven variants banks seven caps. The pool's
+    # budget is the largest daily_rep_cap among its members; each member's own
+    # cap still applies on top. None means the drill is its own pool.
+    cap_pool: str | None = None
+
 
 class Tissue(str, Enum):
     """What a drill mostly stresses.
