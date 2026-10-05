@@ -29,39 +29,39 @@ def seen(total, left=0, right=0):
 class TestTheRule:
     def test_under_the_cap_every_rep_counts(self):
         c = credit_reps(seen(300, 150, 150), WALL,
-                        drill_reps_today=0, pool_reps_today=0, pool_budget=800)
+                        drill_reps_today=0, pool_reps_today=0, pool_budget=500)
         assert (c.total, c.left, c.right) == (300, 150, 150)
         assert not c.capped and c.cap_scope is None
 
     def test_a_half_hour_of_wall_ball_counts_the_cap_and_no_more(self):
         c = credit_reps(seen(1_800, 900, 900), WALL,
-                        drill_reps_today=0, pool_reps_today=0, pool_budget=800)
-        assert c.total == 800 and c.seen_total == 1_800
-        assert c.capped and c.cap_scope == "drill" and c.cap == 800
+                        drill_reps_today=0, pool_reps_today=0, pool_budget=500)
+        assert c.total == 500 and c.seen_total == 1_800
+        assert c.capped and c.cap_scope == "drill" and c.cap == 500
 
     def test_the_budget_is_spent_across_the_day_not_per_session(self):
         c = credit_reps(seen(500), WALL,
-                        drill_reps_today=600, pool_reps_today=600, pool_budget=800)
+                        drill_reps_today=300, pool_reps_today=300, pool_budget=500)
         assert c.total == 200
 
     def test_a_day_already_full_credits_nothing(self):
         c = credit_reps(seen(300), WALL,
-                        drill_reps_today=800, pool_reps_today=800, pool_budget=800)
+                        drill_reps_today=500, pool_reps_today=500, pool_budget=500)
         assert c.total == 0 and c.left == 0 and c.right == 0
 
     def test_hands_scale_together_so_the_weak_side_share_holds(self):
         c = credit_reps(seen(1_000, 400, 600), WALL,
-                        drill_reps_today=0, pool_reps_today=0, pool_budget=800)
-        assert c.total == 800
-        assert c.left + c.right <= 800
-        assert abs(c.left / 800 - 0.4) < 0.01
+                        drill_reps_today=0, pool_reps_today=0, pool_budget=500)
+        assert c.total == 500
+        assert c.left + c.right <= 500
+        assert abs(c.left / 500 - 0.4) < 0.01
 
     def test_the_pool_binds_when_variants_are_used_to_dodge_the_drill_cap(self):
-        # 600 plain wall ball already today; strong-hand has 600 of its own
+        # 300 plain wall ball already today; strong-hand has 500 of its own
         # but the pool has only 200 left.
         c = credit_reps(seen(500), STRONG,
-                        drill_reps_today=0, pool_reps_today=600, pool_budget=800)
-        assert c.total == 200 and c.cap_scope == "pool" and c.cap == 800
+                        drill_reps_today=0, pool_reps_today=300, pool_budget=500)
+        assert c.total == 200 and c.cap_scope == "pool" and c.cap == 500
 
     def test_a_drill_outside_the_pool_is_its_own_budget(self):
         assert pool_members(GB, ALL_DRILLS) == (GB,)
@@ -76,7 +76,7 @@ class TestTheCatalog:
             "lax_wall_ball_offhand", "lax_wall_ball_one_hand", "lax_wall_ball_cross",
             "lax_wall_ball_btb", "lax_wall_ball_split",
         }
-        assert pool_cap(WALL, ALL_DRILLS) == 800
+        assert pool_cap(WALL, ALL_DRILLS) == 500
 
     def test_a_pool_budget_is_never_below_any_member_cap(self):
         for d in ALL_DRILLS:
@@ -151,13 +151,13 @@ class TestThroughTheStore:
         body = _submit(c, hero["h"], "lax_wall_ball", 1_800)
         assert body["status"] == "counted", body["notes"]
         assert body["reps_seen"] == 1_800
-        assert body["reps_total"] == 800
-        assert body["rep_cap"] == {"seen": 1_800, "credited": 800, "cap": 800, "scope": "drill"}
-        assert any("800" in n and "count toward today" in n for n in body["notes"])
+        assert body["reps_total"] == 500
+        assert body["rep_cap"] == {"seen": 1_800, "credited": 500, "cap": 500, "scope": "drill"}
+        assert any("500" in n and "count toward today" in n for n in body["notes"])
 
         board = c.get("/api/leaderboard?board=reps&window=week", headers=hero["h"]).json()
         rows = {r["athlete_id"]: r["value"] for r in board["rows"]}
-        assert rows[hero["id"]] == 800
+        assert rows[hero["id"]] == 500
 
     def test_the_table_keeps_both_numbers(self, club):
         c, hero = club["client"], club["kids"]["Hero"]
@@ -165,8 +165,8 @@ class TestThroughTheStore:
         row = club["store"].conn.execute(
             "SELECT reps_total, reps_seen, reps_left, reps_right FROM sessions WHERE id=?",
             (body["session_id"],)).fetchone()
-        assert row["reps_seen"] == 1_000 and row["reps_total"] == 800
-        assert row["reps_left"] + row["reps_right"] <= 800
+        assert row["reps_seen"] == 1_000 and row["reps_total"] == 500
+        assert row["reps_left"] + row["reps_right"] <= 500
 
     def test_an_ordinary_session_is_untouched(self, club):
         c, kid = club["client"], club["kids"]["Steady"]
@@ -177,14 +177,14 @@ class TestThroughTheStore:
 
     def test_the_budget_runs_across_sessions_in_a_day(self, club):
         c, hero = club["client"], club["kids"]["Hero"]
-        first = _submit(c, hero["h"], "lax_wall_ball", 600)
-        second = _submit(c, hero["h"], "lax_wall_ball", 600)
-        assert first["reps_total"] == 600
-        assert second["reps_total"] == 200 and second["reps_seen"] == 600
+        first = _submit(c, hero["h"], "lax_wall_ball", 300)
+        second = _submit(c, hero["h"], "lax_wall_ball", 300)
+        assert first["reps_total"] == 300
+        assert second["reps_total"] == 200 and second["reps_seen"] == 300
 
     def test_switching_variants_does_not_reopen_the_budget(self, club):
         c, hero = club["client"], club["kids"]["Hero"]
-        _submit(c, hero["h"], "lax_wall_ball", 800)
+        _submit(c, hero["h"], "lax_wall_ball", 500)
         strong = _submit(c, hero["h"], "lax_wall_ball_strong", 400)
         assert strong["reps_total"] == 0
         assert strong["rep_cap"]["scope"] == "pool"
@@ -192,25 +192,25 @@ class TestThroughTheStore:
 
     def test_a_different_drill_has_its_own_budget(self, club):
         c, hero = club["client"], club["kids"]["Hero"]
-        _submit(c, hero["h"], "lax_wall_ball", 800)
+        _submit(c, hero["h"], "lax_wall_ball", 500)
         gb = _submit(c, hero["h"], "lax_ground_ball", 100)
         assert gb["reps_total"] == 100
 
     def test_xp_is_for_the_reps_that_counted(self, club):
         c, hero, steady = club["client"], club["kids"]["Hero"], club["kids"]["Steady"]
-        a = _submit(c, hero["h"], "lax_wall_ball", 800)
-        b = _submit(c, hero["h"], "lax_wall_ball", 800)
+        a = _submit(c, hero["h"], "lax_wall_ball", 500)
+        b = _submit(c, hero["h"], "lax_wall_ball", 500)
         assert b["xp_awarded"] == 0
         assert a["xp_awarded"] > 0
 
     def test_the_hero_cannot_blow_away_a_steady_teammate_by_volume(self, club):
-        """The point of the whole thing: 1,800 reps in a day lands at 800 on
+        """The point of the whole thing: 1,800 reps in a day lands at 500 on
         the board, within reach of a teammate who did two honest sessions."""
         c, hero, steady = club["client"], club["kids"]["Hero"], club["kids"]["Steady"]
         _submit(c, hero["h"], "lax_wall_ball", 1_800)
-        _submit(c, steady["h"], "lax_wall_ball", 350)
-        _submit(c, steady["h"], "lax_wall_ball", 350)
+        _submit(c, steady["h"], "lax_wall_ball", 220)
+        _submit(c, steady["h"], "lax_wall_ball", 220)
         board = c.get("/api/leaderboard?board=reps&window=week", headers=hero["h"]).json()
         rows = {r["athlete_id"]: r["value"] for r in board["rows"]}
-        assert rows[hero["id"]] == 800
-        assert rows[steady["id"]] == 700
+        assert rows[hero["id"]] == 500
+        assert rows[steady["id"]] == 440

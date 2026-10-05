@@ -269,11 +269,11 @@ WALL_BALL = DrillSpec(
     scoring=ScoringSpec(
         xp_per_rep=1.0,
         # One day's wall-ball budget is shared by every variant and Quick
-        # Stick: 800 reps across the lot, whichever names they were logged
-        # under. Each variant keeps its own smaller cap on top. Without the
-        # pool, 30 minutes of wall ball could be logged across eight drills
-        # and land 3,600 reps on the team board.
-        daily_rep_cap=800, cap_pool="lax_wall_ball",
+        # Stick: 500 reps across the lot, whichever names they were logged
+        # under (set by the club, 2026-10). Each variant keeps its own cap on
+        # top. Without the pool, 30 minutes of wall ball could be logged
+        # across eight drills and land thousands of reps on the team board.
+        daily_rep_cap=500, cap_pool="lax_wall_ball",
         diminishing_after_reps=250,
         diminishing_rate=0.35,
     ),
@@ -399,7 +399,7 @@ WALL_BALL_STRONG = DrillSpec(
         min_rep_ms=450, max_rep_ms=6_000, rising_completes=True,
     ),
     scoring=ScoringSpec(
-        xp_per_rep=1.0, daily_rep_cap=600, cap_pool="lax_wall_ball",
+        xp_per_rep=1.0, daily_rep_cap=500, cap_pool="lax_wall_ball",
         diminishing_after_reps=200, diminishing_rate=0.35,
     ),
     validation=ValidationSpec(
