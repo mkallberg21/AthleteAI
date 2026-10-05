@@ -13,11 +13,14 @@ import pytest
 from offdays.drills import ALL_DRILLS, DRILLS_BY_KEY
 from offdays.drills.base import Metric
 from offdays.integrity import IntegrityResult
-from offdays.scoring import credit_reps, pool_cap, pool_members
+from offdays.scoring import (credit_reps, daily_cap_for, pace_for_age, pool_cap,
+                             pool_members)
 
 
 WALL = DRILLS_BY_KEY["lax_wall_ball"]
 STRONG = DRILLS_BY_KEY["lax_wall_ball_strong"]
+OFFHAND = DRILLS_BY_KEY["lax_wall_ball_offhand"]
+QUICK = DRILLS_BY_KEY["lax_quick_stick"]
 GB = DRILLS_BY_KEY["lax_ground_ball"]
 
 
@@ -57,9 +60,9 @@ class TestTheRule:
         assert abs(c.left / 500 - 0.4) < 0.01
 
     def test_the_pool_binds_when_variants_are_used_to_dodge_the_drill_cap(self):
-        # 300 plain wall ball already today; strong-hand has 500 of its own
+        # 300 plain wall ball already today; quick stick has 500 of its own
         # but the pool has only 200 left.
-        c = credit_reps(seen(500), STRONG,
+        c = credit_reps(seen(500), QUICK,
                         drill_reps_today=0, pool_reps_today=300, pool_budget=500)
         assert c.total == 200 and c.cap_scope == "pool" and c.cap == 500
 
@@ -69,14 +72,50 @@ class TestTheRule:
 
 
 class TestTheCatalog:
-    def test_every_wall_ball_variant_and_quick_stick_share_one_budget(self):
+    def test_plain_wall_ball_quick_stick_and_the_trick_variants_share_one_budget(self):
         pooled = {d.key for d in pool_members(WALL, ALL_DRILLS)}
         assert pooled == {
-            "lax_wall_ball", "lax_quick_stick", "lax_wall_ball_strong",
-            "lax_wall_ball_offhand", "lax_wall_ball_one_hand", "lax_wall_ball_cross",
-            "lax_wall_ball_btb", "lax_wall_ball_split",
+            "lax_wall_ball", "lax_quick_stick", "lax_wall_ball_one_hand",
+            "lax_wall_ball_cross", "lax_wall_ball_btb", "lax_wall_ball_split",
         }
         assert pool_cap(WALL, ALL_DRILLS) == 500
+
+    def test_each_handed_wall_ball_drill_has_its_own_five_minute_day(self):
+        """Both hands are wanted, so neither spends the other's budget, and
+        neither is pooled with the trick variants."""
+        for d in (STRONG, OFFHAND):
+            assert d.scoring.cap_pool is None
+            assert d.scoring.daily_cap_minutes == 5.0
+            assert pool_members(d, ALL_DRILLS) == (d,)
+
+
+class TestAgeAppropriate:
+    def test_pace_rises_with_age_and_tops_out(self):
+        assert pace_for_age(9) < pace_for_age(12) < pace_for_age(14) < pace_for_age(17)
+        assert pace_for_age(17) == pace_for_age(30)
+
+    def test_five_minutes_for_a_ten_year_old_is_about_150_reps(self):
+        assert daily_cap_for(STRONG, 10) == 150
+
+    def test_five_minutes_for_a_fourteen_year_old_is_about_220_reps(self):
+        assert daily_cap_for(STRONG, 14) == 220
+
+    def test_a_high_schooler_gets_the_full_300(self):
+        assert daily_cap_for(STRONG, 17) == 300
+
+    def test_an_unknown_or_estimated_age_takes_the_conservative_default(self):
+        assert daily_cap_for(STRONG, None) == daily_cap_for(STRONG, 12)
+        assert daily_cap_for(STRONG, 17, estimated=True) == daily_cap_for(STRONG, 12)
+
+    def test_a_drill_without_a_minute_budget_keeps_its_flat_cap(self):
+        assert daily_cap_for(WALL, 10) == WALL.scoring.daily_rep_cap
+        assert daily_cap_for(GB, 17) == GB.scoring.daily_rep_cap
+
+    def test_the_minute_budget_never_exceeds_the_flat_ceiling(self):
+        for d in ALL_DRILLS:
+            if d.scoring.daily_cap_minutes:
+                for age in (8, 12, 15, 18, 25, None):
+                    assert daily_cap_for(d, age) <= d.scoring.daily_rep_cap, d.key
 
     def test_a_pool_budget_is_never_below_any_member_cap(self):
         for d in ALL_DRILLS:
@@ -111,7 +150,8 @@ def club(tmp_path):
     # The pool spans every wall-ball variant, so the team needs them turned on.
     from offdays import library
     library.set_team_drills(store.conn, org, "lacrosse", team["id"],
-                            ["lax_wall_ball", "lax_wall_ball_strong", "lax_ground_ball"])
+                            ["lax_wall_ball", "lax_quick_stick", "lax_wall_ball_strong",
+                             "lax_wall_ball_offhand", "lax_ground_ball"])
     kids = {}
     for name in ("Hero", "Steady"):
         kid = store.create_user(org, "athlete", name, birth_year=2012, dominant_hand="right")
@@ -185,10 +225,28 @@ class TestThroughTheStore:
     def test_switching_variants_does_not_reopen_the_budget(self, club):
         c, hero = club["client"], club["kids"]["Hero"]
         _submit(c, hero["h"], "lax_wall_ball", 500)
+        quick = _submit(c, hero["h"], "lax_quick_stick", 400)
+        assert quick["reps_total"] == 0
+        assert quick["rep_cap"]["scope"] == "pool"
+        assert quick["xp_awarded"] == 0
+
+    def test_a_2012_kid_gets_about_five_minutes_on_each_hand(self, club):
+        """Born 2012 -> 14 this year -> 44 a minute -> 220 a day per hand.
+        The off hand is its own budget, so a full strong-hand day leaves it
+        untouched, and the note talks in minutes, not reps."""
+        c, hero = club["client"], club["kids"]["Hero"]
         strong = _submit(c, hero["h"], "lax_wall_ball_strong", 400)
-        assert strong["reps_total"] == 0
-        assert strong["rep_cap"]["scope"] == "pool"
-        assert strong["xp_awarded"] == 0
+        assert strong["reps_total"] == 220 and strong["reps_seen"] == 400
+        assert any("about 5 minutes of work for your age" in n for n in strong["notes"])
+        off = _submit(c, hero["h"], "lax_wall_ball_offhand", 200)
+        assert off["reps_total"] == 200 and "rep_cap" not in off
+
+    def test_a_younger_kid_gets_a_smaller_day(self, club):
+        c, store, hero = club["client"], club["store"], club["kids"]["Hero"]
+        store.conn.execute("UPDATE users SET birth_year = 2016 WHERE id = ?", (hero["id"],))
+        store.conn.commit()
+        body = _submit(c, hero["h"], "lax_wall_ball_strong", 400)
+        assert body["reps_total"] == 150
 
     def test_a_different_drill_has_its_own_budget(self, club):
         c, hero = club["client"], club["kids"]["Hero"]

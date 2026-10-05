@@ -268,11 +268,13 @@ WALL_BALL = DrillSpec(
     ),
     scoring=ScoringSpec(
         xp_per_rep=1.0,
-        # One day's wall-ball budget is shared by every variant and Quick
-        # Stick: 500 reps across the lot, whichever names they were logged
-        # under (set by the club, 2026-10). Each variant keeps its own cap on
-        # top. Without the pool, 30 minutes of wall ball could be logged
-        # across eight drills and land thousands of reps on the team board.
+        # One day's wall-ball budget is shared by plain wall ball, Quick Stick
+        # and the trick variants: 500 reps across the lot, whichever names
+        # they were logged under (set by the club, 2026-10). Each keeps its
+        # own cap on top. The two handed drills (Strong Hand, Off Hand) sit
+        # outside the pool on their own age-based five-minute budgets.
+        # Without the pool, 30 minutes of wall ball could be logged across
+        # several drills and land thousands of reps on the team board.
         daily_rep_cap=500, cap_pool="lax_wall_ball",
         diminishing_after_reps=250,
         diminishing_rate=0.35,
@@ -399,7 +401,13 @@ WALL_BALL_STRONG = DrillSpec(
         min_rep_ms=450, max_rep_ms=6_000, rising_completes=True,
     ),
     scoring=ScoringSpec(
-        xp_per_rep=1.0, daily_rep_cap=500, cap_pool="lax_wall_ball",
+        xp_per_rep=1.0,
+        # Each hand gets its own day: about five minutes at an age-appropriate
+        # pace (scoring.REPS_PER_MINUTE_BY_AGE), so a ten-year-old's day is
+        # ~150 reps and a high-schooler's ~300. Set by the club (2026-10).
+        # Not pooled with the other variants: both hands are wanted, and
+        # doing the off hand should never cost the strong hand its budget.
+        daily_rep_cap=300, daily_cap_minutes=5.0,
         diminishing_after_reps=200, diminishing_rate=0.35,
     ),
     validation=ValidationSpec(
@@ -441,7 +449,10 @@ WALL_BALL_OFFHAND = DrillSpec(
     # product most wants a young player to do. Nothing else in the catalogue
     # is paid above 1.4.
     scoring=ScoringSpec(
-        xp_per_rep=1.0, daily_rep_cap=500, cap_pool="lax_wall_ball",
+        xp_per_rep=1.0,
+        # Its own five-minute day at an age-appropriate pace, same as the
+        # strong hand; see Wall Ball - Strong Hand.
+        daily_rep_cap=300, daily_cap_minutes=5.0,
         diminishing_after_reps=200, diminishing_rate=0.35,
     ),
     validation=ValidationSpec(

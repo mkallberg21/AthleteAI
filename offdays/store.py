@@ -59,6 +59,7 @@ from .scoring import (
     RepCredit,
     compute_streak,
     credit_reps,
+    daily_cap_for,
     earned_badges,
     level_progress,
     pool_cap,
@@ -85,9 +86,13 @@ def _cap_note(credit: RepCredit, drill) -> str:
     """Why fewer reps counted than the camera saw, in the athlete's terms."""
     what = (f"{drill.name}" if credit.cap_scope == "drill"
             else f"{drill.name} and the drills it shares a limit with")
+    minutes = drill.scoring.daily_cap_minutes
+    how_much = (f"about {minutes:g} minutes of work for your age"
+                if minutes and credit.cap_scope == "drill"
+                else f"{credit.cap} reps")
     return (
         f"The camera counted {credit.seen_total} reps and {credit.total} of them "
-        f"count toward today. {what} count up to {credit.cap} reps a day, so the "
+        f"count toward today. {what} counts up to {how_much} a day, so the "
         f"rest is practice, not points. Tomorrow starts fresh."
     )
 
@@ -3377,6 +3382,7 @@ class Store:
     ) -> RepCredit:
         """Spend the day's rep budget on a counted session."""
         members = pool_members(drill, ALL_DRILLS)
+        age, estimated = self._age_of(athlete_id, day)
         return credit_reps(
             verdict, drill,
             drill_reps_today=self._reps_credited_on_day(
@@ -3384,7 +3390,18 @@ class Store:
             pool_reps_today=self._reps_credited_on_day(
                 athlete_id, day, tuple(d.key for d in members), exclude_session),
             pool_budget=pool_cap(drill, ALL_DRILLS),
+            drill_cap=daily_cap_for(drill, age, estimated),
         )
+
+    def _age_of(self, athlete_id: int, day: str) -> tuple[int | None, bool]:
+        """The athlete's age on `day`, and whether it was only estimated."""
+        row = self.conn.execute(
+            "SELECT birth_year, birth_year_estimated FROM users WHERE id = ?",
+            (athlete_id,),
+        ).fetchone()
+        if row is None or not row["birth_year"]:
+            return None, False
+        return int(day[:4]) - int(row["birth_year"]), bool(row["birth_year_estimated"])
 
     def athlete_stats(self, athlete_id: int) -> AthleteStats:
         c = self.conn

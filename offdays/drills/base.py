@@ -265,6 +265,13 @@ class ScoringSpec:
     # cap still applies on top. None means the drill is its own pool.
     cap_pool: str | None = None
 
+    # When set, the day's rep budget for this drill is this many minutes of
+    # work at an age-appropriate pace (scoring.REPS_PER_MINUTE_BY_AGE) rather
+    # than daily_rep_cap, which then acts only as the ceiling for the oldest
+    # athletes. Set by the club for the two handed wall-ball drills: about
+    # five minutes a day on each hand is what counts; the rest is practice.
+    daily_cap_minutes: float | None = None
+
 
 class Tissue(str, Enum):
     """What a drill mostly stresses.
