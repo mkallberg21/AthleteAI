@@ -160,6 +160,47 @@ def pool_cap(drill: DrillSpec, catalog: tuple[DrillSpec, ...]) -> int:
     return max(d.scoring.daily_rep_cap for d in pool_members(drill, catalog))
 
 
+# Catch-and-throw pace by age, in reps per minute, for a drill whose day is
+# budgeted in minutes (ScoringSpec.daily_cap_minutes). Bands match
+# benchmarks.AGE_BANDS. An unknown or estimated age takes the 11-12 figure,
+# the same conservative default used everywhere else a child's age is unsure.
+#
+# These are coaching estimates of a steady wall-ball rhythm, not measurements:
+# a ten-year-old at about a rep every two seconds, a high-schooler at one a
+# second. To be checked against the club's own footage and adjusted here.
+REPS_PER_MINUTE_BY_AGE: tuple[tuple[int, int], ...] = (
+    (10, 30),    # under 11
+    (12, 36),    # 11-12
+    (14, 44),    # 13-14
+    (16, 52),    # 15-16
+    (18, 60),    # 17-18
+    (200, 60),   # 19 and over
+)
+_DEFAULT_PACE = 36
+
+
+def pace_for_age(age: int | None, estimated: bool = False) -> int:
+    """Reps per minute a steady athlete of this age keeps up."""
+    if age is None or estimated:
+        return _DEFAULT_PACE
+    for max_age, pace in REPS_PER_MINUTE_BY_AGE:
+        if age <= max_age:
+            return pace
+    return REPS_PER_MINUTE_BY_AGE[-1][1]
+
+
+def daily_cap_for(drill: DrillSpec, age: int | None, estimated: bool = False) -> int:
+    """This drill's daily rep budget for an athlete of this age.
+
+    A drill budgeted in minutes gets minutes x pace, never above its own
+    daily_rep_cap. Any other drill gets daily_rep_cap as before.
+    """
+    spec = drill.scoring
+    if spec.daily_cap_minutes is None:
+        return spec.daily_rep_cap
+    return min(spec.daily_rep_cap, int(round(spec.daily_cap_minutes * pace_for_age(age, estimated))))
+
+
 def credit_reps(
     integrity: IntegrityResult,
     drill: DrillSpec,
@@ -167,24 +208,27 @@ def credit_reps(
     drill_reps_today: int,
     pool_reps_today: int,
     pool_budget: int,
+    drill_cap: int | None = None,
 ) -> RepCredit:
     """How many of this session's reps count toward the day.
 
     `drill_reps_today` and `pool_reps_today` are reps already credited today
     on this drill and on its pool; both counts include this drill's reps, so
-    the pool number is never smaller. Hands are scaled together so the
-    weak-side share is unchanged by the cap -- a capped session is still as
-    balanced as it was.
+    the pool number is never smaller. `drill_cap` is the athlete's budget on
+    this drill (daily_cap_for), defaulting to the spec's flat cap. Hands are
+    scaled together so the weak-side share is unchanged by the cap -- a
+    capped session is still as balanced as it was.
     """
     seen = integrity.reps_total
-    drill_room = max(0, drill.scoring.daily_rep_cap - drill_reps_today)
+    cap_today = drill.scoring.daily_rep_cap if drill_cap is None else drill_cap
+    drill_room = max(0, cap_today - drill_reps_today)
     pool_room = max(0, pool_budget - pool_reps_today)
     room = min(drill_room, pool_room)
     total = min(seen, room)
     if total >= seen:
         cap, scope = 0, None
     elif drill_room <= pool_room:
-        cap, scope = drill.scoring.daily_rep_cap, "drill"
+        cap, scope = cap_today, "drill"
     else:
         cap, scope = pool_budget, "pool"
     share = total / seen if seen else 0.0
