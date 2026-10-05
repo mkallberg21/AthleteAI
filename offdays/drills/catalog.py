@@ -268,7 +268,12 @@ WALL_BALL = DrillSpec(
     ),
     scoring=ScoringSpec(
         xp_per_rep=1.0,
-        daily_rep_cap=800,
+        # One day's wall-ball budget is shared by every variant and Quick
+        # Stick: 500 reps across the lot, whichever names they were logged
+        # under (set by the club, 2026-10). Each variant keeps its own cap on
+        # top. Without the pool, 30 minutes of wall ball could be logged
+        # across eight drills and land thousands of reps on the team board.
+        daily_rep_cap=500, cap_pool="lax_wall_ball",
         diminishing_after_reps=250,
         diminishing_rate=0.35,
     ),
@@ -333,7 +338,7 @@ QUICK_STICK = DrillSpec(
         max_rep_ms=2_500,
         rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=500, diminishing_after_reps=150),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=500, cap_pool="lax_wall_ball", diminishing_after_reps=150),
     validation=ValidationSpec(
         max_reps_per_second=4.0, min_reps_per_second=0.25, min_reps=10
     ),
@@ -394,7 +399,7 @@ WALL_BALL_STRONG = DrillSpec(
         min_rep_ms=450, max_rep_ms=6_000, rising_completes=True,
     ),
     scoring=ScoringSpec(
-        xp_per_rep=1.0, daily_rep_cap=600,
+        xp_per_rep=1.0, daily_rep_cap=500, cap_pool="lax_wall_ball",
         diminishing_after_reps=200, diminishing_rate=0.35,
     ),
     validation=ValidationSpec(
@@ -436,7 +441,7 @@ WALL_BALL_OFFHAND = DrillSpec(
     # product most wants a young player to do. Nothing else in the catalogue
     # is paid above 1.4.
     scoring=ScoringSpec(
-        xp_per_rep=1.0, daily_rep_cap=500,
+        xp_per_rep=1.0, daily_rep_cap=500, cap_pool="lax_wall_ball",
         diminishing_after_reps=200, diminishing_rate=0.35,
     ),
     validation=ValidationSpec(
@@ -481,7 +486,7 @@ WALL_BALL_ONE_HAND = DrillSpec(
         down_threshold=0.0, up_threshold=0.14,
         min_rep_ms=320, max_rep_ms=3_000, rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=350, diminishing_after_reps=120),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=350, cap_pool="lax_wall_ball", diminishing_after_reps=120),
     validation=ValidationSpec(
         max_reps_per_second=3.5, min_reps_per_second=0.15, min_reps=10
     ),
@@ -525,7 +530,7 @@ WALL_BALL_CROSS = DrillSpec(
         down_threshold=-0.05, up_threshold=0.16,
         min_rep_ms=550, max_rep_ms=7_000, rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=400, diminishing_after_reps=150),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=400, cap_pool="lax_wall_ball", diminishing_after_reps=150),
     validation=ValidationSpec(
         max_reps_per_second=2.5, min_reps_per_second=0.08, min_reps=10
     ),
@@ -570,7 +575,7 @@ WALL_BALL_BTB = DrillSpec(
     # A lower cap than the rest of the routine on purpose. This is a garnish,
     # and a child grinding 600 behind-the-back reps is not building a lacrosse
     # player.
-    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=200, diminishing_after_reps=80),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=200, cap_pool="lax_wall_ball", diminishing_after_reps=80),
     validation=ValidationSpec(
         max_reps_per_second=2.5, min_reps_per_second=0.06, min_reps=8
     ),
@@ -617,7 +622,7 @@ WALL_BALL_SPLIT = DrillSpec(
         max_rep_ms=9_000,
         rising_completes=True,
     ),
-    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, diminishing_after_reps=120),
+    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=300, cap_pool="lax_wall_ball", diminishing_after_reps=120),
     validation=ValidationSpec(
         max_reps_per_second=1.6, min_reps_per_second=0.05, min_reps=8
     ),

@@ -107,6 +107,102 @@ def _diminished_reps(reps: int, drill: DrillSpec) -> float:
     return spec.diminishing_after_reps + excess * spec.diminishing_rate
 
 
+# --------------------------------------------------------------------------
+# The daily rep cap
+# --------------------------------------------------------------------------
+#
+# The daily XP cap stops one day's XP from running away. It does nothing for
+# the rep boards, badges, parent reports and roster rollups, which all sum
+# `sessions.reps_total` -- so a half-hour of wall ball still put 1,800 reps on
+# the team board next to teammates' 300. The fix is at the source: what the
+# camera saw is kept as `reps_seen`, and `reps_total` becomes what counts
+# toward the day, so every place that sums reps honours the cap without
+# knowing it exists.
+#
+# The budget is per drill and per pool of same-work drills (see
+# ScoringSpec.cap_pool), spent in submission order. The athlete sees both
+# numbers and why they differ.
+
+@dataclass(frozen=True)
+class RepCredit:
+    """What a session's reps count for, after the day's rep budget."""
+
+    seen_total: int
+    seen_left: int
+    seen_right: int
+    total: int
+    left: int
+    right: int
+    cap: int                 # the budget that bound, if one did
+    cap_scope: str | None    # 'drill' | 'pool' | None when nothing bound
+
+    @property
+    def capped(self) -> bool:
+        return self.total < self.seen_total
+
+    def to_dict(self) -> dict[str, int | str | None]:
+        return {
+            "seen": self.seen_total, "credited": self.total,
+            "cap": self.cap, "scope": self.cap_scope,
+        }
+
+
+def pool_members(drill: DrillSpec, catalog: tuple[DrillSpec, ...]) -> tuple[DrillSpec, ...]:
+    """Every drill sharing this drill's daily rep budget, itself included."""
+    pool = drill.scoring.cap_pool
+    if pool is None:
+        return (drill,)
+    return tuple(d for d in catalog if d.scoring.cap_pool == pool)
+
+
+def pool_cap(drill: DrillSpec, catalog: tuple[DrillSpec, ...]) -> int:
+    """The pool's daily budget: the largest cap among its members."""
+    return max(d.scoring.daily_rep_cap for d in pool_members(drill, catalog))
+
+
+def credit_reps(
+    integrity: IntegrityResult,
+    drill: DrillSpec,
+    *,
+    drill_reps_today: int,
+    pool_reps_today: int,
+    pool_budget: int,
+) -> RepCredit:
+    """How many of this session's reps count toward the day.
+
+    `drill_reps_today` and `pool_reps_today` are reps already credited today
+    on this drill and on its pool; both counts include this drill's reps, so
+    the pool number is never smaller. Hands are scaled together so the
+    weak-side share is unchanged by the cap -- a capped session is still as
+    balanced as it was.
+    """
+    seen = integrity.reps_total
+    drill_room = max(0, drill.scoring.daily_rep_cap - drill_reps_today)
+    pool_room = max(0, pool_budget - pool_reps_today)
+    room = min(drill_room, pool_room)
+    total = min(seen, room)
+    if total >= seen:
+        cap, scope = 0, None
+    elif drill_room <= pool_room:
+        cap, scope = drill.scoring.daily_rep_cap, "drill"
+    else:
+        cap, scope = pool_budget, "pool"
+    share = total / seen if seen else 0.0
+    left = int(round(integrity.reps_left * share))
+    right = int(round(integrity.reps_right * share))
+    # Rounding can push the sides a rep over the total; take it from the
+    # larger side, never below zero.
+    if left + right > total:
+        if left >= right:
+            left -= (left + right) - total
+        else:
+            right -= (left + right) - total
+    return RepCredit(
+        seen_total=seen, seen_left=integrity.reps_left, seen_right=integrity.reps_right,
+        total=total, left=max(0, left), right=max(0, right), cap=cap, cap_scope=scope,
+    )
+
+
 def score_session(
     drill: DrillSpec,
     integrity: IntegrityResult,

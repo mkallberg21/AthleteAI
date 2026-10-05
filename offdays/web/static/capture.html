@@ -2640,7 +2640,16 @@ function showResult(result) {
     box.innerHTML = '';
   }
 
+  // What counted toward today. When the day's rep budget bound, the camera's
+  // own count sits beside it so the athlete sees the work was seen; the note
+  // in r-notes says why the two differ.
   $('r-reps').textContent = result.reps_total;
+  const seen = result.reps_seen;
+  const repLabel = $('r-reps').nextElementSibling;
+  if (repLabel) {
+    repLabel.textContent = (seen != null && seen > result.reps_total)
+      ? `Reps counted (${seen} seen)` : 'Reps';
+  }
   $('r-left').textContent = result.reps_left;
   $('r-right').textContent = result.reps_right;
   $('r-xp').textContent = result.xp_awarded;

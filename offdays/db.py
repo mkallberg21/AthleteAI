@@ -397,7 +397,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     quality_json     TEXT,
     -- Marked for ever on a session the camera could not count. Kept out of
     -- any statistic that needs a measured number, counted for turning up.
-    self_reported    INTEGER NOT NULL DEFAULT 0
+    self_reported    INTEGER NOT NULL DEFAULT 0,
+    -- What the camera counted; reps_total is what counted toward the day
+    -- after the rep cap. NULL means the same as reps_total.
+    reps_seen        INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_athlete ON sessions(athlete_id, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
@@ -1093,6 +1096,10 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # Marked for ever on a session the camera could not count. Kept out of
         # any statistic that needs a measured number, counted for turning up.
         ("self_reported", "INTEGER NOT NULL DEFAULT 0"),
+        # What the camera counted. reps_total is what counted toward the day
+        # after the rep cap; this is the number before it. NULL on sessions
+        # from before the cap existed, which means "the same as reps_total".
+        ("reps_seen", "INTEGER"),
     ],
     "rep_events": [
         ("peak", "REAL"),

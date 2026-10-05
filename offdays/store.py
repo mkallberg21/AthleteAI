@@ -11,7 +11,7 @@ import json
 import logging
 import pathlib
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -38,7 +38,7 @@ from . import wellness
 from .db import (connect, fresh_token, hash_token, init_db, new_join_code,
                   new_nonce, new_token, transaction)
 from .drills import DRILLS_BY_KEY, get_drill
-from .drills.base import SignalKind
+from .drills.base import Metric, SignalKind
 from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import guardians as guardians_mod
@@ -56,9 +56,13 @@ from .quality import QualityReport, RepFeature, analyze as analyze_quality
 from .scoring import (
     AthleteStats,
     BADGES_BY_KEY,
+    RepCredit,
     compute_streak,
+    credit_reps,
     earned_badges,
     level_progress,
+    pool_cap,
+    pool_members,
     score_session,
 )
 from . import week_plan
@@ -75,6 +79,17 @@ MAX_WORDINGS = 60
 #: One recognition message, on a phone, read by a child. Longer than this and
 #: it is a letter.
 MAX_WORDING_CHARS = 320
+
+
+def _cap_note(credit: RepCredit, drill) -> str:
+    """Why fewer reps counted than the camera saw, in the athlete's terms."""
+    what = (f"{drill.name}" if credit.cap_scope == "drill"
+            else f"{drill.name} and the drills it shares a limit with")
+    return (
+        f"The camera counted {credit.seen_total} reps and {credit.total} of them "
+        f"count toward today. {what} count up to {credit.cap} reps a day, so the "
+        f"rest is practice, not points. Tomorrow starts fresh."
+    )
 
 
 def _now() -> datetime:
@@ -1940,6 +1955,7 @@ class Store:
         start = (_now().date() - timedelta(days=days - 1)).isoformat()
         rows = self.conn.execute(
             "SELECT id, drill_key, status, reps_total, reps_left, reps_right, "
+            "  COALESCE(reps_seen, reps_total) AS reps_seen, "
             "  hold_ms, duration_ms, quality_score, xp_awarded, integrity_notes, "
             "  date(COALESCE(completed_at, submitted_at)) AS day "
             "FROM sessions WHERE athlete_id = ? AND status != 'open' "
@@ -1960,6 +1976,10 @@ class Store:
                 "day": row["day"],
                 "status": row["status"],
                 "reps": int(row["reps_total"] or 0),
+                # What the camera counted, when the day's rep cap held some
+                # back. A coach or parent should see the work was done even
+                # though it did not all count.
+                "reps_seen": int(row["reps_seen"] or 0),
                 "left": int(row["reps_left"] or 0),
                 "right": int(row["reps_right"] or 0),
                 "hold_s": round(int(row["hold_ms"] or 0) / 1000),
@@ -3090,9 +3110,25 @@ class Store:
 
         today, effective_at = self._effective_day(completed_at)
         already = self._xp_on_day(athlete_id, today)
+
+        # The day's rep budget, spent before XP is worked out so the XP is for
+        # the reps that counted. A held or rejected session spends nothing:
+        # it has not been established as work yet, and a coach approving it
+        # later goes through the same gate (review_session).
+        credit = None
+        scored = verdict
+        if verdict.status == "counted" and drill.metric is Metric.REPS:
+            credit = self._credit_reps(athlete_id, drill, verdict, today)
+            scored = replace(
+                verdict, reps_total=credit.total,
+                reps_left=credit.left, reps_right=credit.right,
+            )
+            if credit.capped:
+                scored.notes = list(verdict.notes) + [_cap_note(credit, drill)]
+
         breakdown = score_session(
             drill,
-            verdict,
+            scored,
             hold_ms=claim.hold_ms,
             dominant_hand=hand,
             xp_already_today=already,
@@ -3103,15 +3139,17 @@ class Store:
         with transaction(self.conn) as c:
             c.execute(
                 "UPDATE sessions SET submitted_at=?, completed_at=?, duration_ms=?, "
-                "reps_total=?, reps_left=?, reps_right=?, hold_ms=?, mean_confidence=?, "
+                "reps_total=?, reps_left=?, reps_right=?, reps_seen=?, hold_ms=?, "
+                "mean_confidence=?, "
                 "cadence_cv=?, integrity_score=?, integrity_notes=?, xp_awarded=?, "
                 "status=?, client_version=?, device_label=?, quality_score=?, "
                 "quality_json=? WHERE id=?",
                 (
-                    _iso(_now()), effective_at, claim.duration_ms, verdict.reps_total,
-                    verdict.reps_left, verdict.reps_right, claim.hold_ms,
+                    _iso(_now()), effective_at, claim.duration_ms, scored.reps_total,
+                    scored.reps_left, scored.reps_right, verdict.reps_total,
+                    claim.hold_ms,
                     claim.mean_confidence, verdict.cadence_cv, verdict.score,
-                    json.dumps(verdict.notes), awarded, verdict.status,
+                    json.dumps(scored.notes), awarded, verdict.status,
                     client_version, device_label, report.score,
                     json.dumps(report.to_dict()), session_id,
                 ),
@@ -3162,7 +3200,7 @@ class Store:
             "status": verdict.status,
             "recognition": recognised,
             "integrity_score": round(verdict.score, 3),
-            "notes": verdict.notes,
+            "notes": scored.notes,
             **({"ball": ball_review.to_dict()} if ball_review else {}),
             **({"saves": save_report.to_dict()} if save_report else {}),
             **({"footwork": footwork_report.to_dict()} if footwork_report else {}),
@@ -3171,9 +3209,13 @@ class Store:
             **({"rhythm": rhythm_report.to_dict()} if rhythm_report else {}),
             **({"shot_speed": speed_report.to_dict()} if speed_report else {}),
             **({"movement": moving_report} if moving_report else {}),
-            "reps_total": verdict.reps_total,
-            "reps_left": verdict.reps_left,
-            "reps_right": verdict.reps_right,
+            "reps_total": scored.reps_total,
+            "reps_left": scored.reps_left,
+            "reps_right": scored.reps_right,
+            # What the camera counted, next to what counted toward the day.
+            # The same unless the day's rep budget bound.
+            "reps_seen": verdict.reps_total,
+            **({"rep_cap": credit.to_dict()} if credit and credit.capped else {}),
             "xp_awarded": awarded,
             "xp_breakdown": [{"label": l, "amount": a} for l, a in breakdown.lines],
             "new_badges": [
@@ -3226,6 +3268,14 @@ class Store:
             reps_left=row["reps_left"],
             reps_right=row["reps_right"],
         )
+        # Approval spends the day's rep budget the same way a counted session
+        # does at submit time, against whatever else was counted that day.
+        # The reps the camera saw stay in reps_seen for the coach.
+        if drill.metric is Metric.REPS:
+            credit = self._credit_reps(athlete_id, drill, verdict, day,
+                                       exclude_session=session_id)
+            verdict = replace(verdict, reps_total=credit.total,
+                              reps_left=credit.left, reps_right=credit.right)
         breakdown = score_session(
             drill,
             verdict,
@@ -3236,8 +3286,11 @@ class Store:
         awarded = breakdown.total
         with transaction(self.conn) as c:
             c.execute(
-                "UPDATE sessions SET status='counted', xp_awarded=? WHERE id=?",
-                (awarded, session_id),
+                "UPDATE sessions SET status='counted', xp_awarded=?, "
+                "reps_total=?, reps_left=?, reps_right=?, "
+                "reps_seen=COALESCE(reps_seen, reps_total) WHERE id=?",
+                (awarded, verdict.reps_total, verdict.reps_left, verdict.reps_right,
+                 session_id),
             )
             if awarded > 0:
                 c.execute(
@@ -3296,6 +3349,42 @@ class Store:
             (athlete_id, day),
         ).fetchone()
         return int(row["t"])
+
+    def _reps_credited_on_day(
+        self, athlete_id: int, day: str, drill_keys: tuple[str, ...],
+        exclude_session: int | None = None,
+    ) -> int:
+        """Reps already counted toward `day` on these drills.
+
+        Counted sessions only: a held one has not spent any budget yet. The
+        day is the one the session was credited to (completed_at), the same
+        day the XP cap uses, so a session synced after midnight spends the
+        budget of the day it was trained.
+        """
+        marks = ",".join("?" * len(drill_keys))
+        row = self.conn.execute(
+            f"SELECT COALESCE(SUM(reps_total),0) AS r FROM sessions "
+            f"WHERE athlete_id=? AND status='counted' AND drill_key IN ({marks}) "
+            f"AND date(COALESCE(completed_at, submitted_at)) = ? "
+            f"AND id IS NOT ?",
+            (athlete_id, *drill_keys, day, exclude_session),
+        ).fetchone()
+        return int(row["r"])
+
+    def _credit_reps(
+        self, athlete_id: int, drill, verdict, day: str,
+        exclude_session: int | None = None,
+    ) -> RepCredit:
+        """Spend the day's rep budget on a counted session."""
+        members = pool_members(drill, ALL_DRILLS)
+        return credit_reps(
+            verdict, drill,
+            drill_reps_today=self._reps_credited_on_day(
+                athlete_id, day, (drill.key,), exclude_session),
+            pool_reps_today=self._reps_credited_on_day(
+                athlete_id, day, tuple(d.key for d in members), exclude_session),
+            pool_budget=pool_cap(drill, ALL_DRILLS),
+        )
 
     def athlete_stats(self, athlete_id: int) -> AthleteStats:
         c = self.conn
