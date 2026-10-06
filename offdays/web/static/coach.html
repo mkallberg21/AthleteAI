@@ -634,6 +634,7 @@
       <h2 style="margin:0">Claim codes</h2>
       <button class="secondary inline" id="print-slips">Print</button>
     </div>
+    <p class="small muted no-print" id="slips-note"></p>
     <p class="small muted no-print">
       Cut these up and hand them out. Each code works once, expires in 30 days,
       and is not stored anywhere you can read it again, so print this now.
@@ -2478,9 +2479,23 @@ function renderSlips(res) {
     ...res.guardian_invites.map((g) => `<div class="slip">
         <b>${esc(g.athlete_name)} &middot; parent</b>
         <div class="code">${esc(g.code)}</div>
-        <span>${esc(g.email)}</span>
+        <span>${esc(g.email)}${g.emailed ? ' &middot; emailed' : ''}</span>
       </div>`),
   ].join('');
+
+  // Say what went out on its own, so the coach only prints what did not.
+  const invites = res.guardian_invites || [];
+  const emailed = res.emailed || 0;
+  const note = $('slips-note');
+  if (note) {
+    note.textContent = invites.length
+      ? (emailed
+        ? `${emailed} of ${invites.length} parent invites were emailed with a link. `
+          + `Print the rest, and the athlete codes, for families without an address.`
+        : `No parent invites were emailed (no addresses, or email is not set up). `
+          + `Print and hand out.`)
+      : '';
+  }
 
   if (slips.length) $('slips-card').scrollIntoView({ behavior: 'smooth' });
 }

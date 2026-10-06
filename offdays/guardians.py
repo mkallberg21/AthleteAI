@@ -202,15 +202,18 @@ def create_invite(
     code = new_invite_code()
     expires = _now() + timedelta(days=INVITE_TTL_DAYS)
     with transaction(conn) as c:
-        c.execute(
+        cur = c.execute(
             "INSERT INTO guardian_invites(athlete_id, created_by, code_hash, email, "
             "created_at, expires_at) VALUES (?,?,?,?,?,?)",
             (athlete_id, created_by, _hash_code(code), email, _iso(_now()), _iso(expires)),
         )
+        invite_id = int(cur.lastrowid)
     return {
+        "invite_id": invite_id,
         "code": code,
         "athlete_id": athlete_id,
         "athlete_name": athlete["display_name"],
+        "email": email,
         "expires_at": _iso(expires),
     }
 
@@ -315,6 +318,70 @@ def link_existing(
             (_iso(_now()), guardian_id, row["id"]),
         )
     return int(row["athlete_id"])
+
+
+# ---------------------------------------------------------------------------
+# The athlete's own sign-in, handed over by the parent
+# ---------------------------------------------------------------------------
+
+def signin_link(code: str) -> str:
+    """The app with the athlete's sign-in code in the URL: tap it, you are in."""
+    from .config import CONFIG
+
+    base = CONFIG.app_base_url.rstrip("/") if CONFIG.app_base_url else ""
+    return f"{base}/app/index.html?code={code}"
+
+
+def athlete_signin_link(
+    conn: sqlite3.Connection, guardian_id: int, athlete_id: int
+) -> dict[str, Any]:
+    """The child's standing sign-in link, for the parent to forward.
+
+    Most kids have a phone of their own and the parent is on a tablet, so what
+    the parent needs is something to text or email, not a code to read out.
+    The link carries the athlete's own sign-in code -- the same thing a coach
+    hands out on a slip -- so it is not single-use and does not expire: the
+    parent says yes once, and the child gets in on any phone, any time, for
+    as long as that yes stands. A new phone, a cleared browser, a tablet at a
+    grandparent's house: the same link works.
+
+    Refused until participation is granted. The parent registers the child
+    -- says yes -- and only then has something to forward, because a link to
+    an account that cannot record anything teaches the child the app is
+    broken. Withdrawing participation does not kill the link but does stop
+    recording; the app says "waiting on a parent" rather than refusing entry.
+
+    Each call issues a fresh code and retires the previous one and any
+    printed claim slip, so a link that went astray can be revoked by asking
+    for a new one. That also signs out every phone holding the old code,
+    which is the point of asking.
+    """
+    require_guardianship(conn, guardian_id, athlete_id)
+    if not has_consent(conn, athlete_id, Scope.PARTICIPATION):
+        raise GuardianError(
+            "Say yes to training first. The sign-in link only works once that is on."
+        )
+    athlete = conn.execute(
+        "SELECT id, display_name FROM users WHERE id = ? AND active = 1 "
+        "AND role = 'athlete'",
+        (athlete_id,),
+    ).fetchone()
+    if athlete is None:
+        raise GuardianError("that athlete is no longer in the program")
+
+    token = fresh_token(conn)
+    with transaction(conn) as c:
+        c.execute(
+            "UPDATE users SET token_hash = ?, claim_code_hash = NULL, "
+            "claim_expires_at = NULL WHERE id = ?",
+            (hash_token(token), athlete_id),
+        )
+    return {
+        "athlete_id": athlete_id,
+        "athlete_name": athlete["display_name"],
+        "code": token,
+        "link": signin_link(token),
+    }
 
 
 # ---------------------------------------------------------------------------

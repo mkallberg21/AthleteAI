@@ -42,6 +42,7 @@ from .drills.base import Metric, SignalKind
 from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import guardians as guardians_mod
+from . import invites as invites_mod
 from . import load as load_mod
 from . import roster as roster_mod
 from . import absence
@@ -3836,7 +3837,9 @@ class Store:
         created: list[dict[str, Any]] = []
         updated: list[dict[str, Any]] = []
         invites: list[dict[str, Any]] = []
+        emailed = 0
         now = _iso(_now())
+        sender = self._invite_sender(org_id, created_by)
 
         for athlete in plan.athletes:
             if not athlete.ok:
@@ -3909,11 +3912,15 @@ class Store:
                     invite = guardians_mod.create_invite(
                         self.conn, athlete_id, created_by, athlete.guardian_email
                     )
+                    sent = invites_mod.deliver(self.conn, invite, **sender)
+                    emailed += 1 if sent else 0
                     invites.append({
+                        "invite_id": invite["invite_id"],
                         "athlete_id": athlete_id,
                         "athlete_name": athlete.display_name,
                         "email": athlete.guardian_email,
                         "code": invite["code"],
+                        "emailed": sent,
                     })
                 except guardians_mod.GuardianError:
                     # A bad invite must not lose the athlete who was just
@@ -3924,7 +3931,21 @@ class Store:
             "created": created,
             "updated": updated,
             "guardian_invites": invites,
+            "emailed": emailed,
             "skipped": [a.to_dict() for a in plan.athletes if not a.ok],
+        }
+
+    def _invite_sender(self, org_id: int, staff_id: int) -> dict[str, str]:
+        """Who the invite email says it is from: the program and the coach."""
+        org = self.conn.execute(
+            "SELECT name FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        who = self.conn.execute(
+            "SELECT display_name FROM users WHERE id = ?", (staff_id,)
+        ).fetchone()
+        return {
+            "org_name": (org["name"] if org else "") or "your program",
+            "coach_name": (who["display_name"] if who else "") or "Your coach",
         }
 
     def claim_account(self, code: str) -> dict[str, Any]:

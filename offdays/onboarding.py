@@ -78,7 +78,10 @@ PROGRAM_STEPS: tuple[Step, ...] = (
     Step(
         key="first_session",
         title="Get one athlete training",
-        detail="Hand out their code and have them record one session.",
+        detail=(
+            "Their parent texts them a sign-in link from the parent portal once "
+            "they say yes; or hand out a printed slip. One session counts."
+        ),
         why=(
             "The only step that proves the whole chain works: code handed "
             "over, app installed, camera pointed, session counted."
@@ -88,7 +91,7 @@ PROGRAM_STEPS: tuple[Step, ...] = (
     Step(
         key="parents",
         title="Invite the parents",
-        detail="Send a guardian invite for each athlete.",
+        detail="A roster with a Parent Email column does this on import; otherwise invite from the roster row.",
         why=(
             "Parents consent, and once one is linked their decision is what "
             "lets that athlete train. Better to do it early than mid-season."
@@ -260,14 +263,17 @@ def blockers(conn: sqlite3.Connection, org_id: int) -> list[dict[str, Any]]:
     # The gate that surprises people. Enforcement starts the moment a parent is
     # linked, so inviting parents can lock athletes out overnight, and the app
     # gives the athlete a clear message while telling the coach nothing.
+    # The latest decision, not "ever granted": consents are append-only and
+    # a parent who withdrew has a granted row above a revoked one. Reading
+    # it the same way enforcement does is what keeps this list honest.
     waiting = conn.execute(
         "SELECT u.id, u.display_name FROM users u "
         "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1 "
         "AND EXISTS (SELECT 1 FROM guardians g WHERE g.athlete_id = u.id) "
-        "AND NOT EXISTS ("
-        "  SELECT 1 FROM consents c WHERE c.athlete_id = u.id "
-        "  AND c.scope = 'participation' AND c.granted = 1"
-        ")",
+        "AND COALESCE(("
+        "  SELECT c.granted FROM consents c WHERE c.athlete_id = u.id "
+        "  AND c.scope = 'participation' ORDER BY c.id DESC LIMIT 1"
+        "), 0) = 0",
         (org_id,),
     ).fetchall()
     if waiting:
@@ -336,12 +342,7 @@ def athlete_blockers(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str
     ).fetchone()
     if linked is None:
         return []
-    granted = conn.execute(
-        "SELECT 1 FROM consents WHERE athlete_id = ? AND scope = 'participation' "
-        "AND granted = 1 LIMIT 1",
-        (athlete_id,),
-    ).fetchone()
-    if granted is not None:
+    if guardians.has_consent(conn, athlete_id, guardians.Scope.PARTICIPATION):
         return []
     return [{
         "key": "awaiting_consent",

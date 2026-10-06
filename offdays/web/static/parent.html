@@ -119,6 +119,60 @@ function qualityClass(score) {
   return score >= 80 ? 'good' : score >= 60 ? 'mid' : 'low';
 }
 
+function firstName(name) {
+  return (name || '').trim().split(/\s+/)[0] || 'their';
+}
+
+/**
+ * The sign-in link, with every way a parent on a tablet might get it to a
+ * phone that is not theirs. Share goes through the device's own sheet where
+ * one exists (iOS, Android, most tablets); Text and Email are plain sms: and
+ * mailto: links so the native apps open with the message written; Copy is
+ * for everything else.
+ */
+function renderSigninLink(wrap, res) {
+  const first = firstName(res.athlete_name);
+  const link = res.link || `${location.origin}/app/index.html?code=${encodeURIComponent(res.code)}`;
+  const message = `${first}, tap this to sign in to your training app: ${link}`;
+  const subject = `${first}'s training app sign-in`;
+  const canShare = typeof navigator.share === 'function';
+
+  wrap.innerHTML = `
+    <div class="small muted">${esc(res.athlete_name)}'s sign-in link</div>
+    <input readonly value="${esc(link)}" data-link-field
+           style="margin:6px 0;font-size:.85rem" onfocus="this.select()">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="secondary inline" data-copy>Copy</button>
+      ${canShare ? '<button class="secondary inline" data-share>Share</button>' : ''}
+      <a class="secondary inline" style="text-decoration:none"
+         href="sms:?&body=${encodeURIComponent(message)}">Text</a>
+      <a class="secondary inline" style="text-decoration:none"
+         href="mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}">Email</a>
+    </div>
+    <div class="small muted" style="margin-top:6px">
+      Keeps working all season, on any phone: a new phone or a cleared browser
+      just needs the same link again. If it goes astray, come back here for a
+      new one and the old one stops working everywhere.
+      Or they can type <b>${esc(res.code)}</b> under "Your athlete code".
+    </div>`;
+
+  wrap.querySelector('[data-copy]').addEventListener('click', async (e) => {
+    const field = wrap.querySelector('[data-link-field]');
+    try {
+      await navigator.clipboard.writeText(link);
+      e.target.textContent = 'Copied';
+    } catch {
+      field.focus(); field.select();
+      e.target.textContent = 'Select and copy';
+    }
+  });
+  const share = wrap.querySelector('[data-share]');
+  if (share) share.addEventListener('click', async () => {
+    try { await navigator.share({ title: subject, text: message, url: link }); }
+    catch { /* dismissed */ }
+  });
+}
+
 function renderAthlete(a) {
   const q = a.quality || {};
   const trend = q.trend > 2 ? ' <span class="trend-up">&#9650;</span>'
@@ -172,6 +226,16 @@ function renderAthlete(a) {
       <div class="stat"><b class="${q.current ? qualityClass(q.current) : ''}">${
         q.current === null || q.current === undefined ? '–' : q.current
       }${trend}</b><span>Form score</span></div>
+    </div>
+
+    <div style="margin-top:12px" data-signin-wrap="${a.athlete_id}">
+      <button class="secondary inline" data-signin="${a.athlete_id}">
+        Send ${esc(firstName(a.display_name))} their sign-in link
+      </button>
+      <span class="small muted" style="display:block;margin-top:4px">
+        A link to text or email to their phone. It keeps working all season,
+        on any phone. Getting a new one turns the old one off.
+      </span>
     </div>
 
     ${assignments ? `<h3 style="margin:18px 0 4px;font-size:.95rem">From their coach</h3>${assignments}` : ''}
@@ -704,6 +768,26 @@ function wire() {
         showError(e.message);
       }
       box.disabled = false;
+    });
+  });
+
+  // The step a printed slip used to do. The parent is usually on a tablet
+  // and the kid has a phone of their own, so the deliverable is a link they
+  // can text, email or share -- not a code to read across the room. The
+  // server refuses it until training is switched on, in the parent's words.
+  document.querySelectorAll('[data-signin]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const wrap = btn.closest('[data-signin-wrap]');
+      try {
+        const res = await api(`/api/guardians/athlete-link/${btn.dataset.signin}`, {
+          method: 'POST',
+        });
+        renderSigninLink(wrap, res);
+      } catch (e) {
+        btn.disabled = false;
+        showError(e.message);
+      }
     });
   });
 
