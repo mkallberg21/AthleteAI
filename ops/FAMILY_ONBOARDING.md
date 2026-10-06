@@ -81,8 +81,12 @@ The link is not single-use and does not expire. The parent says yes once;
 the kid is in for the season on whatever phone opens the link -- a new
 phone, a cleared browser, a tablet at a grandparent's. Access ends when a
 parent issues a new link (old one off everywhere), withdraws training
-(signed in, but the app says "waiting on a parent" and will not record), or
-the coach deactivates the athlete.
+(signed in, but the app says "waiting on a parent" and will not record),
+the coach deactivates the athlete, or **the season end date passes**
+(director sets it on the Season card; the morning after, athlete sign-in
+says "the season has ended" until the next date is set -- parents and staff
+are never cut off, and nobody re-registers: the same link works again the
+day the next season opens).
 
 ## Rules the code enforces
 

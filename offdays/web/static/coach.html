@@ -177,6 +177,14 @@
     <label for="season-phase">This program is currently</label>
     <select id="season-phase"></select>
     <div id="season-note" class="small muted" style="margin-top:8px"></div>
+    <label for="season-ends" style="margin-top:12px">Athlete access ends on</label>
+    <input id="season-ends" type="date">
+    <div class="small muted" style="margin-top:4px">
+      Parents say yes once and their athlete is in until this date. The
+      morning after, athlete sign-in pauses until you set next season's date.
+      Parents and coaches are never locked out. Leave blank for no cutoff.
+    </div>
+    <div id="season-ends-state" class="small muted" style="margin-top:4px"></div>
     <div id="season-err" class="err hidden"></div>
   </div>
 
@@ -2147,6 +2155,28 @@ async function loadSeason(isDirector) {
       $('season-note').textContent = note(select.value);
       // Every budget on the page was computed against the old phase.
       await loadAll();
+    } catch (e) {
+      $('season-err').textContent = e.message;
+      $('season-err').classList.remove('hidden');
+    }
+  });
+
+  const ends = $('season-ends');
+  ends.value = data.ends_on || '';
+  ends.disabled = !isDirector;
+  const endsState = (d) => {
+    $('season-ends-state').textContent = !d.ends_on ? 'No cutoff set.'
+      : d.over ? `Ended ${d.ends_on}. Athletes cannot sign in until you set a new date.`
+      : `Athletes can sign in through ${d.ends_on}.`;
+  };
+  endsState(data);
+  ends.addEventListener('change', async () => {
+    $('season-err').classList.add('hidden');
+    try {
+      const res = await api('/api/org/season', {
+        method: 'PUT', body: { ends_on: ends.value || '' },
+      });
+      endsState(res);
     } catch (e) {
       $('season-err').textContent = e.message;
       $('season-err').classList.remove('hidden');

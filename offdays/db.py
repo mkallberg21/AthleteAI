@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- already a lot of that. Chosen, never inferred -- sports do not share a
     -- season, and a wrong guess quietly changes what every child is told.
     season_phase TEXT NOT NULL DEFAULT 'preseason',
+    -- The day athlete access ends, ISO date, blank for none. A parent says
+    -- yes once and the child is in until this date; after it their sign-in
+    -- stops working until a director sets the next season's date. Parents
+    -- and staff are never cut off, so the program can be set up for next
+    -- year without anyone re-registering.
+    season_ends_on TEXT NOT NULL DEFAULT '',
     -- A senior figure in the program whose recognition carries extra weight --
     -- a director of player development, a former professional. Optional, and
     -- absent means every message comes from the athlete's own coach.
@@ -1129,6 +1135,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("kind", "TEXT NOT NULL DEFAULT 'program'"),
         ("sibling_compare", "INTEGER NOT NULL DEFAULT 0"),
         ("season_phase", "TEXT NOT NULL DEFAULT 'preseason'"),
+        ("season_ends_on", "TEXT NOT NULL DEFAULT ''"),
         # A club's own badge. The file lives under web/static/teams/ and this
         # is its name -- a path rather than a blob, because a logo is served
         # to every screen on every load and a database is the wrong place to
