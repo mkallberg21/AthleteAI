@@ -26,7 +26,16 @@ Last updated: 2026-09-28.
   with Svix). At pilot volume (about 35 families) a bounce is something a
   coach notices. If bounce handling is needed later, add a Resend verifier
   to `offdays/webhooks.py`. Don't switch providers to get it.
-- **Status: not set up yet.** Needed:
+- **Status: scripted, waiting on two tokens.** `scripts/setup_resend.py`
+  does every step below in one idempotent run on k6-server: adds the
+  domain in Resend, pushes DKIM/SPF/DMARC into the Cloudflare zone (DNS
+  only), polls verification, writes `OFFDAYS_SMTP_*` into `.env.prod`,
+  recreates the container, and `--test you@x` sends one mail through the
+  app's own outbox. It needs `RESEND_API_KEY` (**full access**; the
+  UtiliTrust key on the box is sending-only and cannot manage domains) and
+  `CLOUDFLARE_API_TOKEN` (Zone:DNS:Edit on 0ffdays.com), passed in the
+  environment for that one command and never stored. The steps, for the
+  record:
   1. Add `mail.0ffdays.com` in Resend. The free plan allows one domain, which
      is probably already used by `mail.utilitrust.com`, so this is either a
      second free Resend account or the paid plan. Free is capped at 100/day

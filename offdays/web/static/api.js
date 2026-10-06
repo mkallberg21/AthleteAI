@@ -43,6 +43,15 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
     setToken(null);
     throw new Error('Your sign-in expired. Enter your athlete code again.');
   }
+  if (res.status === 403 && path === '/api/me') {
+    // A real code the server will not seat: the season has ended, or the
+    // wrong program. The reason is the whole message; a generic one would
+    // send a kid to their coach saying the app is broken.
+    let detail = 'You cannot sign in right now.';
+    try { detail = (await res.json()).detail || detail; } catch { /* keep */ }
+    setToken(null);
+    throw new Error(detail);
+  }
   if (res.status === 429) {
     // Too many wrong codes from this phone or at this code. Say how long,
     // and do not drop the stored token: the code may well be right.

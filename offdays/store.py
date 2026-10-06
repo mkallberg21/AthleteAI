@@ -2694,6 +2694,17 @@ class Store:
         if row is None:
             raise StoreError("invalid or inactive token")
 
+        # A season that has ended closes the door on athletes, and only on
+        # athletes. Staff get in to set next season's date, and parents get
+        # in because their rights -- export, erase, withdraw -- do not expire
+        # with a fixture list. The link the parent sent in spring works again
+        # the day a director opens the next season; nobody re-registers.
+        if row["role"] == "athlete" and self.season_over(row["org_id"]):
+            raise StoreError(
+                "The season has ended, so sign-in is paused until your program "
+                "opens the next one. Nothing is lost."
+            )
+
         memberships = [
             Membership(org_id=m["org_id"], org_name=m["org_name"], role=m["role"])
             for m in self.conn.execute(
@@ -2724,6 +2735,24 @@ class Store:
             memberships=memberships,
             team_ids=self._team_scope(row["id"], active.org_id, active.role),
         )
+
+    def season_ends_on(self, org_id: int) -> str:
+        row = self.conn.execute(
+            "SELECT COALESCE(season_ends_on, '') AS d FROM organizations WHERE id = ?",
+            (org_id,),
+        ).fetchone()
+        return (row["d"] if row else "") or ""
+
+    def season_over(self, org_id: int, today: date | None = None) -> bool:
+        """Past the program's season end date. Blank means never."""
+        ends = self.season_ends_on(org_id)
+        if not ends:
+            return False
+        try:
+            end = date.fromisoformat(ends)
+        except ValueError:
+            return False
+        return (today or _now().date()) > end
 
     def _team_scope(self, user_id: int, org_id: int, role: str) -> list[int] | None:
         """Which teams this caller may see, or None for all of them.

@@ -249,6 +249,11 @@ def _principal(
         # re-authenticating would not help, and it was not a wrong guess.
         if "access to that program" in str(exc):
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        # A real code after the season has ended is not a wrong guess either:
+        # counting it would throttle a kid for trying the link their parent
+        # sent, and the message has to reach them rather than a lockout.
+        if "season has ended" in str(exc):
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         throttle.record_failure(store.conn, attempt)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     throttle.record_success(store.conn, attempt)
@@ -2496,7 +2501,9 @@ def _side_words(store: Store, org_id: int) -> dict[str, str]:
 
 
 class SeasonPhaseSetting(BaseModel):
-    phase: str = Field(min_length=1, max_length=40)
+    phase: str | None = Field(default=None, min_length=1, max_length=40)
+    #: ISO date (YYYY-MM-DD) athlete access ends, or "" for no cutoff.
+    ends_on: str | None = Field(default=None, max_length=10)
 
 
 @app.get("/api/org/season")
@@ -2507,6 +2514,8 @@ def get_season_phase(
     return {
         "phase": season_mod.get(_org_phase(store, principal.org_id)).to_dict(),
         "phases": [p.to_dict() for p in season_mod.PHASES],
+        "ends_on": store.season_ends_on(principal.org_id),
+        "over": store.season_over(principal.org_id),
     }
 
 
@@ -2528,14 +2537,34 @@ def set_season_phase(
             status_code=403,
             detail="only a director can change the season phase",
         )
-    if body.phase not in season_mod.BY_KEY:
+    if body.phase is not None and body.phase not in season_mod.BY_KEY:
         raise HTTPException(status_code=400, detail=f"unknown phase: {body.phase}")
+    if body.ends_on:
+        from datetime import date as _date
+        try:
+            _date.fromisoformat(body.ends_on)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail="season end must be a date like 2027-06-30"
+            ) from None
     with transaction(store.conn) as conn:
-        conn.execute(
-            "UPDATE organizations SET season_phase = ? WHERE id = ?",
-            (body.phase, principal.org_id),
-        )
-    return {"phase": season_mod.BY_KEY[body.phase].to_dict()}
+        if body.phase is not None:
+            conn.execute(
+                "UPDATE organizations SET season_phase = ? WHERE id = ?",
+                (body.phase, principal.org_id),
+            )
+        if body.ends_on is not None:
+            # Blank clears it: no cutoff. The date itself is the last day the
+            # athletes can sign in; the morning after, they cannot.
+            conn.execute(
+                "UPDATE organizations SET season_ends_on = ? WHERE id = ?",
+                (body.ends_on.strip(), principal.org_id),
+            )
+    return {
+        "phase": season_mod.get(_org_phase(store, principal.org_id)).to_dict(),
+        "ends_on": store.season_ends_on(principal.org_id),
+        "over": store.season_over(principal.org_id),
+    }
 
 
 class SpecialisationSetting(BaseModel):
