@@ -2307,19 +2307,18 @@ def redeem_guardian_invite(
     return result
 
 
-@app.post("/api/guardians/athlete-code/{athlete_id}", status_code=201)
-def guardian_athlete_code(
+@app.post("/api/guardians/athlete-link/{athlete_id}", status_code=201)
+def guardian_athlete_link(
     athlete_id: int,
     principal: Principal = Depends(_guardian),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """A fresh sign-in code for the parent's own child, shown once.
+    """A single-use sign-in link for the parent's own child, to forward.
 
     The step a printed slip used to do. Refused until the parent has said yes
-    to training, and every call rotates the code, so a slip that went astray
-    stops working the moment the parent does this.
+    to training; each call replaces the previous link and any printed slip.
     """
-    return guardians_mod.athlete_signin_code(store.conn, principal.id, athlete_id)
+    return guardians_mod.athlete_signin_link(store.conn, principal.id, athlete_id)
 
 
 class LinkRequest(BaseModel):

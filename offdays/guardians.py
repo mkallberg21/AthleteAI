@@ -324,23 +324,41 @@ def link_existing(
 # The athlete's own sign-in, handed over by the parent
 # ---------------------------------------------------------------------------
 
-def athlete_signin_code(
+def signin_link(code: str) -> str:
+    """The app with a claim code in the URL: tap it and you are signed in."""
+    from .config import CONFIG
+
+    base = CONFIG.app_base_url.rstrip("/") if CONFIG.app_base_url else ""
+    return f"{base}/app/index.html?claim={code}"
+
+
+def athlete_signin_link(
     conn: sqlite3.Connection, guardian_id: int, athlete_id: int
 ) -> dict[str, Any]:
-    """Mint a fresh sign-in code for the child, for the parent to pass on.
+    """A single-use sign-in link for the child, for the parent to forward.
 
-    Closes the loop the coach used to close with a printed slip: the parent
-    who just said yes is holding a phone, and the child is in the next room.
-    Refused until participation is granted, because handing over a code to an
-    account that cannot record anything teaches the child the app is broken.
+    Most kids have a phone of their own and the parent is on a tablet, so what
+    the parent needs is something to text or email, not a code to read out.
+    This is the same claim mechanism as the printed slip: the link carries a
+    30-day single-use claim code, and redeeming it issues the phone a token.
 
-    Rotation, not recovery. The previous code or token stops working, so a
-    slip that went astray is worthless the moment the parent does this.
+    Refused until participation is granted. The parent registers the child
+    -- says yes -- and only then has something to forward, because a link to
+    an account that cannot record anything teaches the child the app is
+    broken.
+
+    Each call replaces the previous claim code (the column is unique per
+    athlete), so a printed slip or an earlier link that went astray dies the
+    moment the parent asks for a new one. A phone already signed in with a
+    redeemed link keeps working: this issues a new way in, it does not throw
+    the child out.
     """
+    from . import roster as roster_mod
+
     require_guardianship(conn, guardian_id, athlete_id)
     if not has_consent(conn, athlete_id, Scope.PARTICIPATION):
         raise GuardianError(
-            "Say yes to training first. The sign-in code only works once that is on."
+            "Say yes to training first. The sign-in link only works once that is on."
         )
     athlete = conn.execute(
         "SELECT id, display_name FROM users WHERE id = ? AND active = 1 "
@@ -350,17 +368,19 @@ def athlete_signin_code(
     if athlete is None:
         raise GuardianError("that athlete is no longer in the program")
 
-    token = fresh_token(conn)
+    code = roster_mod.new_claim_code()
+    expires = roster_mod.claim_expiry()
     with transaction(conn) as c:
         c.execute(
-            "UPDATE users SET token_hash = ?, claim_code_hash = NULL, "
-            "claim_expires_at = NULL WHERE id = ?",
-            (hash_token(token), athlete_id),
+            "UPDATE users SET claim_code_hash = ?, claim_expires_at = ? WHERE id = ?",
+            (roster_mod.hash_claim(code), expires, athlete_id),
         )
     return {
         "athlete_id": athlete_id,
         "athlete_name": athlete["display_name"],
-        "code": token,
+        "code": code,
+        "link": signin_link(code),
+        "expires_at": expires,
     }
 
 

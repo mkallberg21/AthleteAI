@@ -79,7 +79,7 @@ PROGRAM_STEPS: tuple[Step, ...] = (
         key="first_session",
         title="Get one athlete training",
         detail=(
-            "Their parent gets the sign-in code from their own portal once "
+            "Their parent texts them a sign-in link from the parent portal once "
             "they say yes; or hand out a printed slip. One session counts."
         ),
         why=(

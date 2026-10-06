@@ -1,7 +1,8 @@
 """A new program's families get in without the coach doing anything by hand.
 
 Upload the roster, the parent gets an email with a link, they tap it, say yes
-to training, and the app hands them their child's sign-in code. Every step
+to training, and the app gives them a sign-in link to text to the child.
+Every step
 was already half-built; these tests pin the joins between them, because the
 joins are where it was broken -- an invite that was stored but never sent,
 a sign-up button with no handler, a claim code only the coach could see.
@@ -129,7 +130,10 @@ class TestTheLinkedCodeWorks:
         assert G.guards(store.conn, guardian["guardian_id"], invite["athlete_id"])
 
 
-class TestParentHandsOverTheSignIn:
+class TestParentForwardsTheSignInLink:
+    """The parent is on a tablet; the kid has a phone. What the parent needs
+    is a link to text or email, and they only get it after saying yes."""
+
     def _family(self, store, program):
         result = import_roster(store, program)
         invite = next(i for i in result["guardian_invites"] if i["emailed"])
@@ -139,14 +143,25 @@ class TestParentHandsOverTheSignIn:
     def test_refused_until_training_is_switched_on(self, store, program):
         gid, aid = self._family(store, program)
         with pytest.raises(G.GuardianError, match="Say yes to training first"):
-            G.athlete_signin_code(store.conn, gid, aid)
+            G.athlete_signin_link(store.conn, gid, aid)
 
-    def test_the_code_signs_the_child_in_once_consent_is_given(self, store, program):
+    def test_the_link_carries_a_claim_code_that_signs_the_child_in(self, store, program):
         gid, aid = self._family(store, program)
         G.set_consent(store.conn, aid, gid, G.Scope.PARTICIPATION, True)
-        out = G.athlete_signin_code(store.conn, gid, aid)
+        out = G.athlete_signin_link(store.conn, gid, aid)
         assert out["athlete_name"] == "Jordan Pierce"
-        assert store.authenticate(out["code"]).id == aid
+        assert out["link"].endswith(f"/app/index.html?claim={out['code']}")
+        signed = store.claim_account(out["code"])
+        assert signed["athlete_id"] == aid
+        assert store.authenticate(signed["token"]).id == aid
+
+    def test_the_link_works_once(self, store, program):
+        gid, aid = self._family(store, program)
+        G.set_consent(store.conn, aid, gid, G.Scope.PARTICIPATION, True)
+        code = G.athlete_signin_link(store.conn, gid, aid)["code"]
+        store.claim_account(code)
+        with pytest.raises(StoreError, match="not valid"):
+            store.claim_account(code)
 
     def test_it_replaces_the_printed_claim_code(self, store, program):
         """A slip that went astray stops working the moment the parent does this."""
@@ -156,28 +171,33 @@ class TestParentHandsOverTheSignIn:
         guardian = G.redeem_invite(store.conn, invite["code"], "Dana Pierce")
         G.set_consent(store.conn, invite["athlete_id"], guardian["guardian_id"],
                       G.Scope.PARTICIPATION, True)
-        G.athlete_signin_code(store.conn, guardian["guardian_id"], invite["athlete_id"])
+        G.athlete_signin_link(store.conn, guardian["guardian_id"], invite["athlete_id"])
         with pytest.raises(StoreError, match="not valid"):
             store.claim_account(slip["claim_code"])
 
-    def test_each_call_rotates_so_the_old_code_dies(self, store, program):
+    def test_a_new_link_kills_the_old_one_but_not_a_phone_already_signed_in(
+        self, store, program
+    ):
         gid, aid = self._family(store, program)
         G.set_consent(store.conn, aid, gid, G.Scope.PARTICIPATION, True)
-        first = G.athlete_signin_code(store.conn, gid, aid)["code"]
-        second = G.athlete_signin_code(store.conn, gid, aid)["code"]
+        first = G.athlete_signin_link(store.conn, gid, aid)["code"]
+        phone = store.claim_account(first)["token"]
+        second = G.athlete_signin_link(store.conn, gid, aid)["code"]
         assert first != second
-        assert store.authenticate(second).id == aid
-        with pytest.raises(Exception):
-            store.authenticate(first)
+        with pytest.raises(StoreError, match="not valid"):
+            store.claim_account(first)
+        # The kid who already signed in is not thrown out by a re-send.
+        assert store.authenticate(phone).id == aid
+        assert store.claim_account(second)["athlete_id"] == aid
 
-    def test_a_parent_cannot_mint_a_code_for_another_family(self, store, program):
+    def test_a_parent_cannot_mint_a_link_for_another_family(self, store, program):
         gid, aid = self._family(store, program)
         other = store.conn.execute(
             "SELECT id FROM users WHERE display_name = 'Sam Rivera'"
         ).fetchone()["id"]
         G.set_consent(store.conn, other, None, G.Scope.PARTICIPATION, True)
         with pytest.raises(G.GuardianError, match="not listed as a guardian"):
-            G.athlete_signin_code(store.conn, gid, other)
+            G.athlete_signin_link(store.conn, gid, other)
 
 
 class TestThroughTheApi:
@@ -222,7 +242,7 @@ class TestThroughTheApi:
 
         # Not yet: the gate is in the parent's words.
         refused = client.post(
-            f"/api/guardians/athlete-code/{invite['athlete_id']}", headers=ph
+            f"/api/guardians/athlete-link/{invite['athlete_id']}", headers=ph
         )
         assert refused.status_code == 400
         assert "Say yes to training first" in refused.json()["detail"]
@@ -232,11 +252,13 @@ class TestThroughTheApi:
             json={"athlete_id": invite["athlete_id"], "scope": "participation", "granted": True},
             headers=ph,
         )
-        code = client.post(
-            f"/api/guardians/athlete-code/{invite['athlete_id']}", headers=ph
-        ).json()["code"]
+        sent = client.post(
+            f"/api/guardians/athlete-link/{invite['athlete_id']}", headers=ph
+        ).json()
+        assert sent["link"].endswith(f"?claim={sent['code']}")
 
-        # The child signs in with it and can start a session.
+        # The child taps the link: the page redeems the claim code for a token.
+        code = client.post("/api/claim", json={"code": sent["code"]}).json()["token"]
         me = client.get("/api/me", headers={"Authorization": f"Bearer {code}"}).json()
         assert me["role"] == "athlete" and me["display_name"] == "Jordan Pierce"
         started = client.post(
@@ -268,7 +290,7 @@ class TestThroughTheApi:
             headers=director["headers"],
         ).json()
         aid = imported["created"][0]["athlete_id"]
-        res = client.post(f"/api/guardians/athlete-code/{aid}", headers=director["headers"])
+        res = client.post(f"/api/guardians/athlete-link/{aid}", headers=director["headers"])
         assert res.status_code == 403
 
 
@@ -280,7 +302,10 @@ class TestTheSignUpPageIsWired:
         assert "/api/guardians/redeem" in html
         assert "/api/claim" in html
         assert "get('invite')" in html  # the ?invite= prefill
+        assert "get('claim')" in html   # the kid's ?claim= link auto-redeems
 
-    def test_the_parent_portal_offers_the_sign_in_code(self):
+    def test_the_parent_portal_offers_every_way_to_forward_the_link(self):
         html = (STATIC / "parent.html").read_text(encoding="utf-8")
-        assert "/api/guardians/athlete-code/" in html
+        assert "/api/guardians/athlete-link/" in html
+        for way in ("navigator.clipboard", "navigator.share", "sms:", "mailto:"):
+            assert way in html, way

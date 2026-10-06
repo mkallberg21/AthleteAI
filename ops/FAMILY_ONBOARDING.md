@@ -5,11 +5,11 @@ drill, with the parent in the loop, and with the coach doing nothing after
 the upload.
 
 Code: `offdays/invites.py` (the email), `guardians.create_invite` /
-`guardians.athlete_signin_code`, `Store.apply_import` in `offdays/store.py`,
+`guardians.athlete_signin_link`, `Store.apply_import` in `offdays/store.py`,
 routes `/api/coach/roster/import`, `/api/coach/guardian-invites`,
 `/api/guardians/redeem`, `/api/guardians/consent`,
-`/api/guardians/athlete-code/{athlete_id}`. Pages: `index.html` (sign-up),
-`parent.html` (consent + sign-in code), `coach.html` (import + slips).
+`/api/guardians/athlete-link/{athlete_id}`. Pages: `index.html` (sign-up),
+`parent.html` (consent + sign-in link), `coach.html` (import + slips).
 Tests: `tests/test_family_onboarding.py`.
 
 ---
@@ -30,15 +30,15 @@ parent taps the link  →  /app/index.html?invite=CODE
 parent portal: "Decide whether Jordan can train"  →  tick participation
         │  (the consent gate switches on the moment a parent is linked)
         ▼
-"Get Jordan's sign-in code"  →  shown once; parent hands the phone over
-        │
+"Send Jordan their sign-in link"  →  Copy / Share / Text / Email
+        │  single-use claim link: /app/index.html?claim=CODE, 30 days
         ▼
-child enters it under "Your athlete code"  →  capture.html  →  first session
+child taps it on their own phone  →  auto-redeems  →  capture.html  →  first session
 ```
 
 Each arrow is a real join and each was previously broken: the invite was
 stored but never sent; the sign-up buttons had no handlers after the
-re-skin; the athlete's claim code was only on the coach's printed slip.
+re-skin; the athlete's claim code was only on the coach's printed slip, and a parent on a tablet had nothing to forward to a phone.
 
 ## What the coach does
 
@@ -62,12 +62,17 @@ an email it is sent; without one the code is shown to read out.
 3. Ticks **Training in the app**. Until this is on, the child's app says
    "Waiting on a parent" and the sign-in button below refuses with
    "Say yes to training first".
-4. Taps **Get Jordan's sign-in code**, hands the phone to the child.
+4. Taps **Send Jordan their sign-in link** and texts, emails, shares or
+   copies it to the child's phone. Most kids have their own device and most
+   parents do this from a tablet, so the deliverable is a link, not a code
+   to read across the room. The code is shown too for a phone with no link
+   handling.
 
 ## What the child does
 
-Opens `app.0ffdays.com`, enters the code under "Your athlete code", records
-one drill. That is the step that proves the whole chain.
+Taps the link. The sign-in page sees `?claim=` and redeems it with no
+typing, landing on the camera. Records one drill. That is the step that
+proves the whole chain.
 
 ## Rules the code enforces
 
@@ -77,9 +82,10 @@ one drill. That is the step that proves the whole chain.
 | One email per invite, never twice: dedupe key `guardian_invite:{id}` | `invites.deliver` |
 | No address on the roster → nothing queued, `emailed: false`, printed slip | `invites.deliver` |
 | Invite codes are single-use, 14 days, stored hashed, throttled on redeem | `guardians.redeem_invite`, `throttle` |
-| Sign-in code refused until participation consent is granted | `guardians.athlete_signin_code` |
-| Every sign-in code request rotates: the old code and the printed claim code die | `guardians.athlete_signin_code` |
-| A guardian can only mint a code for a child they are linked to | `require_guardianship` |
+| Sign-in link refused until participation consent is granted: the parent registers the child first | `guardians.athlete_signin_link` |
+| The link is a single-use, 30-day claim code; every request replaces the previous one and the printed slip | `guardians.athlete_signin_link` |
+| A re-sent link does not sign out a phone that already redeemed one | token untouched; only `claim_code_hash` rotates |
+| A guardian can only mint a link for a child they are linked to | `require_guardianship` |
 | Staff and athletes cannot call the parent code route (403) | `_guardian` dependency |
 
 ## Email delivery

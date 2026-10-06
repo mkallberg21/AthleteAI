@@ -59,8 +59,8 @@ def compose(
         f"the phone: it is not uploaded or stored anywhere. Their coach sees "
         f"the numbers, never the footage.\n\n"
         f"Nothing happens until you say so. Set up your parent account, decide "
-        f"whether {first} can train, and the app hands you their sign-in code "
-        f"to pass on.\n\n"
+        f"whether {first} can train, and the app gives you a sign-in link to "
+        f"text or email to {first}'s phone.\n\n"
         f"Open this link:\n{link}\n\n"
         f"Or go to the app and enter the invite code {code}.\n\n"
         f"The code works once and expires in {days} days. If it has expired, "
@@ -76,8 +76,8 @@ def compose(
         f"leaves the phone</b>: it is not uploaded or stored anywhere. Their coach "
         f"sees the numbers, never the footage.</p>"
         f"<p>Nothing happens until you say so. Set up your parent account, decide "
-        f"whether {escape(first)} can train, and the app hands you their sign-in "
-        f"code to pass on.</p>"
+        f"whether {escape(first)} can train, and the app gives you a sign-in link "
+        f"to text or email to {escape(first)}'s phone.</p>"
         f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;'
         f'background:#111;color:#fff;text-decoration:none;border-radius:6px">'
         f"Set up {escape(first)}'s account</a></p>"

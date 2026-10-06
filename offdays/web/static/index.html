@@ -313,11 +313,20 @@ redeemBtn.addEventListener('click', async () => {
 
 // A parent arriving from the invite email lands with the code already typed
 // and the parent card in view: their job is a name and one button.
-const invited = new URLSearchParams(window.location.search).get('invite');
+const params = new URLSearchParams(window.location.search);
+const invited = params.get('invite');
+const claimed = params.get('claim');
 if (invited) {
   $('invite').value = invited.trim().toUpperCase();
   $('invite').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   $('pname').focus();
+} else if (claimed) {
+  // A kid tapping the link their parent sent. The code is in the URL, so
+  // there is nothing to type: redeem it and go straight to the camera. The
+  // code is single-use, so the URL is worthless once this has run.
+  $('claim').value = claimed.trim().toUpperCase();
+  $('claim').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  claimBtn.click();
 } else {
   tokenInput?.focus();
 }
