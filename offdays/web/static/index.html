@@ -263,7 +263,64 @@ document.getElementById('signin-form').addEventListener('submit', async (e) => {
   }
 });
 
-tokenInput?.focus();
+// First-time athlete: a printed claim code becomes a sign-in.
+const claimBtn = $('claim-btn');
+claimBtn.addEventListener('click', async () => {
+  const code = $('claim').value.trim();
+  $('cerr').classList.add('hidden');
+  if (!code) {
+    $('cerr').textContent = 'Enter the claim code from your slip.';
+    $('cerr').classList.remove('hidden');
+    return;
+  }
+  claimBtn.disabled = true;
+  try {
+    const data = await api('/api/claim', { method: 'POST', body: { code } });
+    setToken(data.token);
+    window.location.href = 'capture.html';
+  } catch (e) {
+    $('cerr').textContent = e.message || 'That code did not work.';
+    $('cerr').classList.remove('hidden');
+    claimBtn.disabled = false;
+  }
+});
+
+// Parent: invite code becomes a guardian account.
+const redeemBtn = $('redeem');
+redeemBtn.addEventListener('click', async () => {
+  const code = $('invite').value.trim();
+  const name = $('pname').value.trim();
+  $('perr').classList.add('hidden');
+  if (!code || !name) {
+    $('perr').textContent = 'Enter the invite code and your name.';
+    $('perr').classList.remove('hidden');
+    return;
+  }
+  redeemBtn.disabled = true;
+  try {
+    const data = await api('/api/guardians/redeem', {
+      method: 'POST',
+      body: { code, display_name: name, email: $('pemail').value.trim() || null },
+    });
+    setToken(data.token);
+    window.location.href = 'parent.html';
+  } catch (e) {
+    $('perr').textContent = e.message || 'Could not use that code.';
+    $('perr').classList.remove('hidden');
+    redeemBtn.disabled = false;
+  }
+});
+
+// A parent arriving from the invite email lands with the code already typed
+// and the parent card in view: their job is a name and one button.
+const invited = new URLSearchParams(window.location.search).get('invite');
+if (invited) {
+  $('invite').value = invited.trim().toUpperCase();
+  $('invite').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('pname').focus();
+} else {
+  tokenInput?.focus();
+}
 </script>
 </body>
 </html>

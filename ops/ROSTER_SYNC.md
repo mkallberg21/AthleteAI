@@ -70,8 +70,9 @@ native `.xlsx` must be saved as CSV first. A template is at
 
 **A guardian email column matters.** When it is present, import issues a
 single-use, 14-day guardian invite for each athlete automatically
-(`invite_guardians` defaults to true). Without it, a coach has to send invites
-by hand.
+(`invite_guardians` defaults to true) **and queues it as an email with a
+sign-up link** (`ops/FAMILY_ONBOARDING.md`). Without it, the coach prints the
+slip and hands it out.
 
 ---
 

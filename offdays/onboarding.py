@@ -78,7 +78,10 @@ PROGRAM_STEPS: tuple[Step, ...] = (
     Step(
         key="first_session",
         title="Get one athlete training",
-        detail="Hand out their code and have them record one session.",
+        detail=(
+            "Their parent gets the sign-in code from their own portal once "
+            "they say yes; or hand out a printed slip. One session counts."
+        ),
         why=(
             "The only step that proves the whole chain works: code handed "
             "over, app installed, camera pointed, session counted."
@@ -88,7 +91,7 @@ PROGRAM_STEPS: tuple[Step, ...] = (
     Step(
         key="parents",
         title="Invite the parents",
-        detail="Send a guardian invite for each athlete.",
+        detail="A roster with a Parent Email column does this on import; otherwise invite from the roster row.",
         why=(
             "Parents consent, and once one is linked their decision is what "
             "lets that athlete train. Better to do it early than mid-season."

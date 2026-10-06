@@ -202,15 +202,18 @@ def create_invite(
     code = new_invite_code()
     expires = _now() + timedelta(days=INVITE_TTL_DAYS)
     with transaction(conn) as c:
-        c.execute(
+        cur = c.execute(
             "INSERT INTO guardian_invites(athlete_id, created_by, code_hash, email, "
             "created_at, expires_at) VALUES (?,?,?,?,?,?)",
             (athlete_id, created_by, _hash_code(code), email, _iso(_now()), _iso(expires)),
         )
+        invite_id = int(cur.lastrowid)
     return {
+        "invite_id": invite_id,
         "code": code,
         "athlete_id": athlete_id,
         "athlete_name": athlete["display_name"],
+        "email": email,
         "expires_at": _iso(expires),
     }
 
@@ -315,6 +318,50 @@ def link_existing(
             (_iso(_now()), guardian_id, row["id"]),
         )
     return int(row["athlete_id"])
+
+
+# ---------------------------------------------------------------------------
+# The athlete's own sign-in, handed over by the parent
+# ---------------------------------------------------------------------------
+
+def athlete_signin_code(
+    conn: sqlite3.Connection, guardian_id: int, athlete_id: int
+) -> dict[str, Any]:
+    """Mint a fresh sign-in code for the child, for the parent to pass on.
+
+    Closes the loop the coach used to close with a printed slip: the parent
+    who just said yes is holding a phone, and the child is in the next room.
+    Refused until participation is granted, because handing over a code to an
+    account that cannot record anything teaches the child the app is broken.
+
+    Rotation, not recovery. The previous code or token stops working, so a
+    slip that went astray is worthless the moment the parent does this.
+    """
+    require_guardianship(conn, guardian_id, athlete_id)
+    if not has_consent(conn, athlete_id, Scope.PARTICIPATION):
+        raise GuardianError(
+            "Say yes to training first. The sign-in code only works once that is on."
+        )
+    athlete = conn.execute(
+        "SELECT id, display_name FROM users WHERE id = ? AND active = 1 "
+        "AND role = 'athlete'",
+        (athlete_id,),
+    ).fetchone()
+    if athlete is None:
+        raise GuardianError("that athlete is no longer in the program")
+
+    token = fresh_token(conn)
+    with transaction(conn) as c:
+        c.execute(
+            "UPDATE users SET token_hash = ?, claim_code_hash = NULL, "
+            "claim_expires_at = NULL WHERE id = ?",
+            (hash_token(token), athlete_id),
+        )
+    return {
+        "athlete_id": athlete_id,
+        "athlete_name": athlete["display_name"],
+        "code": token,
+    }
 
 
 # ---------------------------------------------------------------------------

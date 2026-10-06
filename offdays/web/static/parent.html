@@ -119,6 +119,10 @@ function qualityClass(score) {
   return score >= 80 ? 'good' : score >= 60 ? 'mid' : 'low';
 }
 
+function firstName(name) {
+  return (name || '').trim().split(/\s+/)[0] || 'their';
+}
+
 function renderAthlete(a) {
   const q = a.quality || {};
   const trend = q.trend > 2 ? ' <span class="trend-up">&#9650;</span>'
@@ -172,6 +176,16 @@ function renderAthlete(a) {
       <div class="stat"><b class="${q.current ? qualityClass(q.current) : ''}">${
         q.current === null || q.current === undefined ? '–' : q.current
       }${trend}</b><span>Form score</span></div>
+    </div>
+
+    <div style="margin-top:12px" data-signin-wrap="${a.athlete_id}">
+      <button class="secondary inline" data-signin="${a.athlete_id}">
+        Get ${esc(firstName(a.display_name))}'s sign-in code
+      </button>
+      <span class="small muted" style="display:block;margin-top:4px">
+        The code they type into the app on their own phone. Shown once; getting
+        a new one replaces the old.
+      </span>
     </div>
 
     ${assignments ? `<h3 style="margin:18px 0 4px;font-size:.95rem">From their coach</h3>${assignments}` : ''}
@@ -704,6 +718,31 @@ function wire() {
         showError(e.message);
       }
       box.disabled = false;
+    });
+  });
+
+  // The step a printed slip used to do. The server refuses it until
+  // training is switched on, and says so in the parent's words.
+  document.querySelectorAll('[data-signin]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const wrap = btn.closest('[data-signin-wrap]');
+      try {
+        const res = await api(`/api/guardians/athlete-code/${btn.dataset.signin}`, {
+          method: 'POST',
+        });
+        wrap.innerHTML = `
+          <div class="small muted">${esc(res.athlete_name)}'s sign-in code</div>
+          <div style="font-size:1.6rem;font-weight:700;letter-spacing:.12em;margin:4px 0">
+            ${esc(res.code)}</div>
+          <div class="small muted">
+            Open <b>${esc(location.host)}/app</b> on their phone and enter this under
+            "Your athlete code". It is not shown again; come back here for a new one.
+          </div>`;
+      } catch (e) {
+        btn.disabled = false;
+        showError(e.message);
+      }
     });
   });
 

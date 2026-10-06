@@ -178,8 +178,10 @@ behind Cloudflare's proxy without the real-IP change in the nginx config (§1).
 ## 7. Product gates (before families)
 
 - [ ] **Email sending** set up through Resend on `mail.0ffdays.com`, with
-      DKIM, SPF and DMARC (`ops/DECISIONS.md`). Until then, guardian invites
-      are printed codes.
+      DKIM, SPF and DMARC (`ops/DECISIONS.md`). Guardian invites are queued
+      with a sign-up link on roster import (`ops/FAMILY_ONBOARDING.md`), but
+      until SMTP is set they only reach the log, and printed codes are the
+      real path.
 - [ ] Wall-ball calibration: ≥ 6 own-youth clips in realistic/poor light per
       drill through `/app/calibrate.html`, `calibration.verdict()` = `measured`
       (or retuned).

@@ -33,6 +33,7 @@ from . import benchmarks as benchmarks_mod
 from . import billing as billing_mod
 from . import digest as digest_mod
 from . import mailer
+from . import invites as invites_mod
 from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import onboarding as onboarding_mod
@@ -2229,9 +2230,15 @@ def create_guardian_invite(
         raise HTTPException(status_code=403, detail="athlete belongs to another program")
     if not store.staff_can_see_athlete(principal, body.athlete_id):
         raise HTTPException(status_code=403, detail="you are not assigned to that athlete's team")
-    return guardians_mod.create_invite(
+    invite = guardians_mod.create_invite(
         store.conn, body.athlete_id, principal.id, body.email
     )
+    # With an address the invite goes out by email as well as being shown.
+    # Without one the coach reads the code out, which is the pilot path.
+    sent = invites_mod.deliver(
+        store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
+    )
+    return {**invite, "link": invites_mod.invite_link(invite["code"]), "emailed": sent}
 
 
 @app.get("/api/coach/guardian-invites")
@@ -2246,7 +2253,11 @@ def list_guardian_invites(
         "WHERE u.org_id = ? ORDER BY i.created_at DESC LIMIT 100",
         (principal.org_id,),
     ).fetchall()
-    return {"invites": [dict(r) for r in rows]}
+    delivery = invites_mod.delivery_status(store.conn, [int(r["id"]) for r in rows])
+    return {
+        "invites": [{**dict(r), "email_status": delivery.get(int(r["id"]), "none")} for r in rows],
+        "smtp_configured": CONFIG.smtp_configured,
+    }
 
 
 @app.delete("/api/coach/guardian-invites/{invite_id}")
@@ -2294,6 +2305,21 @@ def redeem_guardian_invite(
         raise
     throttle.record_success(store.conn, attempt)
     return result
+
+
+@app.post("/api/guardians/athlete-code/{athlete_id}", status_code=201)
+def guardian_athlete_code(
+    athlete_id: int,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A fresh sign-in code for the parent's own child, shown once.
+
+    The step a printed slip used to do. Refused until the parent has said yes
+    to training, and every call rotates the code, so a slip that went astray
+    stops working the moment the parent does this.
+    """
+    return guardians_mod.athlete_signin_code(store.conn, principal.id, athlete_id)
 
 
 class LinkRequest(BaseModel):
