@@ -31,9 +31,10 @@ parent portal: "Decide whether Jordan can train"  →  tick participation
         │  (the consent gate switches on the moment a parent is linked)
         ▼
 "Send Jordan their sign-in link"  →  Copy / Share / Text / Email
-        │  single-use claim link: /app/index.html?claim=CODE, 30 days
+        │  /app/index.html?code=CODE -- the athlete's standing sign-in code,
+        │  reusable on any phone all season, until a parent issues a new one
         ▼
-child taps it on their own phone  →  auto-redeems  →  capture.html  →  first session
+child taps it on their own phone  →  signed in  →  home screen (drills, film, leaderboard)
 ```
 
 Each arrow is a real join and each was previously broken: the invite was
@@ -66,13 +67,22 @@ an email it is sent; without one the code is shown to read out.
    copies it to the child's phone. Most kids have their own device and most
    parents do this from a tablet, so the deliverable is a link, not a code
    to read across the room. The code is shown too for a phone with no link
-   handling.
+   handling. One yes, one link, the whole season; the parent only comes
+   back here to turn a stray link off by issuing a new one.
 
 ## What the child does
 
-Taps the link. The sign-in page sees `?claim=` and redeems it with no
-typing, landing on the camera. Records one drill. That is the step that
-proves the whole chain.
+Taps the link. The sign-in page sees `?code=` and signs in with no typing,
+landing on their home screen: the drill list to choose from, film the coach
+has curated, the leaderboard button, the wellness check-in. Picks a drill,
+records it. That is the step that proves the whole chain.
+
+The link is not single-use and does not expire. The parent says yes once;
+the kid is in for the season on whatever phone opens the link -- a new
+phone, a cleared browser, a tablet at a grandparent's. Access ends when a
+parent issues a new link (old one off everywhere), withdraws training
+(signed in, but the app says "waiting on a parent" and will not record), or
+the coach deactivates the athlete.
 
 ## Rules the code enforces
 
@@ -83,8 +93,9 @@ proves the whole chain.
 | No address on the roster → nothing queued, `emailed: false`, printed slip | `invites.deliver` |
 | Invite codes are single-use, 14 days, stored hashed, throttled on redeem | `guardians.redeem_invite`, `throttle` |
 | Sign-in link refused until participation consent is granted: the parent registers the child first | `guardians.athlete_signin_link` |
-| The link is a single-use, 30-day claim code; every request replaces the previous one and the printed slip | `guardians.athlete_signin_link` |
-| A re-sent link does not sign out a phone that already redeemed one | token untouched; only `claim_code_hash` rotates |
+| The link carries the athlete's standing sign-in code: reusable, no expiry | `guardians.athlete_signin_link` |
+| Every request issues a new code: the old link, and any printed claim slip, stop working everywhere | `guardians.athlete_signin_link` |
+| Withdrawing training pauses recording but does not sign the kid out; the home screen says why | `Store._require_participation_consent`, `onboarding.athlete_blockers` |
 | A guardian can only mint a link for a child they are linked to | `require_guardianship` |
 | Staff and athletes cannot call the parent code route (403) | `_guardian` dependency |
 

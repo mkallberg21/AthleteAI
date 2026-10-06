@@ -263,14 +263,17 @@ def blockers(conn: sqlite3.Connection, org_id: int) -> list[dict[str, Any]]:
     # The gate that surprises people. Enforcement starts the moment a parent is
     # linked, so inviting parents can lock athletes out overnight, and the app
     # gives the athlete a clear message while telling the coach nothing.
+    # The latest decision, not "ever granted": consents are append-only and
+    # a parent who withdrew has a granted row above a revoked one. Reading
+    # it the same way enforcement does is what keeps this list honest.
     waiting = conn.execute(
         "SELECT u.id, u.display_name FROM users u "
         "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1 "
         "AND EXISTS (SELECT 1 FROM guardians g WHERE g.athlete_id = u.id) "
-        "AND NOT EXISTS ("
-        "  SELECT 1 FROM consents c WHERE c.athlete_id = u.id "
-        "  AND c.scope = 'participation' AND c.granted = 1"
-        ")",
+        "AND COALESCE(("
+        "  SELECT c.granted FROM consents c WHERE c.athlete_id = u.id "
+        "  AND c.scope = 'participation' ORDER BY c.id DESC LIMIT 1"
+        "), 0) = 0",
         (org_id,),
     ).fetchall()
     if waiting:
@@ -339,12 +342,7 @@ def athlete_blockers(conn: sqlite3.Connection, athlete_id: int) -> list[dict[str
     ).fetchone()
     if linked is None:
         return []
-    granted = conn.execute(
-        "SELECT 1 FROM consents WHERE athlete_id = ? AND scope = 'participation' "
-        "AND granted = 1 LIMIT 1",
-        (athlete_id,),
-    ).fetchone()
-    if granted is not None:
+    if guardians.has_consent(conn, athlete_id, guardians.Scope.PARTICIPATION):
         return []
     return [{
         "key": "awaiting_consent",

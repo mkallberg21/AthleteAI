@@ -132,7 +132,7 @@ function firstName(name) {
  */
 function renderSigninLink(wrap, res) {
   const first = firstName(res.athlete_name);
-  const link = res.link || `${location.origin}/app/index.html?claim=${encodeURIComponent(res.code)}`;
+  const link = res.link || `${location.origin}/app/index.html?code=${encodeURIComponent(res.code)}`;
   const message = `${first}, tap this to sign in to your training app: ${link}`;
   const subject = `${first}'s training app sign-in`;
   const canShare = typeof navigator.share === 'function';
@@ -150,9 +150,10 @@ function renderSigninLink(wrap, res) {
          href="mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}">Email</a>
     </div>
     <div class="small muted" style="margin-top:6px">
-      Works once, on the phone that opens it, for 30 days. If it goes astray
-      come back here for a new one and the old one stops working.
-      Or they can type <b>${esc(res.code)}</b> under "Claim code" in the app.
+      Keeps working all season, on any phone: a new phone or a cleared browser
+      just needs the same link again. If it goes astray, come back here for a
+      new one and the old one stops working everywhere.
+      Or they can type <b>${esc(res.code)}</b> under "Your athlete code".
     </div>`;
 
   wrap.querySelector('[data-copy]').addEventListener('click', async (e) => {
@@ -232,8 +233,8 @@ function renderAthlete(a) {
         Send ${esc(firstName(a.display_name))} their sign-in link
       </button>
       <span class="small muted" style="display:block;margin-top:4px">
-        A link to text or email to their phone. It signs them in once; getting
-        a new one replaces it.
+        A link to text or email to their phone. It keeps working all season,
+        on any phone. Getting a new one turns the old one off.
       </span>
     </div>
 

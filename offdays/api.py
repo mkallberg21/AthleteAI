@@ -2313,10 +2313,12 @@ def guardian_athlete_link(
     principal: Principal = Depends(_guardian),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """A single-use sign-in link for the parent's own child, to forward.
+    """The child's standing sign-in link, for the parent to forward.
 
-    The step a printed slip used to do. Refused until the parent has said yes
-    to training; each call replaces the previous link and any printed slip.
+    The step a printed slip used to do. Not single-use and does not expire:
+    the parent says yes once and the child is in for the season. Refused
+    until that yes; each call issues a new code and retires the old link,
+    which is how a parent revokes one that went astray.
     """
     return guardians_mod.athlete_signin_link(store.conn, principal.id, athlete_id)
 

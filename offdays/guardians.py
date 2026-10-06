@@ -325,36 +325,37 @@ def link_existing(
 # ---------------------------------------------------------------------------
 
 def signin_link(code: str) -> str:
-    """The app with a claim code in the URL: tap it and you are signed in."""
+    """The app with the athlete's sign-in code in the URL: tap it, you are in."""
     from .config import CONFIG
 
     base = CONFIG.app_base_url.rstrip("/") if CONFIG.app_base_url else ""
-    return f"{base}/app/index.html?claim={code}"
+    return f"{base}/app/index.html?code={code}"
 
 
 def athlete_signin_link(
     conn: sqlite3.Connection, guardian_id: int, athlete_id: int
 ) -> dict[str, Any]:
-    """A single-use sign-in link for the child, for the parent to forward.
+    """The child's standing sign-in link, for the parent to forward.
 
     Most kids have a phone of their own and the parent is on a tablet, so what
     the parent needs is something to text or email, not a code to read out.
-    This is the same claim mechanism as the printed slip: the link carries a
-    30-day single-use claim code, and redeeming it issues the phone a token.
+    The link carries the athlete's own sign-in code -- the same thing a coach
+    hands out on a slip -- so it is not single-use and does not expire: the
+    parent says yes once, and the child gets in on any phone, any time, for
+    as long as that yes stands. A new phone, a cleared browser, a tablet at a
+    grandparent's house: the same link works.
 
     Refused until participation is granted. The parent registers the child
     -- says yes -- and only then has something to forward, because a link to
     an account that cannot record anything teaches the child the app is
-    broken.
+    broken. Withdrawing participation does not kill the link but does stop
+    recording; the app says "waiting on a parent" rather than refusing entry.
 
-    Each call replaces the previous claim code (the column is unique per
-    athlete), so a printed slip or an earlier link that went astray dies the
-    moment the parent asks for a new one. A phone already signed in with a
-    redeemed link keeps working: this issues a new way in, it does not throw
-    the child out.
+    Each call issues a fresh code and retires the previous one and any
+    printed claim slip, so a link that went astray can be revoked by asking
+    for a new one. That also signs out every phone holding the old code,
+    which is the point of asking.
     """
-    from . import roster as roster_mod
-
     require_guardianship(conn, guardian_id, athlete_id)
     if not has_consent(conn, athlete_id, Scope.PARTICIPATION):
         raise GuardianError(
@@ -368,19 +369,18 @@ def athlete_signin_link(
     if athlete is None:
         raise GuardianError("that athlete is no longer in the program")
 
-    code = roster_mod.new_claim_code()
-    expires = roster_mod.claim_expiry()
+    token = fresh_token(conn)
     with transaction(conn) as c:
         c.execute(
-            "UPDATE users SET claim_code_hash = ?, claim_expires_at = ? WHERE id = ?",
-            (roster_mod.hash_claim(code), expires, athlete_id),
+            "UPDATE users SET token_hash = ?, claim_code_hash = NULL, "
+            "claim_expires_at = NULL WHERE id = ?",
+            (hash_token(token), athlete_id),
         )
     return {
         "athlete_id": athlete_id,
         "athlete_name": athlete["display_name"],
-        "code": code,
-        "link": signin_link(code),
-        "expires_at": expires,
+        "code": token,
+        "link": signin_link(token),
     }
 
 

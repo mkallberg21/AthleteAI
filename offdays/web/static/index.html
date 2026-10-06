@@ -316,14 +316,21 @@ redeemBtn.addEventListener('click', async () => {
 const params = new URLSearchParams(window.location.search);
 const invited = params.get('invite');
 const claimed = params.get('claim');
+const linked = params.get('code');
 if (invited) {
   $('invite').value = invited.trim().toUpperCase();
   $('invite').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   $('pname').focus();
+} else if (linked) {
+  // A kid tapping the link their parent sent. It carries their standing
+  // sign-in code, so this is an ordinary sign-in with nothing to type, and
+  // the same link keeps working on any phone until a parent issues a new
+  // one. They land on their home screen: drills to choose from, film from
+  // the coach, the leaderboard -- not the camera.
+  tokenInput.value = linked.trim().toUpperCase();
+  $('signin-form').requestSubmit();
 } else if (claimed) {
-  // A kid tapping the link their parent sent. The code is in the URL, so
-  // there is nothing to type: redeem it and go straight to the camera. The
-  // code is single-use, so the URL is worthless once this has run.
+  // A printed claim slip's code in a URL. Single-use; redeemed here.
   $('claim').value = claimed.trim().toUpperCase();
   $('claim').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   claimBtn.click();
