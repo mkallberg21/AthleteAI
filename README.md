@@ -2785,27 +2785,26 @@ what.
 | We invoice the club | **$37,500** |
 | Club adds to dues (recommended) | $85 / player → collects $42,500 |
 | Club margin | $5,000 |
-| Sponsorship rebate (7.5%) | $2,812.50 |
-| **Into their scholarship fund** | **$7,812.50** |
+| Sponsorship rebate (flat 7.5%) | $2,812.50 |
+| **Returned to the club** | **$7,812.50** |
 | **Out of the club's own budget** | **$0** |
 
-A director is not being asked to find budget. They are shown a line that funds
-their own scholarship fund. The recommended add is the per-athlete cost plus a
+A director is not being asked to find budget. They are shown a line on dues
+that covers the invoice with a margin left over, plus a rebate. The recommended add is the per-athlete cost plus a
 $10 margin, rounded up to the next $5 so it reads like a line on a fee
 schedule; the club sets its own number.
 
-### The rebate is a fund, not a discount
+### The sponsorship rebate is a balance, not a discount
 
-5–10% of what a club pays comes back, earmarked for families who cannot afford
-the season at all. It is **accrued as a ledger with a balance**, not netted off
-the invoice, and that is deliberate: a discount disappears into a smaller
-number nobody looks at, while a fund is something a director can point at in a
-board meeting and spend on a named family. Spending it records what it went to,
-because a director will be asked.
+A flat 7.5% of what a club pays comes back to it as the sponsorship rebate,
+typically spent on families who cannot afford the season. It is **accrued as a
+ledger with a balance**, not netted off the invoice, and that is deliberate: a
+discount disappears into a smaller number nobody looks at, while a balance is
+something a director can point at in a board meeting and spend on a named
+family. Spending it records what it went to, because a director will be asked.
 
-The rate is a commercial lever within a bounded band. What is *not* negotiable
-is what it is for — it is the club's scholarship money, not a volume discount
-in disguise.
+The rate is flat on purpose: one number every club gets, never a negotiation
+and never a volume discount in disguise.
 
 ### Late joiners are prorated
 

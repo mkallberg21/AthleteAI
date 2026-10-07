@@ -873,16 +873,13 @@ def expire_households(conn: sqlite3.Connection, today: date | None = None) -> in
 # is never a function of who bought what.
 # ---------------------------------------------------------------------------
 
-#: Share of what a club pays that comes back to them, earmarked for covering
-#: families who cannot afford the season at all.
-#:
-#: The rate is a range rather than a constant because it is a commercial lever
-#: -- a club negotiating hard gets the top of it. What is *not* negotiable is
-#: what it is for: this is the club's scholarship fund, not a volume discount
-#: dressed up as one.
-REBATE_RATE_MIN = 0.05
-REBATE_RATE_MAX = 0.10
-REBATE_RATE_DEFAULT = 0.075
+#: The sponsorship rebate: a flat share of what a club pays that comes back
+#: to it as a balance the director can spend, typically on covering a family
+#: who cannot afford the season. Flat on purpose: one number every club gets,
+#: so it is never a negotiation and never a volume discount in disguise.
+#: Kept as a ledger with a balance rather than netted off the invoice, so it
+#: is something a director can point at in a board meeting.
+REBATE_RATE = 0.075
 
 
 def season_window(conn: sqlite3.Connection, org_id: int) -> tuple[date | None, date | None]:
@@ -981,7 +978,6 @@ class RosterInvoice:
     #: Sum over athletes of their own billable days (late joiners count less).
     billable_athlete_days: int
     dues_add_cents: int
-    rebate_rate: float
 
     @property
     def per_athlete_cents(self) -> int:
@@ -1000,20 +996,19 @@ class RosterInvoice:
     @property
     def club_margin_cents(self) -> int:
         """What is left over after paying us. The club's, to do as it likes
-        with -- most will put it where the rebate goes."""
+        with -- most will put it alongside the rebate."""
         return self.dues_collected_cents - self.total_cents
 
     @property
     def rebate_cents(self) -> int:
-        return round(self.total_cents * self.rebate_rate)
+        """The sponsorship rebate: a flat REBATE_RATE of what the club pays."""
+        return round(self.total_cents * REBATE_RATE)
 
     @property
-    def sponsorship_pot_cents(self) -> int:
-        """Margin plus rebate: the number that makes this an easy yes.
-
-        A director is not being asked to find budget. They are being shown a
-        line that funds their own scholarship fund.
-        """
+    def returned_cents(self) -> int:
+        """Margin plus sponsorship rebate: what the arrangement returns to
+        the club. The number that makes this an easy yes, because a director
+        is not being asked to find budget."""
         return self.club_margin_cents + self.rebate_cents
 
     @property
@@ -1040,10 +1035,11 @@ class RosterInvoice:
             "recommended_dues_add_cents": self.dues_add_cents,
             "dues_collected_cents": self.dues_collected_cents,
             "club_margin_cents": self.club_margin_cents,
-            "rebate_rate": self.rebate_rate,
+            "rebate_rate": REBATE_RATE,
             "rebate_cents": self.rebate_cents,
-            "sponsorship_pot_cents": self.sponsorship_pot_cents,
-            "sponsorship_pot_display": money(self.sponsorship_pot_cents),
+            "rebate_display": money(self.rebate_cents),
+            "returned_cents": self.returned_cents,
+            "returned_display": money(self.returned_cents),
             "costs_the_club_directly": 0,
             "note": None if self.season_set else (
                 "Set the season start and end dates on the Season card; the "
@@ -1056,7 +1052,6 @@ def roster_invoice(
     conn: sqlite3.Connection,
     org_id: int,
     *,
-    rebate_rate: float = REBATE_RATE_DEFAULT,
     dues_add_cents: int | None = None,
 ) -> RosterInvoice:
     """What this club owes for its season, and what the arrangement returns.
@@ -1065,11 +1060,6 @@ def roster_invoice(
     organisation; a club with no dates set gets a zero invoice and a note,
     never a number computed from an assumed length.
     """
-    if not REBATE_RATE_MIN <= rebate_rate <= REBATE_RATE_MAX:
-        raise BillingError(
-            f"the sponsorship rebate is between {REBATE_RATE_MIN:.0%} and "
-            f"{REBATE_RATE_MAX:.0%}"
-        )
     plan = get_plan("club_roster")
     starts, ends = season_window(conn, org_id)
     days = season_days(starts, ends)
@@ -1085,7 +1075,6 @@ def roster_invoice(
         billable_athlete_days=billable,
         dues_add_cents=(dues_add_cents if dues_add_cents is not None
                         else recommended_dues_add_cents(days * per_day)),
-        rebate_rate=rebate_rate,
     )
 
 
@@ -1095,18 +1084,18 @@ def accrue_rebate(
     amount_cents: int,
     *,
     reason: str = "season invoice",
-    rate: float = REBATE_RATE_DEFAULT,
 ) -> int:
-    """Record sponsorship credit earned on an amount the club has paid.
+    """Record the sponsorship rebate earned on an amount the club has paid.
 
     Accrued rather than netted off the invoice on purpose. A discount
-    disappears into a smaller number nobody looks at; a fund with a balance is
-    something a director can point at in a board meeting and spend on a named
-    family. The whole commercial argument here is that it is the second thing.
+    disappears into a smaller number nobody looks at; a rebate with a balance
+    is something a director can point at in a board meeting and spend on a
+    named family. The whole commercial argument here is that it is the second
+    thing.
     """
     if amount_cents <= 0:
         return 0
-    credit = round(amount_cents * rate)
+    credit = round(amount_cents * REBATE_RATE)
     conn.execute(
         "INSERT INTO sponsorship_credits(org_id, amount_cents, reason, "
         "  created_at) VALUES (?,?,?,?)",
@@ -1119,11 +1108,11 @@ def accrue_rebate(
 def spend_rebate(
     conn: sqlite3.Connection, org_id: int, amount_cents: int, reason: str
 ) -> int:
-    """Draw the fund down. Refuses to overdraw rather than going negative."""
+    """Draw the rebate down. Refuses to overdraw rather than going negative."""
     balance = rebate_balance(conn, org_id)
     if amount_cents > balance:
         raise BillingError(
-            f"the sponsorship fund holds ${balance / 100:,.2f}, "
+            f"the sponsorship rebate balance is ${balance / 100:,.2f}, "
             f"which is less than ${amount_cents / 100:,.2f}"
         )
     conn.execute(
