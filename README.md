@@ -2739,10 +2739,10 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 34 modules across 465 call sites.
+SQL lives in 34 modules across 468 call sites.
 store.py holds 36% of them.
 
-1059 occurrences are mechanical (search-and-replace with tests behind it).
+1063 occurrences are mechanical (search-and-replace with tests behind it).
 78 need judgement.
 ```
 
@@ -2784,27 +2784,27 @@ what.
 | Per athlete | 150 × $0.50 = **$75** |
 | We invoice the club | **$37,500** |
 | Club adds to dues (recommended) | $85 / player → collects $42,500 |
-| Club margin | $5,000 |
-| Sponsorship rebate (flat 7.5%) | $2,812.50 |
-| **Returned to the club** | **$7,812.50** |
+| **Club margin, theirs to keep** | **$5,000** |
 | **Out of the club's own budget** | **$0** |
 
 A director is not being asked to find budget. They are shown a line on dues
-that covers the invoice with a margin left over, plus a rebate. The recommended add is the per-athlete cost plus a
+that covers the invoice with a margin left over. The recommended add is the per-athlete cost plus a
 $10 margin, rounded up to the next $5 so it reads like a line on a fee
 schedule; the club sets its own number.
 
-### The sponsorship rebate is a balance, not a discount
+### The sponsorship rebate is granted, never automatic
 
-A flat 7.5% of what a club pays comes back to it as the sponsorship rebate,
-typically spent on families who cannot afford the season. It is **accrued as a
-ledger with a balance**, not netted off the invoice, and that is deliberate: a
-discount disappears into a smaller number nobody looks at, while a balance is
-something a director can point at in a board meeting and spend on a named
-family. Spending it records what it went to, because a director will be asked.
+There is no rebate in the standard price. The operator may grant one club a
+sponsorship rebate -- a share of what it pays, returned as a balance the
+director can spend, typically on a family who cannot afford the season -- by
+setting a rate on that organisation (`scripts/set_rebate.py`). Zero by
+default, bounded at 25%, and no director-facing route can change it: it is a
+one-off commercial decision with a name on it, not a line every club gets.
 
-The rate is flat on purpose: one number every club gets, never a negotiation
-and never a volume discount in disguise.
+Where it is granted it is **accrued as a ledger with a balance**, not netted
+off the invoice: a discount disappears into a smaller number nobody looks at,
+while a balance is something a director can point at in a board meeting and
+spend on a named family. Spending it records what it went to.
 
 ### Late joiners are prorated
 

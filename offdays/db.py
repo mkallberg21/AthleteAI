@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -61,6 +61,12 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- must not start a February season. The season is [starts_on, ends_on]
     -- inclusive, and that day count is what the club is billed on.
     season_starts_on TEXT NOT NULL DEFAULT '',
+    -- Sponsorship rebate for this club, as a fraction of what it pays. Zero
+    -- by default: there is no automatic rebate. It is granted one club at a
+    -- time by the operator (scripts/set_rebate.py), never by a director, so
+    -- it is a deliberate commercial decision with a name on it rather than
+    -- a line every club gets.
+    sponsorship_rebate_rate REAL NOT NULL DEFAULT 0,
     -- A senior figure in the program whose recognition carries extra weight --
     -- a director of player development, a former professional. Optional, and
     -- absent means every message comes from the athlete's own coach.
@@ -1171,6 +1177,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("season_phase", "TEXT NOT NULL DEFAULT 'preseason'"),
         ("season_ends_on", "TEXT NOT NULL DEFAULT ''"),
         ("season_starts_on", "TEXT NOT NULL DEFAULT ''"),
+        ("sponsorship_rebate_rate", "REAL NOT NULL DEFAULT 0"),
         # A club's own badge. The file lives under web/static/teams/ and this
         # is its name -- a path rather than a blob, because a logo is served
         # to every screen on every load and a database is the wrong place to

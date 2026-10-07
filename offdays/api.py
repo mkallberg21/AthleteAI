@@ -4084,15 +4084,16 @@ def pricing() -> dict[str, Any]:
                 "total_cents": 500 * 150 * billing_mod.PLANS_BY_CODE["club_roster"].per_athlete_day_cents,
             },
             "recommended_dues_margin_cents": billing_mod.RECOMMENDED_DUES_MARGIN_CENTS,
-            "rebate_rate": billing_mod.REBATE_RATE,
+            # No automatic rebate. One may be granted per club by the operator.
+            "rebate_rate": 0.0,
             "note": (
                 "The club pays per rostered athlete per day of its season, between "
                 "the start and end dates the director sets, and covers it by "
                 "adding a line to its own season fee. The "
                 "money still comes from parents, through the channel they already "
                 "pay through, and so the club is out nothing, every athlete is "
-                "covered, and a flat 7.5% comes back to the club as a sponsorship "
-                "rebate it can spend on families who cannot afford the season."
+                "covered. A sponsorship rebate may be arranged for a club "
+                "individually; it is not part of the standard price."
             ),
         },
         "club_pays_instead": {
@@ -4185,8 +4186,8 @@ def org_invoice(
 
     Written to be read by a director deciding, so it leads with the number
     that makes it an easy yes: they are not being asked to find budget, they
-    are being shown a line on dues that covers it and a flat sponsorship
-    rebate that comes back.
+    are being shown a line on dues that covers it. A sponsorship rebate
+    appears only for a club the operator granted one.
     """
     if not principal.is_director:
         raise HTTPException(

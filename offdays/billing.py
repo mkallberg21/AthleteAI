@@ -873,13 +873,38 @@ def expire_households(conn: sqlite3.Connection, today: date | None = None) -> in
 # is never a function of who bought what.
 # ---------------------------------------------------------------------------
 
-#: The sponsorship rebate: a flat share of what a club pays that comes back
-#: to it as a balance the director can spend, typically on covering a family
-#: who cannot afford the season. Flat on purpose: one number every club gets,
-#: so it is never a negotiation and never a volume discount in disguise.
+#: The sponsorship rebate: a share of what a club pays that comes back to it
+#: as a balance the director can spend, typically on covering a family who
+#: cannot afford the season. There is no automatic rebate. The rate lives on
+#: the organisation, defaults to zero, and is set one club at a time by the
+#: operator -- a deliberate commercial decision with a name on it, never a
+#: line every club gets and never something a director can switch on.
 #: Kept as a ledger with a balance rather than netted off the invoice, so it
 #: is something a director can point at in a board meeting.
-REBATE_RATE = 0.075
+MAX_REBATE_RATE = 0.25
+
+
+def rebate_rate(conn: sqlite3.Connection, org_id: int) -> float:
+    """This club's sponsorship rebate rate. Zero unless the operator set one."""
+    row = conn.execute(
+        "SELECT COALESCE(sponsorship_rebate_rate, 0) AS r FROM organizations WHERE id = ?",
+        (org_id,),
+    ).fetchone()
+    return float(row["r"]) if row else 0.0
+
+
+def set_rebate_rate(conn: sqlite3.Connection, org_id: int, rate: float) -> float:
+    """Grant (or withdraw, with 0) a club's sponsorship rebate. Operator only."""
+    if not 0 <= rate <= MAX_REBATE_RATE:
+        raise BillingError(f"the rebate rate must be between 0 and {MAX_REBATE_RATE:.0%}")
+    if conn.execute("SELECT 1 FROM organizations WHERE id = ?", (org_id,)).fetchone() is None:
+        raise BillingError(f"no organisation with id {org_id}")
+    conn.execute(
+        "UPDATE organizations SET sponsorship_rebate_rate = ? WHERE id = ?",
+        (float(rate), org_id),
+    )
+    conn.commit()
+    return float(rate)
 
 
 def season_window(conn: sqlite3.Connection, org_id: int) -> tuple[date | None, date | None]:
@@ -978,6 +1003,8 @@ class RosterInvoice:
     #: Sum over athletes of their own billable days (late joiners count less).
     billable_athlete_days: int
     dues_add_cents: int
+    #: This club's rate, from the organisation. Zero means no rebate.
+    rebate_rate: float = 0.0
 
     @property
     def per_athlete_cents(self) -> int:
@@ -1001,8 +1028,12 @@ class RosterInvoice:
 
     @property
     def rebate_cents(self) -> int:
-        """The sponsorship rebate: a flat REBATE_RATE of what the club pays."""
-        return round(self.total_cents * REBATE_RATE)
+        """The sponsorship rebate, if the operator granted this club one."""
+        return round(self.total_cents * self.rebate_rate)
+
+    @property
+    def has_rebate(self) -> bool:
+        return self.rebate_rate > 0
 
     @property
     def returned_cents(self) -> int:
@@ -1035,7 +1066,8 @@ class RosterInvoice:
             "recommended_dues_add_cents": self.dues_add_cents,
             "dues_collected_cents": self.dues_collected_cents,
             "club_margin_cents": self.club_margin_cents,
-            "rebate_rate": REBATE_RATE,
+            "rebate_rate": self.rebate_rate,
+            "has_rebate": self.has_rebate,
             "rebate_cents": self.rebate_cents,
             "rebate_display": money(self.rebate_cents),
             "returned_cents": self.returned_cents,
@@ -1075,6 +1107,7 @@ def roster_invoice(
         billable_athlete_days=billable,
         dues_add_cents=(dues_add_cents if dues_add_cents is not None
                         else recommended_dues_add_cents(days * per_day)),
+        rebate_rate=rebate_rate(conn, org_id),
     )
 
 
@@ -1087,15 +1120,18 @@ def accrue_rebate(
 ) -> int:
     """Record the sponsorship rebate earned on an amount the club has paid.
 
-    Accrued rather than netted off the invoice on purpose. A discount
-    disappears into a smaller number nobody looks at; a rebate with a balance
-    is something a director can point at in a board meeting and spend on a
-    named family. The whole commercial argument here is that it is the second
-    thing.
+    Nothing accrues for a club with no rate set: there is no automatic
+    rebate. For a club the operator granted one, it is accrued rather than
+    netted off the invoice on purpose. A discount disappears into a smaller
+    number nobody looks at; a rebate with a balance is something a director
+    can point at in a board meeting and spend on a named family.
     """
     if amount_cents <= 0:
         return 0
-    credit = round(amount_cents * REBATE_RATE)
+    rate = rebate_rate(conn, org_id)
+    if rate <= 0:
+        return 0
+    credit = round(amount_cents * rate)
     conn.execute(
         "INSERT INTO sponsorship_credits(org_id, amount_cents, reason, "
         "  created_at) VALUES (?,?,?,?)",
