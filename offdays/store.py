@@ -43,6 +43,7 @@ from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import guardians as guardians_mod
 from . import invites as invites_mod
+from . import contacts as contacts_mod
 from . import load as load_mod
 from . import roster as roster_mod
 from . import absence
@@ -3958,6 +3959,13 @@ class Store:
                     "display_name": athlete.display_name,
                     "jersey": athlete.jersey,
                 })
+
+            for parent in athlete.guardians:
+                contacts_mod.upsert(
+                    self.conn, org_id=org_id, athlete_id=athlete_id,
+                    name=parent["name"], email=parent["email"], phone=parent["phone"],
+                    source="roster",
+                )
 
             if issue_guardian_invites and athlete.guardian_email:
                 try:

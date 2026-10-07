@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS users (
     -- Short code an athlete types once to claim their account. A bulk import
     -- creates hundreds of logins at once and a token shown once on screen is
     -- unusable at that scale -- the coach prints a sheet of these instead.
+    phone            TEXT,
     claim_code_hash  TEXT UNIQUE,
     claim_expires_at TEXT,
     -- True when birth year was estimated from a grade column rather than
@@ -718,6 +719,33 @@ CREATE TABLE IF NOT EXISTS guardians (
 );
 CREATE INDEX IF NOT EXISTS idx_guardians_athlete ON guardians(athlete_id);
 
+-- Every parent the program knows about, whether or not they ever made an
+-- account. The roster is the source: a club's parent list is a real asset
+-- (sponsors, fundraising, the next season's sign-up) and it should not
+-- depend on which parents happened to tap an invite. One row per
+-- (athlete, parent); a second parent on the roster is a second row.
+-- `guardian_id` is filled in when that parent redeems an invite, so the
+-- record and the account are one thing rather than two lists to reconcile.
+-- Whether any of this may be used for sponsor messages is a consent scope
+-- ('marketing'), off until the parent switches it on in their portal.
+CREATE TABLE IF NOT EXISTS guardian_contacts (
+    id            INTEGER PRIMARY KEY,
+    org_id        INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    athlete_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    guardian_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    name          TEXT NOT NULL DEFAULT '',
+    email         TEXT NOT NULL DEFAULT '',
+    phone         TEXT NOT NULL DEFAULT '',
+    relationship  TEXT NOT NULL DEFAULT 'parent',
+    source        TEXT NOT NULL DEFAULT 'roster'
+                  CHECK (source IN ('roster','invite','portal')),
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    UNIQUE (athlete_id, email)
+);
+CREATE INDEX IF NOT EXISTS idx_guardian_contacts_org ON guardian_contacts(org_id);
+CREATE INDEX IF NOT EXISTS idx_guardian_contacts_guardian ON guardian_contacts(guardian_id);
+
 -- Single-use, expiring invitations. A code that reaches the wrong person grants
 -- access to a child's data, so these are short-lived, revocable, and stored
 -- hashed like any other credential.
@@ -1121,6 +1149,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("flare", "REAL"),
     ],
     "users": [
+        ("phone", "TEXT"),
         ("external_id", "TEXT"),
         ("claim_code_hash", "TEXT"),
         ("claim_expires_at", "TEXT"),

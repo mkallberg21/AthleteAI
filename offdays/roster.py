@@ -83,9 +83,34 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
         "parentemail", "guardianemail", "parent", "guardian", "parentcontact",
         "contactemail", "parent1email", "motheremail", "fatheremail",
     ),
-    "guardian_name": ("parentname", "guardianname", "parent1name", "contactname"),
+    "guardian_name": ("parentname", "guardianname", "parent1name", "contactname",
+                      "mothername", "fathername"),
+    "guardian_phone": (
+        "parentphone", "guardianphone", "parentcell", "parentmobile", "phone",
+        "cell", "mobile", "contactphone", "parent1phone", "motherphone",
+        "fatherphone", "phonenumber", "cellphone",
+    ),
+    "guardian2_name": ("parent2name", "guardian2name", "secondparentname"),
+    "guardian2_email": ("parent2email", "guardian2email", "secondparentemail"),
+    "guardian2_phone": ("parent2phone", "guardian2phone", "parent2cell",
+                        "secondparentphone"),
     "team": ("team", "teamname", "squad", "roster"),
 }
+
+
+def parse_phone(value: str | None) -> str | None:
+    """A phone number as digits, or None if it does not look like one.
+
+    Kept as typed otherwise -- formatting a number is a display problem --
+    but a cell with fewer than seven digits is a jersey number in the wrong
+    column, not a phone.
+    """
+    if not value:
+        return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    if len(digits) < 7:
+        return None
+    return value.strip()
 
 
 def detect_columns(headers: Iterable[str]) -> dict[str, str]:
@@ -253,7 +278,28 @@ class Athlete:
     email: str | None = None
     guardian_email: str | None = None
     guardian_name: str | None = None
+    guardian_phone: str | None = None
+    guardian2_email: str | None = None
+    guardian2_name: str | None = None
+    guardian2_phone: str | None = None
     team_name: str | None = None
+
+    @property
+    def guardians(self) -> list[dict[str, str]]:
+        """Every parent this row names, in roster order.
+
+        A parent with only a phone number is still a parent worth keeping:
+        no invite can be emailed, but the club's contact list is not the
+        invite list.
+        """
+        out = []
+        for name, email, phone in (
+            (self.guardian_name, self.guardian_email, self.guardian_phone),
+            (self.guardian2_name, self.guardian2_email, self.guardian2_phone),
+        ):
+            if name or email or phone:
+                out.append({"name": name or "", "email": email or "", "phone": phone or ""})
+        return out
 
     action: str = "create"        # 'create' | 'update' | 'skip'
     existing_id: int | None = None
@@ -291,6 +337,7 @@ class Athlete:
             "birth_year_estimated": self.birth_year_estimated,
             "dominant_hand": self.dominant_hand,
             "guardian_email": self.guardian_email,
+            "guardians": self.guardians,
             "team_name": self.team_name,
             "action": self.action,
             "existing_id": self.existing_id,
@@ -426,6 +473,12 @@ def parse(
         athlete.dominant_hand = parse_hand(value(row, "dominant_hand"))
         athlete.email = value(row, "email") or None
         athlete.guardian_name = value(row, "guardian_name") or None
+        athlete.guardian_phone = parse_phone(value(row, "guardian_phone"))
+        athlete.guardian2_name = value(row, "guardian2_name") or None
+        athlete.guardian2_phone = parse_phone(value(row, "guardian2_phone"))
+        second = value(row, "guardian2_email")
+        if second and "@" in second and "." in second.split("@")[-1]:
+            athlete.guardian2_email = second
         athlete.team_name = value(row, "team") or None
 
         guardian_email = value(row, "guardian_email")

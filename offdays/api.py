@@ -34,6 +34,7 @@ from . import billing as billing_mod
 from . import digest as digest_mod
 from . import mailer
 from . import invites as invites_mod
+from . import contacts as contacts_mod
 from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import onboarding as onboarding_mod
@@ -2173,12 +2174,18 @@ def roster_template() -> dict[str, Any]:
     return {
         "filename": "offdays-roster-template.csv",
         "content": (
-            "First Name,Last Name,#,Position,Birth Year,Shoots,Parent Email\n"
-            "Jordan,Pierce,14,Midfield,2011,Right,parent1@example.com\n"
-            "Sam,Rivera,7,Attack,2010,Left,parent2@example.com\n"
+            "First Name,Last Name,#,Position,Birth Year,Shoots,"
+            "Parent Name,Parent Email,Parent Phone,Parent 2 Name,Parent 2 Email,Parent 2 Phone\n"
+            "Jordan,Pierce,14,Midfield,2011,Right,"
+            "Dana Pierce,parent1@example.com,615 555 0100,Lee Pierce,parent1b@example.com,\n"
+            "Sam,Rivera,7,Attack,2010,Left,"
+            "Maria Rivera,parent2@example.com,,,,\n"
         ),
         "notes": [
             "Column names are matched loosely -- Jersey #, No., and Number all work.",
+            "Parent name, email and phone are kept for the program's parent list, "
+            "and a second parent's columns are kept too. Only an email can be "
+            "sent an invite.",
             "Only a name column is required. Everything else is optional.",
             "Grade or Class Of works instead of Birth Year, but ages from those "
             "are estimates and the athlete is treated as a minor.",
@@ -2246,6 +2253,41 @@ def create_guardian_invite(
     return {**invite, "link": invites_mod.invite_link(invite["code"]), "emailed": sent}
 
 
+@app.get("/api/org/parents")
+def org_parents(
+    format: str = Query(default="json", pattern="^(json|csv)$"),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+):
+    """Every parent the program knows about, with their contact-use decision.
+
+    Directors only: a coach runs a team, a director runs a program, and the
+    parent list is the program's. The `marketing` column is each parent's
+    own answer to whether sponsors may contact them; anything that goes to
+    a sponsor is filtered on it first, and the payload says so.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="director access required")
+    rows = contacts_mod.for_org(store.conn, principal.org_id)
+    if format == "csv":
+        from fastapi.responses import Response
+        return Response(
+            contacts_mod.to_csv(rows), media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="parents.csv"'},
+        )
+    return {
+        "parents": rows,
+        "summary": contacts_mod.summary(rows),
+        "note": (
+            "Use these to run the program and reach families about their "
+            "athlete. For sponsor or partner messages, only rows where "
+            "marketing is yes: the parent switched that on themselves, and "
+            "a text to a parent who did not is a statutory-damages problem, "
+            "not a tone problem."
+        ),
+    }
+
+
 @app.get("/api/coach/guardian-invites")
 def list_guardian_invites(
     principal: Principal = Depends(_staff),
@@ -2288,6 +2330,7 @@ class RedeemRequest(BaseModel):
     code: str = Field(min_length=4, max_length=40)
     display_name: str = Field(min_length=1, max_length=120)
     email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=40)
     relationship: str = Field(default="parent", max_length=40)
 
 
@@ -2303,7 +2346,8 @@ def redeem_guardian_invite(
         raise _throttled(exc) from None
     try:
         result = guardians_mod.redeem_invite(
-            store.conn, body.code, body.display_name, body.email, body.relationship
+            store.conn, body.code, body.display_name, body.email, body.relationship,
+            phone=body.phone,
         )
     except GuardianError:
         throttle.record_failure(store.conn, attempt)

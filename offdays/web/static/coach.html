@@ -648,6 +648,22 @@
     <div id="sync-err" class="err hidden"></div>
   </div>
 
+  <div class="card hidden" id="parents-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0">Parents</h2>
+      <button class="secondary inline" id="parents-csv">Download CSV</button>
+    </div>
+    <p class="small muted" id="parents-summary"></p>
+    <p class="small muted">
+      Every parent named on a roster or who made an account: name, email,
+      phone, which athlete, which team. Use it to run the program. For
+      sponsor or partner messages, use only rows where <b>marketing</b> is
+      <b>yes</b>: that is the parent's own switch in their portal, and a text
+      to a parent who did not turn it on is a legal problem, not a tone one.
+    </p>
+    <div id="parents-err" class="err hidden"></div>
+  </div>
+
   <div class="card hidden" id="slips-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px" class="no-print">
       <h2 style="margin:0">Claim codes</h2>
@@ -2143,6 +2159,37 @@ function defaultGoalDates() {
 
 // ------------------------------------------------------------ season phase
 
+async function loadParents(isDirector) {
+  if (!isDirector) return;
+  try {
+    const data = await api('/api/org/parents');
+    const s = data.summary;
+    $('parents-card').classList.remove('hidden');
+    $('parents-summary').textContent = s.parents
+      ? `${s.parents} parents: ${s.with_email} with email, ${s.with_phone} with phone, `
+        + `${s.with_account} with an account. Sponsor contact: ${s.marketing_yes} yes, `
+        + `${s.marketing_no} no, ${s.marketing_not_asked} not asked.`
+      : 'No parents yet. They arrive with the roster (Parent Email, Parent Phone, '
+        + 'Parent 2 Email… columns) and when a parent creates an account.';
+  } catch { /* not a director, or nothing to show */ }
+}
+
+$('parents-csv').addEventListener('click', async () => {
+  $('parents-err').classList.add('hidden');
+  try {
+    const text = await api('/api/org/parents?format=csv', { raw: true });
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'parents.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    $('parents-err').textContent = e.message;
+    $('parents-err').classList.remove('hidden');
+  }
+});
+
 async function loadSeason(isDirector) {
   const data = await api('/api/org/season');
   $('season-card').classList.remove('hidden');
@@ -2520,7 +2567,7 @@ async function doImport() {
     });
     renderSlips(res);
     $('preview').classList.add('hidden');
-    await Promise.all([loadTeams(), loadAll()]);
+    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR)]);
   } catch (e) {
     $('import-err').textContent = e.message;
     $('import-err').classList.remove('hidden');
@@ -2749,6 +2796,7 @@ $('signout').addEventListener('click', logout);
     await loadStaff(orgs.role === 'director');
     await loadPositionSettings(orgs.role === 'director');
     await loadSeason(orgs.role === 'director');
+    await loadParents(orgs.role === 'director');
     await loadTeams();
     await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.

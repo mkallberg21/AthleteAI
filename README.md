@@ -2739,11 +2739,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 33 modules across 461 call sites.
+SQL lives in 34 modules across 465 call sites.
 store.py holds 36% of them.
 
-1037 occurrences are mechanical (search-and-replace with tests behind it).
-77 need judgement.
+1059 occurrences are mechanical (search-and-replace with tests behind it).
+78 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...

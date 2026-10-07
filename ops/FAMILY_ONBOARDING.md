@@ -131,6 +131,27 @@ end date is the same one that pauses athlete sign-in. A late joiner is billed fr
 The director sees this live under the Season card dates; `GET
 /api/org/invoice` is the number. No dates set = no number, just a note.
 
+## The program's parent list
+
+Every parent named on a roster is kept from the import -- name, email,
+phone, relationship, which athlete, which team -- whether or not they ever
+make an account (`guardian_contacts`; `offdays/contacts.py`). Phone-only
+parents and a second parent's columns (`Parent 2 Name/Email/Phone`) count.
+When a parent redeems an invite the account joins its roster row by email;
+a parent the roster never named is added then, and the sign-up form takes a
+mobile number.
+
+Director sees a **Parents** card with counts and a **Download CSV**
+(`GET /api/org/parents?format=csv`). Coaches do not get it.
+
+**Sponsor use is the parent's call.** The portal has a fifth switch, "Let
+the program's sponsors and partners contact you", off by default. The CSV
+carries it as `marketing` = yes / no / not asked. Running the program and
+reaching a family about their own athlete never needs it; a sponsor message
+does, and a text to a parent who did not switch it on is a TCPA problem
+with statutory damages per message, so the director filters on it first.
+Erasing an athlete ("delete the whole account") removes their contact rows.
+
 ## Known gaps
 
 1. **Verification.** Whoever opens the email is the parent. That is Option B
