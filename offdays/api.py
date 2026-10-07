@@ -2031,12 +2031,7 @@ def import_roster(
         principal.org_id, body.team_id, plan, principal.id,
         issue_guardian_invites=body.invite_guardians,
     )
-    # The day the roster is submitted is the day the season -- and the
-    # bill -- starts. Set once; a director can correct it on the Season
-    # card, and a second import does not move it.
-    started = store.mark_season_started(principal.org_id)
-    return {"summary": plan.to_dict()["summary"], **result,
-            "season_starts_on": started}
+    return {"summary": plan.to_dict()["summary"], **result}
 
 
 # ---------------------------------------------------------------------------
@@ -2509,8 +2504,8 @@ class SeasonPhaseSetting(BaseModel):
     phase: str | None = Field(default=None, min_length=1, max_length=40)
     #: ISO date (YYYY-MM-DD) athlete access ends, or "" for no cutoff.
     ends_on: str | None = Field(default=None, max_length=10)
-    #: ISO date the season (and billing) starts. Set automatically to the
-    #: day the roster is first submitted; a director may correct it.
+    #: ISO date the season (and billing) starts. Chosen by the director,
+    #: like the end date; never inferred from a roster upload.
     starts_on: str | None = Field(default=None, max_length=10)
 
 
@@ -4048,9 +4043,9 @@ def pricing() -> dict[str, Any]:
             "rebate_rate_min": billing_mod.REBATE_RATE_MIN,
             "rebate_rate_max": billing_mod.REBATE_RATE_MAX,
             "note": (
-                "The club pays per rostered athlete per day of its season, from "
-                "the day the roster is submitted to the end date the director "
-                "sets, and covers it by adding a line to its own season fee. The "
+                "The club pays per rostered athlete per day of its season, between "
+                "the start and end dates the director sets, and covers it by "
+                "adding a line to its own season fee. The "
                 "money still comes from parents, through the channel they already "
                 "pay through, and so the club is out nothing, every athlete is "
                 "covered, and a share comes back for families who cannot afford "

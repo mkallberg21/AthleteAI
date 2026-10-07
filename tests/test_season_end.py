@@ -175,19 +175,16 @@ class TestTheSeasonIsWhatTheClubIsBilledOn:
     CSV = "Last Name,First Name,Birth Year\n" + "\n".join(
         f"Kid,Number{i},2012" for i in range(20))
 
-    def test_submitting_the_roster_starts_the_season_today(self, client, director):
-        before = client.get("/api/org/season", headers=director["headers"]).json()
-        assert before["starts_on"] == ""
-        res = client.post(
+    def test_a_roster_import_never_sets_or_moves_the_dates(self, client, director):
+        """A test import in January must not start a February season. The
+        director picks both dates; the roster is just the roster."""
+        client.post(
             "/api/coach/roster/import",
             json={"content": self.CSV, "team_id": director["team"]["id"]},
             headers=director["headers"],
-        ).json()
-        assert res["season_starts_on"] == TODAY
-        after = client.get("/api/org/season", headers=director["headers"]).json()
-        assert after["starts_on"] == TODAY
-
-    def test_a_second_import_does_not_move_the_start(self, client, director):
+        )
+        got = client.get("/api/org/season", headers=director["headers"]).json()
+        assert got["starts_on"] == "" and got["ends_on"] == ""
         client.put("/api/org/season", json={"starts_on": "2027-02-01"}, headers=director["headers"])
         client.post(
             "/api/coach/roster/import",
@@ -195,6 +192,10 @@ class TestTheSeasonIsWhatTheClubIsBilledOn:
             headers=director["headers"],
         )
         assert client.get("/api/org/season", headers=director["headers"]).json()["starts_on"] == "2027-02-01"
+
+    def test_the_start_can_be_set_alone_before_any_roster_exists(self, client, director):
+        res = client.put("/api/org/season", json={"starts_on": "2027-02-01"}, headers=director["headers"]).json()
+        assert res["starts_on"] == "2027-02-01" and res["ends_on"] == "" and res["days"] == 0
 
     def test_the_director_sets_both_dates_and_sees_the_day_count(self, client, director):
         res = client.put(

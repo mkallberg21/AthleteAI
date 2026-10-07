@@ -56,10 +56,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- and staff are never cut off, so the program can be set up for next
     -- year without anyone re-registering.
     season_ends_on TEXT NOT NULL DEFAULT '',
-    -- The first billable day: the day the roster was submitted, set
-    -- automatically by the first import and editable by a director. The
-    -- season is [starts_on, ends_on] inclusive, and that day count is what
-    -- the club is billed on.
+    -- The first billable day, chosen by the director alongside the end
+    -- date. Never inferred from a roster upload: a test import in January
+    -- must not start a February season. The season is [starts_on, ends_on]
+    -- inclusive, and that day count is what the club is billed on.
     season_starts_on TEXT NOT NULL DEFAULT '',
     -- A senior figure in the program whose recognition carries extra weight --
     -- a director of player development, a former professional. Optional, and

@@ -57,9 +57,9 @@ class Plan:
     payer: str = PAYER_PROGRAM
     #: Per rostered athlete, per day of the season. The model this product
     #: actually sells on; `price_cents` stays for the legacy seat plans. A
-    #: season is the inclusive span from the day the roster is submitted to
-    #: the end date the director set, so 500 athletes from 1 February to
-    #: 30 June is 150 days, $75 a head, $37,500.
+    #: season is the inclusive span between the dates the director set, so
+    #: 500 athletes from 1 February to 30 June is 150 days, $75 a head,
+    #: $37,500.
     per_athlete_day_cents: int = 0
     #: Retired plans stay resolvable so existing rows keep working, and stay
     #: out of anything a club is shown. See RETIRED_NOTE.

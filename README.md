@@ -2739,10 +2739,10 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 33 modules across 462 call sites.
+SQL lives in 33 modules across 461 call sites.
 store.py holds 36% of them.
 
-1039 occurrences are mechanical (search-and-replace with tests behind it).
+1037 occurrences are mechanical (search-and-replace with tests behind it).
 77 need judgement.
 ```
 
@@ -2761,15 +2761,14 @@ child is told about their training week.
 
 ## How this is sold
 
-**The club pays $0.50 per rostered athlete per day of its season — from the
-day the roster is submitted to the end date the director sets — and covers it
-by adding a line to its own season fee.**
+**The club pays $0.50 per rostered athlete per day of its season — the start
+and end dates the director sets — and covers it by adding a line to its own
+season fee.**
 
 Per day rather than per season because seasons are not one length: a six-week
 summer programme and a five-month club year are the same product and should
-not cost the same. The start date is set the moment a roster is first
-imported; the director sets the end date on the Season card; the invoice is
-the inclusive day count between them, per athlete.
+not cost the same. The director sets both dates on the Season card when they set up the
+program; the invoice is the inclusive day count between them, per athlete.
 
 The money still comes from parents, but through the channel they already pay
 through, at the moment they are already paying. No second checkout, no

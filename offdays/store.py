@@ -2755,19 +2755,6 @@ class Store:
         from . import billing as billing_mod
         return billing_mod.season_days(*billing_mod.season_window(self.conn, org_id))
 
-    def mark_season_started(self, org_id: int, today: date | None = None) -> str:
-        """Record today as the season start if none is set. Returns the date."""
-        current = self.season_starts_on(org_id)
-        if current:
-            return current
-        day = (today or _now().date()).isoformat()
-        with transaction(self.conn) as c:
-            c.execute(
-                "UPDATE organizations SET season_starts_on = ? WHERE id = ?",
-                (day, org_id),
-            )
-        return day
-
     def season_over(self, org_id: int, today: date | None = None) -> bool:
         """Past the program's season end date. Blank means never."""
         ends = self.season_ends_on(org_id)
