@@ -146,3 +146,93 @@ class TestTheCoachPageHasTheControl:
         from pathlib import Path
         html = (Path(__file__).resolve().parents[1] / "offdays/web/static/coach.html").read_text(encoding="utf-8")
         assert 'id="season-ends"' in html and "ends_on" in html
+
+
+class TestTheSeasonIsWhatTheClubIsBilledOn:
+    """Fifty cents per rostered athlete per day, from the day the roster is
+    submitted to the end date the director set. 500 athletes, 1 February to
+    30 June: 150 days, $37,500."""
+
+    @pytest.fixture
+    def client(self, tmp_path):
+        api_module._store = Store(connect(tmp_path / "b.db"))
+        yield TestClient(api_module.app)
+        api_module._store = None
+
+    @pytest.fixture
+    def director(self, client):
+        made = client.post(
+            "/api/orgs", json={"name": "Nashville Dogs", "director_name": "Dir K"}
+        ).json()
+        headers = {"Authorization": f"Bearer {made['director']['token']}"}
+        team = client.post(
+            "/api/teams", json={"name": "2031 Red", "season": "2027"}, headers=headers
+        ).json()
+        from offdays import billing
+        billing.start_subscription(api_module._store.conn, made["org_id"], "club_roster", trial=False)
+        return {"headers": headers, "team": team, "org": made["org_id"]}
+
+    CSV = "Last Name,First Name,Birth Year\n" + "\n".join(
+        f"Kid,Number{i},2012" for i in range(20))
+
+    def test_a_roster_import_never_sets_or_moves_the_dates(self, client, director):
+        """A test import in January must not start a February season. The
+        director picks both dates; the roster is just the roster."""
+        client.post(
+            "/api/coach/roster/import",
+            json={"content": self.CSV, "team_id": director["team"]["id"]},
+            headers=director["headers"],
+        )
+        got = client.get("/api/org/season", headers=director["headers"]).json()
+        assert got["starts_on"] == "" and got["ends_on"] == ""
+        client.put("/api/org/season", json={"starts_on": "2027-02-01"}, headers=director["headers"])
+        client.post(
+            "/api/coach/roster/import",
+            json={"content": self.CSV, "team_id": director["team"]["id"]},
+            headers=director["headers"],
+        )
+        assert client.get("/api/org/season", headers=director["headers"]).json()["starts_on"] == "2027-02-01"
+
+    def test_the_start_can_be_set_alone_before_any_roster_exists(self, client, director):
+        res = client.put("/api/org/season", json={"starts_on": "2027-02-01"}, headers=director["headers"]).json()
+        assert res["starts_on"] == "2027-02-01" and res["ends_on"] == "" and res["days"] == 0
+
+    def test_the_director_sets_both_dates_and_sees_the_day_count(self, client, director):
+        res = client.put(
+            "/api/org/season",
+            json={"starts_on": "2027-02-01", "ends_on": "2027-06-30"},
+            headers=director["headers"],
+        ).json()
+        assert (res["starts_on"], res["ends_on"], res["days"]) == ("2027-02-01", "2027-06-30", 150)
+
+    def test_the_season_cannot_end_before_it_starts(self, client, director):
+        res = client.put(
+            "/api/org/season",
+            json={"starts_on": "2027-06-30", "ends_on": "2027-02-01"},
+            headers=director["headers"],
+        )
+        assert res.status_code == 400
+        assert "before it starts" in res.json()["detail"]
+
+    def test_the_invoice_is_days_times_athletes_times_fifty_cents(self, client, director):
+        client.post(
+            "/api/coach/roster/import",
+            json={"content": self.CSV, "team_id": director["team"]["id"]},
+            headers=director["headers"],
+        )
+        client.put(
+            "/api/org/season",
+            json={"starts_on": "2027-02-01", "ends_on": "2027-06-30"},
+            headers=director["headers"],
+        )
+        inv = client.get("/api/org/invoice", headers=director["headers"]).json()
+        assert inv["season_days"] == 150
+        assert inv["athletes"] == 20
+        assert inv["per_athlete_cents"] == 7500
+        assert inv["total_cents"] == 20 * 7500
+        assert inv["total_display"] == "$1,500.00"
+
+    def test_no_dates_means_a_note_not_a_number(self, client, director):
+        inv = client.get("/api/org/invoice", headers=director["headers"]).json()
+        assert inv["season_set"] is False and inv["total_cents"] == 0
+        assert "Season card" in inv["note"]

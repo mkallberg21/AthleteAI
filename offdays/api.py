@@ -2504,6 +2504,9 @@ class SeasonPhaseSetting(BaseModel):
     phase: str | None = Field(default=None, min_length=1, max_length=40)
     #: ISO date (YYYY-MM-DD) athlete access ends, or "" for no cutoff.
     ends_on: str | None = Field(default=None, max_length=10)
+    #: ISO date the season (and billing) starts. Chosen by the director,
+    #: like the end date; never inferred from a roster upload.
+    starts_on: str | None = Field(default=None, max_length=10)
 
 
 @app.get("/api/org/season")
@@ -2515,6 +2518,8 @@ def get_season_phase(
         "phase": season_mod.get(_org_phase(store, principal.org_id)).to_dict(),
         "phases": [p.to_dict() for p in season_mod.PHASES],
         "ends_on": store.season_ends_on(principal.org_id),
+        "starts_on": store.season_starts_on(principal.org_id),
+        "days": store.season_day_count(principal.org_id),
         "over": store.season_over(principal.org_id),
     }
 
@@ -2539,14 +2544,23 @@ def set_season_phase(
         )
     if body.phase is not None and body.phase not in season_mod.BY_KEY:
         raise HTTPException(status_code=400, detail=f"unknown phase: {body.phase}")
-    if body.ends_on:
-        from datetime import date as _date
-        try:
-            _date.fromisoformat(body.ends_on)
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="season end must be a date like 2027-06-30"
-            ) from None
+    from datetime import date as _date
+    for label, value in (("end", body.ends_on), ("start", body.starts_on)):
+        if value:
+            try:
+                _date.fromisoformat(value)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"season {label} must be a date like 2027-06-30",
+                ) from None
+    starts = (body.starts_on.strip() if body.starts_on is not None
+              else store.season_starts_on(principal.org_id))
+    ends = (body.ends_on.strip() if body.ends_on is not None
+            else store.season_ends_on(principal.org_id))
+    if starts and ends and _date.fromisoformat(ends) < _date.fromisoformat(starts):
+        raise HTTPException(
+            status_code=400, detail="the season cannot end before it starts")
     with transaction(store.conn) as conn:
         if body.phase is not None:
             conn.execute(
@@ -2560,9 +2574,16 @@ def set_season_phase(
                 "UPDATE organizations SET season_ends_on = ? WHERE id = ?",
                 (body.ends_on.strip(), principal.org_id),
             )
+        if body.starts_on is not None:
+            conn.execute(
+                "UPDATE organizations SET season_starts_on = ? WHERE id = ?",
+                (body.starts_on.strip(), principal.org_id),
+            )
     return {
         "phase": season_mod.get(_org_phase(store, principal.org_id)).to_dict(),
         "ends_on": store.season_ends_on(principal.org_id),
+        "starts_on": store.season_starts_on(principal.org_id),
+        "days": store.season_day_count(principal.org_id),
         "over": store.season_over(principal.org_id),
     }
 
@@ -4007,17 +4028,28 @@ def pricing() -> dict[str, Any]:
         },
         "club_roster": {
             "plan": billing_mod.PLANS_BY_CODE["club_roster"].to_dict(),
-            "per_athlete_season_cents":
-                billing_mod.PLANS_BY_CODE["club_roster"].per_athlete_season_cents,
-            "recommended_dues_add_cents": billing_mod.RECOMMENDED_DUES_ADD_CENTS,
+            "per_athlete_day_cents":
+                billing_mod.PLANS_BY_CODE["club_roster"].per_athlete_day_cents,
+            # Worked example at the length the pitch is usually made for.
+            "example": {
+                "athletes": 500,
+                "season_starts_on": "2027-02-01",
+                "season_ends_on": "2027-06-30",
+                "days": 150,
+                "per_athlete_cents": 150 * billing_mod.PLANS_BY_CODE["club_roster"].per_athlete_day_cents,
+                "total_cents": 500 * 150 * billing_mod.PLANS_BY_CODE["club_roster"].per_athlete_day_cents,
+            },
+            "recommended_dues_margin_cents": billing_mod.RECOMMENDED_DUES_MARGIN_CENTS,
             "rebate_rate_min": billing_mod.REBATE_RATE_MIN,
             "rebate_rate_max": billing_mod.REBATE_RATE_MAX,
             "note": (
-                "The club buys a seat for every rostered athlete and covers it "
-                "by adding a line to its own season fee. The money still comes "
-                "from parents, through the channel they already pay through, and "
-                "so the club is out nothing, every athlete is covered, and a "
-                "share comes back for families who cannot afford the season."
+                "The club pays per rostered athlete per day of its season, between "
+                "the start and end dates the director sets, and covers it by "
+                "adding a line to its own season fee. The "
+                "money still comes from parents, through the channel they already "
+                "pay through, and so the club is out nothing, every athlete is "
+                "covered, and a share comes back for families who cannot afford "
+                "the season."
             ),
         },
         "club_pays_instead": {
@@ -4108,8 +4140,7 @@ def org_invoice(
     rebate_rate: float = Query(
         default=billing_mod.REBATE_RATE_DEFAULT,
         ge=billing_mod.REBATE_RATE_MIN, le=billing_mod.REBATE_RATE_MAX),
-    dues_add_cents: int = Query(
-        default=billing_mod.RECOMMENDED_DUES_ADD_CENTS, ge=0, le=50_000),
+    dues_add_cents: int | None = Query(default=None, ge=0, le=50_000),
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:

@@ -38,7 +38,7 @@ def _seat_metered(plan) -> bool:
     """Billed to the club by seat allowance rather than per head."""
     return (plan.payer == B.PAYER_PROGRAM
             and plan.price_cents > 0
-            and plan.per_athlete_season_cents == 0)
+            and plan.per_athlete_day_cents == 0)
 
 
 class TestPlans:
@@ -62,7 +62,7 @@ class TestPlans:
         """You cannot exceed a seat allowance when every athlete is a seat.
         Getting this wrong blocked roster growth at four athletes."""
         for plan in B.PLANS:
-            if plan.per_athlete_season_cents > 0:
+            if plan.per_athlete_day_cents > 0:
                 assert plan.included_seats == 0
                 assert plan.max_teams == 0 and plan.max_staff == 0
 

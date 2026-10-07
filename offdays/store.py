@@ -2743,6 +2743,18 @@ class Store:
         ).fetchone()
         return (row["d"] if row else "") or ""
 
+    def season_starts_on(self, org_id: int) -> str:
+        row = self.conn.execute(
+            "SELECT COALESCE(season_starts_on, '') AS d FROM organizations WHERE id = ?",
+            (org_id,),
+        ).fetchone()
+        return (row["d"] if row else "") or ""
+
+    def season_day_count(self, org_id: int) -> int:
+        """Inclusive days between the season's dates; zero if either is unset."""
+        from . import billing as billing_mod
+        return billing_mod.season_days(*billing_mod.season_window(self.conn, org_id))
+
     def season_over(self, org_id: int, today: date | None = None) -> bool:
         """Past the program's season end date. Blank means never."""
         ends = self.season_ends_on(org_id)
@@ -3894,6 +3906,17 @@ class Store:
                         ),
                     )
                     athlete_id = int(cur.lastrowid)
+                    # Memberships are the authority for who is rostered in a
+                    # program -- and what the program is billed for. Without
+                    # this row an imported athlete trained fine but was
+                    # invisible to the invoice until the next restart's
+                    # backfill, which is exactly the wrong direction to be
+                    # wrong in.
+                    c.execute(
+                        "INSERT OR REPLACE INTO memberships(user_id, org_id, role, "
+                        "created_at, active) VALUES (?,?,'athlete',?,1)",
+                        (athlete_id, org_id, now),
+                    )
                     c.execute(
                         "INSERT OR REPLACE INTO team_members(team_id, user_id, jersey, "
                         "position, joined_at) VALUES (?,?,?,?,?)",

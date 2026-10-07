@@ -55,9 +55,12 @@ class Plan:
     max_staff: int                   # 0 means unlimited
     blurb: str = ""
     payer: str = PAYER_PROGRAM
-    #: Per rostered athlete, per season. The model this product actually
-    #: sells on; `price_cents` stays for the legacy seat plans.
-    per_athlete_season_cents: int = 0
+    #: Per rostered athlete, per day of the season. The model this product
+    #: actually sells on; `price_cents` stays for the legacy seat plans. A
+    #: season is the inclusive span between the dates the director set, so
+    #: 500 athletes from 1 February to 30 June is 150 days, $75 a head,
+    #: $37,500.
+    per_athlete_day_cents: int = 0
     #: Retired plans stay resolvable so existing rows keep working, and stay
     #: out of anything a club is shown. See RETIRED_NOTE.
     offered: bool = True
@@ -141,26 +144,27 @@ PLANS: tuple[Plan, ...] = (
     Plan(
         code="club_roster",
         name="Club",
-        # Per rostered athlete, per season. A club funds it by adding a line
-        # to its own season fee -- so the money still comes from parents, but
+        # Per rostered athlete, per day. A club funds it by adding a line to
+        # its own season fee -- so the money still comes from parents, but
         # through the channel they already pay through, at the moment they
         # are already paying, with no second checkout and no chasing.
         #
-        # This is why per-athlete rather than seat tiers: a club adding $40 to
-        # dues needs to know exactly what it owes per player, and a tiered
-        # plan makes that a division problem whose answer changes every time
-        # somebody joins.
+        # Per day rather than per season because seasons are not one length:
+        # a six-week summer programme and a five-month club year are the
+        # same product and should not cost the same. Per athlete rather than
+        # seat tiers because a club adding a line to dues needs to know
+        # exactly what it owes per player.
         price_cents=0,
-        per_athlete_season_cents=2500,
+        per_athlete_day_cents=50,
         included_seats=0,
         extra_seat_cents=0,
         max_teams=0,
         max_staff=0,
         payer=PAYER_PROGRAM,
         blurb=(
-            "Every rostered athlete, billed to the club per season. Clubs "
-            "cover it by adding a line to their own season fee, which costs "
-            "the club nothing and returns a sponsorship rebate."
+            "Every rostered athlete, fifty cents a day for the season, billed "
+            "to the club. Clubs cover it by adding a line to their own season "
+            "fee, which costs the club nothing and returns a sponsorship rebate."
         ),
     ),
     Plan(
@@ -266,7 +270,7 @@ class Subscription:
         on the model this product sells.
         """
         return (self.plan.payer == PAYER_HOUSEHOLD
-                or self.plan.per_athlete_season_cents > 0)
+                or self.plan.per_athlete_day_cents > 0)
 
     @property
     def seat_limit(self) -> int:
@@ -859,7 +863,7 @@ def expire_households(conn: sqlite3.Connection, today: date | None = None) -> in
 # ---------------------------------------------------------------------------
 # A club buying for its whole roster
 #
-# The club is invoiced per rostered athlete per season and covers it by adding
+# The club is invoiced per rostered athlete per day of its season and covers it by adding
 # a line to its own season fee. The money still comes from parents, but through
 # the channel they already pay through, at the moment they are already paying:
 # no second checkout, no chasing, and no coach explaining a subscription.
@@ -868,14 +872,6 @@ def expire_households(conn: sqlite3.Connection, today: date | None = None) -> in
 # Every athlete is covered, so coverage is never partial and the coach's view
 # is never a function of who bought what.
 # ---------------------------------------------------------------------------
-
-#: What a club is told to add to each player's season fee. Their number to
-#: set, not ours -- but a recommendation is worth making, because a director
-#: who has to invent it will either under-recover or not bother.
-#:
-#: On a season that runs into four figures this is about two per cent, and it
-#: leaves the club a margin that funds the sponsorship story below.
-RECOMMENDED_DUES_ADD_CENTS = 4000
 
 #: Share of what a club pays that comes back to them, earmarked for covering
 #: families who cannot afford the season at all.
@@ -889,6 +885,62 @@ REBATE_RATE_MAX = 0.10
 REBATE_RATE_DEFAULT = 0.075
 
 
+def season_window(conn: sqlite3.Connection, org_id: int) -> tuple[date | None, date | None]:
+    """The program's season as two dates, either of which may be unset."""
+    row = conn.execute(
+        "SELECT COALESCE(season_starts_on, '') AS s, COALESCE(season_ends_on, '') AS e "
+        "FROM organizations WHERE id = ?",
+        (org_id,),
+    ).fetchone()
+
+    def parse(v: str) -> date | None:
+        try:
+            return date.fromisoformat(v) if v else None
+        except ValueError:
+            return None
+
+    return (parse(row["s"]), parse(row["e"])) if row else (None, None)
+
+
+def season_days(starts: date | None, ends: date | None) -> int:
+    """Billable days in a season, both ends inclusive.
+
+    Inclusive because that is how a club counts it: a season that starts on
+    the first and ends on the thirtieth is thirty days, not twenty-nine. A
+    missing or inverted window is zero days, so nothing is billed on a guess.
+    """
+    if starts is None or ends is None or ends < starts:
+        return 0
+    return (ends - starts).days + 1
+
+
+def athlete_days(
+    conn: sqlite3.Connection, org_id: int, starts: date | None, ends: date | None
+) -> list[tuple[int, int]]:
+    """(athlete_id, billable days) for every rostered athlete.
+
+    A player who joins partway through is billed from the day they were
+    added, not from the start of the season: a club billed a full season for
+    a week-ten joiner will stop adding late joiners, which turns a billing
+    rule into a reason to leave a child off a roster.
+    """
+    if starts is None or ends is None:
+        return []
+    out = []
+    for row in conn.execute(
+        "SELECT m.user_id, m.created_at FROM memberships m JOIN users u ON u.id = m.user_id "
+        "WHERE m.org_id = ? AND m.role = 'athlete' AND m.active = 1 AND u.active = 1",
+        (org_id,),
+    ):
+        try:
+            joined = datetime.fromisoformat(row["created_at"]).date()
+        except (TypeError, ValueError):
+            joined = starts
+        first = max(starts, joined)
+        out.append((int(row["user_id"]), season_days(first, ends)))
+    return out
+
+
 def _rostered(conn: sqlite3.Connection, org_id: int) -> int:
     return int(conn.execute(
         "SELECT COUNT(*) FROM memberships m JOIN users u ON u.id = m.user_id "
@@ -898,31 +950,47 @@ def _rostered(conn: sqlite3.Connection, org_id: int) -> int:
     ).fetchone()[0])
 
 
-def prorated_cents(plan: Plan, months_left: int) -> int:
-    """What one athlete costs when they join partway through a season.
+def prorated_cents(plan: Plan, days_left: int) -> int:
+    """What one athlete costs for the days left in the season."""
+    return max(0, days_left) * plan.per_athlete_day_cents
 
-    A player who turns up in week ten should not cost a full season, and a
-    club that gets billed as though they did will stop adding late joiners --
-    which would quietly turn a billing rule into a reason to leave a child off
-    a roster.
-    """
-    months = max(0, min(SEASON_MONTHS, months_left))
-    if not months:
-        return 0
-    return round(plan.per_athlete_season_cents * months / SEASON_MONTHS)
+
+#: What the club is told to add to each player's season fee, over and above
+#: what it owes us per athlete. Their number to set, not ours -- but a
+#: recommendation is worth making, because a director who has to invent it
+#: will either under-recover or not bother. The margin is what funds the
+#: sponsorship story below.
+RECOMMENDED_DUES_MARGIN_CENTS = 1000
+
+
+def recommended_dues_add_cents(per_athlete_cents: int) -> int:
+    """Per-athlete cost plus the margin, rounded up to a whole five dollars
+    so it reads like a line on a fee schedule rather than a calculation."""
+    raw = per_athlete_cents + RECOMMENDED_DUES_MARGIN_CENTS
+    return -(-raw // 500) * 500
 
 
 @dataclass
 class RosterInvoice:
     org_id: int
     athletes: int
-    per_athlete_cents: int
+    season_starts_on: str
+    season_ends_on: str
+    days: int
+    per_athlete_day_cents: int
+    #: Sum over athletes of their own billable days (late joiners count less).
+    billable_athlete_days: int
     dues_add_cents: int
     rebate_rate: float
 
     @property
+    def per_athlete_cents(self) -> int:
+        """A full-season athlete. What the club quotes a parent."""
+        return self.days * self.per_athlete_day_cents
+
+    @property
     def total_cents(self) -> int:
-        return self.athletes * self.per_athlete_cents
+        return self.billable_athlete_days * self.per_athlete_day_cents
 
     @property
     def dues_collected_cents(self) -> int:
@@ -948,6 +1016,10 @@ class RosterInvoice:
         """
         return self.club_margin_cents + self.rebate_cents
 
+    @property
+    def season_set(self) -> bool:
+        return self.days > 0
+
     def to_dict(self) -> dict[str, Any]:
         def money(cents: int) -> str:
             return f"${cents / 100:,.2f}"
@@ -955,8 +1027,14 @@ class RosterInvoice:
         return {
             "org_id": self.org_id,
             "athletes": self.athletes,
-            "season_months": SEASON_MONTHS,
+            "season_starts_on": self.season_starts_on,
+            "season_ends_on": self.season_ends_on,
+            "season_days": self.days,
+            "season_set": self.season_set,
+            "per_athlete_day_cents": self.per_athlete_day_cents,
             "per_athlete_cents": self.per_athlete_cents,
+            "per_athlete_display": money(self.per_athlete_cents),
+            "billable_athlete_days": self.billable_athlete_days,
             "total_cents": self.total_cents,
             "total_display": money(self.total_cents),
             "recommended_dues_add_cents": self.dues_add_cents,
@@ -967,6 +1045,10 @@ class RosterInvoice:
             "sponsorship_pot_cents": self.sponsorship_pot_cents,
             "sponsorship_pot_display": money(self.sponsorship_pot_cents),
             "costs_the_club_directly": 0,
+            "note": None if self.season_set else (
+                "Set the season start and end dates on the Season card; the "
+                "invoice is the number of days between them, per athlete."
+            ),
         }
 
 
@@ -975,20 +1057,34 @@ def roster_invoice(
     org_id: int,
     *,
     rebate_rate: float = REBATE_RATE_DEFAULT,
-    dues_add_cents: int = RECOMMENDED_DUES_ADD_CENTS,
+    dues_add_cents: int | None = None,
 ) -> RosterInvoice:
-    """What this club owes for a season, and what the arrangement returns."""
+    """What this club owes for its season, and what the arrangement returns.
+
+    The season is the inclusive day count between the dates on the
+    organisation; a club with no dates set gets a zero invoice and a note,
+    never a number computed from an assumed length.
+    """
     if not REBATE_RATE_MIN <= rebate_rate <= REBATE_RATE_MAX:
         raise BillingError(
             f"the sponsorship rebate is between {REBATE_RATE_MIN:.0%} and "
             f"{REBATE_RATE_MAX:.0%}"
         )
     plan = get_plan("club_roster")
+    starts, ends = season_window(conn, org_id)
+    days = season_days(starts, ends)
+    per_day = plan.per_athlete_day_cents
+    billable = sum(d for _, d in athlete_days(conn, org_id, starts, ends))
     return RosterInvoice(
         org_id=org_id,
         athletes=_rostered(conn, org_id),
-        per_athlete_cents=plan.per_athlete_season_cents,
-        dues_add_cents=dues_add_cents,
+        season_starts_on=starts.isoformat() if starts else "",
+        season_ends_on=ends.isoformat() if ends else "",
+        days=days,
+        per_athlete_day_cents=per_day,
+        billable_athlete_days=billable,
+        dues_add_cents=(dues_add_cents if dues_add_cents is not None
+                        else recommended_dues_add_cents(days * per_day)),
         rebate_rate=rebate_rate,
     )
 

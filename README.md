@@ -2739,11 +2739,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 33 modules across 455 call sites.
+SQL lives in 33 modules across 461 call sites.
 store.py holds 36% of them.
 
-1026 occurrences are mechanical (search-and-replace with tests behind it).
-75 need judgement.
+1037 occurrences are mechanical (search-and-replace with tests behind it).
+77 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...
@@ -2761,8 +2761,14 @@ child is told about their training week.
 
 ## How this is sold
 
-**The club buys a seat for every rostered athlete — $25 per athlete per
-season — and covers it by adding a line to its own season fee.**
+**The club pays $0.50 per rostered athlete per day of its season — the start
+and end dates the director sets — and covers it by adding a line to its own
+season fee.**
+
+Per day rather than per season because seasons are not one length: a six-week
+summer programme and a five-month club year are the same product and should
+not cost the same. The director sets both dates on the Season card when they set up the
+program; the invoice is the inclusive day count between them, per athlete.
 
 The money still comes from parents, but through the channel they already pay
 through, at the moment they are already paying. No second checkout, no
@@ -2770,21 +2776,23 @@ chasing, no coach explaining a subscription. And every athlete is covered, so
 coverage is never partial and a coach's view is never a function of who bought
 what.
 
-### What a 200-athlete club sees
+### What a 500-athlete club sees, 1 February to 30 June
 
 | | |
 |---|---|
-| We invoice the club | **$5,000** / season |
-| Club adds to dues | $40 / player → collects $8,000 |
-| Club margin | $3,000 |
-| Sponsorship rebate (7.5%) | $375 |
-| **Into their scholarship fund** | **$3,375** |
+| Season | 150 days |
+| Per athlete | 150 × $0.50 = **$75** |
+| We invoice the club | **$37,500** |
+| Club adds to dues (recommended) | $85 / player → collects $42,500 |
+| Club margin | $5,000 |
+| Sponsorship rebate (7.5%) | $2,812.50 |
+| **Into their scholarship fund** | **$7,812.50** |
 | **Out of the club's own budget** | **$0** |
 
 A director is not being asked to find budget. They are shown a line that funds
-their own scholarship fund. The $40 is a recommendation, not a rule — it is
-about two per cent of a season fee that runs into four figures, and the club
-sets its own number.
+their own scholarship fund. The recommended add is the per-athlete cost plus a
+$10 margin, rounded up to the next $5 so it reads like a line on a fee
+schedule; the club sets its own number.
 
 ### The rebate is a fund, not a discount
 
@@ -2801,7 +2809,7 @@ in disguise.
 
 ### Late joiners are prorated
 
-A player who turns up in week ten costs a fraction of a season. A club billed
+A player added on 1 June is billed from 1 June: 30 days, not 150. A club billed
 in full for a late joiner will stop adding late joiners, which turns a billing
 rule into a reason to leave a child off a roster.
 
@@ -2816,11 +2824,11 @@ appeared in this pricing. A sponsorship SKU was priced *above* the seat plans
 and would never have been chosen. The seat plans were then priced 3.4× to 7.5×
 *below* per-athlete, and would have won every time:
 
-| Club size | Roster plan @ $25 | Old seat plan |
+| Club size | Roster plan, 150-day season | Old seat plan |
 |---|---|---|
-| 40 | $1,000/season | $245 (Team) |
-| 200 | $5,000/season | $745 (Program) |
-| 600 | $15,000/season | $1,995 (Club) |
+| 40 | $3,000/season | $245 (Team) |
+| 200 | $15,000/season | $745 (Program) |
+| 600 | $45,000/season | $1,995 (Club) |
 
 A price that always loses to another price you publish is not an option — it
 is a trap for whoever reads the pricing page carefully. There is now exactly
@@ -4488,8 +4496,8 @@ contact with a real driveway:
     themselves in one click. That is deliberate: verification would mean
     asking a family to prove poverty to their child's sports club, which is a
     worse outcome than some families taking it who could have paid.
-51. **The roster plan is priced against club dues, not against costs.** $25
-    an athlete works because a club can add $40 to a four-figure season fee
+51. **The roster plan is priced against club dues, not against costs.** $0.50
+    a day works because a club can add $85 to a four-figure season fee
     without a parent noticing. It has never been tested against a club that
     negotiates, against a rec league whose season fee is $200 rather than
     $1,800, or against a competitor undercutting it. The seat tiers it

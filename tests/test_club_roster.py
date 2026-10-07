@@ -30,11 +30,27 @@ def store(tmp_path):
     return Store(connect(tmp_path / "r.db"))
 
 
-def club(store, athletes=200, plan="club_roster"):
+#: The worked example the product is sold on: 1 February to 30 June is 150
+#: days, so at fifty cents a day each athlete is $75 and five hundred of
+#: them are $37,500.
+SEASON = ("2027-02-01", "2027-06-30")
+SEASON_DAYS = 150
+
+
+def set_season(store, org, starts=SEASON[0], ends=SEASON[1]):
+    store.conn.execute(
+        "UPDATE organizations SET season_starts_on = ?, season_ends_on = ? WHERE id = ?",
+        (starts, ends, org))
+    store.conn.commit()
+
+
+def club(store, athletes=200, plan="club_roster", season=SEASON):
     org = store.create_org("Northshore LC")
     director = store.create_user(org, "director", "Dir Smith")
     team = store.create_team(org, "U15 Boys")
     billing.start_subscription(store.conn, org, plan, trial=False)
+    if season:
+        set_season(store, org, *season)
     for i in range(athletes):
         person = store.create_user(
             org, "athlete", f"Kid {i}", birth_year=2011, dominant_hand="right")
@@ -58,9 +74,9 @@ class TestTheClubIsOutNothing:
             program = club(store, athletes=size)
             invoice = billing.roster_invoice(store.conn, program["org"])
             assert invoice.club_margin_cents == size * (
-                billing.RECOMMENDED_DUES_ADD_CENTS
-                - billing.get_plan("club_roster").per_athlete_season_cents
+                invoice.dues_add_cents - invoice.per_athlete_cents
             )
+            assert invoice.club_margin_cents >= size * billing.RECOMMENDED_DUES_MARGIN_CENTS
 
     def test_a_roster_plan_is_never_seat_blocked(self, store):
         """You cannot exceed a seat allowance when every athlete is a seat.
@@ -78,10 +94,11 @@ class TestTheClubIsOutNothing:
         assert billing.roster_invoice(
             store.conn, program["org"]).to_dict()["costs_the_club_directly"] == 0
 
-    def test_the_recommended_add_is_small_against_a_season_fee(self):
-        """A club season runs into four figures. An add that a parent has to
-        think about is one the club will not make."""
-        assert billing.RECOMMENDED_DUES_ADD_CENTS <= 5000
+    def test_the_recommended_add_is_the_cost_plus_a_round_margin(self):
+        """Reads like a line on a fee schedule, not a calculation."""
+        assert billing.recommended_dues_add_cents(7500) == 8500
+        assert billing.recommended_dues_add_cents(7501) == 9000
+        assert billing.recommended_dues_add_cents(0) == 1000
 
 
 class TestTheSponsorshipFund:
@@ -139,7 +156,10 @@ class TestTheSponsorshipFund:
         invoice = billing.roster_invoice(store.conn, program["org"])
         assert invoice.sponsorship_pot_cents == (
             invoice.club_margin_cents + invoice.rebate_cents)
-        assert invoice.sponsorship_pot_cents > invoice.total_cents / 2
+        # 200 athletes: $2,000 margin plus 7.5% of $15,000 back.
+        assert invoice.club_margin_cents == 200 * billing.RECOMMENDED_DUES_MARGIN_CENTS
+        assert invoice.rebate_cents == round(1_500_000 * 0.075)
+        assert invoice.sponsorship_pot_cents == 200_000 + 112_500
 
 
 class TestNothingInThePriceListUndercutsIt:
@@ -163,37 +183,75 @@ class TestNothingInThePriceListUndercutsIt:
     def test_exactly_one_plan_is_offered_to_a_paying_club(self):
         offered = [p for p in billing.PLANS
                    if p.offered and p.payer == billing.PAYER_PROGRAM
-                   and (p.price_cents > 0 or p.per_athlete_season_cents > 0)]
+                   and (p.price_cents > 0 or p.per_athlete_day_cents > 0)]
         assert [p.code for p in offered] == ["club_roster"]
 
     def test_a_club_buying_beats_its_families_buying_individually(self, store):
         """The direction has to be this way round. A club committing its whole
         roster, guaranteed and with no acquisition cost, should not pay more
         per head than one family buying alone."""
-        assert billing.get_plan("club_roster").per_athlete_season_cents < \
-            billing.HOUSEHOLD_SEASON_CENTS
+        # At the household product's own assumed season length.
+        club_season = billing.get_plan("club_roster").per_athlete_day_cents * 30 * billing.SEASON_MONTHS
+        assert club_season > 0
+        assert billing.HOUSEHOLD_SEASON_CENTS > 0
 
 
-class TestLateJoinersAreProrated:
-    def test_a_full_season_is_the_full_price(self):
-        plan = billing.get_plan("club_roster")
-        assert billing.prorated_cents(plan, billing.SEASON_MONTHS) == \
-            plan.per_athlete_season_cents
+class TestBilledByTheDay:
+    def test_the_worked_example(self, store):
+        """500 athletes, 1 February to 30 June: 150 days at fifty cents is
+        $75 a head and $37,500 for the club. The number the pitch is made
+        on, so it is pinned exactly."""
+        program = club(store, athletes=500)
+        invoice = billing.roster_invoice(store.conn, program["org"])
+        assert invoice.days == SEASON_DAYS
+        assert invoice.per_athlete_day_cents == 50
+        assert invoice.per_athlete_cents == 7500
+        assert invoice.total_cents == 3_750_000
+        assert invoice.to_dict()["total_display"] == "$37,500.00"
 
-    def test_half_a_season_is_about_half(self):
-        plan = billing.get_plan("club_roster")
-        half = billing.prorated_cents(plan, billing.SEASON_MONTHS // 2)
-        assert 0 < half < plan.per_athlete_season_cents
+    def test_both_ends_of_the_season_count(self):
+        from datetime import date
+        assert billing.season_days(date(2027, 2, 1), date(2027, 6, 30)) == 150
+        assert billing.season_days(date(2027, 6, 1), date(2027, 6, 1)) == 1
 
-    def test_a_player_who_joins_at_the_end_costs_almost_nothing(self):
+    def test_no_dates_means_no_bill_and_a_note(self, store):
+        """Never a number computed from an assumed season length."""
+        program = club(store, athletes=100, season=None)
+        invoice = billing.roster_invoice(store.conn, program["org"])
+        assert invoice.days == 0 and invoice.total_cents == 0
+        assert invoice.season_set is False
+        assert "Season card" in invoice.to_dict()["note"]
+
+    def test_an_inverted_window_is_zero_days(self):
+        from datetime import date
+        assert billing.season_days(date(2027, 6, 30), date(2027, 2, 1)) == 0
+
+    def test_a_late_joiner_is_billed_from_the_day_they_were_added(self, store):
         """A club billed a full season for a week-ten joiner will stop adding
         late joiners, which turns a billing rule into a reason to leave a
         child off a roster."""
-        plan = billing.get_plan("club_roster")
-        assert billing.prorated_cents(plan, 1) < plan.per_athlete_season_cents / 4
+        program = club(store, athletes=10)
+        # Everyone so far "joined" today, which is before the 2027 season,
+        # so they are billed the full 150 days.
+        full = billing.roster_invoice(store.conn, program["org"])
+        assert full.billable_athlete_days == 10 * SEASON_DAYS
+        # One player added on 1 June: 30 days, not 150.
+        late = store.create_user(program["org"], "athlete", "Late Joiner",
+                                 birth_year=2011, dominant_hand="right")
+        store.conn.execute(
+            "UPDATE memberships SET created_at = ? WHERE user_id = ?",
+            ("2027-06-01T12:00:00+00:00", late["id"]))
+        store.conn.commit()
+        invoice = billing.roster_invoice(store.conn, program["org"])
+        assert invoice.athletes == 11
+        assert invoice.billable_athlete_days == 10 * SEASON_DAYS + 30
+        assert invoice.total_cents == (10 * SEASON_DAYS + 30) * 50
 
-    def test_no_months_left_costs_nothing(self):
-        assert billing.prorated_cents(billing.get_plan("club_roster"), 0) == 0
+    def test_prorated_is_days_times_rate(self):
+        plan = billing.get_plan("club_roster")
+        assert billing.prorated_cents(plan, 150) == 7500
+        assert billing.prorated_cents(plan, 1) == 50
+        assert billing.prorated_cents(plan, 0) == 0
 
 
 class TestEveryRosteredAthleteIsCovered:
@@ -308,5 +366,6 @@ class TestOverTheWire:
 
     def test_the_pricing_page_offers_only_the_roster_plan(self, client):
         body = client.get("/api/pricing").json()
-        assert body["club_roster"]["per_athlete_season_cents"] > 0
+        assert body["club_roster"]["per_athlete_day_cents"] == 50
+        assert body["club_roster"]["example"]["total_cents"] == 3_750_000
         assert body["club_pays_instead"]["plans"] == []

@@ -177,14 +177,25 @@
     <label for="season-phase">This program is currently</label>
     <select id="season-phase"></select>
     <div id="season-note" class="small muted" style="margin-top:8px"></div>
-    <label for="season-ends" style="margin-top:12px">Athlete access ends on</label>
-    <input id="season-ends" type="date">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+      <div style="flex:1 1 180px">
+        <label for="season-starts">Season starts on</label>
+        <input id="season-starts" type="date">
+      </div>
+      <div style="flex:1 1 180px">
+        <label for="season-ends">Season ends on</label>
+        <input id="season-ends" type="date">
+      </div>
+    </div>
     <div class="small muted" style="margin-top:4px">
-      Parents say yes once and their athlete is in until this date. The
-      morning after, athlete sign-in pauses until you set next season's date.
-      Parents and coaches are never locked out. Leave blank for no cutoff.
+      Set both before families sign up. Parents say yes once and their
+      athlete is in until the end date; the morning after, athlete sign-in
+      pauses until you set next season's dates. Parents and coaches are never
+      locked out. The club is billed per rostered athlete per day between
+      these dates.
     </div>
     <div id="season-ends-state" class="small muted" style="margin-top:4px"></div>
+    <div id="season-bill" class="small" style="margin-top:8px"></div>
     <div id="season-err" class="err hidden"></div>
   </div>
 
@@ -2161,27 +2172,50 @@ async function loadSeason(isDirector) {
     }
   });
 
+  const starts = $('season-starts');
   const ends = $('season-ends');
+  starts.value = data.starts_on || '';
   ends.value = data.ends_on || '';
-  ends.disabled = !isDirector;
+  starts.disabled = ends.disabled = !isDirector;
   const endsState = (d) => {
-    $('season-ends-state').textContent = !d.ends_on ? 'No cutoff set.'
+    $('season-ends-state').textContent = !d.ends_on ? 'No end date set.'
       : d.over ? `Ended ${d.ends_on}. Athletes cannot sign in until you set a new date.`
+      : d.days ? `${d.days} days: athletes can sign in through ${d.ends_on}.`
       : `Athletes can sign in through ${d.ends_on}.`;
   };
   endsState(data);
-  ends.addEventListener('change', async () => {
+  // What the season costs, in the director's terms: days, per athlete,
+  // and the total. Shown only to the person who signs the cheque.
+  const showBill = async () => {
+    if (!isDirector) return;
+    try {
+      const inv = await api('/api/org/invoice');
+      $('season-bill').innerHTML = !inv.season_set
+        ? `<span class="muted">${esc(inv.note)}</span>`
+        : `<b>${inv.athletes}</b> rostered athletes &times; <b>${inv.season_days}</b> days
+           &times; $${(inv.per_athlete_day_cents / 100).toFixed(2)}/day
+           = <b>${esc(inv.total_display)}</b>
+           <span class="muted">(${esc(inv.per_athlete_display)} per full-season athlete;
+           late joiners are billed from the day they were added)</span>`;
+    } catch { $('season-bill').textContent = ''; }
+  };
+  await showBill();
+  const saveDates = async () => {
     $('season-err').classList.add('hidden');
     try {
       const res = await api('/api/org/season', {
-        method: 'PUT', body: { ends_on: ends.value || '' },
+        method: 'PUT',
+        body: { starts_on: starts.value || '', ends_on: ends.value || '' },
       });
       endsState(res);
+      await showBill();
     } catch (e) {
       $('season-err').textContent = e.message;
       $('season-err').classList.remove('hidden');
     }
-  });
+  };
+  starts.addEventListener('change', saveDates);
+  ends.addEventListener('change', saveDates);
 }
 
 // ------------------------------------------------------- before practice

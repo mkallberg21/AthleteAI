@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- and staff are never cut off, so the program can be set up for next
     -- year without anyone re-registering.
     season_ends_on TEXT NOT NULL DEFAULT '',
+    -- The first billable day, chosen by the director alongside the end
+    -- date. Never inferred from a roster upload: a test import in January
+    -- must not start a February season. The season is [starts_on, ends_on]
+    -- inclusive, and that day count is what the club is billed on.
+    season_starts_on TEXT NOT NULL DEFAULT '',
     -- A senior figure in the program whose recognition carries extra weight --
     -- a director of player development, a former professional. Optional, and
     -- absent means every message comes from the athlete's own coach.
@@ -1136,6 +1141,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("sibling_compare", "INTEGER NOT NULL DEFAULT 0"),
         ("season_phase", "TEXT NOT NULL DEFAULT 'preseason'"),
         ("season_ends_on", "TEXT NOT NULL DEFAULT ''"),
+        ("season_starts_on", "TEXT NOT NULL DEFAULT ''"),
         # A club's own badge. The file lives under web/static/teams/ and this
         # is its name -- a path rather than a blob, because a logo is served
         # to every screen on every load and a database is the wrong place to
