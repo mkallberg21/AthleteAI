@@ -508,4 +508,4 @@ class TestOverTheWire:
         body = client.get("/api/pricing").json()
         assert "sponsorship" not in body
         assert body["club_pays_instead"]["plans"] == []
-        assert body["club_roster"]["per_athlete_season_cents"] > 0
+        assert body["club_roster"]["per_athlete_day_cents"] > 0

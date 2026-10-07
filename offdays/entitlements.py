@@ -259,7 +259,7 @@ def _org_covers(conn: sqlite3.Connection, athlete_id: int) -> bool:
     # Either the club buys a seat for every rostered athlete, or it is on one
     # of the retired seat tiers. Both mean the club paid for the whole
     # product, families included.
-    return plan.per_athlete_season_cents > 0 or plan.price_cents > 0
+    return plan.per_athlete_day_cents > 0 or plan.price_cents > 0
 
 
 def for_athlete(

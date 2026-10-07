@@ -120,6 +120,18 @@ The email copy (`invites.compose`) leads with the privacy promise -- video
 never leaves the phone -- names the coach and the program, carries the link,
 the code as a fallback, and the parent's rights (withdraw, export, delete).
 
+## What the club is billed
+
+$0.50 per rostered athlete per day of the season, both ends inclusive. The
+**start** is set automatically to the day the roster is first imported (a
+director can correct it on the Season card; a second import does not move
+it). The **end** is the date the director sets there -- the same date that
+pauses athlete sign-in. A late joiner is billed from the day they were added.
+
+500 athletes, 1 February to 30 June = 150 days = $75 a head = **$37,500**.
+The director sees this live under the Season card dates; `GET
+/api/org/invoice` is the number. No dates set = no number, just a note.
+
 ## Known gaps
 
 1. **Verification.** Whoever opens the email is the parent. That is Option B

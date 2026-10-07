@@ -273,6 +273,11 @@ def redeem_invite(
         )
         guardian_id = int(cur.lastrowid)
         c.execute(
+            "INSERT OR REPLACE INTO memberships(user_id, org_id, role, created_at, active) "
+            "VALUES (?,?,'guardian',?,1)",
+            (guardian_id, athlete["org_id"], _iso(now)),
+        )
+        c.execute(
             "INSERT OR IGNORE INTO guardians(guardian_id, athlete_id, relationship, linked_at) "
             "VALUES (?,?,?,?)",
             (guardian_id, athlete["id"], relationship, _iso(now)),
