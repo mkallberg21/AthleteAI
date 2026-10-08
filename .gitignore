@@ -7,7 +7,8 @@ venv/
 .env
 infra/.env.prod
 
-# Local databases (including the seeded demo)
+# Local databases (including the seeded demo), and the shot-speed calibration
+# bench's extracted clips/landmarks (scripts/shotcal/, never committed: footage of kids)
 data/
 *.db
 *.db-wal

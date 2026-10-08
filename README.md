@@ -4284,6 +4284,27 @@ contact with a real driveway:
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
    the calibration against hand-counted ground truth remains the
    highest-value next task, and the reason the specs are data rather than code.
+
+   **Shot speed is checked against a radar gun on seven shots, not thirty.**
+   It is a flight average: release (the first crest of the stick's swing,
+   heard; pose only where no swing was), impact (the ball hitting, heard -- a
+   click off a pipe or a thud into a slack net) and a typed distance. On seven
+   Pocket Radar running shots called as 10 yards, one evening, phone on the
+   ground behind the shooter, the release it heard was within 30 ms of the
+   frame the ball left the stick on every clip and on either microphone
+   channel alone (10-16 ms early on average), and the impact matched the frame
+   the net moved. Against the gun it read 64/70, 72/74, 65/67, 78/80, 72/72,
+   84/79 and 84/75 mph. The last two are not the timing: the frames give the
+   same moments, so those were let go nearer than 10 yards or clocked at an
+   angle. A running shot's release point is "about" 10 yards, and at that
+   range a yard is 10%. One channel alone also counts a 30 mph "shot" from a
+   run-up rustle and a footstep. The first version of the counter timed none
+   of these: pose from behind put the release 150-300 ms out, and the
+   wall-ball rhythm tracker kept footsteps and dropped the net. Untested:
+   side-on filming, other phones, wind, a standing shooter. The bench refuses
+   to settle anything under 6 clips / 30 clocked shots, and any correction it
+   motivates lands as one declared number applied identically in
+   `shotspeed.js` and `shotspeed.py`.
 8. **The ball detector is validated on synthetic frames, not real footage.**
    Rendered discs on rendered backgrounds prove the logic — colour separation,
    the size gate, shape rejection, motion direction, the large-ball fix — and
