@@ -272,6 +272,25 @@ class ScoringSpec:
     # five minutes a day on each hand is what counts; the rest is practice.
     daily_cap_minutes: float | None = None
 
+    # When set, the day's rep budget is read straight off this age table:
+    # ((max_age, cap), ...) in ascending age, the last row applying to anyone
+    # older. For work where every rep is a maximal effort and the right
+    # number is a count, not a pace -- a shot is a pitch-shaped throw, and
+    # youth throwing guidance is written as shots per day by age. An unknown
+    # or estimated age takes the 11-12 row, as for the minute budgets. Never
+    # above daily_rep_cap, which stays the ceiling for the oldest athletes.
+    daily_cap_by_age: tuple[tuple[int, int], ...] | None = None
+
+    def __post_init__(self) -> None:
+        if self.daily_cap_minutes is not None and self.daily_cap_by_age is not None:
+            raise ValueError("a drill is budgeted in minutes or by an age table, not both")
+        if self.daily_cap_by_age is not None:
+            ages = [a for a, _ in self.daily_cap_by_age]
+            if not self.daily_cap_by_age or ages != sorted(ages) or len(set(ages)) != len(ages):
+                raise ValueError("daily_cap_by_age must be ((max_age, cap), ...) in ascending age")
+            if any(cap <= 0 or cap > self.daily_rep_cap for _, cap in self.daily_cap_by_age):
+                raise ValueError("every age cap must be positive and within daily_rep_cap")
+
 
 class Tissue(str, Enum):
     """What a drill mostly stresses.
@@ -597,13 +616,15 @@ SOUND_HAND_SOURCES = ("wall_ball", "ball", "none")
 class ShotSpec:
     """A shooting drill that gives each shot an approximate speed.
 
-    Speed is the flight: the release, read from the stick hand, to the ball
-    hitting the net or the wall, heard by the microphone, over a distance the
-    athlete marked out. See `web/static/shotspeed.js` for the reasoning and
-    `offdays/shotspeed.py` for the server's own check of it.
+    Speed is the flight: the release, heard as the stick swings through (or
+    seen, failing that), to the ball hitting the net or the wall, heard by the
+    microphone, over a distance the athlete marked out. See
+    `web/static/shotspeed.js` for the reasoning and `offdays/shotspeed.py` for
+    the server's own check of it.
 
-    A shot with no impact heard -- wide of everything, or the microphone
-    refused -- still counts as a shot. It just has no speed.
+    With the microphone on, a shot is a swing and then a hit, so one wide of
+    everything is not counted. With it refused, shots are counted by the
+    camera alone and have no speed.
     """
 
     #: Distance the athlete is asked to shoot from, in yards. 8 is standard

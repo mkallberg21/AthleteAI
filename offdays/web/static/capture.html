@@ -2054,9 +2054,10 @@ async function startSession() {
   soundCounter = mic
     ? new SoundRepCounter(activeDrill, counter, { sampleRate: mic.sampleRate, ballCounter })
     : null;
-  // Clocked shooting wraps the sound counter: the ear counts each shot and
-  // the stick hand gives its release. Without a microphone there is no
-  // impact to time, so shots are counted by the camera with no speed.
+  // Clocked shooting wraps the sound counter: the ear hears each shot's swing
+  // and its hit, and the camera confirms someone is there to shoot it.
+  // Without a microphone there is no impact to time, so shots are counted by
+  // the camera with no speed.
   if (soundCounter && activeDrill.shot) {
     const wanted = Number($('shot-distance').value);
     const ok = wanted >= activeDrill.shot.min_distance_yd

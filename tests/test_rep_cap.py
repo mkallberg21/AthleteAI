@@ -22,6 +22,7 @@ STRONG = DRILLS_BY_KEY["lax_wall_ball_strong"]
 OFFHAND = DRILLS_BY_KEY["lax_wall_ball_offhand"]
 QUICK = DRILLS_BY_KEY["lax_quick_stick"]
 GB = DRILLS_BY_KEY["lax_ground_ball"]
+SHOOT = DRILLS_BY_KEY["lax_shooting"]
 
 
 def seen(total, left=0, right=0):
@@ -107,13 +108,35 @@ class TestAgeAppropriate:
         assert daily_cap_for(STRONG, None) == daily_cap_for(STRONG, 12)
         assert daily_cap_for(STRONG, 17, estimated=True) == daily_cap_for(STRONG, 12)
 
+    def test_shooting_is_a_days_shots_for_your_age(self):
+        """Every shot is a maximal throw, so the budget is a count by age,
+        inside the throwing ceiling for that age with room left for wall ball."""
+        from offdays.load import throw_ceiling
+        expected = {8: 40, 10: 40, 11: 60, 12: 60, 13: 80, 14: 80, 15: 100, 16: 100,
+                    17: 120, 18: 120, 25: 120}
+        for age, shots in expected.items():
+            assert daily_cap_for(SHOOT, age) == shots, age
+            assert shots <= 0.8 * throw_ceiling(age), (age, shots, throw_ceiling(age))
+        assert daily_cap_for(SHOOT, None) == daily_cap_for(SHOOT, 12) == 60
+        assert daily_cap_for(SHOOT, 17, estimated=True) == 60
+        assert SHOOT.scoring.daily_cap_minutes is None and SHOOT.scoring.cap_pool is None
+
+    def test_an_age_table_is_validated(self):
+        from offdays.drills.base import ScoringSpec
+        with pytest.raises(ValueError):
+            ScoringSpec(daily_cap_minutes=5.0, daily_cap_by_age=((12, 40),))
+        with pytest.raises(ValueError):
+            ScoringSpec(daily_cap_by_age=((14, 40), (12, 30)))
+        with pytest.raises(ValueError):
+            ScoringSpec(daily_rep_cap=100, daily_cap_by_age=((12, 150),))
+
     def test_a_drill_without_a_minute_budget_keeps_its_flat_cap(self):
         assert daily_cap_for(WALL, 10) == WALL.scoring.daily_rep_cap
         assert daily_cap_for(GB, 17) == GB.scoring.daily_rep_cap
 
     def test_the_minute_budget_never_exceeds_the_flat_ceiling(self):
         for d in ALL_DRILLS:
-            if d.scoring.daily_cap_minutes:
+            if d.scoring.daily_cap_minutes or d.scoring.daily_cap_by_age:
                 for age in (8, 12, 15, 18, 25, None):
                     assert daily_cap_for(d, age) <= d.scoring.daily_rep_cap, d.key
 
@@ -151,7 +174,7 @@ def club(tmp_path):
     from offdays import library
     library.set_team_drills(store.conn, org, "lacrosse", team["id"],
                             ["lax_wall_ball", "lax_quick_stick", "lax_wall_ball_strong",
-                             "lax_wall_ball_offhand", "lax_ground_ball"])
+                             "lax_wall_ball_offhand", "lax_ground_ball", "lax_shooting"])
     kids = {}
     for name in ("Hero", "Steady"):
         kid = store.create_user(org, "athlete", name, birth_year=2012, dominant_hand="right")
@@ -166,8 +189,10 @@ def club(tmp_path):
     api_module._store = None
 
 
-def _submit(client, headers, drill_key, reps):
-    """Start and submit a rep session with a plausible rep stream."""
+def _submit(client, headers, drill_key, reps, gap_ms=880):
+    """Start and submit a rep session with a plausible rep stream. `gap_ms`
+    is the mean gap between reps: wall-ball rhythm by default; a shot needs
+    a reload, so shooting passes a slower one."""
     import random
     r = client.post("/api/sessions/start", json={"drill_key": drill_key}, headers=headers)
     assert r.status_code in (200, 201), r.text
@@ -175,7 +200,7 @@ def _submit(client, headers, drill_key, reps):
     rng = random.Random(reps)
     t, events = 0, []
     for i in range(reps):
-        t += max(150, int(rng.gauss(880, 190)))
+        t += max(150, int(rng.gauss(gap_ms, gap_ms * 0.22)))
         events.append({"t_ms": t, "hand": "left" if i % 2 else "right", "confidence": 0.88})
     r = client.post("/api/sessions/submit", json={
         "session_id": body["session_id"], "nonce": body["nonce"],
@@ -240,6 +265,19 @@ class TestThroughTheStore:
         assert any("about 5 minutes of work for your age" in n for n in strong["notes"])
         off = _submit(c, hero["h"], "lax_wall_ball_offhand", 200)
         assert off["reps_total"] == 200 and "rep_cap" not in off
+
+    def test_a_2012_kid_gets_eighty_shots_a_day_and_is_told_so_in_shots(self, club):
+        """Born 2012 -> 14 -> 80 shots count; the 81st and after are practice.
+        The note talks in shots a day for your age, never minutes or a pace."""
+        c, hero = club["client"], club["kids"]["Hero"]
+        body = _submit(c, hero["h"], "lax_shooting", 120, gap_ms=3000)
+        assert body["status"] == "counted", body["notes"]
+        assert body["reps_total"] == 80 and body["reps_seen"] == 120
+        assert body["rep_cap"] == {"seen": 120, "credited": 80, "cap": 80, "scope": "drill"}
+        assert any("about 80 shots a day for your age" in n for n in body["notes"])
+        # Shooting has its own day: a full shooting day leaves wall ball untouched.
+        wall = _submit(c, hero["h"], "lax_wall_ball_strong", 100)
+        assert wall["reps_total"] == 100 and "rep_cap" not in wall
 
     def test_a_younger_kid_gets_a_smaller_day(self, club):
         c, store, hero = club["client"], club["store"], club["kids"]["Hero"]

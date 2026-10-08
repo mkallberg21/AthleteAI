@@ -89,9 +89,15 @@ def _cap_note(credit: RepCredit, drill) -> str:
     what = (f"{drill.name}" if credit.cap_scope == "drill"
             else f"{drill.name} and the drills it shares a limit with")
     minutes = drill.scoring.daily_cap_minutes
-    how_much = (f"about {minutes:g} minutes of work for your age"
-                if minutes and credit.cap_scope == "drill"
-                else f"{credit.cap} reps")
+    if minutes and credit.cap_scope == "drill":
+        how_much = f"about {minutes:g} minutes of work for your age"
+    elif drill.scoring.daily_cap_by_age is not None and credit.cap_scope == "drill":
+        # Stated as the age guidance it is, the way a pitch count is told to
+        # a kid: a day's shots for your age, not a figure to beat.
+        unit = "shots" if getattr(drill, "shot", None) is not None else "reps"
+        how_much = f"about {credit.cap} {unit} a day for your age"
+    else:
+        how_much = f"{credit.cap} reps"
     return (
         f"The camera counted {credit.seen_total} reps and {credit.total} of them "
         f"count toward today. {what} counts up to {how_much} a day, so the "

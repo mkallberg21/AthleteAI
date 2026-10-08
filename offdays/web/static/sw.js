@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v7';
+const CACHE = 'offdays-shell-v8';
 
 const SHELL = [
   './',

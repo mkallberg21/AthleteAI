@@ -189,13 +189,25 @@ def pace_for_age(age: int | None, estimated: bool = False) -> int:
     return REPS_PER_MINUTE_BY_AGE[-1][1]
 
 
+#: The age an unknown or estimated birth year is treated as for an age table:
+#: the top of the 11-12 band, the same conservative default as pace_for_age.
+_DEFAULT_TABLE_AGE = 12
+
+
 def daily_cap_for(drill: DrillSpec, age: int | None, estimated: bool = False) -> int:
     """This drill's daily rep budget for an athlete of this age.
 
-    A drill budgeted in minutes gets minutes x pace, never above its own
-    daily_rep_cap. Any other drill gets daily_rep_cap as before.
+    A drill budgeted in minutes gets minutes x pace; a drill with an age table
+    gets its row; neither ever exceeds the drill's own daily_rep_cap. Any
+    other drill gets daily_rep_cap as before.
     """
     spec = drill.scoring
+    if spec.daily_cap_by_age is not None:
+        a = _DEFAULT_TABLE_AGE if age is None or estimated else age
+        for max_age, cap in spec.daily_cap_by_age:
+            if a <= max_age:
+                return min(spec.daily_rep_cap, cap)
+        return min(spec.daily_rep_cap, spec.daily_cap_by_age[-1][1])
     if spec.daily_cap_minutes is None:
         return spec.daily_rep_cap
     return min(spec.daily_rep_cap, int(round(spec.daily_cap_minutes * pace_for_age(age, estimated))))
