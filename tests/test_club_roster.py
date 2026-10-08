@@ -10,9 +10,10 @@ Every athlete is covered, so coverage is never partial and a coach's view is
 never a function of who bought what.
 
 The commercial shape is the part worth testing. A director is not being asked
-to find budget -- they are shown a line that funds their own scholarship fund,
-made of the margin between what they add to dues and what they owe us, plus a
-rebate on what they pay. That only works if the numbers actually land that way,
+to find budget -- they are shown a line on dues that covers what they owe us
+with a margin left over. A sponsorship rebate exists but is never automatic:
+the operator grants it one club at a time. That only works if the numbers
+actually land that way,
 and if nothing else in the price list quietly beats it.
 """
 from __future__ import annotations
@@ -101,33 +102,63 @@ class TestTheClubIsOutNothing:
         assert billing.recommended_dues_add_cents(0) == 1000
 
 
-class TestTheSponsorshipFund:
-    def test_the_rebate_is_a_share_of_what_the_club_paid(self, store):
-        program = club(store)
+class TestTheSponsorshipRebate:
+    def test_there_is_no_automatic_rebate(self, store):
+        """A new club gets nothing back unless the operator decides it does."""
+        program = club(store, athletes=500)
         invoice = billing.roster_invoice(store.conn, program["org"])
-        assert invoice.rebate_cents == round(
-            invoice.total_cents * billing.REBATE_RATE_DEFAULT)
+        assert invoice.rebate_rate == 0.0
+        assert invoice.rebate_cents == 0
+        assert invoice.has_rebate is False
+        assert invoice.returned_cents == invoice.club_margin_cents
+        assert not hasattr(billing, "REBATE_RATE")
 
-    def test_the_rate_is_bounded(self, store):
-        """A lever, but a bounded one. Outside the band it stops being a
-        scholarship rebate and becomes a volume discount in disguise."""
-        program = club(store, athletes=10)
-        for bad in (0.0, 0.04, 0.25, 1.0):
-            with pytest.raises(BillingError, match="between"):
-                billing.roster_invoice(
-                    store.conn, program["org"], rebate_rate=bad)
-
-    def test_a_negotiated_top_of_band_rate_works(self, store):
+    def test_nothing_accrues_for_a_club_with_no_rate(self, store):
         program = club(store, athletes=100)
-        invoice = billing.roster_invoice(
-            store.conn, program["org"], rebate_rate=billing.REBATE_RATE_MAX)
-        assert invoice.rebate_cents > 0
+        assert billing.accrue_rebate(store.conn, program["org"], 1_000_000) == 0
+        assert billing.rebate_balance(store.conn, program["org"]) == 0
+
+    def test_the_operator_grants_it_one_club_at_a_time(self, store):
+        """500 athletes, 150 days, granted 7.5%: $37,500 paid, $2,812.50 back."""
+        program = club(store, athletes=500)
+        other = club(store, athletes=50)
+        billing.set_rebate_rate(store.conn, program["org"], 0.075)
+        invoice = billing.roster_invoice(store.conn, program["org"])
+        assert invoice.rebate_rate == 0.075
+        assert invoice.rebate_cents == 281_250
+        assert invoice.to_dict()["rebate_display"] == "$2,812.50"
+        # The other club is untouched.
+        assert billing.roster_invoice(store.conn, other["org"]).rebate_cents == 0
+
+    def test_it_can_be_withdrawn_without_touching_what_was_credited(self, store):
+        program = club(store, athletes=100)
+        billing.set_rebate_rate(store.conn, program["org"], 0.05)
+        earned = billing.accrue_rebate(store.conn, program["org"], 100_000)
+        assert earned == 5_000
+        billing.set_rebate_rate(store.conn, program["org"], 0)
+        assert billing.accrue_rebate(store.conn, program["org"], 100_000) == 0
+        assert billing.rebate_balance(store.conn, program["org"]) == 5_000
+
+    def test_the_rate_is_bounded_and_the_club_must_exist(self, store):
+        program = club(store, athletes=10)
+        for bad in (-0.01, 0.26, 1.0):
+            with pytest.raises(BillingError, match="between 0 and"):
+                billing.set_rebate_rate(store.conn, program["org"], bad)
+        with pytest.raises(BillingError, match="no organisation"):
+            billing.set_rebate_rate(store.conn, 999, 0.05)
+
+    def test_a_director_cannot_set_it(self):
+        """No route sets the rate. It is an operator script, on purpose."""
+        from offdays import api
+        paths = {r.path for r in api.app.routes}
+        assert not any("rebate" in p and "rate" in p for p in paths)
 
     def test_the_fund_is_a_ledger_not_a_discount(self, store):
         """A discount disappears into a smaller number nobody looks at. A fund
         with a balance is something a director can point at in a board meeting
         and spend on a named family."""
         program = club(store, athletes=100)
+        billing.set_rebate_rate(store.conn, program["org"], 0.075)
         invoice = billing.roster_invoice(store.conn, program["org"])
         billing.accrue_rebate(store.conn, program["org"], invoice.total_cents)
         assert billing.rebate_balance(store.conn, program["org"]) == \
@@ -136,6 +167,7 @@ class TestTheSponsorshipFund:
 
     def test_spending_it_records_who_it_went_to(self, store):
         program = club(store, athletes=100)
+        billing.set_rebate_rate(store.conn, program["org"], 0.075)
         billing.accrue_rebate(store.conn, program["org"], 100_000)
         billing.spend_rebate(
             store.conn, program["org"], 5000, "covered the Reyes season fee")
@@ -145,21 +177,23 @@ class TestTheSponsorshipFund:
 
     def test_it_cannot_be_overdrawn(self, store):
         program = club(store, athletes=10)
+        billing.set_rebate_rate(store.conn, program["org"], 0.075)
         billing.accrue_rebate(store.conn, program["org"], 10_000)
         with pytest.raises(BillingError, match="less than"):
             billing.spend_rebate(
                 store.conn, program["org"], 999_999, "too much")
 
-    def test_the_scholarship_pot_is_margin_plus_rebate(self, store):
+    def test_what_is_returned_is_margin_plus_any_rebate(self, store):
         """The number that makes it an easy yes."""
         program = club(store)
         invoice = billing.roster_invoice(store.conn, program["org"])
-        assert invoice.sponsorship_pot_cents == (
-            invoice.club_margin_cents + invoice.rebate_cents)
-        # 200 athletes: $2,000 margin plus 7.5% of $15,000 back.
+        # 200 athletes, no rebate granted: the $2,000 margin and nothing else.
         assert invoice.club_margin_cents == 200 * billing.RECOMMENDED_DUES_MARGIN_CENTS
+        assert invoice.returned_cents == 200_000
+        billing.set_rebate_rate(store.conn, program["org"], 0.075)
+        invoice = billing.roster_invoice(store.conn, program["org"])
         assert invoice.rebate_cents == round(1_500_000 * 0.075)
-        assert invoice.sponsorship_pot_cents == 200_000 + 112_500
+        assert invoice.returned_cents == 200_000 + 112_500
 
 
 class TestNothingInThePriceListUndercutsIt:
@@ -327,7 +361,9 @@ class TestOverTheWire:
         body = client.get("/api/org/invoice", headers=wired["director"]).json()
         assert body["athletes"] == 20
         assert body["costs_the_club_directly"] == 0
-        assert body["sponsorship_pot_cents"] > 0
+        assert body["returned_cents"] > 0
+        assert body["rebate_rate"] == 0.0 and body["has_rebate"] is False
+        assert "rebate_balance_cents" in body
 
     def test_the_dues_add_is_theirs_to_change(self, client, wired):
         """Our recommendation, their number."""
@@ -337,12 +373,13 @@ class TestOverTheWire:
         assert body["recommended_dues_add_cents"] == 6000
         assert body["club_margin_cents"] > 0
 
-    def test_an_out_of_band_rebate_is_refused(self, client, wired):
-        """422 rather than a payment error: an out-of-range parameter is a
-        bad request, not a billing problem."""
-        assert client.get(
+    def test_the_rebate_cannot_be_set_from_the_outside(self, client, wired):
+        """A rebate_rate on the query string is ignored, not honoured. The
+        rate is the operator's, set per club, never per request."""
+        body = client.get(
             "/api/org/invoice?rebate_rate=0.5",
-            headers=wired["director"]).status_code == 422
+            headers=wired["director"]).json()
+        assert body["rebate_rate"] == 0.0
 
     def test_an_assistant_coach_cannot_see_the_invoice(self, client, wired):
         coach = wired["store"].create_user(wired["org_id"], "coach", "Asst")
@@ -351,7 +388,16 @@ class TestOverTheWire:
         assert client.get(
             "/api/org/sponsorship-fund", headers=headers).status_code == 403
 
+    def test_a_club_with_no_rebate_has_nothing_to_spend(self, client, wired):
+        billing.accrue_rebate(wired["store"].conn, wired["org_id"], 100_000)
+        res = client.post(
+            "/api/org/sponsorship-fund/spend",
+            json={"amount_cents": 4000, "reason": "covered a season fee"},
+            headers=wired["director"])
+        assert res.status_code == 402
+
     def test_the_fund_can_be_spent_and_shows_where_it_went(self, client, wired):
+        billing.set_rebate_rate(wired["store"].conn, wired["org_id"], 0.075)
         billing.accrue_rebate(wired["store"].conn, wired["org_id"], 100_000)
         res = client.post(
             "/api/org/sponsorship-fund/spend",
@@ -360,7 +406,7 @@ class TestOverTheWire:
         assert res.status_code == 201
         ledger = client.get(
             "/api/org/sponsorship-fund", headers=wired["director"]).json()
-        assert ledger["balance_cents"] == 7500 - 4000 + (100_000 * 0.075 - 7500)
+        assert ledger["balance_cents"] == 7500 - 4000
         assert any("covered a season fee" in row["reason"]
                    for row in ledger["ledger"])
 

@@ -68,6 +68,7 @@ class Scope:
     LEADERBOARD_NAME = "leaderboard_name"  # full name on shared leaderboards
     DATA_RETENTION = "data_retention"      # keep granular per-rep timings
     COACH_VIDEO = "coach_video"            # a coach may watch a clip the athlete shares
+    MARKETING = "marketing"                # sponsors / program partners may contact the parent
 
 
 SCOPES = (
@@ -97,6 +98,15 @@ SCOPES = (
         "Keep detailed rep timings for 45 days",
         "Used to review a disputed score. Turning this off keeps their totals "
         "and removes the rep-by-rep detail.",
+    ),
+    (
+        Scope.MARKETING,
+        "Let the program's sponsors and partners contact you",
+        "Off unless you turn it on. Your program keeps your name, email and "
+        "phone to run the app and reach you about your athlete; that never "
+        "needs this. With this on, the program may also share your details "
+        "with its sponsors and partners for their offers. Turn it off any "
+        "time.",
     ),
 )
 
@@ -232,6 +242,7 @@ def redeem_invite(
     display_name: str,
     email: str | None = None,
     relationship: str = "parent",
+    phone: str | None = None,
 ) -> dict[str, Any]:
     """Turn an invitation into a guardian account linked to the athlete.
 
@@ -264,11 +275,12 @@ def redeem_invite(
     token = fresh_token(conn)
     with transaction(conn) as c:
         cur = c.execute(
-            "INSERT INTO users(org_id, role, display_name, email, token_hash, created_at) "
-            "VALUES (?,?,?,?,?,?)",
+            "INSERT INTO users(org_id, role, display_name, email, phone, token_hash, "
+            "created_at) VALUES (?,?,?,?,?,?,?)",
             (
                 athlete["org_id"], "guardian", display_name,
-                email or row["email"], hash_token(token), _iso(now),
+                email or row["email"], (phone or "").strip() or None,
+                hash_token(token), _iso(now),
             ),
         )
         guardian_id = int(cur.lastrowid)
@@ -286,6 +298,15 @@ def redeem_invite(
             "UPDATE guardian_invites SET redeemed_at = ?, redeemed_by = ? WHERE id = ?",
             (_iso(now), guardian_id, row["id"]),
         )
+
+    # The account joins the program's parent list -- matched to the roster
+    # row by email, or added if the roster never named this parent.
+    from . import contacts
+    contacts.link_account(
+        conn, guardian_id=guardian_id, athlete_id=int(athlete["id"]),
+        org_id=int(athlete["org_id"]), name=display_name,
+        email=email or row["email"], phone=phone,
+    )
 
     return {
         "guardian_id": guardian_id,
@@ -631,6 +652,7 @@ def erase_athlete(
                 "DELETE FROM consents WHERE athlete_id = ?",
                 "DELETE FROM guardians WHERE athlete_id = ?",
                 "DELETE FROM guardian_invites WHERE athlete_id = ?",
+                "DELETE FROM guardian_contacts WHERE athlete_id = ?",
                 "DELETE FROM users WHERE id = ?",
             ):
                 removed += c.execute(sql, (athlete_id,)).rowcount

@@ -100,6 +100,10 @@
           <label class="form-label" for="pemail">Email (optional)</label>
           <input id="pemail" class="form-input" type="email" placeholder="you@example.com" autocomplete="email">
         </div>
+        <div class="form-group">
+          <label class="form-label" for="pphone">Mobile (optional)</label>
+          <input id="pphone" class="form-input" type="tel" placeholder="615 555 0100" autocomplete="tel">
+        </div>
         <div id="perr" class="form-error hidden"></div>
         <button type="button" class="btn btn-secondary" id="redeem">Create parent account</button>
       </form>
@@ -300,7 +304,11 @@ redeemBtn.addEventListener('click', async () => {
   try {
     const data = await api('/api/guardians/redeem', {
       method: 'POST',
-      body: { code, display_name: name, email: $('pemail').value.trim() || null },
+      body: {
+        code, display_name: name,
+        email: $('pemail').value.trim() || null,
+        phone: $('pphone').value.trim() || null,
+      },
     });
     setToken(data.token);
     window.location.href = 'parent.html';

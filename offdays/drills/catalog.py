@@ -693,9 +693,20 @@ SHOOTING = DrillSpec(
     ),
     # Pays what wall ball pays. Both read the same top-hand signal, so a
     # higher rate here would pay a child to pick "Shooting" and do wall ball
-    # (test_drills enforces it). Capped well below wall ball and tapered
-    # early: the throwing ceiling is what actually protects the arm.
-    scoring=ScoringSpec(xp_per_rep=1.0, daily_rep_cap=150, diminishing_after_reps=60),
+    # (test_drills enforces it). Tapered early, and the day is budgeted as
+    # shots by age rather than minutes: every shot is a maximal throw, so the
+    # right number is a count, the way youth throwing guidance is written.
+    #
+    # These are the shots that COUNT on 0FFDAYS for a travel player on top of
+    # practice and games the app never sees, so they sit well inside the
+    # throwing ceiling for the age (load.THROW_CEILING_BY_AGE: 90 at 10,
+    # 105 at 12, 120 at 14, 135 at 16, 150 at 18) and leave room for wall
+    # ball on the same day. Shaped by pitch-count guidance, not quoted from
+    # it; a coaching estimate to be revisited with the club, as one row.
+    scoring=ScoringSpec(
+        xp_per_rep=1.0, daily_rep_cap=150, diminishing_after_reps=60,
+        daily_cap_by_age=((10, 40), (12, 60), (14, 80), (16, 100), (200, 120)),
+    ),
     validation=ValidationSpec(
         max_reps_per_second=0.8, min_reps_per_second=0.01, min_reps=5,
         min_duration_ms=20_000,

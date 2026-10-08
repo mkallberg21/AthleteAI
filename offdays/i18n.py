@@ -125,6 +125,23 @@ STRINGS: dict[str, dict[str, str]] = {
              "conservan los totales y se elimina el detalle repetición por "
              "repetición."),
     },
+    "consent.marketing.label": {
+        EN: "Let the program's sponsors and partners contact you",
+        ES: "Permitir que los patrocinadores y socios del programa le contacten",
+    },
+    "consent.marketing.why": {
+        EN: ("Off unless you turn it on. Your program keeps your name, email and "
+             "phone to run the app and reach you about your athlete; that never "
+             "needs this. With this on, the program may also share your details "
+             "with its sponsors and partners for their offers. Turn it off any "
+             "time."),
+        ES: ("Desactivado a menos que usted lo active. Su programa guarda su "
+             "nombre, correo y teléfono para operar la aplicación y "
+             "comunicarse con usted sobre su atleta; eso nunca requiere este "
+             "permiso. Si lo activa, el programa también puede compartir sus "
+             "datos con sus patrocinadores y socios para sus ofertas. Puede "
+             "desactivarlo en cualquier momento."),
+    },
     # The household wording, where the person granting the permission and the
     # person who would watch are the same.
     "consent.family.coach_video.label": {

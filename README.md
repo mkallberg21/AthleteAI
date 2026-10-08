@@ -2739,11 +2739,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 33 modules across 461 call sites.
+SQL lives in 34 modules across 468 call sites.
 store.py holds 36% of them.
 
-1037 occurrences are mechanical (search-and-replace with tests behind it).
-77 need judgement.
+1063 occurrences are mechanical (search-and-replace with tests behind it).
+78 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...
@@ -2784,28 +2784,27 @@ what.
 | Per athlete | 150 × $0.50 = **$75** |
 | We invoice the club | **$37,500** |
 | Club adds to dues (recommended) | $85 / player → collects $42,500 |
-| Club margin | $5,000 |
-| Sponsorship rebate (7.5%) | $2,812.50 |
-| **Into their scholarship fund** | **$7,812.50** |
+| **Club margin, theirs to keep** | **$5,000** |
 | **Out of the club's own budget** | **$0** |
 
-A director is not being asked to find budget. They are shown a line that funds
-their own scholarship fund. The recommended add is the per-athlete cost plus a
+A director is not being asked to find budget. They are shown a line on dues
+that covers the invoice with a margin left over. The recommended add is the per-athlete cost plus a
 $10 margin, rounded up to the next $5 so it reads like a line on a fee
 schedule; the club sets its own number.
 
-### The rebate is a fund, not a discount
+### The sponsorship rebate is granted, never automatic
 
-5–10% of what a club pays comes back, earmarked for families who cannot afford
-the season at all. It is **accrued as a ledger with a balance**, not netted off
-the invoice, and that is deliberate: a discount disappears into a smaller
-number nobody looks at, while a fund is something a director can point at in a
-board meeting and spend on a named family. Spending it records what it went to,
-because a director will be asked.
+There is no rebate in the standard price. The operator may grant one club a
+sponsorship rebate -- a share of what it pays, returned as a balance the
+director can spend, typically on a family who cannot afford the season -- by
+setting a rate on that organisation (`scripts/set_rebate.py`). Zero by
+default, bounded at 25%, and no director-facing route can change it: it is a
+one-off commercial decision with a name on it, not a line every club gets.
 
-The rate is a commercial lever within a bounded band. What is *not* negotiable
-is what it is for — it is the club's scholarship money, not a volume discount
-in disguise.
+Where it is granted it is **accrued as a ledger with a balance**, not netted
+off the invoice: a discount disappears into a smaller number nobody looks at,
+while a balance is something a director can point at in a board meeting and
+spend on a named family. Spending it records what it went to.
 
 ### Late joiners are prorated
 
@@ -4285,6 +4284,27 @@ contact with a real driveway:
    sine wave, not a 13-year-old. Filming 20-30 real athletes and re-running
    the calibration against hand-counted ground truth remains the
    highest-value next task, and the reason the specs are data rather than code.
+
+   **Shot speed is checked against a radar gun on seven shots, not thirty.**
+   It is a flight average: release (the first crest of the stick's swing,
+   heard; pose only where no swing was), impact (the ball hitting, heard -- a
+   click off a pipe or a thud into a slack net) and a typed distance. On seven
+   Pocket Radar running shots called as 10 yards, one evening, phone on the
+   ground behind the shooter, the release it heard was within 30 ms of the
+   frame the ball left the stick on every clip and on either microphone
+   channel alone (10-16 ms early on average), and the impact matched the frame
+   the net moved. Against the gun it read 64/70, 72/74, 65/67, 78/80, 72/72,
+   84/79 and 84/75 mph. The last two are not the timing: the frames give the
+   same moments, so those were let go nearer than 10 yards or clocked at an
+   angle. A running shot's release point is "about" 10 yards, and at that
+   range a yard is 10%. One channel alone also counts a 30 mph "shot" from a
+   run-up rustle and a footstep. The first version of the counter timed none
+   of these: pose from behind put the release 150-300 ms out, and the
+   wall-ball rhythm tracker kept footsteps and dropped the net. Untested:
+   side-on filming, other phones, wind, a standing shooter. The bench refuses
+   to settle anything under 6 clips / 30 clocked shots, and any correction it
+   motivates lands as one declared number applied identically in
+   `shotspeed.js` and `shotspeed.py`.
 8. **The ball detector is validated on synthetic frames, not real footage.**
    Rendered discs on rendered backgrounds prove the logic — colour separation,
    the size gate, shape rejection, motion direction, the large-ball fix — and

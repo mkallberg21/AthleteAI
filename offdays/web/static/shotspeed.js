@@ -16,11 +16,13 @@
  * far it was. Nothing on the phone can measure it. 8 yards is the default
  * because it is the standard shooting distance in youth practice.
  *
- * **Release** comes from pose. A lacrosse release is nearly silent -- the ball
- * leaves the pocket without a sound worth hearing -- so the moment is taken
- * from the stick hand: the frame where it was highest and moving fastest
- * forward. That is good to about a frame (33ms), which is the biggest single
- * source of error here.
+ * **Release** comes from the swing. The ball leaves the pocket without a sound
+ * of its own, but the stick does not: a shot is a 60-200ms whoosh, loudest as
+ * the ball goes, and the microphone times it to the hop. On four radar-clocked
+ * shots filmed from behind the shooter it put the release within 30ms of the
+ * frame the ball left the stick (`ShotListener`). Pose -- the frame the stick
+ * hand moved fastest -- is the fallback where no swing was heard, and from
+ * behind it is poor: it needs to see the hand.
  *
  * **Impact** comes from the microphone, timed to ~10ms, and corrected for the
  * time the sound takes to come back from the goal to a phone standing near the
@@ -71,13 +73,6 @@ export const MAX_FLIGHT_MS = 1600;
  */
 export const MIN_MPH = 15;
 export const MAX_MPH = 110;
-
-/**
- * How long before an impact its release may be and still be the same shot.
- * The slowest flight worth timing (MAX_FLIGHT_MS); a release further back
- * than that was a shot that hit nothing.
- */
-export const MATCH_WINDOW_MS = MAX_FLIGHT_MS;
 
 /**
  * The fewest frames between two releases, at the 30fps the phone films. A
@@ -138,7 +133,16 @@ export function shotSpeedMph(releaseMs, impactMs, distanceM) {
  * athlete faces the camera.
  */
 export class ReleaseDetector {
-  constructor() {
+  /**
+   * The thresholds default to the exported constants. They are options so the
+   * calibration bench (`scripts/shotcal/`) can sweep them against radar-gun
+   * truth without editing this file; the capture screen never passes any.
+   */
+  constructor({ minHeight = RELEASE_MIN_HEIGHT, minHandSpeed = RELEASE_MIN_HAND_SPEED,
+                minGapMs = MIN_RELEASE_GAP_MS } = {}) {
+    this.minHeight = minHeight;
+    this.minHandSpeed = minHandSpeed;
+    this.minGapMs = minGapMs;
     this.prev = null;
     this.peak = null;       // fastest frame in the current shot so far
     this.releases = [];
@@ -155,7 +159,7 @@ export class ReleaseDetector {
     if (!prev || t <= prev.t) return;
     const speed = Math.abs(x - prev.x) / ((t - prev.t) / 1000);
 
-    const shooting = height >= RELEASE_MIN_HEIGHT && speed >= RELEASE_MIN_HAND_SPEED;
+    const shooting = height >= this.minHeight && speed >= this.minHandSpeed;
     if (shooting) {
       if (!this.peak || speed > this.peak.speed) this.peak = { t, speed, hand };
     } else {
@@ -167,7 +171,7 @@ export class ReleaseDetector {
   _close() {
     if (!this.peak) return;
     const last = this.releases[this.releases.length - 1];
-    if (!last || this.peak.t - last.t_ms >= MIN_RELEASE_GAP_MS) {
+    if (!last || this.peak.t - last.t_ms >= this.minGapMs) {
       this.releases.push({ t_ms: Math.round(this.peak.t), hand: this.peak.hand });
     }
     this.peak = null;
@@ -178,58 +182,321 @@ export class ReleaseDetector {
 }
 
 /**
- * The shooting counter. Wraps the sound counter, which already counts each
- * impact and supplies the hand, and adds a speed to every shot it can time.
+ * How far above the background the stick's swing must sound, as a ratio of
+ * energies (5dB), read from a running median over SWING_SMOOTH_HOPS so a
+ * single click does not count. The swings in the radar clips peaked 7-12dB
+ * over the floor, phone on the ground a few yards behind the shooter.
+ */
+export const SWING_RATIO = 3.16;
+
+/**
+ * A swing lasts at least this long. The radar clips' swings ran 80-190ms on
+ * every channel; the loudest thing that was not one -- a step on the follow-
+ * through, right by the phone -- ran 50.
+ */
+export const SWING_MIN_MS = 60;
+
+/** Hops in the running median that swings and sharpness are read against (50ms). */
+export const SWING_SMOOTH_HOPS = 5;
+
+/**
+ * An impact: a hop at least this far above the background (5dB) ...
+ *
+ * Lower than the wall-ball detector's ONSET_RATIO on purpose. From 10 yards
+ * a ball into a net is a soft sound: one radar clip's sat 6-9dB over the
+ * floor, under the wall-ball threshold on either channel alone, and the shot
+ * was paired with the ball dropping out of the net half a second later.
+ */
+export const IMPACT_RATIO = 3.16;
+
+/**
+ * ... and either at least this far above its own 50ms (5dB) -- a ball off a
+ * pipe or a taut net is one or two hops of edge, where a whoosh or a run past
+ * the phone is as loud but sustained ...
+ */
+export const IMPACT_SHARPNESS = 3.16;
+
+/**
+ * ... or a jump of at least this much (12dB) over the 20ms before it. A ball
+ * into a slack net is not one hop of edge: on one radar clip it rang for 80ms,
+ * and the sharpness test above threw it out. But it arrived from nothing, 16-
+ * 17dB up in a single hop, where a swing or a run-past builds over several.
+ * The only other sounds that jump like that in the radar clips are steps on
+ * the follow-through, and those land too soon after the swing to be a shot.
+ */
+export const IMPACT_JUMP = 15.8;
+
+/** Two sharp hops closer than this are one hit (the ball and the net's rattle). */
+export const IMPACT_DEBOUNCE_MS = 150;
+
+/**
+ * The camera must have seen a body in this many frames within
+ * BODY_WINDOW_MS of a release for it to be one. An empty field makes noises
+ * that hum like a swing, and pose finds a "person" in a frame of one now and
+ * then; a run of frames is someone actually there.
+ */
+export const BODY_MIN_FRAMES = 3;
+export const BODY_WINDOW_MS = 100;
+
+/**
+ * After a shot lands, the next cannot leave the stick for this long: the
+ * athlete has to get another ball into the pocket. Keeps the jog after a
+ * shot -- a swing-like rustle and a footstep under a second later, on one
+ * radar clip -- from pairing into a shot of its own.
+ */
+export const RELOAD_MS = 1000;
+
+/** Analysis hop of the impact detector, in ms. */
+const HOP_MS = 10;
+
+/**
+ * Anything older than this is settled for good: past the longest flight and
+ * a reload, nothing heard later can change it.
+ */
+const SETTLE_MS = 4000;
+
+/**
+ * Listens to the shot: the stick swinging through, and the ball hitting.
+ * Fed one hop at a time from `ImpactDetector.onHop` -- energies only, never
+ * audio.
+ *
+ *   swings   [{ t_ms, start_ms, end_ms }]  a sustained rise in the high-
+ *            passed energy, 60-200ms long; t_ms is its first crest,
+ *            which is where the ball left the stick
+ *   impacts  [{ t_ms, ratio }]             sharp hops, debounced
+ *
+ * The release used to come from pose alone, and pose needs the stick hand.
+ * From behind the shooter it does not see it: on the first radar clips it
+ * put the release 150-300ms out or found none at all, while the swing was
+ * audible in every one, within a frame of where the ball left the stick.
+ */
+export class ShotListener {
+  constructor() {
+    this.window = [];
+    this.current = null;
+    this.swings = [];
+    this.impacts = [];
+    this.lastMs = -Infinity;
+  }
+
+  hop(tMs, energy, floor, warm) {
+    this.window.push({ t: tMs, e: energy, floor, warm });
+    if (this.window.length > SWING_SMOOTH_HOPS) this.window.shift();
+    if (this.window.length < SWING_SMOOTH_HOPS) return;
+    const mid = this.window[SWING_SMOOTH_HOPS >> 1];
+    const sorted = this.window.map((h) => h.e).sort((a, b) => a - b);
+    const smooth = sorted[SWING_SMOOTH_HOPS >> 1];
+    this.lastMs = mid.t;
+    // Judged only once the whole 50ms is past the warm-up: against a window
+    // still holding warm-up hops, the first real hop looks like an edge.
+    if (this.window.some((h) => h.warm)) return;
+
+    const before = Math.max(this.window[0].e, this.window[1].e);
+    const edge = mid.e >= smooth * IMPACT_SHARPNESS || mid.e >= before * IMPACT_JUMP;
+    if (mid.e >= mid.floor * IMPACT_RATIO && edge) {
+      const last = this.impacts[this.impacts.length - 1];
+      if (!last || mid.t - last.t_ms >= IMPACT_DEBOUNCE_MS) {
+        this.impacts.push({ t_ms: Math.round(mid.t), ratio: mid.e / mid.floor });
+      }
+    }
+
+    if (smooth >= mid.floor * SWING_RATIO) {
+      if (!this.current) this.current = { start: mid.t, end: mid.t, hops: [] };
+      this.current.end = mid.t;
+      this.current.hops.push({ t: mid.t, e: smooth });
+    } else {
+      this._close();
+    }
+  }
+
+  _close() {
+    const c = this.current;
+    this.current = null;
+    if (!c || c.end - c.start + HOP_MS < SWING_MIN_MS) return;
+    this.swings.push({
+      t_ms: Math.round(firstCrest(c.hops)), start_ms: Math.round(c.start), end_ms: Math.round(c.end),
+    });
+  }
+
+  /** Forget what ended before tMs. */
+  drop(tMs) {
+    while (this.swings.length && this.swings[0].t_ms < tMs) this.swings.shift();
+    while (this.impacts.length && this.impacts[0].t_ms < tMs) this.impacts.shift();
+  }
+
+  finish() { this._close(); }
+}
+
+/**
+ * Where in a swing the ball left: the first crest that comes within 3dB of
+ * the loudest. The stick is fastest as the ball goes, but it keeps whooshing
+ * on the follow-through, and on a run-up the athlete's own noise runs
+ * straight into the swing. On one radar clip that made a 180ms hump with two
+ * crests, the ball leaving at the first; its middle was 50ms late, which is
+ * 20 mph. Over all seven clips and both channels the first crest sat 16ms
+ * from the frame the ball left, on average, against 24 for the middle.
+ */
+function firstCrest(hops) {
+  const top = Math.max(...hops.map((h) => h.e));
+  let i = 0;
+  while (i < hops.length) {
+    // A crest may be flat: take the run of equal hops as one, and its middle.
+    let j = i;
+    while (j + 1 < hops.length && hops[j + 1].e === hops[i].e) j += 1;
+    const rose = i === 0 || hops[i - 1].e < hops[i].e;
+    const fell = j === hops.length - 1 || hops[j + 1].e < hops[j].e;
+    if (rose && fell && hops[i].e >= top / 2) return (hops[i].t + hops[j].t) / 2;
+    i = j + 1;
+  }
+  return hops.find((h) => h.e === top).t;
+}
+
+/**
+ * Choose the shots: pairs of (release, impact) where the flight is a real
+ * shot at the distance set. Two steps.
+ *
+ * One ball is in the air at a time, so overlapping pairs are rivals, and the
+ * tightest flight wins. That is what makes "the ball hits the first thing in
+ * its way" hold: a swing pairs with the first hit after it, not the louder
+ * rattle of the ball dropping out of the net, and a hit pairs with the swing
+ * just before it, not a rustle from the run-up. Every looser pairing on the
+ * radar clips overlapped a tighter, true one.
+ *
+ * Then, in order, a shot released within RELOAD_MS of the last one landing is
+ * dropped: that is the jog after a shot, not the next one.
+ *
+ * `taken` are shots already settled, which new ones must also respect.
+ */
+export function pairShots(releases, impacts, distanceM, taken = []) {
+  const candidates = [];
+  for (const r of releases) {
+    for (const i of impacts) {
+      if (i.t_ms <= r.t_ms) continue;
+      const mph = shotSpeedMph(r.t_ms, i.t_ms, distanceM);
+      if (mph !== null) {
+        candidates.push({ release_ms: r.t_ms, impact_ms: i.t_ms, via: r.via, mph });
+      }
+    }
+  }
+  candidates.sort((a, b) => (a.impact_ms - a.release_ms) - (b.impact_ms - b.release_ms));
+  const apart = (a, b) => a.impact_ms < b.release_ms || b.impact_ms < a.release_ms;
+  const rivals = [];
+  for (const c of candidates) {
+    if (taken.every((s) => apart(c, s)) && rivals.every((s) => apart(c, s))) rivals.push(c);
+  }
+  const kept = [];
+  const landed = taken.map((s) => s.impact_ms);
+  for (const c of rivals.sort((a, b) => a.release_ms - b.release_ms)) {
+    const before = landed.concat(kept.map((s) => s.impact_ms)).filter((t) => t <= c.release_ms);
+    const last = before.length ? Math.max(...before) : -Infinity;
+    if (c.release_ms - last >= RELOAD_MS) kept.push(c);
+  }
+  return kept;
+}
+
+/**
+ * The shooting counter. A shot is a swing and then a hit: the stick heard
+ * going through (or, where it was not heard, seen), then a sharp impact a
+ * believable flight later. Each pair is one shot and its speed.
  *
  * Presents the same surface as the other counters (count, reps, handCounts,
  * meanConfidence, toSubmission) so the capture screen holds it like any other.
  *
- * The count is the number of shots *heard*: a shot that hit nothing is still a
- * shot to the athlete, but with no sound there is nothing to count it by. That
- * is why the setup asks for a net or a wall.
+ * It does not count with the wall-ball rhythm the sound counter keeps.
+ * Shooting has no rhythm -- a run-up, a shot, a jog back -- and on the radar
+ * clips that tracker kept footsteps and dropped the net, even when the net
+ * was the loudest sound heard. A shot needs both moments: a swing at nothing
+ * makes no sound to count it by, and a sound with no swing before it is
+ * someone else's noise.
  */
 export class ShotSpeedCounter {
-  constructor(spec, soundCounter, { distanceYd } = {}) {
+  constructor(spec, soundCounter, { distanceYd, release } = {}) {
     this.spec = spec;
     this.sound = soundCounter;
     this.pose = soundCounter.pose;
     this.distanceYd = Number(distanceYd) || (spec.shot && spec.shot.default_distance_yd)
       || DEFAULT_DISTANCE_YD;
-    this.releases = new ReleaseDetector();
+    // `release` is the bench's override of the detector thresholds; absent in
+    // the product, where the detector runs on its constants.
+    this.releases = new ReleaseDetector(release || {});
+    this.listener = new ShotListener();
+    if (soundCounter.detector) {
+      soundCounter.detector.onHop = (t, e, floor, warm) => this.listener.hop(t, e, floor, warm);
+    }
+    this.bodyAt = [];
+    this.settled = [];
+    this.cache = null;
   }
 
-  pushAudio(block, tMs) { this.sound.pushAudio(block, tMs); }
+  pushAudio(block, tMs) {
+    this.sound.pushAudio(block, tMs);
+    this.cache = null;
+  }
 
   /** Pose: forwarded to the sound counter, and read for the release. */
   pushPose(landmarks, tMs) {
     this.sound.pushPose(landmarks, tMs);
     this.releases.push({ t: tMs, ...stickHand(landmarks) });
+    if (Array.isArray(landmarks) && landmarks.length) this.bodyAt.push(tMs);
+    this.cache = null;
   }
 
-  /** Impacts the sound counter kept as shots, with each one's release. */
+  /** Was someone in frame around tMs? */
+  bodyNear(tMs) {
+    let n = 0;
+    for (const t of this.bodyAt) if (Math.abs(t - tMs) <= BODY_WINDOW_MS) n += 1;
+    return n >= BODY_MIN_FRAMES;
+  }
+
+  /** Every shot so far: { release_ms, impact_ms, via, mph }, oldest first. */
   get shots() {
-    const impacts = this.sound.grouping.cycles.map((c) => c.t_ms);
-    const releases = this.releases.releases.map((r) => r.t_ms);
+    if (this.cache) return this.cache;
     const metres = distanceMetres(this.distanceYd);
-    // Pair from the impact's side: each heard shot looks back for the last
-    // release before it, inside the flight window. A release with no sound
-    // after it (a wide shot) is simply never claimed.
-    return impacts.map((impact) => {
-      let release = null;
-      for (let i = releases.length - 1; i >= 0; i -= 1) {
-        if (releases[i] < impact) {
-          if (impact - releases[i] <= MATCH_WINDOW_MS) release = releases[i];
-          break;
-        }
+    const L = this.listener;
+    const heard = L.swings.filter((s) => this.bodyNear(s.t_ms))
+      .map((s) => ({ t_ms: s.t_ms, via: 'swing' }));
+    let fresh = pairShots(heard, L.impacts, metres, this.settled);
+    // Hits no heard swing explains may still have a release the camera saw.
+    const used = new Set(fresh.map((s) => s.impact_ms));
+    const seen = this.releases.releases.filter((r) => this.bodyNear(r.t_ms))
+      .map((r) => ({ t_ms: r.t_ms, via: 'pose' }));
+    fresh = fresh.concat(pairShots(
+      seen, L.impacts.filter((i) => !used.has(i.t_ms)), metres, this.settled.concat(fresh),
+    )).sort((a, b) => a.impact_ms - b.impact_ms);
+
+    // Settle what nothing heard from now on could change, and forget what
+    // came before it, so a long session costs no more per frame than a short.
+    const horizon = L.lastMs - SETTLE_MS;
+    while (fresh.length && fresh[0].impact_ms < horizon) this.settled.push(fresh.shift());
+    const last = this.settled[this.settled.length - 1];
+    if (last) {
+      L.drop(last.impact_ms + 1);
+      while (this.bodyAt.length && this.bodyAt[0] < last.impact_ms - BODY_WINDOW_MS) {
+        this.bodyAt.shift();
       }
-      const mph = release === null ? null : shotSpeedMph(release, impact, metres);
-      return { impact_ms: impact, release_ms: release, mph };
-    });
+    }
+    this.cache = this.settled.concat(fresh);
+    return this.cache;
   }
 
-  get count() { return this.sound.count; }
+  get count() { return this.shots.length; }
   get meanConfidence() { return this.sound.meanConfidence; }
-  handCounts() { return this.sound.handCounts(); }
+
+  /** The stick hand for a shot, read the way wall ball reads it. */
+  _hand(shot) {
+    if (!this.spec.tracks_handedness || typeof this.sound.handFor !== 'function') return 'none';
+    return this.sound.handFor(shot.impact_ms);
+  }
+
+  handCounts() {
+    let left = 0, right = 0;
+    for (const s of this.shots) {
+      const hand = this._hand(s);
+      if (hand === 'left') left += 1;
+      else if (hand === 'right') right += 1;
+    }
+    return { left, right };
+  }
 
   /** The last shot's speed, for the live readout. */
   get lastMph() {
@@ -238,20 +505,23 @@ export class ShotSpeedCounter {
   }
 
   get reps() {
-    const shots = this.shots;
-    return this.sound.reps.map((rep, i) => {
-      const shot = shots[i];
-      if (!shot) return rep;
-      const out = { ...rep, impact_t_ms: Math.round(shot.impact_ms) };
-      // The raw release time, not the speed: the server works the speed out
-      // again itself, and only a shot with both moments has one.
-      if (shot.release_ms !== null) out.release_t_ms = Math.round(shot.release_ms);
-      return out;
-    });
+    const confidence = Math.round((this.sound.meanConfidence || 0) * 1000) / 1000;
+    // The raw times, never the speed: the server works the speed out again
+    // itself from them and the distance.
+    return this.shots.map((s) => ({
+      t_ms: Math.round(s.impact_ms),
+      hand: this._hand(s),
+      confidence,
+      source: 'sound',
+      impact_t_ms: Math.round(s.impact_ms),
+      release_t_ms: Math.round(s.release_ms),
+    }));
   }
 
   toSubmission(sessionId, nonce, durationMs, extra = {}) {
     this.releases.finish();
+    this.listener.finish();
+    this.cache = null;
     return this.sound.toSubmission(sessionId, nonce, durationMs, {
       reps: this.reps,
       shot_distance_yd: this.distanceYd,

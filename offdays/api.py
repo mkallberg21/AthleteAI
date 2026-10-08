@@ -34,6 +34,7 @@ from . import billing as billing_mod
 from . import digest as digest_mod
 from . import mailer
 from . import invites as invites_mod
+from . import contacts as contacts_mod
 from . import staple as staple_mod
 from . import webhooks as webhooks_mod
 from . import onboarding as onboarding_mod
@@ -2173,12 +2174,18 @@ def roster_template() -> dict[str, Any]:
     return {
         "filename": "offdays-roster-template.csv",
         "content": (
-            "First Name,Last Name,#,Position,Birth Year,Shoots,Parent Email\n"
-            "Jordan,Pierce,14,Midfield,2011,Right,parent1@example.com\n"
-            "Sam,Rivera,7,Attack,2010,Left,parent2@example.com\n"
+            "First Name,Last Name,#,Position,Birth Year,Shoots,"
+            "Parent Name,Parent Email,Parent Phone,Parent 2 Name,Parent 2 Email,Parent 2 Phone\n"
+            "Jordan,Pierce,14,Midfield,2011,Right,"
+            "Dana Pierce,parent1@example.com,615 555 0100,Lee Pierce,parent1b@example.com,\n"
+            "Sam,Rivera,7,Attack,2010,Left,"
+            "Maria Rivera,parent2@example.com,,,,\n"
         ),
         "notes": [
             "Column names are matched loosely -- Jersey #, No., and Number all work.",
+            "Parent name, email and phone are kept for the program's parent list, "
+            "and a second parent's columns are kept too. Only an email can be "
+            "sent an invite.",
             "Only a name column is required. Everything else is optional.",
             "Grade or Class Of works instead of Birth Year, but ages from those "
             "are estimates and the athlete is treated as a minor.",
@@ -2246,6 +2253,41 @@ def create_guardian_invite(
     return {**invite, "link": invites_mod.invite_link(invite["code"]), "emailed": sent}
 
 
+@app.get("/api/org/parents")
+def org_parents(
+    format: str = Query(default="json", pattern="^(json|csv)$"),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+):
+    """Every parent the program knows about, with their contact-use decision.
+
+    Directors only: a coach runs a team, a director runs a program, and the
+    parent list is the program's. The `marketing` column is each parent's
+    own answer to whether sponsors may contact them; anything that goes to
+    a sponsor is filtered on it first, and the payload says so.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="director access required")
+    rows = contacts_mod.for_org(store.conn, principal.org_id)
+    if format == "csv":
+        from fastapi.responses import Response
+        return Response(
+            contacts_mod.to_csv(rows), media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="parents.csv"'},
+        )
+    return {
+        "parents": rows,
+        "summary": contacts_mod.summary(rows),
+        "note": (
+            "Use these to run the program and reach families about their "
+            "athlete. For sponsor or partner messages, only rows where "
+            "marketing is yes: the parent switched that on themselves, and "
+            "a text to a parent who did not is a statutory-damages problem, "
+            "not a tone problem."
+        ),
+    }
+
+
 @app.get("/api/coach/guardian-invites")
 def list_guardian_invites(
     principal: Principal = Depends(_staff),
@@ -2288,6 +2330,7 @@ class RedeemRequest(BaseModel):
     code: str = Field(min_length=4, max_length=40)
     display_name: str = Field(min_length=1, max_length=120)
     email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=40)
     relationship: str = Field(default="parent", max_length=40)
 
 
@@ -2303,7 +2346,8 @@ def redeem_guardian_invite(
         raise _throttled(exc) from None
     try:
         result = guardians_mod.redeem_invite(
-            store.conn, body.code, body.display_name, body.email, body.relationship
+            store.conn, body.code, body.display_name, body.email, body.relationship,
+            phone=body.phone,
         )
     except GuardianError:
         throttle.record_failure(store.conn, attempt)
@@ -4040,16 +4084,16 @@ def pricing() -> dict[str, Any]:
                 "total_cents": 500 * 150 * billing_mod.PLANS_BY_CODE["club_roster"].per_athlete_day_cents,
             },
             "recommended_dues_margin_cents": billing_mod.RECOMMENDED_DUES_MARGIN_CENTS,
-            "rebate_rate_min": billing_mod.REBATE_RATE_MIN,
-            "rebate_rate_max": billing_mod.REBATE_RATE_MAX,
+            # No automatic rebate. One may be granted per club by the operator.
+            "rebate_rate": 0.0,
             "note": (
                 "The club pays per rostered athlete per day of its season, between "
                 "the start and end dates the director sets, and covers it by "
                 "adding a line to its own season fee. The "
                 "money still comes from parents, through the channel they already "
                 "pay through, and so the club is out nothing, every athlete is "
-                "covered, and a share comes back for families who cannot afford "
-                "the season."
+                "covered. A sponsorship rebate may be arranged for a club "
+                "individually; it is not part of the standard price."
             ),
         },
         "club_pays_instead": {
@@ -4134,12 +4178,6 @@ class RebateSpend(BaseModel):
 
 @app.get("/api/org/invoice")
 def org_invoice(
-    # Bounded at the edge as well as in the module, so an out-of-range rate
-    # is a 422 like every other bad parameter rather than arriving as a
-    # payment error.
-    rebate_rate: float = Query(
-        default=billing_mod.REBATE_RATE_DEFAULT,
-        ge=billing_mod.REBATE_RATE_MIN, le=billing_mod.REBATE_RATE_MAX),
     dues_add_cents: int | None = Query(default=None, ge=0, le=50_000),
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
@@ -4148,30 +4186,30 @@ def org_invoice(
 
     Written to be read by a director deciding, so it leads with the number
     that makes it an easy yes: they are not being asked to find budget, they
-    are being shown a line that funds their own scholarship fund.
+    are being shown a line on dues that covers it. A sponsorship rebate
+    appears only for a club the operator granted one.
     """
     if not principal.is_director:
         raise HTTPException(
             status_code=403, detail="only a director can see the invoice")
     invoice = billing_mod.roster_invoice(
-        store.conn, principal.org_id,
-        rebate_rate=rebate_rate, dues_add_cents=dues_add_cents)
+        store.conn, principal.org_id, dues_add_cents=dues_add_cents)
     return {
         **invoice.to_dict(),
-        "sponsorship_fund_cents": billing_mod.rebate_balance(
+        "rebate_balance_cents": billing_mod.rebate_balance(
             store.conn, principal.org_id),
     }
 
 
 @app.get("/api/org/sponsorship-fund")
-def sponsorship_fund(
+def sponsorship_rebate(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """The fund's balance and where it came from and went."""
+    """The sponsorship rebate's balance and where it came from and went."""
     if not principal.is_director:
         raise HTTPException(
-            status_code=403, detail="only a director can see the fund")
+            status_code=403, detail="only a director can see the rebate")
     return {
         "balance_cents": billing_mod.rebate_balance(store.conn, principal.org_id),
         "ledger": billing_mod.rebate_ledger(store.conn, principal.org_id),
@@ -4179,19 +4217,20 @@ def sponsorship_fund(
 
 
 @app.post("/api/org/sponsorship-fund/spend", status_code=201)
-def spend_sponsorship_fund(
+def spend_sponsorship_rebate(
     body: RebateSpend,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """Draw the fund down for a family who cannot afford the season.
+    """Draw the rebate down, typically for a family who cannot afford the
+    season.
 
     The reason is recorded because a director will be asked where it went,
     and the answer should be in the product rather than in their memory.
     """
     if not principal.is_director:
         raise HTTPException(
-            status_code=403, detail="only a director can spend the fund")
+            status_code=403, detail="only a director can spend the rebate")
     balance = billing_mod.spend_rebate(
         store.conn, principal.org_id, body.amount_cents, body.reason)
     return {"balance_cents": balance}

@@ -125,6 +125,10 @@ export class ImpactDetector {
     this.recent = [];
     this.lastOnsetMs = -Infinity;
     this.onsets = [];
+    // Optional listener for every hop's energy and the floor it was judged
+    // against: `(tMs, energy, floor, warm)`, on the same clock as onsets. The
+    // shot timer reads the stick's swing from it. Numbers only, like the rest.
+    this.onHop = null;
   }
 
   /** Samples arrive in blocks of any length; tMs is the time of block[0]. */
@@ -160,8 +164,10 @@ export class ImpactDetector {
       this.warm.push(e);
       const sorted = [...this.warm].sort((a, b) => a - b);
       this.floor = Math.max(MIN_FLOOR, sorted[Math.floor(sorted.length / 2)]);
+      if (this.onHop) this.onHop(tMs - HOP_MS, e, this.floor, true);
       return;
     }
+    if (this.onHop) this.onHop(tMs - HOP_MS, e, this.floor, false);
     const loud = e > this.floor * ONSET_RATIO && e > before * RISE_RATIO;
     if (loud && tMs - this.lastOnsetMs >= DEBOUNCE_MS) {
       this.lastOnsetMs = tMs;
