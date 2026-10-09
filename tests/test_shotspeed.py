@@ -40,7 +40,7 @@ class TestTheMaths:
 
 
 class TestTheReport:
-    LIMITS = dict(min_distance_yd=4, max_distance_yd=15)
+    LIMITS = dict(min_distance_yd=7, max_distance_yd=15)
 
     def shots(self, speeds, hand="right"):
         out, t = [], 1000
@@ -73,6 +73,35 @@ class TestTheReport:
     def test_a_distance_outside_the_drills_range_is_refused(self):
         r = shotspeed.analyze(self.shots([50, 55, 60]), 40, **self.LIMITS)
         assert r.median_mph is None
+        # Under 7 yards a hop of timing is too large a share of the flight.
+        r = shotspeed.analyze(self.shots([50, 55, 60]), 5, **self.LIMITS)
+        assert r.median_mph is None and "how far you shot from" in r.note
+
+    def test_every_distance_from_seven_to_fifteen_yards_is_timed(self):
+        for yd in (7, 8, 10, 12, 15):
+            reps = self.shots([50, 55, 60], )
+            # heard_at defaults to 8 yards; rebuild the impacts for this distance.
+            for rep, mph in zip(reps, (50, 55, 60)):
+                rep["impact_t_ms"] = heard_at(rep["release_t_ms"], mph, yd * shotspeed.YD_TO_M)
+            r = shotspeed.analyze(reps, yd, **self.LIMITS)
+            assert r.timed == 3, yd
+            assert r.median_mph == pytest.approx(55, abs=0.3), yd
+
+    def test_the_report_says_what_it_is_good_to_and_it_tightens_with_distance(self):
+        """The same timing error is a bigger share of a short flight: 75 mph
+        from 7 yards is about +-9 mph, from 15 about +-4."""
+        near = shotspeed.precision_mph(7, 75)
+        far = shotspeed.precision_mph(15, 75)
+        assert near is not None and far is not None and near > far
+        assert 7 <= near <= 11 and 3 <= far <= 5
+        assert shotspeed.precision_mph(10, 45) < shotspeed.precision_mph(10, 75)
+        reps = self.shots([70, 75, 80])
+        for rep, mph in zip(reps, (70, 75, 80)):
+            rep["impact_t_ms"] = heard_at(rep["release_t_ms"], mph, 7 * shotspeed.YD_TO_M)
+        r = shotspeed.analyze(reps, 7, **self.LIMITS)
+        assert r.plus_minus_mph == near
+        assert "good to about" in r.note and "either way" in r.note
+        assert r.to_dict()["plus_minus_mph"] == near
 
     def test_by_hand_only_with_enough_shots_each(self):
         reps = self.shots([50, 52, 54]) + self.shots([45, 47], hand="left")
@@ -88,6 +117,7 @@ class TestTheDrill:
         d = DRILLS_BY_KEY["lax_shooting"]
         assert d.sport == "lacrosse" and d.shot is not None and d.sound is not None
         assert d.to_dict()["shot"]["default_distance_yd"] == 8
+        assert d.shot.min_distance_yd == 7 and d.shot.max_distance_yd == 15
 
     def test_every_shot_counts_toward_the_throwing_ceiling(self):
         assert DRILLS_BY_KEY["lax_shooting"].load.throws_per_rep == 1.0

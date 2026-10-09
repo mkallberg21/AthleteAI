@@ -630,10 +630,14 @@ class ShotSpec:
     #: Distance the athlete is asked to shoot from, in yards. 8 is standard
     #: youth shooting distance and the number on most club practice plans.
     default_distance_yd: float = 8.0
-    #: The range the athlete may set. Closer than 4 yards the flight is under
-    #: 100ms and a frame of release error is a third of it; past 15 a phone
-    #: beside the shooter starts to miss the impact on a windy day.
-    min_distance_yd: float = 4.0
+    #: The range the athlete may set: 7 to 15 yards. The release is timed to
+    #: a 10ms hop, and what that hop costs depends on how long the ball is in
+    #: the air. From 7 yards a 75mph shot flies 190ms and a hop is about
+    #: 4mph; from 4 it flies 110ms and a hop is 8, which is not a measurement.
+    #: From 15 a hop is under 2mph, and the sound coming back (40ms) is
+    #: already taken off; the limit there is the net being quieter, which the
+    #: radar clips have to confirm before it goes further.
+    min_distance_yd: float = 7.0
     max_distance_yd: float = 15.0
 
     def __post_init__(self) -> None:
