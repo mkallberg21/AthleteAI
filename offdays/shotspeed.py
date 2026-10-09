@@ -45,12 +45,33 @@ MAX_MPH = 110.0
 #: Below this many timed shots a session's median is one shot's opinion.
 MIN_TIMED = 3
 
+#: How far off the two moments can be together, in ms. The release is read
+#: from the swing to a 10ms hop and sat 16ms from the frame the ball left on
+#: the radar clips; the impact is a hop too. Twenty is the two combined, and
+#: it is what the "about" in every report is worked out from.
+TIMING_MS = 20.0
+
+
+def precision_mph(distance_yd: float, mph: float) -> float | None:
+    """How much TIMING_MS of error moves a shot of this speed from this
+    distance, in mph. Short flights are coarse: from 7 yards a 75mph shot is
+    about +-9, from 15 about +-4. Rounded to whole mph."""
+    if not distance_yd or distance_yd <= 0 or not mph or mph <= 0:
+        return None
+    distance_m = distance_yd * YD_TO_M
+    flight_ms = distance_m / (mph / MS_TO_MPH) * 1000
+    if flight_ms <= TIMING_MS:
+        return None
+    faster = distance_m / ((flight_ms - TIMING_MS) / 1000) * MS_TO_MPH
+    return float(max(1, round(faster - mph)))
+
 #: Sentences shown with every report.
 LIMITS = (
     "Approximate: it is the average speed over the ball's flight, timed from "
     "your release to the sound of it hitting, so it reads a little under a "
     "radar gun.",
-    "It is only as right as the distance you set. Shoot from a marked spot.",
+    "It is only as right as the distance you set. Shoot from a marked spot, "
+    "7 to 15 yards out: the further, the finer the timing.",
     "It is yours, your parent's and your coach's. It is not on any leaderboard.",
 )
 
@@ -81,6 +102,8 @@ class ShotReport:
     median_mph: float | None = None
     #: Median by hand, when the stick hand was read for enough shots.
     by_hand: dict[str, float] = field(default_factory=dict)
+    #: What the typical speed is good to, in mph, at this distance and speed.
+    plus_minus_mph: float | None = None
     note: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -92,6 +115,7 @@ class ShotReport:
             "best_mph": self.best_mph,
             "median_mph": self.median_mph,
             "by_hand": self.by_hand,
+            "plus_minus_mph": self.plus_minus_mph,
             "note": self.note,
             "limits": list(LIMITS),
         }
@@ -138,6 +162,7 @@ def analyze(
     report.best_mph = max(timed)
     report.median_mph = round(median(timed), 1)
     report.by_hand = {h: round(median(v), 1) for h, v in by_hand.items() if len(v) >= MIN_TIMED}
+    report.plus_minus_mph = precision_mph(distance_yd, report.median_mph)
 
     if report.timed < MIN_TIMED:
         report.note = (
@@ -145,10 +170,12 @@ def analyze(
             "the app can tell you your typical speed, not just one shot's."
         )
     else:
+        about = (f" (good to about {report.plus_minus_mph:.0f} mph either way from there)"
+                 if report.plus_minus_mph else "")
         report.note = (
             f"Typical shot about {report.median_mph:.0f} mph, best "
-            f"{report.best_mph:.0f} mph, from {distance_yd:g} yards. Compare it "
-            "with your own past sessions from the same spot, not with anyone "
+            f"{report.best_mph:.0f} mph, from {distance_yd:g} yards{about}. Compare "
+            "it with your own past sessions from the same spot, not with anyone "
             "else's."
         )
     return report

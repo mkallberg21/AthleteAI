@@ -716,9 +716,10 @@ SHOOTING = DrillSpec(
     sound=SHOOTING_SOUND,
     shot=ShotSpec(),
     setup_hint=(
-        "Mark a spot 8 yards from the goal or wall and shoot from it. Prop the "
-        "phone beside you, side-on, so it sees you and hears the net. Each "
-        "shot's speed comes from that sound."
+        "Mark a spot 7 to 15 yards from the goal or wall -- 8 is the usual -- "
+        "and shoot from it. Prop the phone beside you, side-on, so it sees you "
+        "and hears the net. Each shot's speed comes from that sound, and the "
+        "further out you are, the finer it is."
     ),
     quality=QualitySpec(
         target_rom=0.55,
