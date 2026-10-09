@@ -2551,6 +2551,30 @@ class SeasonPhaseSetting(BaseModel):
     #: ISO date the season (and billing) starts. Chosen by the director,
     #: like the end date; never inferred from a roster upload.
     starts_on: str | None = Field(default=None, max_length=10)
+    #: Shots a day that count on the shooting drill, for the whole program.
+    #: 0 leaves it to each age's own ceiling. Any number is still capped at
+    #: that ceiling per child -- the director picks the target, the app keeps
+    #: the arm -- so the field is bounded by the drill's hard cap, not the sky.
+    daily_shots: int | None = Field(default=None, ge=0, le=1_000)
+
+
+def _shots_setting(store: Store, org_id: int) -> dict[str, Any]:
+    """The program's shots-a-day and the automatic ceiling it sits under."""
+    from .drills import DRILLS_BY_KEY
+    from .scoring import daily_cap_for
+
+    drill = DRILLS_BY_KEY["lax_shooting"]
+    chosen = store.daily_shots(org_id)
+    bands = ((10, "10 and under"), (12, "11-12"), (14, "13-14"), (16, "15-16"), (200, "17+"))
+    return {
+        "chosen": chosen,
+        "max": drill.scoring.daily_rep_cap,
+        "ceiling_by_age": [
+            {"band": label, "ceiling": daily_cap_for(drill, age),
+             "counts": daily_cap_for(drill, age, chosen=chosen or None)}
+            for age, label in bands
+        ],
+    }
 
 
 @app.get("/api/org/season")
@@ -2565,6 +2589,7 @@ def get_season_phase(
         "starts_on": store.season_starts_on(principal.org_id),
         "days": store.season_day_count(principal.org_id),
         "over": store.season_over(principal.org_id),
+        "shots": _shots_setting(store, principal.org_id),
     }
 
 
@@ -2588,6 +2613,14 @@ def set_season_phase(
         )
     if body.phase is not None and body.phase not in season_mod.BY_KEY:
         raise HTTPException(status_code=400, detail=f"unknown phase: {body.phase}")
+    if body.daily_shots is not None:
+        from .drills import DRILLS_BY_KEY
+        hard = DRILLS_BY_KEY["lax_shooting"].scoring.daily_rep_cap
+        if body.daily_shots > hard:
+            raise HTTPException(
+                status_code=400,
+                detail=f"shots a day can be at most {hard}; 0 leaves it to each age's ceiling",
+            )
     from datetime import date as _date
     for label, value in (("end", body.ends_on), ("start", body.starts_on)):
         if value:
@@ -2623,12 +2656,18 @@ def set_season_phase(
                 "UPDATE organizations SET season_starts_on = ? WHERE id = ?",
                 (body.starts_on.strip(), principal.org_id),
             )
+        if body.daily_shots is not None:
+            conn.execute(
+                "UPDATE organizations SET daily_shots = ? WHERE id = ?",
+                (body.daily_shots, principal.org_id),
+            )
     return {
         "phase": season_mod.get(_org_phase(store, principal.org_id)).to_dict(),
         "ends_on": store.season_ends_on(principal.org_id),
         "starts_on": store.season_starts_on(principal.org_id),
         "days": store.season_day_count(principal.org_id),
         "over": store.season_over(principal.org_id),
+        "shots": _shots_setting(store, principal.org_id),
     }
 
 

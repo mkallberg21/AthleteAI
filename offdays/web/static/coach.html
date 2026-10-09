@@ -196,6 +196,18 @@
     </div>
     <div id="season-ends-state" class="small muted" style="margin-top:4px"></div>
     <div id="season-bill" class="small" style="margin-top:8px"></div>
+    <div style="margin-top:16px">
+      <label for="season-shots">Shots a day that count</label>
+      <input id="season-shots" type="number" min="0" step="5" inputmode="numeric"
+             placeholder="each age's ceiling" style="width:8em">
+      <div class="small muted" style="margin-top:4px">
+        Your number for the whole program. Every shot past it is practice, not
+        points. Whatever you choose, each age keeps its own ceiling: a younger
+        athlete is never asked for more than the arm guidance for their age.
+        Leave it blank (or 0) to use the ceilings alone.
+      </div>
+      <div id="season-shots-table" class="small" style="margin-top:6px"></div>
+    </div>
     <div id="season-err" class="err hidden"></div>
   </div>
 
@@ -2263,6 +2275,33 @@ async function loadSeason(isDirector) {
   };
   starts.addEventListener('change', saveDates);
   ends.addEventListener('change', saveDates);
+
+  // Shots a day: the director's number, shown next to the automatic ceiling
+  // per age so what will actually count for each band is on the page.
+  const shots = $('season-shots');
+  shots.disabled = !isDirector;
+  const showShots = (sh) => {
+    if (!sh) return;
+    shots.value = sh.chosen ? String(sh.chosen) : '';
+    $('season-shots-table').innerHTML = `<table><thead><tr><th>Age</th>
+      <th class="num">Ceiling</th><th class="num">Counts</th></tr></thead><tbody>`
+      + sh.ceiling_by_age.map((r) => `<tr><td>${esc(r.band)}</td>
+        <td class="num">${r.ceiling}</td>
+        <td class="num"><b>${r.counts}</b>${r.counts < r.ceiling ? '' : (sh.chosen && sh.chosen > r.ceiling ? ' <span class="muted">(ceiling)</span>' : '')}</td></tr>`).join('')
+      + '</tbody></table>';
+  };
+  showShots(data.shots);
+  shots.addEventListener('change', async () => {
+    $('season-err').classList.add('hidden');
+    const n = Math.max(0, Math.round(Number(shots.value) || 0));
+    try {
+      const res = await api('/api/org/season', { method: 'PUT', body: { daily_shots: n } });
+      showShots(res.shots);
+    } catch (e) {
+      $('season-err').textContent = e.message;
+      $('season-err').classList.remove('hidden');
+    }
+  });
 }
 
 // ------------------------------------------------------- before practice

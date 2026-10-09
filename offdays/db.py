@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -56,6 +56,12 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- and staff are never cut off, so the program can be set up for next
     -- year without anyone re-registering.
     season_ends_on TEXT NOT NULL DEFAULT '',
+    -- Shots a day that count toward the day on the shooting drill, chosen by
+    -- the director for the whole program. 0 means "each age's own ceiling".
+    -- Whatever is chosen is still capped at the age ceiling for every child
+    -- (ScoringSpec.daily_cap_by_age), so the director picks the target and
+    -- the app keeps the arm; the rest is practice, not points.
+    daily_shots INTEGER NOT NULL DEFAULT 0,
     -- The first billable day, chosen by the director alongside the end
     -- date. Never inferred from a roster upload: a test import in January
     -- must not start a February season. The season is [starts_on, ends_on]
@@ -1177,6 +1183,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("season_phase", "TEXT NOT NULL DEFAULT 'preseason'"),
         ("season_ends_on", "TEXT NOT NULL DEFAULT ''"),
         ("season_starts_on", "TEXT NOT NULL DEFAULT ''"),
+        ("daily_shots", "INTEGER NOT NULL DEFAULT 0"),
         ("sponsorship_rebate_rate", "REAL NOT NULL DEFAULT 0"),
         # A club's own badge. The file lives under web/static/teams/ and this
         # is its name -- a path rather than a blob, because a logo is served

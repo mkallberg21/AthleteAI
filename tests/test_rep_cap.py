@@ -121,6 +121,15 @@ class TestAgeAppropriate:
         assert daily_cap_for(SHOOT, 17, estimated=True) == 60
         assert SHOOT.scoring.daily_cap_minutes is None and SHOOT.scoring.cap_pool is None
 
+    def test_a_directors_number_is_capped_at_each_ages_ceiling(self):
+        """The director picks the target; the age ceiling stays automatic."""
+        assert daily_cap_for(SHOOT, 14, chosen=50) == 50
+        assert daily_cap_for(SHOOT, 10, chosen=50) == 40      # ceiling binds
+        assert daily_cap_for(SHOOT, 17, chosen=500) == 120    # never above the row
+        assert daily_cap_for(SHOOT, 14, chosen=0) == 80       # 0 = ceilings alone
+        assert daily_cap_for(SHOOT, None, chosen=100) == 60   # unknown age stays conservative
+        assert daily_cap_for(STRONG, 14, chosen=50) == 220    # no table: ignored
+
     def test_an_age_table_is_validated(self):
         from offdays.drills.base import ScoringSpec
         with pytest.raises(ValueError):
@@ -278,6 +287,23 @@ class TestThroughTheStore:
         # Shooting has its own day: a full shooting day leaves wall ball untouched.
         wall = _submit(c, hero["h"], "lax_wall_ball_strong", 100)
         assert wall["reps_total"] == 100 and "rep_cap" not in wall
+
+    def test_the_director_sets_fifty_and_a_14_year_old_counts_fifty(self, club):
+        """The note names the program's number when it bound, and the age
+        ceiling when that bound instead."""
+        c, store, hero = club["client"], club["store"], club["kids"]["Hero"]
+        store.conn.execute("UPDATE organizations SET daily_shots = 50 WHERE id = ?", (club["org"],))
+        store.conn.commit()
+        body = _submit(c, hero["h"], "lax_shooting", 70, gap_ms=3000)
+        assert body["reps_total"] == 50 and body["rep_cap"]["cap"] == 50
+        assert any("50 shots a day, the number your program set" in n for n in body["notes"])
+        # A 10-year-old's ceiling (40) is under the director's 50 and wins.
+        steady = club["kids"]["Steady"]
+        store.conn.execute("UPDATE users SET birth_year = 2016 WHERE id = ?", (steady["id"],))
+        store.conn.commit()
+        young = _submit(c, steady["h"], "lax_shooting", 70, gap_ms=3000)
+        assert young["reps_total"] == 40
+        assert any("about 40 shots a day for your age" in n for n in young["notes"])
 
     def test_a_younger_kid_gets_a_smaller_day(self, club):
         c, store, hero = club["client"], club["store"], club["kids"]["Hero"]

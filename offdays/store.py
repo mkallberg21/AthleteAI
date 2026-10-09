@@ -84,18 +84,24 @@ MAX_WORDINGS = 60
 MAX_WORDING_CHARS = 320
 
 
-def _cap_note(credit: RepCredit, drill) -> str:
-    """Why fewer reps counted than the camera saw, in the athlete's terms."""
+def _cap_note(credit: RepCredit, drill, chosen: int | None = None) -> str:
+    """Why fewer reps counted than the camera saw, in the athlete's terms.
+    `chosen` is the program's own number for an age-table drill, if the
+    director set one."""
     what = (f"{drill.name}" if credit.cap_scope == "drill"
             else f"{drill.name} and the drills it shares a limit with")
     minutes = drill.scoring.daily_cap_minutes
     if minutes and credit.cap_scope == "drill":
         how_much = f"about {minutes:g} minutes of work for your age"
     elif drill.scoring.daily_cap_by_age is not None and credit.cap_scope == "drill":
-        # Stated as the age guidance it is, the way a pitch count is told to
-        # a kid: a day's shots for your age, not a figure to beat.
+        # Stated as the guidance it is, the way a pitch count is told to a
+        # kid: the program's number when the director set one and it bound,
+        # otherwise a day's shots for your age. Never a figure to beat.
         unit = "shots" if getattr(drill, "shot", None) is not None else "reps"
-        how_much = f"about {credit.cap} {unit} a day for your age"
+        if chosen and credit.cap == chosen:
+            how_much = f"{credit.cap} {unit} a day, the number your program set"
+        else:
+            how_much = f"about {credit.cap} {unit} a day for your age"
     else:
         how_much = f"{credit.cap} reps"
     return (
@@ -3178,7 +3184,8 @@ class Store:
                 reps_left=credit.left, reps_right=credit.right,
             )
             if credit.capped:
-                scored.notes = list(verdict.notes) + [_cap_note(credit, drill)]
+                scored.notes = list(verdict.notes) + [
+                    _cap_note(credit, drill, self._chosen_daily(athlete_id, drill))]
 
         breakdown = score_session(
             drill,
@@ -3439,8 +3446,30 @@ class Store:
             pool_reps_today=self._reps_credited_on_day(
                 athlete_id, day, tuple(d.key for d in members), exclude_session),
             pool_budget=pool_cap(drill, ALL_DRILLS),
-            drill_cap=daily_cap_for(drill, age, estimated),
+            drill_cap=daily_cap_for(drill, age, estimated,
+                                    chosen=self._chosen_daily(athlete_id, drill)),
         )
+
+    def _chosen_daily(self, athlete_id: int, drill) -> int | None:
+        """The program's own daily number for an age-table drill (today only
+        the shooting drill: `organizations.daily_shots`), or None when the
+        director left it to each age's ceiling or the drill has no table."""
+        if drill.scoring.daily_cap_by_age is None or getattr(drill, "shot", None) is None:
+            return None
+        row = self.conn.execute(
+            "SELECT COALESCE(o.daily_shots, 0) AS n FROM users u "
+            "JOIN organizations o ON o.id = u.org_id WHERE u.id = ?",
+            (athlete_id,),
+        ).fetchone()
+        n = int(row["n"]) if row else 0
+        return n if n > 0 else None
+
+    def daily_shots(self, org_id: int) -> int:
+        """The director's shots-a-day for the program; 0 = each age's ceiling."""
+        row = self.conn.execute(
+            "SELECT COALESCE(daily_shots, 0) AS n FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        return int(row["n"]) if row else 0
 
     def _age_of(self, athlete_id: int, day: str) -> tuple[int | None, bool]:
         """The athlete's age on `day`, and whether it was only estimated."""
