@@ -121,6 +121,32 @@ class TestThroughTheApi:
         client.put("/api/org/season", json={"ends_on": ""}, headers=org["director"])
         assert client.get("/api/me", headers=org["kid"]).status_code == 200
 
+    def test_the_director_chooses_shots_a_day_under_an_automatic_ceiling(self, client, org):
+        got = client.get("/api/org/season", headers=org["director"]).json()["shots"]
+        assert got["chosen"] == 0 and got["max"] == 150
+        bands = {r["band"]: r for r in got["ceiling_by_age"]}
+        assert bands["13-14"]["ceiling"] == 80 and bands["13-14"]["counts"] == 80
+        res = client.put("/api/org/season", json={"daily_shots": 50}, headers=org["director"])
+        assert res.status_code == 200, res.text
+        bands = {r["band"]: r for r in res.json()["shots"]["ceiling_by_age"]}
+        assert res.json()["shots"]["chosen"] == 50
+        assert bands["13-14"]["counts"] == 50          # the director's number
+        assert bands["10 and under"]["counts"] == 40   # the ceiling, automatically
+        assert bands["17+"]["counts"] == 50
+        res = client.put("/api/org/season", json={"daily_shots": 500}, headers=org["director"])
+        assert res.status_code == 400
+        res = client.put("/api/org/season", json={"daily_shots": 0}, headers=org["director"])
+        assert res.json()["shots"]["chosen"] == 0
+        assert {r["band"]: r["counts"] for r in res.json()["shots"]["ceiling_by_age"]}["13-14"] == 80
+
+    def test_a_coach_cannot_set_shots_a_day(self, client, org):
+        store = api_module._store
+        coach = store.create_user(store.conn.execute(
+            "SELECT org_id FROM users LIMIT 1").fetchone()["org_id"], "coach", "Coach")
+        res = client.put("/api/org/season", json={"daily_shots": 50},
+                         headers={"Authorization": f"Bearer {coach['token']}"})
+        assert res.status_code == 403
+
     def test_the_phase_setting_still_works_on_its_own(self, client, org):
         res = client.put("/api/org/season", json={"phase": "in_season"}, headers=org["director"])
         assert res.status_code == 200, res.text
