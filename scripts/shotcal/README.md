@@ -126,6 +126,36 @@ goal-frame distance needs -- or a much higher-resolution work frame, which the
 cheapest phones cannot run per frame. Parked; the mic's swing + impact pairing
 stays the release signal.
 
+## What does the impact sound like? (`impacts.py`) -- waiting on footage
+
+A per-surface impact rule (net / pipe / wall / rebounder) would tighten the
+impact timing and is the only route to a goal-vs-pipe call without the goal in
+frame. `impacts.py` prints, per impact the replay found, its peak over the
+floor, rise time, ring time and spectral centroid, with the surface from
+`truth.csv`'s `note` column where written.
+
+```bash
+"$LOCALAPPDATA/offdays-calvenv/Scripts/python.exe" scripts/shotcal/impacts.py
+```
+
+On the 7 radar clips (all net, 10 yd): shots median peak 11 dB, rise 10 ms,
+ring 50 ms, centroid 281 Hz; the other sounds the mic heard (steps, the ball
+dropping, the bucket) median 10 dB, 10 ms, 30 ms, 407 Hz. Overlapping, n=7,
+one surface: **nothing to separate yet.** It needs the multi-surface clips
+the filming brief already asks for, with `net` / `pipe` / `wall` /
+`rebounder` in the note column per shot.
+
+## Would a bigger pose model help? (`extract.py --model full`)
+
+`extract.py --model full --out data/shotcal/extracted_full` extracts with
+MediaPipe's `full` model (the product runs `lite`). Replayed on the 7 radar
+clips: every mph identical (the swing is the release, so pose does not enter
+the timing), and `full` found a pose in FEWER frames than `lite` on 6 of 7
+clips (1626: 93 vs 110; 1627: 77 vs 103; 1629: 60 vs 68) -- from behind the
+shooter, at night, the bigger model is pickier, not better. Not worth the
+phone's battery for shooting. Re-run on side-on footage before deciding for
+the quality scores.
+
 ## What comes out, and what to do with it
 
 | Figure | Meaning | Action |

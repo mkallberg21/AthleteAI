@@ -42,11 +42,18 @@ from pathlib import Path
 
 import numpy as np
 
-MODEL_URL = (
-    "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
-    "pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
-)
-#: The same model, delegate aside, that `capture.html` and `calibrate.html` load.
+#: The same model, delegate aside, that `capture.html` and `calibrate.html`
+#: load is `lite`. `full` and `heavy` are the bigger siblings; `--model full`
+#: extracts with one of those so the bench can say what a better pose model
+#: would buy BEFORE the product pays for it on the cheapest phone.
+MODELS = {
+    name: (
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
+        f"pose_landmarker_{name}/float16/1/pose_landmarker_{name}.task"
+    )
+    for name in ("lite", "full", "heavy")
+}
+MODEL_URL = MODELS["lite"]
 MODEL_NAME = "pose_landmarker_lite.task"
 
 #: What a phone browser films at; the app's release detector is tuned to it.
@@ -78,12 +85,12 @@ def probe(path: Path) -> dict:
     }
 
 
-def ensure_model(cache: Path) -> Path:
-    model = cache / MODEL_NAME
+def ensure_model(cache: Path, name: str = "lite") -> Path:
+    model = cache / f"pose_landmarker_{name}.task"
     if not model.exists():
         cache.mkdir(parents=True, exist_ok=True)
-        print(f"downloading {MODEL_NAME} ...", file=sys.stderr)
-        urllib.request.urlretrieve(MODEL_URL, model)
+        print(f"downloading {model.name} ...", file=sys.stderr)
+        urllib.request.urlretrieve(MODELS[name], model)
     return model
 
 
@@ -151,11 +158,14 @@ def main() -> None:
     ap.add_argument("--fps", type=int, default=FPS, help="frame rate to sample at (phone = 30)")
     ap.add_argument("--width", type=int, default=WIDTH)
     ap.add_argument("--model-cache", type=Path, default=Path("data/shotcal/models"))
+    ap.add_argument("--model", choices=sorted(MODELS), default="lite",
+                    help="pose model; the product runs lite, so anything else is an experiment "
+                         "and belongs in its own --out")
     ap.add_argument("--force", action="store_true", help="re-extract clips already done")
     args = ap.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
-    model = ensure_model(args.model_cache)
+    model = ensure_model(args.model_cache, args.model)
     for clip in args.clips:
         stem = clip.stem
         meta_path = args.out / f"{stem}.meta.json"
@@ -174,7 +184,8 @@ def main() -> None:
         seen = sum(1 for p in poses if p["landmarks"])
         (args.out / f"{stem}.landmarks.json").write_text(json.dumps(poses))
         meta.update(clip=clip.name, fps=args.fps, frames=len(poses), frames_with_pose=seen,
-                    sample_rate=SAMPLE_RATE, samples=samples, width=args.width)
+                    sample_rate=SAMPLE_RATE, samples=samples, width=args.width,
+                    model=args.model)
         meta_path.write_text(json.dumps(meta, indent=1))
         print(f"{stem}: {len(poses)} frames, pose in {seen} "
               f"({100 * seen / max(len(poses), 1):.0f}%)")
