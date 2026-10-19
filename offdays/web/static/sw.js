@@ -38,6 +38,8 @@ const SHELL = [
   // Shooting speed is imported by the capture screen, so a missing copy
   // would stop the whole screen loading offline, not just shooting.
   'shotspeed.js',
+  // The setup check before Start; imported by the capture screen as well.
+  'setup.js',
   'review.js',
   'offline.js',
   'manifest.webmanifest',

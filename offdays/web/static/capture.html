@@ -417,6 +417,7 @@ import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
 import { RepCounter } from './counter.js';
 import { SoundRepCounter, openMicrophone } from './sound.js';
 import { ShotSpeedCounter } from './shotspeed.js';
+import { SetupGate } from './setup.js';
 import { cueAt, cueCount, label as cueLabel, sequence as cueSequenceFor } from './cues.js';
 import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
@@ -470,6 +471,9 @@ let counter = null;
 // and wraps `counter` for hands and confidence. Null means pose counts.
 let soundCounter = null;
 let mic = null;
+// Before Start: judges the framing and the microphone and says what to fix.
+// Null once the session is running; the live banner takes over then.
+let setupGate = null;
 let session = null;
 let running = false;
 let rafId = null;
@@ -1440,6 +1444,7 @@ async function startListening() {
     setBanner('Starting the microphone…');
     mic = await openMicrophone((block, tMs) => {
       if (running && soundCounter) soundCounter.pushAudio(block, tMs - startedAt);
+      else if (!running && setupGate) setupGate.pushAudio(block, tMs);
     });
   } catch {
     mic = null;
@@ -1558,11 +1563,14 @@ async function openCapture(drill) {
 
     if (drill.sound) await startListening();
 
-    // No distances, no angles. The traffic light says when it is ready, and
-    // an athlete should be training rather than reading setup rules.
-    // A refused microphone has already said so, and that is the more useful
-    // thing to leave on screen.
-    if (!drill.sound || mic) setBanner('Prop the phone up so it can see you, then press Start.');
+    // No distances, no angles. The gate watches the frame and says the one
+    // thing to fix -- feet cut off, too far, a silent microphone -- and then
+    // that it is good; an athlete should be training rather than reading
+    // setup rules. A refused microphone has already said so, and that is
+    // the more useful thing to leave on screen, so the gate stays quiet
+    // until the first frame arrives.
+    setupGate = new SetupGate(drill, { listens: Boolean(drill.sound && mic) });
+    if (!drill.sound || mic) setBanner('Prop the phone up so it can see you.');
     describeOrientation();
     $('startstop').disabled = false;
     renderLoop();
@@ -1620,6 +1628,11 @@ function renderLoop() {
 
     const landmarks = result.landmarks && result.landmarks[0];
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!running && setupGate) {
+      setupGate.pushFrame(landmarks || null, performance.now());
+      const { ready, message } = setupGate.status(performance.now());
+      setBanner(message, !ready);
+    }
     if (!landmarks) {
       if (running) {
         setBanner(soundCounter
@@ -2097,6 +2110,7 @@ async function startSession() {
     if (!recorder.start(startedAt)) recorder = null;
   }
 
+  setupGate = null;
   running = true;
   $('startstop').textContent = 'Finish';
   $('startstop').classList.add('danger');
@@ -2169,6 +2183,7 @@ async function finishSession() {
 
 function stopCamera({ keepRecording = false } = {}) {
   running = false;
+  setupGate = null;
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
   if (stream) {
