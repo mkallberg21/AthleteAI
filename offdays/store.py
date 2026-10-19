@@ -23,6 +23,7 @@ from . import shooting
 from . import sweep
 from . import rhythm
 from . import shotspeed
+from . import distance as distance_mod
 from . import movement
 from . import goalie
 from . import rewatch
@@ -2953,6 +2954,7 @@ class Store:
         ball_contacts: int | None = None,
         ball_travel: float | None = None,
         shot_distance_yd: float | None = None,
+        shot_scene: dict[str, Any] | None = None,
         movement_summary: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Validate, score, and record a completed session.
@@ -3129,13 +3131,34 @@ class Store:
         # worked out here from the raw release and impact times rather than
         # taken from the phone. Counted, never scored, and never ranked.
         speed_report = None
+        distance_report = None
         if drill.shot is not None:
+            # The distance is worked out here from what the camera saw and
+            # what the athlete set, each weighed by what it is good for; the
+            # phone's own estimate is never read. The lens this athlete's
+            # phone turned out to have is remembered when the camera and the
+            # pace agreed, so the next session's camera reading is tighter.
+            age, _ = self._age_of(athlete_id, self._effective_day(completed_at)[0])
+            focal = self.conn.execute(
+                "SELECT camera_focal FROM users WHERE id = ?", (athlete_id,)
+            ).fetchone()["camera_focal"]
+            scene = dict(shot_scene or {})
+            scene["typed_yd"] = shot_distance_yd
+            scene["focal"] = focal
+            distance_report = distance_mod.estimate(scene, age)
+            if distance_report.focal_hint is not None:
+                self.conn.execute(
+                    "UPDATE users SET camera_focal = ? WHERE id = ?",
+                    (distance_mod.learn_focal(focal, distance_report.focal_hint), athlete_id),
+                )
             speed_report = shotspeed.analyze(
                 [{"release_t_ms": r.get("release_t_ms"), "impact_t_ms": r.get("impact_t_ms"),
                   "hand": r.get("hand")} for r in reps],
-                shot_distance_yd,
+                distance_report.distance_yd if distance_report.distance_yd is not None
+                else shot_distance_yd,
                 min_distance_yd=drill.shot.min_distance_yd,
                 max_distance_yd=drill.shot.max_distance_yd,
+                distance=distance_report,
             )
 
         # Form quality reads the same rep stream the counting did, so it costs

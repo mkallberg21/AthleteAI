@@ -43,8 +43,13 @@ const frames = JSON.parse(readFileSync(join(inDir, `${stem}.landmarks.json`), 'u
 const fps = meta.fps || 30;
 // The phone asks for 1280 wide; extraction scaled to that, and the work frame
 // is what the detector gets from it.
-const videoW = meta.width || 1280;
-const videoH = Math.round(meta.height * videoW / meta.width);
+// meta.width is the EXTRACTION width and meta.height the SOURCE height, so
+// the aspect comes from the clip itself.
+const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height',
+  '-of', 'csv=p=0', clip], { encoding: 'utf8' });
+const [srcW, srcH] = probe.stdout.trim().split(',').map(Number);
+const videoW = 1280;
+const videoH = Math.round(srcH * videoW / srcW);
 const size = workSize(videoW, videoH);
 const aspect = videoW / videoH;
 

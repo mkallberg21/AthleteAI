@@ -27,6 +27,7 @@ that protects the arm.
 
 from __future__ import annotations
 
+import math
 import sqlite3
 from dataclasses import dataclass, field
 from statistics import median
@@ -50,6 +51,21 @@ MIN_TIMED = 3
 #: the radar clips; the impact is a hop too. Twenty is the two combined, and
 #: it is what the "about" in every report is worked out from.
 TIMING_MS = 20.0
+
+
+def precision_with_distance(distance_yd: float, mph: float, plus_minus_yd: float | None) -> float | None:
+    """The timing error and the distance error together, in mph.
+
+    A speed is distance over time, so a share of the distance is the same
+    share of the speed: 1 yard in 8 is 12% of 75 mph. Added in quadrature to
+    the timing hop, which is what `precision_mph` is on its own.
+    """
+    timing = precision_mph(distance_yd, mph)
+    if timing is None:
+        return None
+    if not plus_minus_yd or distance_yd <= 0:
+        return timing
+    return round(math.hypot(timing, mph * plus_minus_yd / distance_yd), 1)
 
 
 def precision_mph(distance_yd: float, mph: float) -> float | None:
@@ -105,6 +121,8 @@ class ShotReport:
     #: What the typical speed is good to, in mph, at this distance and speed.
     plus_minus_mph: float | None = None
     note: str = ""
+    #: Where the distance came from and how sure it is (offdays/distance.py).
+    distance: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -117,6 +135,7 @@ class ShotReport:
             "by_hand": self.by_hand,
             "plus_minus_mph": self.plus_minus_mph,
             "note": self.note,
+            "distance": self.distance,
             "limits": list(LIMITS),
         }
 
@@ -127,9 +146,18 @@ def analyze(
     *,
     min_distance_yd: float,
     max_distance_yd: float,
+    distance: Any = None,
 ) -> ShotReport:
-    """Speed for each shot that has both moments, from the raw timings."""
+    """Speed for each shot that has both moments, from the raw timings.
+
+    `distance` is the DistanceReport the distance was taken from, when there
+    is one; its error bar widens the speed's and its note is carried.
+    """
     report = ShotReport(shots=len(reps))
+    plus_minus_yd = None
+    if distance is not None:
+        report.distance = distance.to_dict()
+        plus_minus_yd = distance.plus_minus_yd
     if distance_yd is None or not min_distance_yd <= distance_yd <= max_distance_yd:
         report.note = (
             "No shot speed this time: set how far you shot from before you "
@@ -162,7 +190,7 @@ def analyze(
     report.best_mph = max(timed)
     report.median_mph = round(median(timed), 1)
     report.by_hand = {h: round(median(v), 1) for h, v in by_hand.items() if len(v) >= MIN_TIMED}
-    report.plus_minus_mph = precision_mph(distance_yd, report.median_mph)
+    report.plus_minus_mph = precision_with_distance(distance_yd, report.median_mph, plus_minus_yd)
 
     if report.timed < MIN_TIMED:
         report.note = (
@@ -178,6 +206,8 @@ def analyze(
             "it with your own past sessions from the same spot, not with anyone "
             "else's."
         )
+    if distance is not None and distance.note:
+        report.note = f"{report.note} {distance.note}".strip()
     return report
 
 

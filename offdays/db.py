@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -138,7 +138,11 @@ CREATE TABLE IF NOT EXISTS users (
     claim_expires_at TEXT,
     -- True when birth year was estimated from a grade column rather than
     -- given. Estimates are treated as minors, never as adults.
-    birth_year_estimated INTEGER NOT NULL DEFAULT 0
+    birth_year_estimated INTEGER NOT NULL DEFAULT 0,
+    -- The lens of the phone this athlete shoots with, as a share of the
+    -- frame's short side, learned from sessions where the camera's distance
+    -- and the paced distance agreed (offdays/distance.py). NULL = not yet.
+    camera_focal     REAL
 );
 CREATE INDEX IF NOT EXISTS idx_users_external ON users(org_id, external_id);
 CREATE INDEX IF NOT EXISTS idx_users_org_role ON users(org_id, role);
@@ -1169,6 +1173,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # Per person, not per program: a Spanish-speaking household inside an
         # English-speaking club is the common case, not the edge one.
         ("locale", "TEXT NOT NULL DEFAULT 'en'"),
+        ("camera_focal", "REAL"),
     ],
     # One entry per table. A dict literal keeps only the LAST duplicate key,
     # so a second "organizations" block here would silently drop the first

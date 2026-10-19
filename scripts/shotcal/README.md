@@ -83,7 +83,25 @@ matters: the lens is one number per phone, and 2% of distance is 1.5 mph at
 75 -- under the timing error. The rest of the spread is the phone standing a
 yard or more behind the spot, which this frame cannot separate from the lens.
 
-What it needs to become a product measurement, in order:
+**Now in the product** (`offdays/distance.py`, `web/static/scene.js` +
+`distance.js`): the phone watches the goal and the shooter during the session
+and sends the medians; the server fuses goal width, goal height, shooter size,
+placement, the ground plane (with the phone's tilt) and the typed distance by
+inverse variance, learns the lens per athlete when camera and pace agree, and
+the speed carries the distance error. `scenecal.mjs` runs that exact path on
+a clip:
+
+```bash
+node scripts/shotcal/scenecal.mjs data/shotcal/clips/*.mov --pitch 5
+```
+
+On the 7 radar clips (tape 10 yd, phone 1-2 yd behind the spot, default lens):
+estimate 8.8-9.7 yd +-0.8, goal found in 5/8 to 10/12 looks, every clip
+`camera+set`. The camera reads short by about the yard the phone stood
+behind the shooter -- which is the placement rule in the setup hint, not a
+bug -- and the shooter-size factor is rough from behind (priced at 55%).
+
+What it still needs, in order:
 
 1. **Placement rule**: phone level with the shooting spot, beside the athlete,
    facing the goal, whole goal in frame. The camera's distance is then the
