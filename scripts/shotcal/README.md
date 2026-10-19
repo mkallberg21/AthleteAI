@@ -56,6 +56,76 @@ uv pip install --python "$LOCALAPPDATA/Temp/calvenv/Scripts/python.exe" mediapip
 for one clip (`--clip <stem>`), which is how a shot the pairing missed gets
 diagnosed.
 
+## Distance from the goal frame (`goal.py`)
+
+The biggest error in a shot speed is the typed distance, not the timing: one
+pace short at 8 yards is 12% of every speed in the session, and the session
+median does not wash out an error every shot shares. A goal is 6 ft wide by
+rule, so a camera that can see it knows how far away it is:
+`distance = f * 6 ft / goal_width_px`. `goal.py` finds the orange goal in a
+clip, measures it, and prints the camera's distance next to the tape's.
+
+```bash
+"$LOCALAPPDATA/offdays-calvenv/Scripts/python.exe" scripts/shotcal/goal.py data/shotcal/clips/*.mov --fit-focal
+```
+
+What the first seven radar clips said (all tape 10 yd, phone behind the shooter):
+
+| clip | goal px wide | fitted f (share of frame width) | note |
+|---|---|---|---|
+| IMG_1633 | 87 | 1.176 | |
+| IMG_1634 | 85.5 | 1.155 | within 2% of 1633 |
+| IMG_1626 | 42 | 0.568 | phone much further back |
+| 1627/28/29/32 | - | - | goal cut off at the frame edge |
+
+Two clips from one placement agree on f within 2%, which is the result that
+matters: the lens is one number per phone, and 2% of distance is 1.5 mph at
+75 -- under the timing error. The rest of the spread is the phone standing a
+yard or more behind the spot, which this frame cannot separate from the lens.
+
+What it needs to become a product measurement, in order:
+
+1. **Placement rule**: phone level with the shooting spot, beside the athlete,
+   facing the goal, whole goal in frame. The camera's distance is then the
+   shooting distance; a phone behind the spot reads long by exactly that much.
+2. **One paced calibration per phone** to learn f (or the lens's advertised
+   field of view, where the browser exposes it), then every session after is
+   measured, not typed. The kid still types nothing; the app says "10 yards"
+   and the coach can check it against the tape once.
+3. **Clips to prove it**: 6+ at known tape distances (7, 8, 10, 12, 15) from
+   one phone with the goal fully in frame, so the fitted f can be shown flat
+   across distance. Fewer still gets this table, marked as not enough.
+
+Things it cannot do, said plainly: the shooter's own distance (needs the
+camera's pitch, which a head-on square does not carry -- the phone's
+accelerometer would, in the product); a goal half out of shot (refused, not
+guessed); a non-orange goal (the mask is orange; a white or black goal needs
+its own colour, as the ball presets do).
+
+## Can the camera see the ball leave? (`ballsee.mjs`) -- no
+
+A visual "ball departed" moment would let a heard swing with no ball behind it
+be dropped before pairing (a fake, a stick tap, a shot that hit nothing).
+`ballsee.mjs` runs the production ball detector (`ballvision.js`, at the work
+size the phone uses) over a clip and prints detections around each heard
+release.
+
+```bash
+node scripts/shotcal/ballsee.mjs --clip data/shotcal/clips/IMG_1634.mov
+```
+
+On the radar clips (phone 10+ yd from the goal, 1280 wide, work frame
+509x255): expected ball radius **1.8 px**, under the detector's own 2.2 px
+floor (`MIN_RESOLVABLE_RADIUS_PX`) in 71 of 75 frames, **0 detections in 89
+frames** on every clip tried. That is the detector refusing by design, not
+failing: a 6.35 cm ball a dozen yards off is three pixels across, and at 75
+mph it moves about a metre between 30 fps frames. The cross-check is not
+buildable from this placement. It would need the phone within ~3 yd of the
+release (side-on, where the goal is out of frame) -- the opposite of what the
+goal-frame distance needs -- or a much higher-resolution work frame, which the
+cheapest phones cannot run per frame. Parked; the mic's swing + impact pairing
+stays the release signal.
+
 ## What comes out, and what to do with it
 
 | Figure | Meaning | Action |
