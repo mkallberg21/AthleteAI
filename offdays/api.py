@@ -854,6 +854,37 @@ class RepPayload(BaseModel):
     impact_t_ms: int | None = Field(default=None, ge=0, le=24 * 3_600_000)
 
 
+class GoalSeen(BaseModel):
+    w: float | None = Field(default=None, ge=0.0, le=4.0)
+    h: float | None = Field(default=None, ge=0.0, le=4.0)
+    cx: float | None = Field(default=None, ge=-4.0, le=4.0)
+    base_y: float | None = Field(default=None, ge=-4.0, le=4.0)
+    seen: int = Field(default=0, ge=0, le=100_000)
+    of: int = Field(default=0, ge=0, le=100_000)
+
+
+class AthleteSeen(BaseModel):
+    torso: float | None = Field(default=None, ge=0.0, le=4.0)
+    cx: float | None = Field(default=None, ge=-4.0, le=4.0)
+    feet_y: float | None = Field(default=None, ge=-4.0, le=4.0)
+    seen: int = Field(default=0, ge=0, le=100_000)
+
+
+class ShotScenePayload(BaseModel):
+    """Clocked shooting: the scene, as medians over the session. Numbers only.
+
+    `view_w` / `view_h` are the camera's pixel dimensions -- two integers,
+    so the goal's size in short-side units can be turned back into a pixel
+    error. No pixels travel; the privacy test on this schema enforces it.
+    """
+
+    view_w: int = Field(default=0, ge=0, le=8192)
+    view_h: int = Field(default=0, ge=0, le=8192)
+    goal: GoalSeen | None = None
+    athlete: AthleteSeen | None = None
+    pitch_deg: float | None = Field(default=None, ge=-90.0, le=90.0)
+
+
 class FootworkPayload(BaseModel):
     """Footwork drills: what the phone saw of the movement. Numbers only."""
 
@@ -888,6 +919,10 @@ class SubmitSessionRequest(BaseModel):
     # Clocked shooting drills only: the distance the athlete set before
     # shooting, in yards. Checked against the drill's own range on the server.
     shot_distance_yd: float | None = Field(default=None, ge=0.0, le=100.0)
+    # Clocked shooting: what the camera saw of the goal and the shooter, so
+    # the server can work the distance out itself (offdays/distance.py).
+    # Numbers only, in frame units; bounded like everything else.
+    shot_scene: ShotScenePayload | None = None
     # Footwork drills only: direction changes and ground covered (in torso
     # lengths, so it means the same whatever the distance to the phone).
     # Bounded like every other client-supplied number.
@@ -917,6 +952,7 @@ def submit_session(
             ball_contacts=body.ball_contacts,
             ball_travel=body.ball_travel,
             shot_distance_yd=body.shot_distance_yd,
+            shot_scene=body.shot_scene.model_dump() if body.shot_scene else None,
             movement_summary=body.footwork.model_dump() if body.footwork else None,
         )
     except StoreError as exc:

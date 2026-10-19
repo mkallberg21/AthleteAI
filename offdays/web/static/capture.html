@@ -280,6 +280,12 @@
           speed is only as right as this number.
         </div>
         <div class="small muted" id="shot-distance-range" style="margin-top:2px"></div>
+        <label class="small" style="display:block;margin-top:8px">
+          <input type="checkbox" id="shot-see-goal" checked>
+          Point the back camera at the goal (beside you, facing the goal). The
+          app measures the distance from the goal itself, and checks it
+          against what you set.
+        </label>
       </div>
 
       <!-- Diagnostics. Hidden unless ?debug=1, because an athlete should
@@ -418,6 +424,7 @@ import { RepCounter } from './counter.js';
 import { SoundRepCounter, openMicrophone } from './sound.js';
 import { ShotSpeedCounter } from './shotspeed.js';
 import { SetupGate } from './setup.js';
+import { SceneWatcher, watchPitch } from './scene.js';
 import { cueAt, cueCount, label as cueLabel, sequence as cueSequenceFor } from './cues.js';
 import {
   enablePush, enqueue, flush, onConnectivityChange, pendingCount,
@@ -474,6 +481,10 @@ let mic = null;
 // Before Start: judges the framing and the microphone and says what to fix.
 // Null once the session is running; the live banner takes over then.
 let setupGate = null;
+// Clocked shooting: watches the goal, the shooter and the phone's tilt so
+// the server can work the distance out rather than trust the typed number.
+let sceneWatcher = null;
+let stopPitch = null;
 let session = null;
 let running = false;
 let rafId = null;
@@ -1547,9 +1558,13 @@ async function openCapture(drill) {
     // over between what was asked for and what the sensor wanted. Everything
     // downstream now adapts to whatever arrives, so the only thing worth
     // insisting on is enough resolution to find a ball in.
+    // Shooting with the goal in view uses the BACK camera: the phone stands
+    // beside the shooter facing the goal, and the shooter is in the edge of
+    // the frame. Every other drill faces the athlete with the front camera.
+    const seeGoal = Boolean(drill.shot && $('shot-see-goal').checked);
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: 'user',
+        facingMode: seeGoal ? 'environment' : 'user',
         width: { min: 480, ideal: 1280 },
         frameRate: { ideal: 30 },
       },
@@ -1680,6 +1695,18 @@ function renderLoop() {
     }
     if (activeDrill.cues) updateCue(t);
     if (recorder) recorder.samplePose(landmarks, t);
+    if (sceneWatcher) {
+      sceneWatcher.setFrame(video.videoWidth, video.videoHeight);
+      sceneWatcher.pushPose(landmarks);
+      // The goal does not move; a look every few hundred ms over the
+      // session is plenty, on the same downscaled frame the ball uses.
+      if ($('shot-see-goal').checked) {
+        try {
+          const image = workFrame();
+          if (image) sceneWatcher.pushImage(image, t);
+        } catch { /* a frame that will not read is a frame not looked at */ }
+      }
+    }
     renderDebug();
 
     if (ballCounter && !ballConfirms && !soundCounter) {
@@ -1884,6 +1911,15 @@ function updateBallReadout() {
 
 $('ball-calibrate').addEventListener('click', calibrateBall);
 
+// The camera is chosen when the drill opens, so changing the goal-in-view
+// choice afterwards reopens it with the other one. Before Start only; a
+// running session keeps the camera it started with.
+$('shot-see-goal').addEventListener('change', () => {
+  if (!activeDrill || !activeDrill.shot || running) return;
+  stopCamera();
+  openCapture(activeDrill);
+});
+
 /**
  * Says which way up the phone is, and that it does not matter.
  *
@@ -2087,6 +2123,14 @@ async function startSession() {
     soundCounter = new ShotSpeedCounter(activeDrill, soundCounter, { distanceYd });
     $('shot-live').classList.remove('hidden');
   }
+  if (activeDrill.shot) {
+    sceneWatcher = new SceneWatcher({ typedYd: Number($('shot-distance').value) || null });
+    if ($('shot-see-goal').checked) {
+      // From a tap, so iOS will ask for the tilt permission here and not later.
+      watchPitch((deg) => sceneWatcher && sceneWatcher.pushPitch(deg))
+        .then((stop) => { stopPitch = stop; }).catch(() => {});
+    }
+  }
   if (mic) mic.resume().catch(() => {});
   startedAt = performance.now();
 
@@ -2117,6 +2161,16 @@ async function startSession() {
   setBanner('');
 }
 
+/** The scene the server works the distance out from. Numbers only. */
+function sceneScene() {
+  const s = sceneWatcher.scene();
+  const out = { view_w: s.view_w, view_h: s.view_h };
+  if (s.goal) out.goal = s.goal;
+  if (s.athlete) out.athlete = s.athlete;
+  if (Number.isFinite(s.pitch_deg)) out.pitch_deg = Math.round(s.pitch_deg * 10) / 10;
+  return out;
+}
+
 async function finishSession() {
   running = false;
   // Before anything slow: a voice still calling spots at a goalie who has
@@ -2140,6 +2194,7 @@ async function finishSession() {
     // its quality is still reported so the server can say so honestly.
     ...(!ballConfirms && soundCounter && ballCounter
       ? { track_quality: Math.round(ballCounter.trackQuality * 1000) / 1000 } : {}),
+    ...(sceneWatcher ? { shot_scene: sceneScene() } : {}),
     client_version: CLIENT_VERSION,
     device_label: navigator.platform || '',
     // The device's own clock decides which day this counts for. A session
@@ -2184,6 +2239,8 @@ async function finishSession() {
 function stopCamera({ keepRecording = false } = {}) {
   running = false;
   setupGate = null;
+  if (stopPitch) { try { stopPitch(); } catch { /* fine */ } stopPitch = null; }
+  sceneWatcher = null;
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
   if (stream) {
@@ -2567,11 +2624,19 @@ function renderShotSpeed(s) {
   const handLine = hands.left && hands.right
     ? `<div class="small muted" style="margin-top:6px">Left hand about ${Math.round(hands.left)} mph, right about ${Math.round(hands.right)} mph.</div>`
     : '';
+  const d = s.distance || null;
+  const factors = d && d.factors && d.factors.length
+    ? `<details class="small muted" style="margin-top:6px"><summary>How the distance was worked out</summary>
+         <ul style="margin:4px 0 0;padding-left:18px">${d.factors.map((f) => f.yd === null
+           ? `<li>${esc(f.name)}: not used &middot; ${esc(f.why || '')}</li>`
+           : `<li>${esc(f.name)}: ${f.yd.toFixed(1)} yd &plusmn;${f.plus_minus_yd.toFixed(1)}${f.used ? '' : ' (not used)'}${f.why ? ` &middot; ${esc(f.why)}` : ''}</li>`).join('')}</ul>
+       </details>`
+    : '';
   const head = s.median_mph
     ? `<div class="quality-top"><div class="qscore">${Math.round(s.median_mph)}<small>mph typical</small></div>
          <div class="qscore">${Math.round(s.best_mph)}<small>mph best</small></div>
          <div class="small muted" style="align-self:center">${s.timed} of ${s.shots} shots timed
-           from ${s.distance_yd} yd${s.plus_minus_mph ? ` &middot; &plusmn;${Math.round(s.plus_minus_mph)} mph` : ''}</div></div>`
+           from ${s.distance_yd} yd${d && d.plus_minus_yd ? ` &plusmn;${d.plus_minus_yd.toFixed(1)}` : ''}${s.plus_minus_mph ? ` &middot; &plusmn;${Math.round(s.plus_minus_mph)} mph` : ''}</div></div>`
     : '';
   return `<div class="quality">
     <div class="small muted" style="margin-bottom:6px"><b>Shot speed</b> &middot; approximate</div>
@@ -2579,6 +2644,7 @@ function renderShotSpeed(s) {
     ${speeds.length && s.timed ? `<div class="sp-bars" role="img" aria-label="Speed of each shot">${bars}</div>` : ''}
     ${handLine}
     ${s.note ? `<div class="coach-note">${esc(s.note)}</div>` : ''}
+    ${factors}
     <ul class="small muted" style="margin:8px 0 0;padding-left:18px">
       ${(s.limits || []).map((l) => `<li>${esc(l)}</li>`).join('')}
     </ul>

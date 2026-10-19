@@ -40,6 +40,9 @@ const SHELL = [
   'shotspeed.js',
   // The setup check before Start; imported by the capture screen as well.
   'setup.js',
+  // Shooting distance: what the camera saw of the goal and the shooter.
+  // The estimate itself is made on the server; distance.js is the bench copy.
+  'scene.js',
   'review.js',
   'offline.js',
   'manifest.webmanifest',
