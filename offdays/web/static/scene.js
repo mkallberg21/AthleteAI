@@ -21,13 +21,40 @@
  */
 
 /**
- * Orange, in 0-360 hue. Floodlit night pipes measured 12-30 on the radar
- * clips; sodium-lit trees and a dirt track sit 30-50 and must stay out, or
- * they merge with the goal and drag its box to the frame edge.
+ * What the goal might look like, before anything is known about THIS one.
+ *
+ * A fixed hue window was wrong on the second field it saw: floodlit orange
+ * pipes read hue 12-30; the same pipes in daylight 15-40; a faded goal under
+ * sodium light drifts past 40; and plenty of goals are white or black. So
+ * the colour is LEARNED. These are only the opening guesses, tried in turn
+ * until the two-posts-and-a-bar structure turns up under one of them; the
+ * pixels of the posts it found are then sampled and the window is tightened
+ * around what this goal, in this light, actually is (see `GoalColour`).
+ *
+ * Each is { hue: [lo, hi] or null (any), sat: [lo, hi], val: [lo, hi] }.
+ * Hue in 0-360 and may wrap; sat and val 0-1.
  */
-export const GOAL_HUE = [8, 32];
-export const GOAL_MIN_SAT = 0.22;
-export const GOAL_MIN_VAL = 0.35;
+export const GOAL_SEEDS = [
+  { name: 'orange', hue: [5, 45], sat: [0.22, 1], val: [0.35, 1] },
+  { name: 'red', hue: [340, 15], sat: [0.3, 1], val: [0.3, 1] },
+  { name: 'yellow', hue: [40, 70], sat: [0.3, 1], val: [0.45, 1] },
+  { name: 'white', hue: null, sat: [0, 0.18], val: [0.72, 1] },
+  { name: 'dark', hue: null, sat: [0, 0.35], val: [0, 0.22] },
+];
+/**
+ * How far around the sampled posts the learned window reaches. Hue in
+ * degrees, sat and val as absolute 0-1 widths, each side of the 10th-90th
+ * percentile of the post pixels.
+ */
+export const LEARN_HUE_PAD = 8;
+export const LEARN_SV_PAD = 0.12;
+/** Narrower than this the window is brittle in changing light. */
+export const LEARN_MIN_HUE_SPAN = 14;
+export const LEARN_MIN_SV_SPAN = 0.25;
+/** This many straight misses under a learned window and it is widened. */
+export const LEARN_MISSES_TO_WIDEN = 3;
+/** This many straight misses at full width and the seeds are tried again. */
+export const LEARN_MISSES_TO_RESEED = 6;
 /** Goal proportions: square head-on, narrower from an angle. */
 export const GOAL_ASPECT = [0.45, 1.8];
 /** A goal narrower than this share of the work frame's short side is too far. */
@@ -68,13 +95,27 @@ function hsv(r, g, b) {
  * spacing, scored by how much of the bar between their tops is orange and
  * how little orange sits in the columns just outside them.
  */
-export function findGoal(image) {
+export function inWindow(h, s, v, win) {
+  if (s < win.sat[0] || s > win.sat[1] || v < win.val[0] || v > win.val[1]) return false;
+  if (!win.hue) return true;
+  const [lo, hi] = win.hue;
+  return lo <= hi ? (h >= lo && h <= hi) : (h >= lo || h <= hi);
+}
+
+/** The pixels in the window, as a 0/1 mask. */
+export function colourMask(image, win) {
   const { data, width, height } = image;
   const mask = new Uint8Array(width * height);
   for (let i = 0, p = 0; i < width * height; i += 1, p += 4) {
     const [h, s, v] = hsv(data[p], data[p + 1], data[p + 2]);
-    if (h >= GOAL_HUE[0] && h <= GOAL_HUE[1] && s >= GOAL_MIN_SAT && v >= GOAL_MIN_VAL) mask[i] = 1;
+    if (inWindow(h, s, v, win)) mask[i] = 1;
   }
+  return mask;
+}
+
+export function findGoal(image, win = GOAL_SEEDS[0]) {
+  const { data, width, height } = image;
+  const mask = colourMask(image, win);
   const short = Math.min(width, height);
   const minSide = GOAL_MIN_SIDE_FRAC * short;
   const maxSide = MAX_GOAL_FRAC * short;
@@ -144,6 +185,111 @@ export function findGoal(image) {
   return { x: best.x, y: best.y, w: best.w, h: best.h };
 }
 
+
+/**
+ * Sample the colour of a found goal's posts and bar, and build the window
+ * that fits them. Posts only -- the net inside is a different, dimmer thing
+ * and the grass outside is not the goal. Returns null when too few pixels
+ * matched, which happens when the "goal" was a false find.
+ */
+export function learnWindow(image, goal, win) {
+  const { data, width, height } = image;
+  const hs = [], ss = [], vs = [];
+  const sample = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const p = (y * width + x) * 4;
+    const [h, s, v] = hsv(data[p], data[p + 1], data[p + 2]);
+    if (inWindow(h, s, v, win)) { hs.push(h); ss.push(s); vs.push(v); }
+  };
+  const band = Math.max(1, Math.round(0.03 * Math.max(goal.w, goal.h)));
+  for (let y = goal.y; y < goal.y + goal.h; y += 1) {
+    for (let d = -band; d <= band; d += 1) { sample(goal.x + d, y); sample(goal.x + goal.w - 1 + d, y); }
+  }
+  for (let x = goal.x; x < goal.x + goal.w; x += 1) {
+    for (let d = -band; d <= band; d += 1) sample(x, goal.y + d);
+  }
+  if (hs.length < 40) return null;
+  const pct = (arr, q) => { const a = [...arr].sort((p, q2) => p - q2); return a[Math.min(a.length - 1, Math.floor(q * a.length))]; };
+  // Hue is circular: unwrap around the seed's centre before taking percentiles.
+  let hue = null;
+  if (win.hue) {
+    const [lo, hi] = win.hue;
+    const centre = lo <= hi ? (lo + hi) / 2 : ((lo + hi + 360) / 2) % 360;
+    const un = hs.map((h) => { let d = h - centre; if (d > 180) d -= 360; if (d < -180) d += 360; return d; });
+    let a = pct(un, 0.1) - LEARN_HUE_PAD, b = pct(un, 0.9) + LEARN_HUE_PAD;
+    if (b - a < LEARN_MIN_HUE_SPAN) { const m = (a + b) / 2; a = m - LEARN_MIN_HUE_SPAN / 2; b = m + LEARN_MIN_HUE_SPAN / 2; }
+    hue = [((centre + a) % 360 + 360) % 360, ((centre + b) % 360 + 360) % 360];
+  }
+  const span = (arr) => {
+    let a = Math.max(0, pct(arr, 0.1) - LEARN_SV_PAD), b = Math.min(1, pct(arr, 0.9) + LEARN_SV_PAD);
+    if (b - a < LEARN_MIN_SV_SPAN) { const m = (a + b) / 2; a = Math.max(0, m - LEARN_MIN_SV_SPAN / 2); b = Math.min(1, m + LEARN_MIN_SV_SPAN / 2); }
+    return [a, b];
+  };
+  return { name: win.name.replace(/\*+$/, '') + '*', hue, sat: span(ss), val: span(vs), learned: true };
+}
+
+/** A window widened by one step toward its seed, for when the light moves. */
+export function widenWindow(win, seed) {
+  const mid = (a, b) => (a + b) / 2;
+  const sat = [mid(win.sat[0], seed.sat[0]), mid(win.sat[1], seed.sat[1])];
+  const val = [mid(win.val[0], seed.val[0]), mid(win.val[1], seed.val[1])];
+  let hue = win.hue;
+  if (win.hue && seed.hue) {
+    const un = (h, c) => { let d = h - c; if (d > 180) d -= 360; if (d < -180) d += 360; return d; };
+    const c = seed.hue[0] <= seed.hue[1] ? (seed.hue[0] + seed.hue[1]) / 2 : ((seed.hue[0] + seed.hue[1] + 360) / 2) % 360;
+    const a = mid(un(win.hue[0], c), un(seed.hue[0], c)), b = mid(un(win.hue[1], c), un(seed.hue[1], c));
+    hue = [((c + a) % 360 + 360) % 360, ((c + b) % 360 + 360) % 360];
+  }
+  return { name: win.name, hue, sat, val, learned: true };
+}
+
+/**
+ * The goal's colour, learned as it goes.
+ *
+ * Starts with no idea: each look tries the seeds in turn until one finds the
+ * structure, then the posts are sampled and the window tightens to this
+ * goal in this light. Misses under the learned window widen it back toward
+ * its seed a step at a time; enough misses at full width and it starts over
+ * with the seeds -- a cloud came over, or the floodlights came on. Keeps the
+ * seed that last worked first in line, because the goal did not repaint.
+ */
+export class GoalColour {
+  constructor(seeds = GOAL_SEEDS) {
+    this.seeds = [...seeds];
+    this.seed = null;
+    this.window = null;
+    this.misses = 0;
+    this.found = 0;
+  }
+
+  /** Find the goal, learning as it goes. Returns { x, y, w, h } or null. */
+  find(image) {
+    if (this.window) {
+      const g = findGoal(image, this.window);
+      if (g) {
+        this.misses = 0; this.found += 1;
+        // Re-learn every so often so a slow change in light is followed.
+        if (this.found % 5 === 0) this.window = learnWindow(image, g, this.window) || this.window;
+        return g;
+      }
+      this.misses += 1;
+      if (this.misses >= LEARN_MISSES_TO_RESEED) { this.window = null; this.misses = 0; }
+      else if (this.misses >= LEARN_MISSES_TO_WIDEN) this.window = widenWindow(this.window, this.seed);
+      return null;
+    }
+    const order = this.seed ? [this.seed, ...this.seeds.filter((x) => x !== this.seed)] : this.seeds;
+    for (const seed of order) {
+      const g = findGoal(image, seed);
+      if (!g) continue;
+      this.seed = seed;
+      this.window = learnWindow(image, g, seed) || { ...seed, learned: false };
+      this.misses = 0; this.found = 1;
+      return g;
+    }
+    return null;
+  }
+}
+
 function median(values) {
   if (!values.length) return null;
   const s = [...values].sort((a, b) => a - b);
@@ -162,6 +308,7 @@ export class SceneWatcher {
     this.frameW = 0; this.frameH = 0;
     this.goals = [];       // { w, h, cx, base_y } in short-side units, centre-relative
     this.goalLooks = 0;
+    this.colour = new GoalColour();
     this.lastGoalAt = -Infinity;
     this.torsos = []; this.athleteCx = []; this.feetY = [];
     this.pitches = [];
@@ -174,7 +321,7 @@ export class SceneWatcher {
     if (tMs - this.lastGoalAt < GOAL_EVERY_MS) return null;
     this.lastGoalAt = tMs;
     this.goalLooks += 1;
-    const g = findGoal(image);
+    const g = this.colour.find(image);
     if (!g) return null;
     const short = Math.min(image.width, image.height);
     const rec = {
@@ -223,6 +370,7 @@ export class SceneWatcher {
         w: median(this.goals.map((g) => g.w)), h: median(this.goals.map((g) => g.h)),
         cx: median(this.goals.map((g) => g.cx)), base_y: median(this.goals.map((g) => g.base_y)),
         seen: this.goals.length, of: this.goalLooks,
+        colour: this.colour.window ? this.colour.window.name : null,
       };
     }
     if (this.torsos.length) {
