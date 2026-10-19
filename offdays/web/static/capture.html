@@ -2165,7 +2165,7 @@ async function startSession() {
 function sceneScene() {
   const s = sceneWatcher.scene();
   const out = { view_w: s.view_w, view_h: s.view_h };
-  if (s.goal) out.goal = s.goal;
+  if (s.goal) { const { colour, ...goal } = s.goal; out.goal = goal; }
   if (s.athlete) out.athlete = s.athlete;
   if (Number.isFinite(s.pitch_deg)) out.pitch_deg = Math.round(s.pitch_deg * 10) / 10;
   return out;

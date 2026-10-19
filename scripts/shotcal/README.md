@@ -101,6 +101,14 @@ estimate 8.8-9.7 yd +-0.8, goal found in 5/8 to 10/12 looks, every clip
 behind the shooter -- which is the placement rule in the setup hint, not a
 bug -- and the shooter-size factor is rough from behind (priced at 55%).
 
+The goal's colour is learned, not fixed (`GoalColour` in scene.js): seeds
+for orange / red / yellow / white / dark are tried until the two-posts-and-a-
+bar structure appears, the post pixels are sampled, and the window tightens
+to that goal in that light; misses widen it back, enough misses reseed.
+Checked on IMG_1634 relit with ffmpeg: dim+blue (fixed window 3/6 looks,
+adaptive 6/6), warm+bright (6/6, 5/6), hue shifted +25 deg (fixed 0/6,
+adaptive 6/6). About 5 ms a look at the work size.
+
 What it still needs, in order:
 
 1. **Placement rule**: phone level with the shooting spot, beside the athlete,

@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import {
   estimateDistance, fuse, torsoForAge, GOAL_WIDTH_M, DEFAULT_FOCAL, YD_PER_M, TYPED_SIGMA_M,
 } from '../../offdays/web/static/distance.js';
-import { SceneWatcher, findGoal } from '../../offdays/web/static/scene.js';
+import { SceneWatcher, findGoal, GoalColour, GOAL_SEEDS, inWindow } from '../../offdays/web/static/scene.js';
 import { LANDMARKS } from '../../offdays/web/static/counter.js';
 
 const PARITY_SCENE = {
@@ -60,22 +60,54 @@ test('unknown age takes the twelve-year-old torso', () => {
   assert.ok(torsoForAge(16) > torsoForAge(10));
 });
 
-/** A synthetic frame: grass with an orange square outline and net. */
-function frame(width, height, goal) {
+/** A synthetic frame: grass with a square goal outline and net, in a colour. */
+const ORANGE = [235, 110, 30], FADED = [200, 150, 60], WHITE = [240, 240, 236], BLACK = [25, 25, 28];
+function frame(width, height, goal, rgb = ORANGE, grass = [40, 120, 40]) {
   const data = new Uint8ClampedArray(width * height * 4);
-  for (let i = 0; i < width * height; i += 1) { data[i * 4] = 40; data[i * 4 + 1] = 120; data[i * 4 + 2] = 40; data[i * 4 + 3] = 255; }
+  for (let i = 0; i < width * height; i += 1) { data[i * 4] = grass[0]; data[i * 4 + 1] = grass[1]; data[i * 4 + 2] = grass[2]; data[i * 4 + 3] = 255; }
   if (goal) {
     const { x, y, w, h } = goal;
     for (let yy = y; yy < y + h; yy += 1) {
       for (let xx = x; xx < x + w; xx += 1) {
         const edge = xx - x < 3 || x + w - xx <= 3 || yy - y < 3;
         const net = (xx + yy) % 5 === 0;
-        if (edge || net) { const i = (yy * width + xx) * 4; data[i] = 235; data[i + 1] = 110; data[i + 2] = 30; }
+        if (edge || net) { const i = (yy * width + xx) * 4; data[i] = rgb[0]; data[i + 1] = rgb[1]; data[i + 2] = rgb[2]; }
       }
     }
   }
   return { data, width, height };
 }
+
+test('the colour is learned: orange, faded, white and black goals are all found', () => {
+  for (const rgb of [ORANGE, FADED, WHITE, BLACK]) {
+    const c = new GoalColour();
+    const g = c.find(frame(320, 180, { x: 100, y: 40, w: 60, h: 56 }, rgb));
+    assert.ok(g, `not found for ${rgb}`);
+    assert.ok(Math.abs(g.w - 60) <= 2, JSON.stringify(g));
+    assert.ok(c.window && c.window.learned, 'window not learned');
+  }
+});
+
+test('a learned window is tighter than its seed and still fits the posts', () => {
+  const c = new GoalColour();
+  c.find(frame(320, 180, { x: 100, y: 40, w: 60, h: 56 }));
+  const seed = GOAL_SEEDS[0], w = c.window;
+  assert.ok(w.sat[1] - w.sat[0] < seed.sat[1] - seed.sat[0]);
+  assert.ok(inWindow(20, 0.87, 0.92, w), 'the goal colour fell out of its own window');
+  assert.ok(!inWindow(20, 0.3, 0.5, w), 'a dull orange should be outside the tightened window');
+});
+
+test('a change of light widens the window and then reseeds rather than losing the goal', () => {
+  const c = new GoalColour();
+  const bright = frame(320, 180, { x: 100, y: 40, w: 60, h: 56 }, ORANGE);
+  for (let i = 0; i < 3; i += 1) assert.ok(c.find(bright));
+  // The floodlights go off: same goal, much dimmer and duller.
+  const dim = frame(320, 180, { x: 100, y: 40, w: 60, h: 56 }, [120, 60, 20], [15, 45, 15]);
+  let found = null;
+  for (let i = 0; i < 12 && !found; i += 1) found = c.find(dim);
+  assert.ok(found, 'goal lost after the light changed');
+  assert.ok(Math.abs(found.w - 60) <= 2);
+});
 
 test('the goal finder boxes an orange square and ignores grass', () => {
   const g = findGoal(frame(320, 180, { x: 100, y: 40, w: 60, h: 56 }));
