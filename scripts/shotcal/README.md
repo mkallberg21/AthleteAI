@@ -228,6 +228,120 @@ quiet throw, and a brick-wall clip (louder catches). Floor before changing
 Also unmeasured: the ball detector is not driven by the bench (pixels are not
 kept), so `hand_from = ball` drills cannot be replayed yet.
 
+### Second clip: IMG_5059, left hand, same spot -- app 13, true 9
+
+`netshake.py <clip> x y w h [z]` gives an objective truth on rebounder clips:
+frame-difference energy inside the net's box (540x960 frame), peaks = the
+net being hit. On 5058 it finds the same 10 the eye found (its 11th, z=140,
+is the kid walking through the box); on 5059 it finds 9 at 3.60 .. 17.07 s
+every 1.6-1.8 s, then nothing -- the kid lost the ball after the ninth, went
+out of frame left to fetch it (19.6-21.6 s) and walked to the phone.
+
+| | app (sound) | net shake / eye | note |
+|---|---|---|---|
+| reps | **13** | **9** | |
+| hand | 3 L / 1 R / 9 none | 9 L | from behind-left the top-hand signal is mostly unreadable |
+| onsets heard | 20 | | every real throw 10-43x floor; 5058's were 40-385x |
+
+Where the 13 came from: 8 real cycles found (one of them on the catch at
+7.19 s rather than the throw at 6.82 s -- same count), the throw at 8.67 s
+NOT heard at all (no onset within 0.5 s; a softer left-hand throw, phone
+further from the net than the stick side), and 5 phantoms after the last
+throw (18.62, 19.87, 21.81, 22.95, 25.52 s: footsteps, stick on grass, the
+phone being picked up) carried by the rhythm tracker across 8 s of no
+throwing. Net +4.
+
+What this says, across both clips (19 real throws, 25 recorded):
+- Every miscount so far is AFTER the kid stopped. The tracker has no notion
+  of "the session ended"; it keeps buying soft sounds at the old period
+  because MAX_GAP_COST (2) is cheaper than the worth of a quiet sound (0.5).
+  The lever is a tail rule, not a loudness rule: stop extending the beat
+  once N consecutive chosen sounds are under 1/4 of the chosen median.
+  A loudness-only cut (1/4 median) would also have eaten real left-hand
+  throws here (10-15x vs median 28x) -- the two clips disagree on it.
+- Left-hand throws are quieter from this placement and one was missed
+  outright. Not a threshold problem (nothing to choose from); a placement
+  one. The app's instruction should put the phone on the STICK side.
+- Hand from pose is not usable from behind: 9 of 13 reps 'none'. The
+  strong/off-hand drills need the phone side-on or the ball tracker.
+
+Still not shipped: 2 clips / 19 throws against a 6 / 100 floor.
+
+### Third clip: IMG_5060, right hand, D-pole -- app 11, true 10
+
+| | app (sound) | net shake | note |
+|---|---|---|---|
+| reps | **11** | **10** (3.3 .. 17.6 s, every 1.6 s) | |
+| hand | 6 R / 0 L / 5 none | 10 R | |
+| throws heard | 8-55x floor | | the loudest sound (445x, 17.76 s) is the 10th ball landing in the head -- a catch, not a throw |
+
+All 10 real throws counted (9 on the throw, the 10th on its catch -- same
+count). One phantom at 19.13 s (11x) while he walked to the phone. The long
+pole changes nothing the counter sees: same period, same loudness band as
+the short stick on the same hand.
+
+**Three clips, 29 real throws, app 36.** Every one of the 7 extras is in
+the tail after the kid stopped (2 + 5 + 1 at 11-18x floor); one real throw
+was missed (left hand, quiet). The tail rule is the lever; the floor is
+still 6 clips.
+
+Tried on the replays (not shipped): "trim chosen reps after the last one
+that is both within 1.5 periods of its predecessor and >= 1/4 of the chosen
+median" gives 10 / 12 / 11 against 10 / 9 / 10. It fixes 5058 only. On 5059
+the phantoms are evenly spaced at the old period and 11-14x floor against a
+median of 28x -- indistinguishable from a quiet left-hand throw by spacing
+or loudness alone; on 5060 the one phantom (11x) sits one period after the
+445x catch. What separates a phantom from a throw on all three is the NET
+(netshake sees nothing) and the KID (pose: walking toward the camera, body
+growing in frame). The pose counter already has the frames; a "session
+over" gate on torso scale / walking cadence is the next thing to bench,
+and it is footage-free -- the three extracted clips carry the landmarks.
+
+### Fourth clip: IMG_5062, left hand, D-pole -- app 12, true 10 (phone moved)
+
+The phone is behind-RIGHT this time (stick side for a lefty) and the kid's
+body covers the net for most of the clip, so `netshake.py` sees only the
+walk-out (3 peaks, all after 23 s). Truth from `stickburst.py` instead
+(motion in a sky box above the head: the pole cocks up into it and swings
+out, one burst per throw): 10 bursts 4.0-20.3 s at 1.4-1.9 s spacing,
+then the walk. Checked by eye at 5 fps across 3.5-21 s: 10 throws, the last
+at ~19.9 s, a scoop of the 10th ball at 21.2 s, stick raised and walking
+from 21.5.
+
+| | app (sound) | stickburst / eye | note |
+|---|---|---|---|
+| reps | **12** | **10** | |
+| hand | 5 L / 3 R / 4 none | 10 L | 3 wrong-hand reps -- worst of the four |
+| throws heard | 18-178x floor | | stick-side placement: louder than 5059's 10-43x |
+
+Extras: 21.95 s (98x) and 23.36 s (17x) -- the scoop/stick-on-ground and the
+walk; both after the last throw. The 10 real throws are all there, and
+being on the stick side, none was missed (5059, same hand, phone on the
+far side, missed one). Period 1820 ms, the slowest of the four -- the pole.
+
+**Four clips, 39 real throws, app 48 (+9, every one after the last throw;
+1 missed, far-side placement).** Stick-side placement fixed the miss.
+Wrong hand from pose: 0 / 1 / 0 / 3 wrong, 'none' on 9 / 9 / 5 / 4 -- from
+behind, the hand is a guess; the app should not record it from pose at
+this placement. Side-on or the ball tracker.
+
+`bodyscale.mjs` (torso span per second, 1.00 = session median) on all
+four: flat at 0.9-1.1 through every throw, then 1.3 / 1.1 / 1.3 / 1.3
+within a second of the last real rep and climbing (1.8-4.3 by the phone).
+That is the "session over" signal the sound tracker lacks, and it is in
+frames the pose counter already has. Rule to bench next: once the torso
+span exceeds 1.25x its session median, stop accepting new reps (the kid is
+coming to the phone). On these four it would remove every phantom that
+came 1 s or more after the scale crossed -- 5058 both, 5059 the last three
+of five, 5060 the one, 5062 both. 5059's first two phantoms (18.6, 19.9 s,
+kid out of frame fetching the ball -- no pose at all) need the companion:
+no pose for > 1.5 periods = session paused, no reps until a throw-loud
+sound (>= median) returns.
+
+Bench truth tools, when the net is hidden: `stickburst.py` (sky box above
+the head) and `handpeaks.mjs` (wrist speed from landmarks -- useless from
+behind, 1-6 peaks on 10-throw clips; kept as the measurement, not a tool).
+
 ## What comes out, and what to do with it
 
 | Figure | Meaning | Action |
