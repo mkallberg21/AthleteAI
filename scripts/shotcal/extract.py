@@ -68,7 +68,8 @@ SAMPLE_RATE = 48000
 def probe(path: Path) -> dict:
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries",
-         "stream=codec_type,width,height,r_frame_rate,duration", "-of", "json", str(path)],
+         "stream=codec_type,width,height,r_frame_rate,duration:stream_side_data=rotation",
+         "-of", "json", str(path)],
         check=True, capture_output=True, text=True,
     ).stdout
     streams = json.loads(out)["streams"]
@@ -77,8 +78,19 @@ def probe(path: Path) -> dict:
     if video is None:
         raise SystemExit(f"{path}: no video stream")
     num, den = video["r_frame_rate"].split("/")
+    # A phone held upright records a landscape sensor frame and writes a
+    # rotation tag; ffmpeg applies the tag when decoding, so the frames we
+    # read are portrait while width/height above still say landscape. Swap
+    # them or every portrait clip is squashed 16:9 and the pose finds nobody.
+    width, height = int(video["width"]), int(video["height"])
+    rotation = 0
+    for sd in video.get("side_data_list") or []:
+        if "rotation" in sd:
+            rotation = int(round(float(sd["rotation"])))
+    if rotation % 180 != 0:
+        width, height = height, width
     return {
-        "width": int(video["width"]), "height": int(video["height"]),
+        "width": width, "height": height, "rotation": rotation,
         "source_fps": float(num) / float(den),
         "duration_s": float(video.get("duration") or 0),
         "has_audio": audio is not None,
@@ -105,9 +117,20 @@ def extract_audio(path: Path, out: Path) -> int:
 
 
 def frames(path: Path, width: int, fps: int):
-    """Yield (t_ms, HxWx3 uint8) at a fixed fps, scaled to `width`."""
+    """Yield (t_ms, HxWx3 uint8) at a fixed fps, long side scaled to `width`.
+
+    `capture.html` asks for 1280 on the long side; a phone held upright gets
+    720x1280, on its side 1280x720. Portrait clips are scaled the same way, so
+    the bench sees the pixels the product would, not a 1280-wide blow-up.
+    """
     meta = probe(path)
-    height = int(round(meta["height"] * width / meta["width"] / 2)) * 2
+    if meta["height"] > meta["width"]:
+        h = width
+        w = int(round(meta["width"] * width / meta["height"] / 2)) * 2
+    else:
+        w = width
+        h = int(round(meta["height"] * width / meta["width"] / 2)) * 2
+    width, height = w, h
     proc = subprocess.Popen(
         ["ffmpeg", "-v", "error", "-i", str(path),
          "-vf", f"fps={fps},scale={width}:{height}", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"],

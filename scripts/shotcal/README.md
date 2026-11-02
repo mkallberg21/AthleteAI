@@ -182,6 +182,52 @@ shooter, at night, the bigger model is pickier, not better. Not worth the
 phone's battery for shooting. Re-run on side-on footage before deciding for
 the quality scores.
 
+## Wall ball rep count on a phone clip (`wallreplay.mjs`) -- first clip, counted right
+
+`wallreplay.mjs` drives the production `RepCounter -> SoundRepCounter` on an
+extracted clip for a wall-ball drill (no ShotSpeedCounter; wall ball has no
+ShotSpec), and prints what the app would have recorded: pose count, heard
+count, per-hand split, period, catch coverage, plus every onset for diagnosis.
+
+```
+node scripts/shotcal/wallreplay.mjs --specs "$LOCALAPPDATA/Temp/specs.json" \
+     --in data/wallcal/extracted --drill lax_wall_ball_strong
+```
+
+**Portrait clips**: a phone held upright writes a landscape sensor frame
+with a rotation tag, ffmpeg applies the tag, and the old `probe()` reported
+the un-rotated size -- every portrait clip was squashed to 16:9 and the pose
+model found a body in 64% of frames. `extract.py` now reads the tag and
+scales the LONG side to 1280 (720x1280, what `capture.html` gets upright).
+The radar clips were landscape, so none of the shot-speed numbers move.
+
+IMG_5058 (25 s, portrait, phone on the grass ~2 yd behind-left of a
+right-handed player, rebounder net ~8 yd away in frame, backyard, birds):
+
+| | pose | sound (what the app records) | by eye |
+|---|---|---|---|
+| reps | 2 | **12** (12 R / 0 L) | **10** throws, all right-handed |
+| frames with pose | 745/757 (98%) | | |
+| period | | 1680 ms | ~1.7 s |
+
+The 12 = 10 real throws (every one the loudest sound of its cycle, 40-385x
+floor) + 2 phantom reps at 22.89 s and 24.07 s (18x and 15x floor), when the
+kid had stopped and was walking to the phone -- the rhythm tracker carried the
+beat on through soft sounds (footsteps, stick on grass) because a gap costs
+score and a quiet sound still earns 1 - 0.5. The pose counter alone would
+have said 2: from behind-left the top-hand signal barely crosses the gate,
+which is why wall ball counts from sound.
+
+Lever, NOT shipped on one clip: drop a chosen rep quieter than 1/4 of the
+chosen median strength -- here 10/12 at 0.25 and 0.33, 8/12 at 0.5 (too
+tight; two real throws at 40-44x are near the 44 cut). Needs clips with
+pauses mid-session (a drink, a dropped ball) to prove it does not eat a real
+quiet throw, and a brick-wall clip (louder catches). Floor before changing
+`sound.js`: 6 clips / 100 by-eye throws, same as the shot bench.
+
+Also unmeasured: the ball detector is not driven by the bench (pixels are not
+kept), so `hand_from = ball` drills cannot be replayed yet.
+
 ## What comes out, and what to do with it
 
 | Figure | Meaning | Action |
