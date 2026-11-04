@@ -110,6 +110,30 @@
       can change it.
     </p>
     <div id="staff-list"></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <b>Add a coach</b>
+      <p class="small muted" style="margin:4px 0 8px">
+        They get an email with their sign-in link. Pick their teams now and
+        they see only those athletes from the first tap.
+      </p>
+      <div class="inline-form">
+        <div style="flex:1 1 160px">
+          <label for="new-coach-name">Name</label>
+          <input id="new-coach-name" placeholder="Sam Hill" autocomplete="off">
+        </div>
+        <div style="flex:1 1 200px">
+          <label for="new-coach-email">Email</label>
+          <input id="new-coach-email" type="email" placeholder="sam@example.com" autocomplete="off">
+        </div>
+        <div style="flex:1 1 160px">
+          <label for="new-coach-teams">Teams</label>
+          <select id="new-coach-teams" multiple size="3"></select>
+        </div>
+        <button class="secondary inline" id="new-coach-add">Add coach</button>
+      </div>
+      <div id="new-coach-out" class="small hidden" style="margin-top:8px"></div>
+      <div id="new-coach-err" class="err hidden"></div>
+    </div>
   </div>
 
   <div class="card" id="digest-card">
@@ -901,6 +925,8 @@ async function loadStaff(isDirector) {
         </label>` : ''}
     </div>`;
   }).join('');
+
+  $('new-coach-teams').innerHTML = teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
 
   $('staff-list').querySelectorAll('[data-pick]').forEach((box) => {
     box.addEventListener('change', async () => {
@@ -2196,6 +2222,36 @@ function defaultGoalDates() {
 }
 
 // ------------------------------------------------------------ season phase
+
+$('new-coach-add').addEventListener('click', async () => {
+  const name = $('new-coach-name').value.trim();
+  const email = $('new-coach-email').value.trim();
+  const team_ids = [...$('new-coach-teams').selectedOptions].map((o) => Number(o.value));
+  $('new-coach-err').classList.add('hidden');
+  $('new-coach-out').classList.add('hidden');
+  if (!name) {
+    $('new-coach-err').textContent = 'A name, please.';
+    $('new-coach-err').classList.remove('hidden');
+    return;
+  }
+  const btn = $('new-coach-add');
+  btn.disabled = true;
+  try {
+    const res = await api('/api/coach/staff', { method: 'POST', body: { display_name: name, email, team_ids } });
+    $('new-coach-out').innerHTML = res.emailed
+      ? `<b>${esc(res.display_name)}</b> added. Their sign-in link went to ${esc(res.email)}.`
+      : `<b>${esc(res.display_name)}</b> added. No email, so read them this code: <code>${esc(res.code)}</code> (shown once).`;
+    $('new-coach-out').classList.remove('hidden');
+    $('new-coach-name').value = '';
+    $('new-coach-email').value = '';
+    await loadStaff(IS_DIRECTOR);
+  } catch (e) {
+    $('new-coach-err').textContent = e.message || 'Could not add the coach.';
+    $('new-coach-err').classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 let familiesData = null;
 

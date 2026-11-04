@@ -62,42 +62,60 @@ class Step:
 
 
 PROGRAM_STEPS: tuple[Step, ...] = (
+    # The director's kickoff, in the order it happens: teams, coaches, the
+    # roster with parent emails. After the third step the system takes over
+    # -- invites go out, parents say yes, kids get their links -- and the
+    # Families card on the dashboard shows who is where.
     Step(
         key="team",
-        title="Create your first team",
-        detail="Give it a name and a season. Athletes join with its code.",
+        title="Create your teams",
+        detail="One per age group or squad. Coaches are assigned to them and athletes are imported into them.",
         anchor="scope-card",
     ),
     Step(
+        key="staff",
+        title="Add your coaches",
+        detail="Name, email, and which teams. Each gets their sign-in link by email and sees only their own athletes.",
+        why="Do this before the roster so the first thing a coach sees is their team, not an empty page.",
+        required=False,
+        anchor="staff-card",
+    ),
+    Step(
         key="athletes",
-        title="Add your athletes",
-        detail="One at a time, or paste a roster and import the lot.",
+        title="Import the roster, with parent emails",
+        detail=(
+            "A CSV from TeamSnap, SportsEngine or a spreadsheet, with a Parent Email "
+            "column. Every parent is emailed an invite the moment it lands."
+        ),
         why="Birth year matters more than it looks: everything is age-scaled.",
         anchor="import-card",
     ),
     Step(
-        key="first_session",
-        title="Get one athlete training",
-        detail=(
-            "Their parent texts them a sign-in link from the parent portal once "
-            "they say yes; or hand out a printed slip. One session counts."
-        ),
-        why=(
-            "The only step that proves the whole chain works: code handed "
-            "over, app installed, camera pointed, session counted."
-        ),
-        anchor="roster-card",
-    ),
-    Step(
         key="parents",
-        title="Invite the parents",
-        detail="A roster with a Parent Email column does this on import; otherwise invite from the roster row.",
+        title="Parents sign up and say yes",
+        detail=(
+            "Nothing for you to do: the invite email asks them. The Families card "
+            "shows who has and who has not, with a Nudge for anyone who has not opened it."
+        ),
         why=(
             "Parents consent, and once one is linked their decision is what "
-            "lets that athlete train. Better to do it early than mid-season."
+            "lets that athlete train."
         ),
         required=False,
-        anchor="slips-card",
+        anchor="families-card",
+    ),
+    Step(
+        key="first_session",
+        title="The first athlete trains",
+        detail=(
+            "Their parent sends them the sign-in link from the parent portal; "
+            "they tap it, pick a drill, press Start. One counted session."
+        ),
+        why=(
+            "The only step that proves the whole chain works: email opened, "
+            "parent said yes, link forwarded, camera pointed, session counted."
+        ),
+        anchor="families-card",
     ),
     Step(
         key="recognition",
@@ -106,13 +124,6 @@ PROGRAM_STEPS: tuple[Step, ...] = (
         why="The defaults are placeholders and they read like it.",
         required=False,
         anchor="recognition-card",
-    ),
-    Step(
-        key="staff",
-        title="Add another coach",
-        detail="Assign them to a team so they see only their own athletes.",
-        required=False,
-        anchor="staff-card",
     ),
 )
 

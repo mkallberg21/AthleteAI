@@ -59,7 +59,7 @@ class TestItStartsAtTheBeginning:
     def test_the_next_step_is_the_first_undone_one(self, program):
         store = program["store"]
         store.create_team(program["org"], "U15")
-        assert O.progress(store.conn, program["org"])["next"]["key"] == "athletes"
+        assert O.progress(store.conn, program["org"])["next"]["key"] == "staff"  # coaches come before the roster now
 
     def test_the_order_matches_what_unblocks_what(self):
         """A team before an athlete, an athlete before a session. The order is

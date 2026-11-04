@@ -394,6 +394,29 @@ button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-
 .family-row .family-parent { font-size: .85rem; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
 .family-row button { width: auto; }
 
+/* Coaches card rows and team chips (lost in the v3 re-skin). */
+.staff-row {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap;
+}
+.staff-row:last-child { border-bottom: none; }
+.team-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.team-chip {
+  font-size: .72rem; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 99px; padding: 3px 9px; display: inline-flex; gap: 5px; align-items: center;
+}
+.team-chip button, .team-chip button:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) {
+  width: auto; min-height: auto; padding: 0 2px; background: none; border: none;
+  box-shadow: none; color: var(--text-muted); font-size: .85rem; line-height: 1;
+}
+.team-chip button:hover { color: var(--danger); }
+
+/* Small inline forms on the dashboard: label above its field. */
+.inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.inline-form > div { display: flex; flex-direction: column; }
+.inline-form label { margin-bottom: 4px; }
+.inline-form select[multiple] { min-height: 72px; padding: 4px; }
+
 /* The one button that matters on the capture screen. Pinned to the bottom
    of the phone so it is on screen the moment the camera opens and still
    under the thumb when the kid comes back to end the session -- never

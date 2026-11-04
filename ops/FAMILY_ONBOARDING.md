@@ -1,5 +1,21 @@
 # Family onboarding: roster to first session
 
+## The director's kickoff (the order it happens)
+
+1. **Sign up** on the public page: program name, sport, their own name. The
+   director code is shown once and is their standing sign-in.
+2. **Teams** -- one per squad, from the dashboard.
+3. **Coaches** -- `POST /api/coach/staff` (Coaches card, "Add a coach"): name,
+   email, teams. Each coach is emailed a standing sign-in link
+   (`invites.compose_staff`). No email = the code is shown once to read out.
+4. **Roster with a Parent Email column** -- import into a team. Every parent
+   is emailed an invite on import (`invite_guardians` defaults on).
+
+From here the system runs it: parents sign up and say yes, send the kid the
+link, the kid trains. The Families card shows every family's stage and a
+Nudge for parents who have not opened the invite. `onboarding.PROGRAM_STEPS`
+is this list, in this order.
+
 How a new program gets from "here is our roster" to a child recording a
 drill, with the parent in the loop, and with the coach doing nothing after
 the upload.

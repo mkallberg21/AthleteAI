@@ -1613,6 +1613,59 @@ def unassign_staff(
     return {"assigned": False, "user_id": body.user_id, "team_id": body.team_id}
 
 
+class CreateStaffRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+    team_ids: list[int] = Field(default_factory=list, max_length=50)
+
+
+@app.post("/api/coach/staff", status_code=201)
+def create_staff(
+    body: CreateStaffRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Add a coach to the program. Directors only.
+
+    This is the director's second move after signing up, before the roster:
+    name the coaches, put each on their teams, and the system emails every
+    one of them a standing sign-in link. The code is also returned once so a
+    director with a coach standing next to them can read it out; it is
+    stored only as a hash.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can add coaches")
+    email = (body.email or "").strip() or None
+    for team_id in body.team_ids:
+        team = store.conn.execute(
+            "SELECT org_id FROM teams WHERE id = ?", (team_id,)
+        ).fetchone()
+        if team is None or team["org_id"] != principal.org_id:
+            raise HTTPException(status_code=404, detail=f"unknown team {team_id}")
+    coach = store.create_user(principal.org_id, "coach", body.display_name, email=email)
+    for team_id in body.team_ids:
+        store.assign_staff_to_team(coach["id"], team_id)
+    sender = store._invite_sender(principal.org_id, principal.id)
+    emailed = invites_mod.deliver_staff(
+        store.conn,
+        user_id=coach["id"],
+        email=email or "",
+        coach_name=body.display_name,
+        org_name=sender["org_name"],
+        director_name=sender["coach_name"],
+        code=coach["token"],
+    )
+    return {
+        "user_id": coach["id"],
+        "display_name": body.display_name,
+        "email": email,
+        "code": coach["token"],
+        "link": guardians_mod.signin_link(coach["token"]),
+        "team_ids": body.team_ids,
+        "emailed": emailed,
+    }
+
+
 @app.get("/api/coach/staff")
 def list_staff(
     principal: Principal = Depends(_staff),

@@ -92,6 +92,80 @@ def compose(
     return subject, html, text
 
 
+def compose_staff(
+    *,
+    coach_name: str,
+    org_name: str,
+    director_name: str,
+    code: str,
+) -> tuple[str, str, str]:
+    """Subject, HTML and plain text for a coach's sign-in.
+
+    Shorter than the parent's: a coach was asked by the director, not by an
+    app, and the thing they need is the link and what they will see when
+    they tap it. The link is their standing sign-in, same as an athlete's.
+    """
+    from .guardians import signin_link
+
+    first = coach_name.split()[0] if coach_name.strip() else "Coach"
+    link = signin_link(code)
+    subject = f"{org_name}: your 0FFDAYS coach sign-in"
+    text = (
+        f"{director_name} added you as a coach at {org_name} on 0FFDAYS.\n\n"
+        f"Your athletes record drills at home on their own phones; the app "
+        f"counts the reps and you see who is putting the work in. No video "
+        f"ever reaches you, only the numbers.\n\n"
+        f"Sign in here, on any phone or computer:\n{link}\n\n"
+        f"Or go to the app and enter the code {code}.\n\n"
+        f"Keep this message: the link is your sign-in for the season."
+    )
+    html = (
+        f"<p>{escape(director_name)} added you as a coach at <b>{escape(org_name)}</b> "
+        f"on 0FFDAYS.</p>"
+        f"<p>Your athletes record drills at home on their own phones; the app counts "
+        f"the reps and you see who is putting the work in. No video ever reaches you, "
+        f"only the numbers.</p>"
+        f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;'
+        f'background:#111;color:#fff;text-decoration:none;border-radius:6px">'
+        f"Open your coach dashboard</a></p>"
+        f'<p style="color:#555">Or go to the app and enter the code '
+        f"<code>{escape(code)}</code>.</p>"
+        f'<p style="color:#555;font-size:90%">Keep this message: the link is your '
+        f"sign-in for the season.</p>"
+    )
+    return subject, html, text
+
+
+def deliver_staff(
+    conn: sqlite3.Connection,
+    *,
+    user_id: int,
+    email: str,
+    coach_name: str,
+    org_name: str,
+    director_name: str,
+    code: str,
+) -> bool:
+    """Queue the coach's sign-in email. True if queued."""
+    email = (email or "").strip()
+    if not email:
+        return False
+    subject, html, text = compose_staff(
+        coach_name=coach_name, org_name=org_name, director_name=director_name, code=code,
+    )
+    queued = mailer.enqueue(
+        conn,
+        to_email=email,
+        subject=subject,
+        html=html,
+        text=text,
+        kind=mailer.Kind.TRANSACTIONAL,
+        dedupe_key=f"staff_signin:{user_id}:{code[:2]}",
+        user_id=user_id,
+    )
+    return queued is not None
+
+
 def deliver(
     conn: sqlite3.Connection,
     invite: dict[str, Any],
