@@ -393,16 +393,13 @@
     </div>
     <div id="season-ends-state" class="small muted" style="margin-top:4px"></div>
     <div id="season-bill" class="small" style="margin-top:8px"></div>
-    <div style="margin-top:16px">
+    <!-- The program-wide shots number is superseded by the per-team numbers
+         on the Teams card (set from each team's age when it is created). The
+         inputs stay in the DOM, hidden, so the loader that reads the
+         organisation's legacy value still works for programs that set one. -->
+    <div class="hidden" style="margin-top:16px">
       <label for="season-shots">Shots a day that count</label>
-      <input id="season-shots" type="number" min="0" step="5" inputmode="numeric"
-             placeholder="each age's ceiling" style="width:8em">
-      <div class="small muted" style="margin-top:4px">
-        Your number for the whole program. Every shot past it is practice, not
-        points. Whatever you choose, each age keeps its own ceiling: a younger
-        athlete is never asked for more than the arm guidance for their age.
-        Leave it blank (or 0) to use the ceilings alone.
-      </div>
+      <input id="season-shots" type="number" min="0" step="5" inputmode="numeric" style="width:8em">
       <div id="season-shots-table" class="small" style="margin-top:6px"></div>
     </div>
     <div id="season-err" class="err hidden"></div>
