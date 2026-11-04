@@ -31,6 +31,7 @@ from .config import CONFIG
 from . import assignments as assignments_mod
 from . import badge as badge_mod
 from . import teamsnap as teamsnap_mod
+from . import team_age as team_age_mod
 from . import benchmarks as benchmarks_mod
 from . import billing as billing_mod
 from . import funnel as funnel_mod
@@ -724,8 +725,29 @@ def create_org(body: CreateOrgRequest, store: Store = Depends(get_store)) -> dic
 
 
 class CreateTeamRequest(BaseModel):
+    """One form: the team, its coach, and the day's numbers.
+
+    The director types "2031 Red" and the coach's name and email; the
+    numbers arrive prefilled from the team's age (team_age.suggest) and he
+    can change them. Both are bounded by the drill's hard cap; 0 leaves the
+    drill to each age's own ceiling.
+    """
     name: str = Field(min_length=1, max_length=120)
     season: str = ""
+    daily_wall_ball: int = Field(default=0, ge=0, le=1_000)
+    daily_shots: int = Field(default=0, ge=0, le=1_000)
+    coach_name: str = Field(default="", max_length=120)
+    coach_email: str = Field(default="", max_length=200)
+
+
+@app.get("/api/teams/suggest")
+def suggest_team_targets(
+    name: str = Query(default="", max_length=120),
+    principal: Principal = Depends(_staff),
+) -> dict[str, Any]:
+    """What a team named like this should prefill: age band, wall-ball reps
+    and shots a day, from the same tables every athlete is held to."""
+    return team_age_mod.suggest(name)
 
 
 @app.post("/api/teams", status_code=201)
@@ -734,7 +756,23 @@ def create_team(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    return store.create_team(principal.org_id, body.name, body.season)
+    from .drills import DRILLS_BY_KEY
+    wall_max = DRILLS_BY_KEY["lax_wall_ball_strong"].scoring.daily_rep_cap
+    shot_max = DRILLS_BY_KEY["lax_shooting"].scoring.daily_rep_cap
+    team = store.create_team(
+        principal.org_id, body.name, body.season,
+        daily_wall_ball=min(body.daily_wall_ball, wall_max),
+        daily_shots=min(body.daily_shots, shot_max),
+    )
+    coach_name = body.coach_name.strip()
+    if coach_name:
+        if not principal.is_director:
+            raise HTTPException(status_code=403, detail="only a director can add coaches")
+        team["coach"] = create_staff(
+            CreateStaffRequest(display_name=coach_name, email=body.coach_email.strip() or None,
+                               team_ids=[team["id"]]),
+            principal, store)
+    return team
 
 
 class CreateAthleteRequest(BaseModel):
@@ -5016,7 +5054,10 @@ def get_teams(
 ) -> dict[str, Any]:
     rows = store.conn.execute(
         "SELECT t.id, t.name, t.season, t.join_code, "
-        "  (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) AS roster "
+        "  COALESCE(t.daily_wall_ball, 0) AS daily_wall_ball, COALESCE(t.daily_shots, 0) AS daily_shots, "
+        "  (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) AS roster, "
+        "  (SELECT GROUP_CONCAT(u.display_name, ', ') FROM team_staff ts JOIN users u ON u.id = ts.user_id "
+        "   WHERE ts.team_id = t.id) AS coaches "
         "FROM teams t WHERE t.org_id = ? ORDER BY t.name",
         (principal.org_id,),
     ).fetchall()

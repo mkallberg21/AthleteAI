@@ -128,7 +128,12 @@ class TestAgeAppropriate:
         assert daily_cap_for(SHOOT, 17, chosen=500) == 120    # never above the row
         assert daily_cap_for(SHOOT, 14, chosen=0) == 80       # 0 = ceilings alone
         assert daily_cap_for(SHOOT, None, chosen=100) == 60   # unknown age stays conservative
-        assert daily_cap_for(STRONG, 14, chosen=50) == 220    # no table: ignored
+        # A minutes-budgeted drill (handed wall ball) takes the program's
+        # number too, under its own minutes x pace ceiling: the team's
+        # wall-ball-a-day is set when the director creates the team.
+        assert daily_cap_for(STRONG, 14, chosen=50) == 50
+        assert daily_cap_for(STRONG, 14, chosen=900) == 220   # never above the ceiling
+        assert daily_cap_for(STRONG, 14, chosen=0) == 220
 
     def test_an_age_table_is_validated(self):
         from offdays.drills.base import ScoringSpec

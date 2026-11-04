@@ -489,6 +489,28 @@ button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-
   margin-bottom: 0.4rem;
 }
 
+/* Bare inputs, selects, labels and tables on the dashboard pages. The v3
+   re-skin styled only .form-input / .form-label and left every plain
+   <input> on coach.html at the browser default. These are the same rules
+   the dashboard had before the re-skin, in the new tokens. */
+input:not([class]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+select:not([class]) {
+  font: inherit; font-size: 1rem; width: 100%; padding: 0.7rem 0.9rem; min-height: 44px;
+  background: var(--surface-2); color: var(--text);
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px;
+  -webkit-appearance: none; appearance: none;
+}
+input:not([class]):focus, select:not([class]):focus { outline: none; border-color: var(--accent); }
+label:not([class]) {
+  display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--surface-2); }
+
 .form-input, .form-select, .form-textarea {
   width: 100%;
   padding: 0.8rem 1rem;

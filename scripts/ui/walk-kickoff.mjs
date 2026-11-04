@@ -31,7 +31,6 @@ const next = await page.locator('#setup-card').first().innerText().catch(() => '
 console.log('   checklist head:', next.split('\n').slice(0, 4).join(' | '));
 
 // 3. Create two teams.
-await page.locator('details:has(#new-team) summary').click();
 for (const name of ['2031 Red', '2031 Blue']) {
   await page.fill('#new-team', name);
   await page.click('#add-team');

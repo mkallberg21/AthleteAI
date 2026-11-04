@@ -219,11 +219,12 @@ def daily_cap_for(
     """
     spec = drill.scoring
     ceiling = age_ceiling(drill, age, estimated)
-    if ceiling is not None:
-        return min(ceiling, chosen) if chosen and chosen > 0 else ceiling
-    if spec.daily_cap_minutes is None:
+    if ceiling is None and spec.daily_cap_minutes is not None:
+        # Minutes x pace for this age: the handed wall-ball drills.
+        ceiling = min(spec.daily_rep_cap, int(round(spec.daily_cap_minutes * pace_for_age(age, estimated))))
+    if ceiling is None:
         return spec.daily_rep_cap
-    return min(spec.daily_rep_cap, int(round(spec.daily_cap_minutes * pace_for_age(age, estimated))))
+    return min(ceiling, chosen) if chosen and chosen > 0 else ceiling
 
 
 def credit_reps(

@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -101,6 +101,13 @@ CREATE TABLE IF NOT EXISTS teams (
     -- name cohorts differently -- birth year here, "U14" elsewhere -- and a
     -- club that never splits a cohort can leave it empty.
     age_group   TEXT NOT NULL DEFAULT '',
+    -- The day's wall-ball reps and shots for this team, filled in from the
+    -- team's age when the director creates it and his to change. 0 = the
+    -- drill's own per-age ceiling. Each child's ceiling still binds above
+    -- these; they are the program's guidance, never shown as a figure to
+    -- beat. Staff see them on the dashboard; athletes and parents do not.
+    daily_wall_ball INTEGER NOT NULL DEFAULT 0,
+    daily_shots     INTEGER NOT NULL DEFAULT 0,
     -- Athletes self-serve onboarding with this code; no email needed, which
     -- matters when the athletes are 12 and do not have school email.
     join_code   TEXT NOT NULL UNIQUE,
@@ -1150,6 +1157,8 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
 ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     "teams": [
         ("age_group", "TEXT NOT NULL DEFAULT ''"),
+        ("daily_wall_ball", "INTEGER NOT NULL DEFAULT 0"),
+        ("daily_shots", "INTEGER NOT NULL DEFAULT 0"),
     ],
     "sessions": [
         ("completed_at", "TEXT"),

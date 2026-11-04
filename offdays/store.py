@@ -2613,7 +2613,8 @@ class Store:
         return org_id
 
     def create_team(
-        self, org_id: int, name: str, season: str = "", *, age_group: str = ""
+        self, org_id: int, name: str, season: str = "", *, age_group: str = "",
+        daily_wall_ball: int = 0, daily_shots: int = 0,
     ) -> dict[str, Any]:
         billing_mod.check_can_add_team(self.conn, org_id)
         # Retry on the astronomically unlikely join-code collision rather than
@@ -2624,14 +2625,17 @@ class Store:
                 with transaction(self.conn) as c:
                     cur = c.execute(
                         "INSERT INTO teams(org_id, name, season, age_group, join_code, "
-                        "created_at) VALUES (?,?,?,?,?,?)",
-                        (org_id, name, season, age_group.strip(), code, _iso(_now())),
+                        "created_at, daily_wall_ball, daily_shots) VALUES (?,?,?,?,?,?,?,?)",
+                        (org_id, name, season, age_group.strip(), code, _iso(_now()),
+                         max(0, int(daily_wall_ball or 0)), max(0, int(daily_shots or 0))),
                     )
                 return {
                     "id": int(cur.lastrowid),
                     "name": name,
                     "age_group": age_group.strip(),
                     "join_code": code,
+                    "daily_wall_ball": max(0, int(daily_wall_ball or 0)),
+                    "daily_shots": max(0, int(daily_shots or 0)),
                 }
             except sqlite3.IntegrityError:
                 continue
@@ -3516,10 +3520,28 @@ class Store:
         )
 
     def _chosen_daily(self, athlete_id: int, drill) -> int | None:
-        """The program's own daily number for an age-table drill (today only
-        the shooting drill: `organizations.daily_shots`), or None when the
-        director left it to each age's ceiling or the drill has no table."""
-        if drill.scoring.daily_cap_by_age is None or getattr(drill, "shot", None) is None:
+        """The program's own daily number for an age-table drill, or None
+        when it is left to each age's ceiling or the drill has no table.
+
+        The team's number wins (set when the director created the team,
+        from its age; his to change). For shooting, the organisation-wide
+        `daily_shots` is the fallback. Wall ball means the two handed
+        wall-ball drills, which share one table.
+        """
+        is_shot = getattr(drill, "shot", None) is not None and drill.scoring.daily_cap_by_age is not None
+        is_wall = drill.key in ("lax_wall_ball_strong", "lax_wall_ball_offhand")
+        if not (is_shot or is_wall):
+            return None
+        col = "daily_shots" if is_shot else "daily_wall_ball"
+        row = self.conn.execute(
+            f"SELECT MAX(COALESCE(t.{col}, 0)) AS n FROM team_members tm "
+            "JOIN teams t ON t.id = tm.team_id WHERE tm.user_id = ?",
+            (athlete_id,),
+        ).fetchone()
+        n = int(row["n"] or 0) if row else 0
+        if n > 0:
+            return n
+        if not is_shot:
             return None
         row = self.conn.execute(
             "SELECT COALESCE(o.daily_shots, 0) AS n FROM users u "

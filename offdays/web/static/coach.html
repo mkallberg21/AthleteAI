@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 <div class="topbar">
@@ -803,22 +803,60 @@
     <div class="slips" id="slips"></div>
   </div>
 
-  <div class="card">
-    <h2>Teams &amp; join codes</h2>
+  <div class="card card--wide" id="teams-card">
+    <h2>Teams</h2>
+
+    <!-- Create a team: one form. Name it the way the club does ("2031
+         Red", "U13"), name the coach, and the day's numbers fill in from
+         the team's age. Director only; coaches see the table. -->
+    <div id="create-team" class="hidden" style="padding:12px 14px;margin:0 0 14px;background:var(--surface-2);border-radius:var(--radius-sm)">
+      <b>Create a team</b>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <div style="flex:1 1 160px">
+          <label for="new-team">Team</label>
+          <input id="new-team" placeholder="2031 Red" autocomplete="off">
+          <div class="small muted" id="new-team-age" style="margin-top:4px;min-height:1.2em"></div>
+        </div>
+        <div style="flex:1 1 160px">
+          <label for="new-team-coach">Coach</label>
+          <input id="new-team-coach" placeholder="Sam Hill" autocomplete="off">
+        </div>
+        <div style="flex:1 1 200px">
+          <label for="new-team-coach-email">Coach's email</label>
+          <input id="new-team-coach-email" type="email" placeholder="sam@example.com" autocomplete="off">
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
+        <div style="flex:0 1 150px">
+          <label for="new-team-wall">Wall ball a day</label>
+          <input id="new-team-wall" type="number" inputmode="numeric" min="0" step="10" placeholder="auto">
+        </div>
+        <div style="flex:0 1 150px">
+          <label for="new-team-shots">Shots a day</label>
+          <input id="new-team-shots" type="number" inputmode="numeric" min="0" step="5" placeholder="auto">
+        </div>
+        <div style="flex:1 1 220px" class="small muted" id="new-team-note">
+          Filled in from the team's age once you name it. Each kid's own age ceiling still applies on top.
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <button class="inline" id="add-team">Create team</button>
+        <span class="small muted" id="new-team-status"></span>
+      </div>
+      <div id="new-team-out" class="small hidden" style="margin-top:8px"></div>
+      <div id="new-team-err" class="err hidden"></div>
+    </div>
+
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Team</th><th>Season</th><th class="num">Roster</th><th>Join code</th></tr></thead>
+        <thead><tr><th>Team</th><th>Coach</th><th class="num">Roster</th><th class="num">Wall ball/day</th><th class="num">Shots/day</th><th>Join code</th></tr></thead>
         <tbody id="teams"></tbody>
       </table>
     </div>
+    <p class="small muted" style="margin:8px 0 0">Wall ball and shots are the program's daily guidance per team, from each age's table. Staff see them here; athletes and parents never see a number to beat.</p>
     <details style="margin-top:14px">
-      <summary class="small muted" style="cursor:pointer">Add a team or athlete</summary>
+      <summary class="small muted" style="cursor:pointer">Add an athlete by hand</summary>
       <div style="margin-top:12px">
-        <label for="new-team">New team name</label>
-        <input id="new-team" placeholder="U15 Boys">
-        <button class="secondary" id="add-team">Create team</button>
-
-        <hr style="border:none;border-top:1px solid var(--border);margin:18px 0">
 
         <label for="new-athlete">New athlete name</label>
         <input id="new-athlete" placeholder="Jordan P.">
@@ -906,7 +944,8 @@ function renderRosterBilling(b, inv) {
       <div class="stat"><b>$${perDay}</b><span>Per athlete per day</span></div>
       <div class="stat"><b>${inv.season_set ? esc(inv.total_display) : '—'}</b><span>Season total</span></div>
     </div>
-    <p class="small muted" style="margin:10px 0 0">${inv.season_set
+    <p class="small muted" style="margin:10px 0 0"><b>Never shown to coaches, parents or athletes.</b> The cost of the program, the per-athlete figure and the per-team daily numbers are yours; nobody else in the program sees a dollar figure or a number to beat.</p>
+    <p class="small muted" style="margin:6px 0 0">${inv.season_set
       ? `${esc(inv.per_athlete_display)} per athlete for the whole season. Most programs add that to team dues at the start of the season; a late joiner is billed from the day they are added. Change the dates on the Season card.`
       : 'Set the season start and end dates on the Season card. The invoice is the number of days between them, times fifty cents, per rostered athlete. Example: 100 athletes for a 150-day season is $7,500, or $75 a head.'}</p>`;
   $('seatbar-fill').parentElement.classList.add('hidden');
@@ -971,6 +1010,8 @@ function renderBilling(b) {
 }
 
 async function loadBilling() {
+  // The cost of the program is the director's alone. Coaches never fetch it.
+  if (!IS_DIRECTOR) { $('billing-card').classList.add('hidden'); return; }
   try {
     const b = await api('/api/billing');
     if (b.plan && b.plan.per_athlete_day_cents > 0) {
@@ -2171,10 +2212,13 @@ function renderReview(sessions) {
 async function loadTeams() {
   const { teams } = await api('/api/coach/teams');
   $('teams').innerHTML = teams.length ? teams.map((t) => `
-    <tr><td><b>${esc(t.name)}</b></td><td>${esc(t.season || '–')}</td>
+    <tr><td><b>${esc(t.name)}</b>${t.season ? ` <span class="muted small">${esc(t.season)}</span>` : ''}</td>
+        <td>${esc(t.coaches || '') || '<span class="muted">none yet</span>'}</td>
         <td class="num">${t.roster}</td>
+        <td class="num">${t.daily_wall_ball || '<span class="muted">age</span>'}</td>
+        <td class="num">${t.daily_shots || '<span class="muted">age</span>'}</td>
         <td><code>${esc(t.join_code)}</code></td></tr>`).join('')
-    : '<tr><td colspan="4" class="muted small">No teams yet.</td></tr>';
+    : '<tr><td colspan="6" class="muted small">No teams yet.</td></tr>';
 
   const select = $('team');
   const current = select.value;
@@ -2357,6 +2401,7 @@ $('new-coach-add').addEventListener('click', async () => {
 
 async function loadBadge(isDirector) {
   $('badge-card').classList.toggle('hidden', !isDirector);
+  $('create-team').classList.toggle('hidden', !isDirector);
   if (!isDirector) return;
   let brand = { name: '', logo: '' };
   try { brand = await api('/api/branding'); } catch { return; }
@@ -3141,14 +3186,61 @@ function defaultAssignmentDates() {
   $('a-due').value = iso(due);
 }
 
+// The team's name says how old the players are ("2031 Red" = 13-14 this
+// season). As the director types it, the day's numbers fill in from the
+// same age tables every athlete is held to; he can overtype them.
+let suggestTimer = null;
+let suggested = { wall_ball: null, shots: null };
+async function suggestFromName() {
+  const name = $('new-team').value.trim();
+  if (!name) { $('new-team-age').textContent = ''; return; }
+  try {
+    const s = await api(`/api/teams/suggest?name=${encodeURIComponent(name)}`);
+    if (s.inferred) {
+      $('new-team-age').textContent = `${s.band} (${s.how})`;
+      for (const [id, key] of [['new-team-wall', 'wall_ball'], ['new-team-shots', 'shots']]) {
+        const el = $(id);
+        // Only overwrite what we filled in last time, never a number he typed.
+        if (!el.value || Number(el.value) === suggested[key]) el.value = s[key];
+      }
+      suggested = { wall_ball: s.wall_ball, shots: s.shots };
+    } else {
+      $('new-team-age').textContent = 'Age not clear from the name; add a year ("2031 Red") or leave the numbers to each age.';
+    }
+  } catch { /* leave as is */ }
+}
+$('new-team').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(suggestFromName, 250); });
+
 $('add-team').addEventListener('click', async () => {
   const name = $('new-team').value.trim();
-  if (!name) return;
+  const coach_name = $('new-team-coach').value.trim();
+  const coach_email = $('new-team-coach-email').value.trim();
+  $('new-team-err').classList.add('hidden');
+  $('new-team-out').classList.add('hidden');
+  if (!name) { $('new-team-err').textContent = 'Name the team.'; $('new-team-err').classList.remove('hidden'); return; }
+  if (coach_name && !coach_email) { $('new-team-err').textContent = "The coach's email, so their sign-in link can go to them."; $('new-team-err').classList.remove('hidden'); return; }
+  const btn = $('add-team'); btn.disabled = true; $('new-team-status').textContent = 'Creating\u2026';
   try {
-    await api('/api/teams', { method: 'POST', body: { name } });
-    $('new-team').value = '';
-    await loadTeams();
-  } catch (e) { showError(e.message); }
+    const res = await api('/api/teams', { method: 'POST', body: {
+      name, coach_name, coach_email,
+      daily_wall_ball: Number($('new-team-wall').value) || 0,
+      daily_shots: Number($('new-team-shots').value) || 0,
+    } });
+    let out = `<b>${esc(res.name)}</b> created`;
+    if (res.coach) {
+      const c = res.coach;
+      const mail = c.email ? `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(c.subject)}&body=${encodeURIComponent(c.text)}` : '';
+      out += c.emailed
+        ? `; <b>${esc(c.display_name)}</b> added as coach and their sign-in link went to ${esc(c.email)}.`
+        : `; <b>${esc(c.display_name)}</b> added as coach. The program is not sending email, so send it yourself: <a class="btn-link" href="${mail}">Open in my email</a> &middot; or read them this code: <code>${esc(c.code)}</code> (shown once).`;
+    } else out += '.';
+    $('new-team-out').innerHTML = out; $('new-team-out').classList.remove('hidden');
+    for (const id of ['new-team', 'new-team-coach', 'new-team-coach-email', 'new-team-wall', 'new-team-shots']) $(id).value = '';
+    $('new-team-age').textContent = ''; suggested = { wall_ball: null, shots: null };
+    await Promise.all([loadTeams(), loadStaff(IS_DIRECTOR)]);
+  } catch (e) {
+    $('new-team-err').textContent = e.message || 'Could not create the team.'; $('new-team-err').classList.remove('hidden');
+  } finally { btn.disabled = false; $('new-team-status').textContent = ''; }
 });
 
 $('add-athlete').addEventListener('click', async () => {
@@ -3266,9 +3358,9 @@ $('signout').addEventListener('click', logout);
       $('scope-card').classList.remove('hidden');
     }
 
+    IS_DIRECTOR = orgs.role === 'director';
     await loadBilling();
     await loadSetup();
-    IS_DIRECTOR = orgs.role === 'director';
     await loadStaff(orgs.role === 'director');
     await loadPositionSettings(orgs.role === 'director');
     await loadSeason(orgs.role === 'director');
