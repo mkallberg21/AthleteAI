@@ -60,8 +60,10 @@ async function box(page, sel) {
 for (const [tag, opts] of [['phone', devices['iPhone 13']], ['laptop', { viewport: { width: 1280, height: 800 } }]]) {
   console.log(`\n== landing (${tag})`);
   const { ctx, page, failures } = await fresh(tag, opts);
-  await page.goto(`${base}/app/index.html`, { waitUntil: 'networkidle' });
+  // The bare domain is what people type. It must land on the styled page.
+  await page.goto(`${base}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(500);
+  if (!/\/app\/index\.html/.test(page.url())) bad(`${tag}: '/' stayed at ${page.url()} instead of /app/index.html`); else ok(`${tag}: '/' lands on /app/index.html`);
   await assertStylesheetCurrent(page, tag);
   if (failures.length) bad(`${tag}: ${failures.join('; ')}`);
 

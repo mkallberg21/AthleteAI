@@ -5114,5 +5114,15 @@ if CONFIG.static_dir.is_dir():
     )
 
     @app.get("/")
-    def index() -> FileResponse:
-        return FileResponse(CONFIG.static_dir / "index.html")
+    def index(request: Request) -> Response:
+        """The bare domain goes to /app/, where the page lives.
+
+        Serving index.html's bytes from "/" looked the same and was not:
+        every relative link in it (styles.css, api.js, the lockup) resolved
+        against the root and 404ed, so whoever typed the domain got an
+        unstyled page with dead buttons while /app/index.html was fine.
+        A redirect keeps one true URL and any ?code= / ?invite= query.
+        """
+        from fastapi.responses import RedirectResponse
+        q = ("?" + request.url.query) if request.url.query else ""
+        return RedirectResponse("/app/index.html" + q, status_code=307)

@@ -190,3 +190,35 @@ def test_every_page_pins_the_stylesheet_and_the_pin_matches_the_content():
         f"styles.css changed (now {digest}) but the pin is still {STYLESHEET_PIN}: "
         "bump ?v= on every page and set STYLESHEET_HASH here")
 
+def test_the_bare_domain_lands_where_the_assets_resolve(tmp_path):
+    """'/' must send people to /app/index.html, not serve its bytes.
+
+    Served from '/', the page's relative links (styles.css, api.js, the
+    lockup) resolve against the root and 404: an unstyled page with dead
+    buttons for anyone who types the domain, while /app/index.html is fine.
+    The query string rides along so ?code= and ?invite= links still work.
+    """
+    import offdays.api as api_module
+    from fastapi.testclient import TestClient
+    from offdays.db import connect
+    from offdays.store import Store
+    if True:
+        api_module._store = Store(connect(tmp_path / "x.db"))
+        try:
+            c = TestClient(api_module.app)
+            r = c.get("/", follow_redirects=False)
+            assert r.status_code in (301, 302, 307, 308)
+            assert r.headers["location"] == "/app/index.html"
+            r = c.get("/?invite=ABCD-EFGH", follow_redirects=False)
+            assert r.headers["location"] == "/app/index.html?invite=ABCD-EFGH"
+            # And where it lands, every asset the page names is served.
+            html = c.get("/app/index.html").text
+            import re
+            for ref in re.findall(r'(?:href|src)="([^"#]+)"', html):
+                if ref.startswith(("http", "/", "data:", "#", "mailto:")):
+                    continue
+                path = "/app/" + ref.split("?")[0]
+                assert c.get(path).status_code == 200, f"{path} (from {ref}) does not resolve"
+        finally:
+            api_module._store = None
+
