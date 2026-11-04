@@ -226,3 +226,23 @@ class TestAParentMustBeReachable(TestOverTheWire):
             "SELECT email, phone FROM users WHERE display_name = 'Dana Reed'").fetchone()
         assert row["email"].strip().lower() == "dana@example.com"
         assert "615" in row["phone"]
+
+class TestTheDirectorIsReachableToo(TestOverTheWire):
+    """Step zero of setup: the director's own email and mobile, same rule
+    as a parent's. The program's reports and failures go to this person."""
+
+    def test_blank_until_set_then_both_required(self, client, org):
+        c = client.get("/api/me/contact", headers=org["director"]).json()
+        assert c["complete"] is False and c["email"] == "" and c["phone"] == ""
+        assert client.put("/api/me/contact", headers=org["director"], json={"email": "joel@example.com", "phone": ""}).status_code == 422
+        assert client.put("/api/me/contact", headers=org["director"], json={"email": "joel", "phone": "615 555 0100"}).status_code == 422
+        r = client.put("/api/me/contact", headers=org["director"], json={"email": "joel@example.com", "phone": "615 555 0100"})
+        assert r.status_code == 200 and r.json()["complete"] is True
+        c = client.get("/api/me/contact", headers=org["director"]).json()
+        assert c["email"] == "joel@example.com" and c["complete"] is True
+
+    def test_a_coach_may_set_their_own_and_nobody_elses(self, client, org):
+        r = client.put("/api/me/contact", headers=org["coach"], json={"email": "sam@example.com", "phone": "615 555 0101"})
+        assert r.status_code == 200
+        assert client.get("/api/me/contact", headers=org["director"]).json()["email"] == ""
+

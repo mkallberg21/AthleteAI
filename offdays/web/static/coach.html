@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 <div class="topbar">
@@ -177,6 +177,28 @@
         <div id="new-token" class="small hidden" style="margin-top:10px"></div>
       </div>
     </details>
+  </div>
+
+  <div class="card hidden" id="contact-card">
+    <h2>How the program reaches you</h2>
+    <p class="small muted" style="margin-top:4px">
+      Your own email and mobile. The monthly report, a failed invite, a parent
+      who withdraws consent -- they come to you. Nobody else in the program
+      sees these.
+    </p>
+    <div class="inline-form" style="margin-top:8px">
+      <div style="flex:1 1 220px">
+        <label for="contact-email">Your email</label>
+        <input id="contact-email" type="email" autocomplete="email" placeholder="joel@maddoglacrosse.com">
+      </div>
+      <div style="flex:1 1 160px">
+        <label for="contact-phone">Your mobile</label>
+        <input id="contact-phone" type="tel" autocomplete="tel" placeholder="615 555 0100">
+      </div>
+      <div><button class="inline" id="contact-save">Save</button></div>
+    </div>
+    <div class="small muted" id="contact-status" style="margin-top:6px"></div>
+    <div id="contact-err" class="err hidden"></div>
   </div>
 
   <div class="card hidden" id="badge-card">
@@ -1598,6 +1620,9 @@ $('wellness-watch').addEventListener('click', async (event) => {
 // tell it is done (read from the same /api/coach/onboarding the checklist
 // uses, plus a couple of direct reads), and the sentence at the top.
 const WIZARD_STEPS = [
+  { key: 'contact', card: 'contact-card', title: 'How the program reaches you',
+    lede: 'Your own email and mobile first. Reports, a failed invite, a parent who withdraws consent -- they come to you, so the program needs a way to reach the person running it.',
+    done: (st) => st.contact },
   { key: 'badge', card: 'badge-card', title: 'Your badge',
     lede: 'Upload your program\u2019s logo. It leads the top of every screen your coaches, athletes and parents see. You can skip this and do it later.',
     done: (st) => st.badge, optional: true },
@@ -1619,14 +1644,16 @@ let wizardStep = 0;
 let wizardOn = false;
 
 async function wizardStatus() {
-  const [ob, brand, season, teams] = await Promise.all([
+  const [ob, brand, season, teams, contact] = await Promise.all([
     api('/api/coach/onboarding').catch(() => null),
     api('/api/branding').catch(() => ({ logo: '' })),
     api('/api/org/season').catch(() => ({})),
     api('/api/coach/teams').catch(() => ({ teams: [] })),
+    api('/api/me/contact').catch(() => ({ complete: false })),
   ]);
   const step = (k) => (ob && ob.steps.find((s) => s.key === k)) || {};
   return {
+    contact: !!contact.complete,
     badge: !!brand.logo,
     season: !!(season.starts_on && season.ends_on),
     teams: teams.teams.length,
@@ -2556,6 +2583,33 @@ $('new-coach-add').addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
   }
+});
+
+async function loadContact(isDirector) {
+  $('contact-card').classList.toggle('hidden', !isDirector);
+  if (!isDirector) return;
+  try {
+    const c = await api('/api/me/contact');
+    $('contact-email').value = c.email || '';
+    $('contact-phone').value = c.phone || '';
+    $('contact-status').textContent = c.complete ? 'On file.' : '';
+  } catch { /* leave blank */ }
+}
+$('contact-save').addEventListener('click', async () => {
+  $('contact-err').classList.add('hidden');
+  const email = $('contact-email').value.trim(), phone = $('contact-phone').value.trim();
+  if (!email || !phone) {
+    $('contact-err').textContent = 'Both, please: the program uses your email and mobile to reach you.';
+    $('contact-err').classList.remove('hidden'); return;
+  }
+  const btn = $('contact-save'); btn.disabled = true;
+  try {
+    await api('/api/me/contact', { method: 'PUT', body: { email, phone } });
+    $('contact-status').textContent = 'Saved.';
+    await wizardRefresh();
+  } catch (e) {
+    $('contact-err').textContent = e.message || 'Could not save.'; $('contact-err').classList.remove('hidden');
+  } finally { btn.disabled = false; }
 });
 
 async function loadBadge(isDirector) {
@@ -3532,6 +3586,7 @@ $('signout').addEventListener('click', logout);
     await loadParents(orgs.role === 'director');
     await loadFamilies();
     await loadBadge(orgs.role === 'director');
+    await loadContact(orgs.role === 'director');
     await loadTeams();
     await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.

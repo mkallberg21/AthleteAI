@@ -1074,6 +1074,58 @@ def me(
 
 
     
+class ContactUpdate(BaseModel):
+    """A staff member's own email and mobile. Same shape and rule as a
+    parent's: both required, and the program is the only reader."""
+    email: str = Field(max_length=200)
+    phone: str = Field(max_length=40)
+
+    @field_validator("email")
+    @classmethod
+    def _email_shape(cls, v: str) -> str:
+        v = v.strip()
+        if "@" not in v or "." not in v.split("@")[-1] or " " in v:
+            raise ValueError("that does not look like an email address")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_shape(cls, v: str) -> str:
+        if len("".join(ch for ch in v if ch.isdigit())) < 7:
+            raise ValueError("a mobile number, please; at least seven digits")
+        return v.strip()
+
+
+@app.get("/api/me/contact")
+def my_contact(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    row = store.conn.execute(
+        "SELECT COALESCE(email, '') AS email, COALESCE(phone, '') AS phone FROM users WHERE id = ?",
+        (principal.id,)).fetchone()
+    return {"display_name": principal.display_name, "email": row["email"], "phone": row["phone"],
+            "complete": bool(row["email"] and row["phone"])}
+
+
+@app.put("/api/me/contact")
+def set_my_contact(
+    body: ContactUpdate,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The director's (or a coach's) own email and mobile.
+
+    Step zero of setting up a program: before teams or a roster, the
+    program needs a way to reach the person running it -- the monthly
+    report, a failed invite, a parent who withdrew consent all go to him.
+    """
+    with transaction(store.conn) as c:
+        c.execute("UPDATE users SET email = ?, phone = ? WHERE id = ?",
+                  (body.email, body.phone, principal.id))
+    return {"display_name": principal.display_name, "email": body.email, "phone": body.phone, "complete": True}
+
+
 @app.post("/api/me/login", status_code=200)
 def login_post(
     request: Request,

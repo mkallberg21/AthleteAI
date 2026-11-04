@@ -1444,7 +1444,8 @@ body.wizard-on .wrap > .sponsor-slot,
 body.wizard-on #summary { display: none !important; }
 body.wizard-on #wizard { grid-column: 1 / -1; }
 .wizard-embedded { border: none; background: transparent; padding: 0; margin: 0; box-shadow: none; }
-.wizard-embedded > h2:first-child { display: none; }
+.wizard-embedded > h2:first-child,
+.wizard-embedded > h2:first-child + p.small.muted { display: none; }
 #wizard-next:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Landing page on a laptop: brand and the four role buttons on the left,

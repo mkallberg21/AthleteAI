@@ -18,6 +18,15 @@ const state = async () => ({
 await page.goto(`${base}/app/index.html?code=${made.director.token}`, { waitUntil: 'networkidle' });
 await page.waitForSelector('#wizard:not(.hidden)', { timeout: 15000 });
 await page.waitForTimeout(800);
+console.log('0', await state());
+await page.screenshot({ path: `${out}/0-contact.png` });
+// Step 0 contact: Next locked until both saved; one field alone is refused
+await page.fill('#contact-email', 'joel@example.com'); await page.click('#contact-save'); await page.waitForTimeout(400);
+console.log('0b email only -> err:', (await page.locator('#contact-err').textContent()).slice(0, 40), '| next disabled:', (await state()).nextDisabled);
+await page.fill('#contact-phone', '615 555 0100'); await page.click('#contact-save');
+await page.waitForFunction(() => !document.getElementById('wizard-next').disabled, null, { timeout: 8000 });
+console.log('0c both saved -> next:', (await state()).next);
+await page.click('#wizard-next'); await page.waitForTimeout(800);
 console.log('1', await state());
 await page.screenshot({ path: `${out}/1-badge.png` });
 

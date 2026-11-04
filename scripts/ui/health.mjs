@@ -115,7 +115,7 @@ else {
       const others = await page.evaluate(() => [...document.querySelectorAll('.wrap > .card:not(#wizard)')].filter((c) => getComputedStyle(c).display !== 'none').map((c) => c.id));
       if (others.length) bad(`dashboard ${tag}: walkthrough is on but other cards show: ${others.join(', ')}`);
       const t = await page.locator('#wizard-title').textContent();
-      if (!/badge/i.test(t)) bad(`dashboard ${tag}: walkthrough starts at '${t}', expected the badge step`);
+      if (!/reaches you/i.test(t)) bad(`dashboard ${tag}: walkthrough starts at '${t}', expected the contact step`);
       await page.screenshot({ path: `${out}/${tag}-walkthrough.png`, fullPage: false });
       await page.click('#wizard-skip'); await page.waitForTimeout(600);
       ok(`dashboard ${tag}: walkthrough shown first, skipped for the card checks`);
