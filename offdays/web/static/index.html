@@ -323,14 +323,10 @@ $('create-org').addEventListener('click', async () => {
       method: 'POST',
       body: { name, sport: $('org-sport').value, director_name: director },
     });
-    $('org-token').innerHTML =
-      `<b>${name}</b> is set up. This is your director code. Copy it now,
-       it is not shown again:<br>
-       <code style="word-break:break-all">${res.director.token}</code>
-       <br><button type="button" class="btn btn-primary" id="open-dashboard" style="margin-top:0.75rem">Open my dashboard</button>`;
-    $('org-token').classList.remove('hidden');
-    $('open-dashboard').addEventListener('click', () =>
-      signIn(res.director.token, { button: $('open-dashboard'), error: $('oerr') }));
+    // Straight in. The walkthrough shows the code once, as its own step,
+    // where it can be copied or emailed; nobody should have to stop here.
+    try { sessionStorage.setItem('offdays.newDirectorCode', res.director.token); } catch { /* fine */ }
+    await signIn(res.director.token, { button: $('create-org'), error: $('oerr') });
   } catch (e) {
     $('oerr').textContent = e.message;
     $('oerr').classList.remove('hidden');

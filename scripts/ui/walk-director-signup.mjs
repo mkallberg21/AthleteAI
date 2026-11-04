@@ -25,14 +25,11 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 860 } 
   await page.fill('#org-director', 'Joel White');
   await card.screenshot({ path: `${out}/${tag}-2-signup-filled.png` });
   await page.click('#create-org');
-  await page.waitForSelector('#org-token:not(.hidden)');
-  await card.screenshot({ path: `${out}/${tag}-3-code-shown.png` });
-  const code = (await page.locator('#org-token code').textContent()).trim();
+  await page.waitForURL(/coach\.html/, { timeout: 15000 });
 
-  // The one-tap path: Open my dashboard right under the code.
-  await page.click('#open-dashboard');
-  await page.waitForURL(/coach\.html/);
   await page.waitForTimeout(2500);
+  console.log(tag, 'first step:', await page.locator('#wizard-title').textContent(), '| code shown:', (await page.locator('#code-value').textContent()).length, 'chars');
+  await page.screenshot({ path: `${out}/${tag}-3-code-step.png` });
   await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
   await page.screenshot({ path: `${out}/${tag}-4-dashboard-first.png`, fullPage: false });
 

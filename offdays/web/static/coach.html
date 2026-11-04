@@ -179,6 +179,24 @@
     </details>
   </div>
 
+  <!-- Shown once, in the walkthrough, on the visit right after the program
+       was created: the code the director signs in with from now on. -->
+  <div class="card hidden" id="code-card">
+    <h2>Your sign-in code</h2>
+    <p class="small muted" style="margin-top:4px">
+      This is how you get back in: open the app, tap Director, paste the code.
+      It is yours alone and it is not shown again after this, so put it
+      somewhere you will find it.
+    </p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <code id="code-value" style="font-size:1.4rem;letter-spacing:0.12em;padding:10px 14px;background:var(--surface-2);border-radius:var(--radius-sm)"></code>
+      <button class="inline" id="code-copy">Copy</button>
+      <a class="btn-link" id="code-email" href="#">Email it to myself</a>
+      <span class="small muted" id="code-status"></span>
+    </div>
+    <p class="small muted" style="margin:10px 0 0">A link that signs you in: <span id="code-link" style="word-break:break-all"></span></p>
+  </div>
+
   <div class="card hidden" id="contact-card">
     <h2>How the program reaches you</h2>
     <p class="small muted" style="margin-top:4px">
@@ -1617,6 +1635,11 @@ $('wellness-watch').addEventListener('click', async (event) => {
 // tell it is done (read from the same /api/coach/onboarding the checklist
 // uses, plus a couple of direct reads), and the sentence at the top.
 const WIZARD_STEPS = [
+  { key: 'code', card: 'code-card', title: 'Your sign-in code',
+    lede: 'You are in. Before anything else: the code you will sign in with from now on. Copy it, or email it to yourself.',
+    done: () => true, optional: true,
+    // Only on the visit right after Create program; the code is never stored here.
+    skip: () => !newDirectorCode },
   { key: 'contact', card: 'contact-card', title: 'How the program reaches you',
     lede: 'Your own email and mobile first. Reports, a failed invite, a parent who withdraws consent -- they come to you, so the program needs a way to reach the person running it.',
     done: (st) => st.contact },
@@ -1652,6 +1675,18 @@ const COACH_STEPS = [
     lede: 'When a kid hits a milestone they get a message signed by you. The defaults are fine; yours are better. Write one or skip.',
     done: () => true, optional: true },
 ];
+let newDirectorCode = '';
+try { newDirectorCode = sessionStorage.getItem('offdays.newDirectorCode') || ''; } catch { /* fine */ }
+if (newDirectorCode) {
+  $('code-value').textContent = newDirectorCode;
+  const link = `${location.origin}/app/index.html?code=${encodeURIComponent(newDirectorCode)}`;
+  $('code-link').textContent = link;
+  $('code-email').href = `mailto:?subject=${encodeURIComponent('My 0FFDAYS director sign-in')}&body=${encodeURIComponent(`Your 0FFDAYS director code: ${newDirectorCode}\n\nOr tap this to sign in: ${link}`)}`;
+  $('code-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(newDirectorCode); $('code-status').textContent = 'Copied.'; }
+    catch { $('code-status').textContent = 'Select the code and copy it.'; }
+  });
+}
 const WIZARD_HOME = {};   // card id -> { parent, next } so cards go back where they live
 let WIZARD = WIZARD_STEPS;   // the active list: director's or coach's
 let wizardStep = 0;
@@ -1736,6 +1771,7 @@ async function wizardRefresh() {
 
 function wizardFinish() {
   wizardOn = false;
+  try { sessionStorage.removeItem('offdays.newDirectorCode'); } catch { /* fine */ }
   wizardRestore();
   $('wizard').classList.add('hidden');
   document.body.classList.remove('wizard-on');
@@ -1744,7 +1780,7 @@ function wizardFinish() {
 }
 
 async function startWizardIfNew(isDirector) {
-  WIZARD = isDirector ? WIZARD_STEPS : COACH_STEPS;
+  WIZARD = (isDirector ? WIZARD_STEPS : COACH_STEPS).filter((s) => !(s.skip && s.skip()));
   let dismissed = false;
   try { dismissed = localStorage.getItem(`offdays.wizard.${CURRENT_ORG}.${isDirector ? 'd' : 'c'}`) === 'done'; } catch { /* fine */ }
   const st = await wizardStatus();
@@ -1757,7 +1793,9 @@ async function startWizardIfNew(isDirector) {
   // Start at the first step not yet done, optional ones included: a
   // brand-new director walks all five in order; one who comes back
   // resumes where they left off.
-  const first = WIZARD.findIndex((s) => !s.done(st));
+  // The sign-in code step, when present, is always first: it exists only
+  // on the visit right after Create program and must be seen once.
+  const first = WIZARD[0].key === 'code' ? 0 : WIZARD.findIndex((s) => !s.done(st));
   await wizardShow(first === -1 ? WIZARD.length - 1 : first);
 }
 
