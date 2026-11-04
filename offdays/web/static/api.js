@@ -69,7 +69,13 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
     try {
       const data = await res.json();
       if (data.detail) {
-        detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+        // A validation error (422) is a list of {loc, msg}; say the message,
+        // not the JSON, so a parent reads "a mobile number, please" and not
+        // a bracket soup.
+        detail = typeof data.detail === 'string' ? data.detail
+          : Array.isArray(data.detail) && data.detail[0] && data.detail[0].msg
+            ? data.detail.map((d) => String(d.msg).replace(/^Value error, /, '')).join(' ')
+            : JSON.stringify(data.detail);
       }
     } catch { /* non-JSON error body */ }
     const err = new Error(detail);

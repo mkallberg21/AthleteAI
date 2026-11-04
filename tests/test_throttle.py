@@ -200,7 +200,7 @@ class TestEndpoints:
         assert client.post("/api/claim", json={"code": "CLAIMX"}).status_code == 429
 
     def test_guardian_invites_are_throttled(self, client):
-        body = {"code": "", "display_name": "Pat"}
+        body = {"code": "", "display_name": "Pat", "email": "pat@example.com", "phone": "615 555 0100"}
         for i in range(CONFIG.auth_max_failures):
             body["code"] = f"INV{i:04d}"
             assert client.post("/api/guardians/redeem", json=body).status_code == 400

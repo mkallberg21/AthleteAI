@@ -21,7 +21,7 @@ from fastapi.responses import (
     PlainTextResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -2549,11 +2549,34 @@ def revoke_guardian_invite(
 
 
 class RedeemRequest(BaseModel):
+    """A parent setting up their account from the program's invite.
+
+    Email and mobile are both required: the program needs to reach this
+    parent (a nudge, the monthly report, a message copied from their kid),
+    and a parent who is the only adult on a child's account cannot be one
+    the club has no way to contact.
+    """
     code: str = Field(min_length=4, max_length=40)
     display_name: str = Field(min_length=1, max_length=120)
-    email: str | None = Field(default=None, max_length=200)
-    phone: str | None = Field(default=None, max_length=40)
+    email: str = Field(max_length=200)
+    phone: str = Field(max_length=40)
     relationship: str = Field(default="parent", max_length=40)
+
+    @field_validator("email")
+    @classmethod
+    def _email_shape(cls, v: str) -> str:
+        v = v.strip()
+        if "@" not in v or "." not in v.split("@")[-1] or " " in v:
+            raise ValueError("that does not look like an email address")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_shape(cls, v: str) -> str:
+        digits = "".join(ch for ch in v if ch.isdigit())
+        if len(digits) < 7:
+            raise ValueError("a mobile number, please; at least seven digits")
+        return v.strip()
 
 
 @app.post("/api/guardians/redeem", status_code=201)

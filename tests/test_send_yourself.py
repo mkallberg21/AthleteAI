@@ -73,7 +73,7 @@ class TestRosterImport:
         out = client.post("/api/coach/roster/import", headers=org["director"],
                           json={"content": CSV, "team_id": org["team_id"]}).json()
         code = out["guardian_invites"][0]["code"]
-        r = client.post("/api/guardians/redeem", json={"code": code, "display_name": "Mason's Mom"})
+        r = client.post("/api/guardians/redeem", json={"code": code, "display_name": "Mason's Mom", "email": "dana@example.com", "phone": "615 555 0100"})
         assert r.status_code in (200, 201), r.text
 
 

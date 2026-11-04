@@ -1233,7 +1233,7 @@ class TestGuardianEndpoints:
         invite = self._invite(client, program, index)
         res = client.post(
             "/api/guardians/redeem",
-            json={"code": invite["code"], "display_name": name},
+            json={"code": invite["code"], "display_name": name, "email": "dana@example.com", "phone": "615 555 0100"},
         ).json()
         res["headers"] = {"Authorization": f"Bearer {res['token']}"}
         return res
@@ -1274,7 +1274,7 @@ class TestGuardianEndpoints:
         invite = self._invite(client, program)
         res = client.post(
             "/api/guardians/redeem",
-            json={"code": invite["code"], "display_name": "Dana"},
+            json={"code": invite["code"], "display_name": "Dana", "email": "dana@example.com", "phone": "615 555 0100"},
         )
         assert res.status_code == 201
 
@@ -1289,7 +1289,7 @@ class TestGuardianEndpoints:
         # A fresh code for the same athlete, then confirm the revoked one fails.
         stale = client.post(
             "/api/guardians/redeem",
-            json={"code": "ZZZZ-ZZZZ-ZZZZ", "display_name": "Nobody"},
+            json={"code": "ZZZZ-ZZZZ-ZZZZ", "display_name": "Nobody", "email": "dana@example.com", "phone": "615 555 0100"},
         )
         assert stale.status_code == 400
 
@@ -1593,7 +1593,7 @@ class TestDigestEndpoints:
         ).json()
         guardian = client.post(
             "/api/guardians/redeem",
-            json={"code": invite["code"], "display_name": "Dana"},
+            json={"code": invite["code"], "display_name": "Dana", "email": "dana@example.com", "phone": "615 555 0100"},
         ).json()
         headers = {"Authorization": f"Bearer {guardian['token']}"}
         assert client.get("/api/coach/digest", headers=headers).status_code == 403

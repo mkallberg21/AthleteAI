@@ -260,7 +260,7 @@ class TestThroughTheApi:
         # Parent taps the link, signs up.
         parent = client.post(
             "/api/guardians/redeem",
-            json={"code": invite["code"], "display_name": "Dana Pierce"},
+            json={"code": invite["code"], "display_name": "Dana Pierce", "email": "dana@example.com", "phone": "615 555 0100"},
         ).json()
         ph = {"Authorization": f"Bearer {parent['token']}"}
 

@@ -31,6 +31,12 @@ console.log('parent panel open:', !(await page.locator('#panel-parent').evaluate
   '| invite prefilled:', await page.inputValue('#invite'));
 await page.screenshot({ path: `${out}/1-parent-lands.png`, fullPage: true });
 await page.fill('#pname', 'Dana Reed');
+// Name only: the page refuses before the server does.
+await page.click('#redeem');
+await page.waitForTimeout(300);
+console.log('without contact details:', (await page.locator('#perr').textContent()).trim());
+await page.fill('#pemail', 'dana@example.com');
+await page.fill('#pphone', '615 555 0100');
 await page.click('#redeem');
 await page.waitForURL(/parent\.html/);
 await page.waitForTimeout(2500);

@@ -188,3 +188,41 @@ class TestOverTheWire:
     def test_the_template_names_the_parent_columns(self, client):
         t = client.get("/api/coach/roster/template").json()
         assert "Parent Phone" in t["content"] and "Parent 2 Email" in t["content"]
+
+class TestAParentMustBeReachable(TestOverTheWire):
+    """Email and mobile are required when a parent sets up their account.
+
+    The program nudges, reports and copies messages to this person; the only
+    adult on a child's account cannot be one the club has no way to reach.
+    The page says so too, but the rule lives here so no path around the
+    form can create a contactless guardian.
+    """
+
+    def _fresh(self, client, org):
+        inv = client.get("/api/coach/guardian-invites", headers=org["director"]).json()["invites"]
+        aid = inv[0]["athlete_id"]
+        return client.post("/api/coach/guardian-invites", json={"athlete_id": aid},
+                           headers=org["director"]).json()["code"]
+
+    def test_email_and_phone_are_required(self, client, org):
+        base = {"code": self._fresh(client, org), "display_name": "Dana Reed"}
+        assert client.post("/api/guardians/redeem", json=base).status_code == 422
+        assert client.post("/api/guardians/redeem", json={**base, "email": "dana@example.com"}).status_code == 422
+        assert client.post("/api/guardians/redeem", json={**base, "phone": "615 555 0100"}).status_code == 422
+
+    def test_a_shape_that_is_not_an_email_or_a_phone_is_refused_with_words(self, client, org):
+        base = {"code": self._fresh(client, org), "display_name": "Dana Reed"}
+        r = client.post("/api/guardians/redeem", json={**base, "email": "dana", "phone": "615 555 0100"})
+        assert r.status_code == 422 and "email" in r.json()["detail"][0]["msg"]
+        r = client.post("/api/guardians/redeem", json={**base, "email": "dana@example.com", "phone": "12"})
+        assert r.status_code == 422 and "mobile" in r.json()["detail"][0]["msg"]
+
+    def test_with_both_the_account_is_created_and_kept_on_file(self, client, org):
+        r = client.post("/api/guardians/redeem", json={
+            "code": self._fresh(client, org), "display_name": "Dana Reed",
+            "email": "Dana@Example.com ", "phone": "(615) 555-0100"})
+        assert r.status_code == 201, r.text
+        row = api_module._store.conn.execute(
+            "SELECT email, phone FROM users WHERE display_name = 'Dana Reed'").fetchone()
+        assert row["email"].strip().lower() == "dana@example.com"
+        assert "615" in row["phone"]
