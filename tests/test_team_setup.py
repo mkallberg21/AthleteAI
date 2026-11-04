@@ -160,3 +160,31 @@ class TestTheNumbersBindAndStayPrivate:
             assert "per_athlete_day" not in body and "total_display" not in body, path
         # A coach's teams list carries them (staff guidance); the kid's does not exist.
         assert client.get("/api/coach/teams", headers=h).status_code in (401, 403)
+
+class TestRemovingAMistake:
+
+    def test_an_empty_team_can_be_removed_and_its_coach_stays(self, client, org):
+        made = client.post("/api/teams", headers=org["director"], json={
+            "name": "2031 Red", "coach_name": "Sam Hill", "coach_email": "sam@example.com"}).json()
+        r = client.delete(f"/api/teams/{made['id']}", headers=org["director"])
+        assert r.status_code == 200 and r.json()["deleted"] is True
+        assert all(t["id"] != made["id"] for t in client.get("/api/coach/teams", headers=org["director"]).json()["teams"])
+        staff = client.get("/api/coach/staff", headers=org["director"]).json()["staff"]
+        assert any(s["display_name"] == "Sam Hill" for s in staff)
+
+    def test_a_team_with_athletes_is_refused_with_the_reason(self, client, org):
+        made = client.post("/api/teams", headers=org["director"], json={"name": "2031 Blue"}).json()
+        store = api_module._store
+        kid = store.create_user(org["org_id"], "athlete", "Mason", birth_year=2013)
+        store.join_team(made["join_code"], kid["id"])
+        r = client.delete(f"/api/teams/{made['id']}", headers=org["director"])
+        assert r.status_code == 409 and "1 athlete" in r.json()["detail"]
+        assert any(t["id"] == made["id"] for t in client.get("/api/coach/teams", headers=org["director"]).json()["teams"])
+
+    def test_only_a_director_and_only_their_own_program(self, client, org):
+        made = client.post("/api/teams", headers=org["director"], json={"name": "2032 Red"}).json()
+        assert client.delete(f"/api/teams/{made['id']}", headers=org["coach"]).status_code == 403
+        other = client.post("/api/orgs", json={"name": "Other", "director_name": "X"}).json()
+        oh = {"Authorization": f"Bearer {other['director']['token']}"}
+        assert client.delete(f"/api/teams/{made['id']}", headers=oh).status_code == 404
+

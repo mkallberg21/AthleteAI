@@ -2417,8 +2417,20 @@ async function loadTeams() {
         <td class="num">${t.roster}</td>
         <td class="num">${t.daily_wall_ball || '<span class="muted">age</span>'}</td>
         <td class="num">${t.daily_shots || '<span class="muted">age</span>'}</td>
-        <td><code>${esc(t.join_code)}</code></td></tr>`).join('')
+        <td style="white-space:nowrap"><code>${esc(t.join_code)}</code>${IS_DIRECTOR && !t.roster
+          ? ` <button class="secondary inline" data-del-team="${t.id}" data-team-name="${esc(t.name)}" title="Remove this team" style="margin-left:8px;padding:4px 10px;min-height:30px">Remove</button>`
+          : ''}</td></tr>`).join('')
     : '<tr><td colspan="6" class="muted small">No teams yet.</td></tr>';
+  // Remove: only offered on a team with nobody on it, and asks first.
+  $('teams').querySelectorAll('[data-del-team]').forEach((btn) => btn.addEventListener('click', async () => {
+    if (!window.confirm(`Remove ${btn.dataset.teamName}? It has no athletes; its coach stays in the program.`)) return;
+    btn.disabled = true;
+    try {
+      await api(`/api/teams/${btn.dataset.delTeam}`, { method: 'DELETE' });
+      await Promise.all([loadTeams(), loadStaff(IS_DIRECTOR)]);
+      await wizardRefresh();
+    } catch (e) { btn.disabled = false; showError(e.message); }
+  }));
 
   const select = $('team');
   const current = select.value;

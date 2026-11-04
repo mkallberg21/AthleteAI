@@ -31,6 +31,15 @@ console.log('U9 prefilled wall/shots:', await page.inputValue('#new-team-wall'),
 await page.click('#add-team');
 await page.waitForTimeout(1500);
 await page.locator('#teams-card').screenshot({ path: `${out}/2-table.png` });
+// The mistake: a second '2031 Red' with no coach. Remove it.
+await page.fill('#new-team', '2031 Red'); await page.waitForTimeout(600); await page.click('#add-team'); await page.waitForTimeout(1200);
+const flat = async () => (await page.locator('#teams').innerText()).split(/\r?\n/).map((x) => x.trim()).filter(Boolean).join(' | ');
+console.log('before remove:', await flat());
+page.once('dialog', (d) => { console.log('confirm:', d.message()); d.accept(); });
+const dup = page.locator('#teams tr', { hasText: '2031 Red' }).filter({ hasText: 'none yet' }).locator('[data-del-team]');
+await dup.click(); await page.waitForTimeout(1200);
+console.log('after remove:', await flat());
+await page.locator('#teams-card').screenshot({ path: `${out}/3-removed.png` });
 console.log('table:', (await page.locator('#teams').innerText()).replace(/\s*\n\s*/g, ' | '));
 console.log('cost card note:', (await page.locator('#billing-card').innerText()).includes('Never shown to coaches, parents or athletes'));
 await browser.close();

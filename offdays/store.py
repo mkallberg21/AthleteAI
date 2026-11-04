@@ -2381,6 +2381,29 @@ class Store:
     # Keeping a roster in step with wherever it lives
     # ------------------------------------------------------------------
 
+    def delete_team(self, org_id: int, team_id: int) -> dict[str, Any]:
+        """Remove a team that has no athletes on it.
+
+        For the director who typed the wrong name or made it twice. A team
+        with athletes is refused: deleting it would cascade away their
+        memberships and the record of which squad they trained on, and a
+        mistake there is fixed by moving the kids, not removing the team.
+        Coaches assigned to it are simply unassigned; the roster link and
+        team-drill choices go with it.
+        """
+        row = self.conn.execute(
+            "SELECT id, name, (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id) AS n "
+            "FROM teams t WHERE id = ? AND org_id = ?", (team_id, org_id)).fetchone()
+        if row is None:
+            raise StoreError("no such team")
+        if int(row["n"]) > 0:
+            raise StoreError(
+                f"{row['name']} has {row['n']} athlete{'s' if row['n'] != 1 else ''} on it; "
+                "move them to another team first")
+        with transaction(self.conn) as c:
+            c.execute("DELETE FROM teams WHERE id = ? AND org_id = ?", (team_id, org_id))
+        return {"deleted": True, "team_id": team_id, "name": row["name"]}
+
     # ----------------------------------------------------------- TeamSnap
 
     def set_teamsnap(self, org_id: int, token: str, user_label: str) -> None:

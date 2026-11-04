@@ -740,6 +740,22 @@ class CreateTeamRequest(BaseModel):
     coach_email: str = Field(default="", max_length=200)
 
 
+@app.delete("/api/teams/{team_id}")
+def delete_team(
+    team_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Remove an empty team. Director only; a team with athletes is a 409."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can remove a team")
+    try:
+        return store.delete_team(principal.org_id, team_id)
+    except StoreError as exc:
+        msg = str(exc)
+        raise HTTPException(status_code=404 if "no such" in msg else 409, detail=msg) from exc
+
+
 @app.get("/api/teams/suggest")
 def suggest_team_targets(
     name: str = Query(default="", max_length=120),
