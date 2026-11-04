@@ -1414,6 +1414,36 @@ button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-
    Populate .sponsor-logo with an <img> and .sponsor-text
    with the sponsor name; hide the whole slot when empty.
    ============================================================ */
+/* Landing page: four role buttons, one panel open at a time. */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 6px;
+}
+.role-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 14px 14px 12px;
+  min-height: 92px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  font: inherit;
+  transition: border-color 120ms, background 120ms, transform 120ms;
+}
+.role-btn:hover { border-color: var(--accent); }
+.role-btn:active { transform: scale(0.985); }
+.role-btn.active { border-color: var(--accent); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--accent); }
+.role-btn .role-icon { font-size: 1.5rem; line-height: 1; margin-bottom: 4px; }
+.role-btn b { font-family: var(--font-condensed); font-size: 1.15rem; letter-spacing: 0.01em; }
+.role-btn > span:last-child { font-size: 0.8rem; color: var(--text-muted); }
+.role-panel { margin-top: 12px; }
+@media (min-width: 600px) { .role-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
 .sponsor-slot:not(.has-sponsor) { display: none; }
 .sponsor-slot {
   display: flex;

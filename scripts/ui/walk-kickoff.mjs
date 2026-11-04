@@ -13,6 +13,7 @@ page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.t
 
 // 1. Sign up a program from the public page.
 await page.goto(`${base}/app/index.html`, { waitUntil: 'networkidle' });
+await page.click('.role-btn[data-role="director"]');
 await page.fill('#org-name', 'Mad Dog Lacrosse');
 await page.selectOption('#org-sport', 'lacrosse');
 await page.fill('#org-director', 'Joel White');

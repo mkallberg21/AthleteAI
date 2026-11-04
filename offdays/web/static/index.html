@@ -36,27 +36,39 @@
   <main class="wrap wrap--narrow">
 
     <!-- Hero -->
-    <div class="card-elevated" style="text-align:center; padding:1.75rem 1.25rem;">
-      <div style="font-size:2.5rem; margin-bottom:0.5rem;">🏆</div>
-      <h1 style="font-size:1.6rem; margin-bottom:0.5rem;">Train on your own. Get the credit.</h1>
-      <p style="font-size:0.9rem;">Record your drills with your phone. The app counts your reps on the phone itself and sends the numbers to your coach.</p>
-      <div class="privacy-note" style="text-align:left; margin-top:0.75rem;">
-        <strong style="color:var(--accent-bright)">Your video never leaves your phone.</strong> It is not uploaded, not saved, and not stored anywhere. Only the counts are sent: reps, which hand, how long. Your coach sees the numbers, never the footage.
-      </div>
+    <div class="card-elevated" style="text-align:center; padding:1.25rem 1.25rem 1rem;">
+      <h1 style="font-size:1.5rem; margin-bottom:0.35rem;">Train on your own. Get the credit.</h1>
+      <p class="small muted" style="margin:0">The phone counts the reps; the coach sees the numbers, never the footage.</p>
     </div>
 
-    <div class="section-divider"></div>
+    <!-- Who are you? One button each; the page shows only that role's part. -->
+    <div class="role-grid" id="roles" role="tablist" aria-label="I am a">
+      <button type="button" class="role-btn" data-role="athlete" role="tab" aria-controls="panel-athlete">
+        <span class="role-icon">🥍</span><b>Athlete</b><span>Use the link your parent sent</span>
+      </button>
+      <button type="button" class="role-btn" data-role="parent" role="tab" aria-controls="panel-parent">
+        <span class="role-icon">👪</span><b>Parent</b><span>Set up your child</span>
+      </button>
+      <button type="button" class="role-btn" data-role="coach" role="tab" aria-controls="panel-coach">
+        <span class="role-icon">📋</span><b>Coach</b><span>Your team's dashboard</span>
+      </button>
+      <button type="button" class="role-btn" data-role="director" role="tab" aria-controls="panel-director">
+        <span class="role-icon">🏆</span><b>Director</b><span>Start or run a program</span>
+      </button>
+    </div>
 
-    <!-- Sign in -->
+    <!-- ATHLETE: the link from a parent signs them in; the code is the fallback -->
+    <div class="role-panel hidden" id="panel-athlete">
     <div class="card">
       <div class="section-header">
-        <span class="section-title">Sign in</span>
+        <span class="section-title">Athlete sign-in</span>
       </div>
+      <p class="small muted" style="margin-top:0.25rem;">Your parent or guardian texts or emails you a link. Tap it and you are in; nothing to type. Lost the link? Ask them to send it again, or paste the code from it here.</p>
       <form id="signin-form" style="margin-top:0.5rem;" action="/api/me/login" method="post" novalidate>
         <div class="form-group">
-          <label class="form-label" for="token">Your athlete code</label>
+          <label class="form-label" for="token">The code from your link</label>
           <input id="token" class="form-input" type="password" autocomplete="off"
-                 placeholder="Paste the code your coach gave you"
+                 placeholder="Paste your code"
                  value="" name="token"
                  aria-describedby="err">
           <div id="err" class="form-error hidden"></div>
@@ -65,12 +77,14 @@
       </form>
     </div>
 
-    <!-- First time here -->
-    <div class="card">
+    <!-- Printed claim slips (families with no email on file). Hidden unless a
+         slip's ?claim= link brings someone here; the normal athlete path is the
+         link a parent sends after saying yes. -->
+    <div class="card hidden" id="claim-card">
       <div class="section-header">
-        <span class="section-title">First time here?</span>
+        <span class="section-title">Your printed slip</span>
       </div>
-      <p class="small muted" style="margin-top:0.25rem;">If your coach gave you a short claim code on a slip of paper, enter it here to set up your account.</p>
+      <p class="small muted" style="margin-top:0.25rem;">Enter the short code printed on it to set up your account.</p>
       <form style="margin-top:0.75rem;">
         <div class="form-group">
           <label class="form-label" for="claim">Claim code</label>
@@ -80,13 +94,15 @@
         <button type="button" class="btn btn-secondary" id="claim-btn">Claim my account</button>
       </form>
     </div>
+    </div>
 
-    <!-- Parent or guardian -->
+    <!-- PARENT: redeem the club's invite, or a family on its own -->
+    <div class="role-panel hidden" id="panel-parent">
     <div class="card">
       <div class="section-header">
-        <span class="section-title">Parent or guardian?</span>
+        <span class="section-title">Set up your child</span>
       </div>
-      <p class="small muted" style="margin-top:0.25rem;">If a coach sent you an invite code, set up your account here. You will be able to see your athlete's training and choose what they share.</p>
+      <p class="small muted" style="margin-top:0.25rem;">Your program emailed you an invite code. Enter it with your name; you will confirm your child, say yes to training, and get a sign-in link to send them. Already set up? <a href="#" class="link-signin">Sign in</a>.</p>
       <form style="margin-top:0.75rem;">
         <div class="form-group">
           <label class="form-label" for="invite">Invite code</label>
@@ -109,8 +125,10 @@
       </form>
     </div>
 
-    <!-- Just your own family? -->
-    <div class="card">
+    <!-- Household product (a family with no club): the API and the parent
+         portal keep working for it, but it is not offered here. Reachable
+         at #family for anyone who already knows. -->
+    <div class="card hidden" id="family-card">
       <div class="section-header">
         <span class="section-title">Just your own family?</span>
       </div>
@@ -129,13 +147,33 @@
         <div id="fam-token" class="small muted hidden" style="margin-top:0.75rem; padding:0.75rem; background:var(--surface-2); border-radius:var(--radius-sm);"></div>
       </form>
     </div>
+    </div>
 
-    <!-- Starting a program? -->
+    <!-- COACH: sign in with the code the director sent -->
+    <div class="role-panel hidden" id="panel-coach">
     <div class="card">
       <div class="section-header">
-        <span class="section-title">Starting a program?</span>
+        <span class="section-title">Coach sign-in</span>
       </div>
-      <p class="small muted" style="margin-top:0.25rem;">Set up your club or school here. Pick your sport and the app fits itself around it: positions, the drills it suggests, and which other sports it tells your athletes their training carries over into.</p>
+      <p class="small muted" style="margin-top:0.25rem;">Your director emailed you a sign-in link; tapping it brings you straight in. No link? Paste the code from that email.</p>
+      <form class="staff-signin" style="margin-top:0.5rem;" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="coach-token">Your code</label>
+          <input id="coach-token" class="form-input" type="password" autocomplete="off" placeholder="Paste your code">
+          <div id="coach-err" class="form-error hidden"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">Open my dashboard</button>
+      </form>
+    </div>
+    </div>
+
+    <!-- DIRECTOR: start a program, or sign in to one -->
+    <div class="role-panel hidden" id="panel-director">
+    <div class="card">
+      <div class="section-header">
+        <span class="section-title">Start your program</span>
+      </div>
+      <p class="small muted" style="margin-top:0.25rem;">Name it, pick the sport, and you are the director. Next you add coaches, import the roster with parents' emails, and the app takes it from there. Fifty cents per rostered athlete per day of the season you set; nothing until then.</p>
       <form style="margin-top:0.75rem;">
         <div class="form-group">
           <label class="form-label" for="org-name">Program name</label>
@@ -156,9 +194,24 @@
       </form>
     </div>
 
-    <p class="small muted" style="text-align:center; margin-top:0.5rem;">
-      Coaches and directors sign in with the same code and land on the dashboard.
-    </p>
+    <div class="card">
+      <div class="section-header">
+        <span class="section-title">Already have a program?</span>
+      </div>
+      <form class="staff-signin" style="margin-top:0.5rem;" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="director-token">Your director code</label>
+          <input id="director-token" class="form-input" type="password" autocomplete="off" placeholder="Paste your code">
+          <div id="director-err" class="form-error hidden"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">Open my dashboard</button>
+      </form>
+    </div>
+    </div>
+
+    <div class="privacy-note" style="margin-top:1rem;">
+      <strong style="color:var(--accent-bright)">Video never leaves the phone.</strong> It is not uploaded, not saved, not stored anywhere. Only the counts are sent: reps, which hand, how long.
+    </div>
 
   </main>
 </div>
@@ -168,6 +221,30 @@ import { api, setToken } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 const tokenInput = document.getElementById('token');
+
+// One role open at a time. The buttons are the page: a kid, a parent, a
+// coach and a director each see only their own part.
+const ROLES = ['athlete', 'parent', 'coach', 'director'];
+function showRole(role, { focus = true } = {}) {
+  for (const r of ROLES) {
+    $(`panel-${r}`).classList.toggle('hidden', r !== role);
+    const btn = document.querySelector(`.role-btn[data-role="${r}"]`);
+    btn.classList.toggle('active', r === role);
+    btn.setAttribute('aria-selected', r === role ? 'true' : 'false');
+  }
+  if (!role) return;
+  history.replaceState(null, '', `#${role}`);
+  const panel = $(`panel-${role}`);
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (focus) {
+    const first = panel.querySelector('input');
+    if (first) setTimeout(() => first.focus({ preventScroll: true }), 300);
+  }
+}
+document.querySelectorAll('.role-btn').forEach((b) => b.addEventListener('click', () => showRole(b.dataset.role)));
+document.querySelectorAll('.link-signin').forEach((a) => a.addEventListener('click', (e) => {
+  e.preventDefault(); showRole('athlete');
+}));
 
 // The sport list is public, because you need it before you have an account.
 (async () => {
@@ -232,8 +309,11 @@ $('create-org').addEventListener('click', async () => {
     $('org-token').innerHTML =
       `<b>${name}</b> is set up. This is your director code. Copy it now,
        it is not shown again:<br>
-       <code style="word-break:break-all">${res.director.token}</code>`;
+       <code style="word-break:break-all">${res.director.token}</code>
+       <br><button type="button" class="btn btn-primary" id="open-dashboard" style="margin-top:0.75rem">Open my dashboard</button>`;
     $('org-token').classList.remove('hidden');
+    $('open-dashboard').addEventListener('click', () =>
+      signIn(res.director.token, { button: $('open-dashboard'), error: $('oerr') }));
   } catch (e) {
     $('oerr').textContent = e.message;
     $('oerr').classList.remove('hidden');
@@ -248,24 +328,45 @@ function showError(message) {
   errEl.classList.remove('hidden');
 }
 
-document.getElementById('signin-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const token = tokenInput.value.trim();
-  if (!token) return showError('Enter the code your coach gave you.');
-
-  goBtn.disabled = true;
-  errEl.classList.add('hidden');
+// Every code is the same kind of code; the server says who it belongs to
+// and the page sends them home: athlete to drills, parent to the portal,
+// coach or director to the dashboard.
+async function signIn(token, { button, error }) {
+  button.disabled = true;
+  error.classList.add('hidden');
   setToken(token);
   try {
     const me = await api('/api/me');
     const home = { athlete: 'capture.html', guardian: 'parent.html' };
-    const dest = home[me.role] || 'coach.html';
-    window.location.href = dest;
+    window.location.href = home[me.role] || 'coach.html';
   } catch (e) {
-    goBtn.disabled = false;
-    showError(e.message || 'Sign in failed. Check your code.');
+    button.disabled = false;
+    error.textContent = e.message || 'Sign in failed. Check your code.';
+    error.classList.remove('hidden');
   }
+}
+
+document.getElementById('signin-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const token = tokenInput.value.trim();
+  if (!token) return showError('Enter your code.');
+  await signIn(token, { button: goBtn, error: errEl });
 });
+
+for (const [form, inputId, errId] of [
+  [document.querySelector('#panel-coach .staff-signin'), 'coach-token', 'coach-err'],
+  [document.querySelector('#panel-director .staff-signin'), 'director-token', 'director-err'],
+]) {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const token = $(inputId).value.trim();
+    const error = $(errId);
+    if (!token) {
+      error.textContent = 'Paste your code.'; error.classList.remove('hidden'); return;
+    }
+    await signIn(token, { button: form.querySelector('button[type="submit"]'), error });
+  });
+}
 
 // First-time athlete: a printed claim code becomes a sign-in.
 const claimBtn = $('claim-btn');
@@ -326,8 +427,8 @@ const invited = params.get('invite');
 const claimed = params.get('claim');
 const linked = params.get('code');
 if (invited) {
+  showRole('parent', { focus: false });
   $('invite').value = invited.trim().toUpperCase();
-  $('invite').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   $('pname').focus();
 } else if (linked) {
   // A kid tapping the link their parent sent. It carries their standing
@@ -335,15 +436,21 @@ if (invited) {
   // the same link keeps working on any phone until a parent issues a new
   // one. They land on their home screen: drills to choose from, film from
   // the coach, the leaderboard -- not the camera.
+  showRole('athlete', { focus: false });
   tokenInput.value = linked.trim().toUpperCase();
   $('signin-form').requestSubmit();
 } else if (claimed) {
   // A printed claim slip's code in a URL. Single-use; redeemed here.
+  showRole('athlete', { focus: false });
+  $('claim-card').classList.remove('hidden');
   $('claim').value = claimed.trim().toUpperCase();
-  $('claim').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   claimBtn.click();
 } else {
-  tokenInput?.focus();
+  // #director etc. from a link or a reload reopens that role; otherwise
+  // the four buttons are the page.
+  const hash = window.location.hash.replace('#', '');
+  if (ROLES.includes(hash)) showRole(hash, { focus: false });
+  if (hash === 'family') { showRole('parent', { focus: false }); $('family-card').classList.remove('hidden'); }
 }
 </script>
 </body>

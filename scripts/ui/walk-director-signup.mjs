@@ -15,6 +15,9 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 860 } 
   await page.goto(`${base}/app/index.html`, { waitUntil: 'networkidle' });
   await page.screenshot({ path: `${out}/${tag}-1-landing.png`, fullPage: tag === 'phone' });
 
+  await page.click('.role-btn[data-role="director"]');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${out}/${tag}-1b-director-open.png`, fullPage: tag === 'phone' });
   const card = page.locator('#org-name').locator('xpath=ancestor::div[contains(@class,"card")][1]');
   await card.scrollIntoViewIfNeeded();
   await page.fill('#org-name', 'Mad Dog Lacrosse');
@@ -26,7 +29,9 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 860 } 
   await card.screenshot({ path: `${out}/${tag}-3-code-shown.png` });
   const code = (await page.locator('#org-token code').textContent()).trim();
 
-  await page.goto(`${base}/app/index.html?code=${code}`, { waitUntil: 'networkidle' });
+  // The one-tap path: Open my dashboard right under the code.
+  await page.click('#open-dashboard');
+  await page.waitForURL(/coach\.html/);
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${out}/${tag}-4-dashboard-first.png`, fullPage: false });
 
