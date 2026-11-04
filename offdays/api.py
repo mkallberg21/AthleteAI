@@ -2244,6 +2244,7 @@ class RosterImport(BaseModel):
     content: str = Field(min_length=1, max_length=2_000_000)
     team_id: int
     invite_guardians: bool = True
+    filename: str = Field(default="", max_length=200)
 
 
 @app.post("/api/coach/roster/import", status_code=201)
@@ -2267,8 +2268,33 @@ def import_roster(
     result = store.apply_import(
         principal.org_id, body.team_id, plan, principal.id,
         issue_guardian_invites=body.invite_guardians,
+        filename=body.filename,
     )
     return {"summary": plan.to_dict()["summary"], **result, "smtp_configured": CONFIG.smtp_configured}
+
+
+@app.get("/api/coach/roster/imports")
+def list_roster_imports(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Roster files applied to this program, so a wrong one can be taken back."""
+    return {"imports": store.roster_imports(principal.org_id)}
+
+
+@app.delete("/api/coach/roster/imports/{import_id}")
+def delete_roster_import(
+    import_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Take back an upload. Director only: it removes athletes."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can delete an uploaded roster")
+    try:
+        return store.delete_roster_import(principal.org_id, import_id)
+    except StoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------

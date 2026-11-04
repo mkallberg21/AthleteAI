@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -781,6 +781,23 @@ CREATE INDEX IF NOT EXISTS idx_guardian_contacts_guardian ON guardian_contacts(g
 -- Single-use, expiring invitations. A code that reaches the wrong person grants
 -- access to a child's data, so these are short-lived, revocable, and stored
 -- hashed like any other credential.
+-- Every roster file applied, and which athletes it created, so a wrong
+-- upload can be taken back. Updated (already-existing) athletes are counted
+-- but not reverted: a file that only touched someone cannot say what they
+-- looked like before.
+CREATE TABLE IF NOT EXISTS roster_imports (
+    id           INTEGER PRIMARY KEY,
+    org_id       INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    team_id      INTEGER REFERENCES teams(id) ON DELETE SET NULL,
+    filename     TEXT NOT NULL DEFAULT '',
+    created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TEXT NOT NULL,
+    created_ids  TEXT NOT NULL DEFAULT '[]',
+    updated_n    INTEGER NOT NULL DEFAULT 0,
+    deleted_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_roster_imports_org ON roster_imports(org_id);
+
 CREATE TABLE IF NOT EXISTS guardian_invites (
     id          INTEGER PRIMARY KEY,
     athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

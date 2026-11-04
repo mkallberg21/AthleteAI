@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 <div class="topbar">
@@ -809,6 +809,27 @@
     <div id="review"></div>
   </div>
 
+  <div class="card card--wide" id="add-player-card">
+    <h2>Add a player</h2>
+    <p class="small muted">
+      A kid moves to town, or a parent forgot to send the form: add one
+      player any time. Their parent gets the same invite as everyone else,
+      and the program is billed for them from today, not from the start of
+      the season.
+    </p>
+    <div class="form-grid">
+      <div><label for="ap-first">Player first name</label><input id="ap-first" autocomplete="off"></div>
+      <div><label for="ap-last">Player last name</label><input id="ap-last" autocomplete="off"></div>
+      <div><label for="ap-year">Birth year</label><input id="ap-year" inputmode="numeric" maxlength="4" placeholder="2013"></div>
+      <div><label for="ap-team">Team</label><select id="ap-team"></select></div>
+      <div><label for="ap-email">Parent email</label><input id="ap-email" type="email" autocomplete="off"></div>
+      <div><label for="ap-phone">Parent mobile</label><input id="ap-phone" type="tel" autocomplete="off"></div>
+    </div>
+    <button class="inline" id="ap-add" style="margin-top:12px">Add player and invite parent</button>
+    <div id="ap-err" class="err hidden"></div>
+    <div id="ap-ok" class="small" style="margin-top:8px"></div>
+  </div>
+
   <div class="card card--wide" id="import-card">
     <h2>Import a roster</h2>
     <p class="small muted">
@@ -821,14 +842,26 @@
     <label for="import-team">Import into</label>
     <select id="import-team"></select>
 
-    <div class="dropzone" id="dropzone">
-      <b>Choose a CSV file</b>
-      <span>or drop one here</span>
-      <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv" hidden>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop a roster file here, or press Enter to browse">
+      <div class="dropzone-icon" aria-hidden="true">&#8682;</div>
+      <b id="dropzone-title">Drag and drop your roster file here</b>
+      <span>CSV, TSV or TXT, up to 2 MB</span>
+      <span class="dropzone-or">or</span>
+      <button type="button" class="inline" id="browse-btn">Browse files</button>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden>
     </div>
+    <div class="small muted" id="chosen-file" style="margin-top:8px"></div>
     <button class="secondary inline" id="template-btn" style="margin-top:10px">
       Show a template
     </button>
+
+    <!-- Files already uploaded. Delete takes one back: the athletes it
+         created are removed, except anyone who has trained or whose parent
+         has signed up, who are kept and named. -->
+    <div id="uploads" class="hidden" style="margin-top:18px">
+      <b>Uploaded rosters</b>
+      <div id="uploads-list" style="margin-top:6px"></div>
+    </div>
 
     <div id="preview" class="hidden" style="margin-top:16px"></div>
     <div id="import-err" class="err hidden"></div>
@@ -2480,6 +2513,7 @@ async function loadTeams() {
   $('a-team').innerHTML = options;
   $('b-team').innerHTML = options;
   $('import-team').innerHTML = options;
+  $('ap-team').innerHTML = options;
   $('sync-team').innerHTML = options;
   $('g-team').innerHTML = options;
   $('ev-team').innerHTML = '<option value="">All teams</option>' + options;
@@ -3318,11 +3352,13 @@ async function doImport() {
         content: pendingCsv,
         team_id: Number($('import-team').value),
         invite_guardians: $('invite-guardians').checked,
+        filename: pendingName,
       },
     });
+    $('chosen-file').textContent = '';
     renderSlips(res);
     $('preview').classList.add('hidden');
-    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadBadge(IS_DIRECTOR)]);
+    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadBadge(IS_DIRECTOR), loadUploads()]);
     await loadTeamSnap();
     await wizardRefresh();
   } catch (e) {
@@ -3330,6 +3366,79 @@ async function doImport() {
     $('import-err').classList.remove('hidden');
     btn.disabled = false;
   }
+}
+
+// One late joiner. Builds a one-row roster and sends it through the same
+// import as a file, so the invite, the parent's contact, the funnel and the
+// billing start-day all behave exactly as they do for everyone else.
+function csvCell(v) { return `"${String(v).replace(/"/g, '""')}"`; }
+$('ap-add').addEventListener('click', async () => {
+  const f = (id) => $(id).value.trim();
+  const err = $('ap-err'); err.classList.add('hidden'); $('ap-ok').textContent = '';
+  const bad = !f('ap-first') ? 'Enter the player\u2019s first name.'
+    : !f('ap-last') ? 'Enter the player\u2019s last name.'
+    : !/^(19|20)\d{2}$/.test(f('ap-year')) ? 'Enter a four-digit birth year, like 2013.'
+    : !/^\S+@\S+\.\S+$/.test(f('ap-email')) ? 'Enter a parent email; that is how the invite reaches them.'
+    : f('ap-phone').replace(/\D/g, '').length < 10 ? 'Enter the parent\u2019s mobile number.'
+    : !$('ap-team').value ? 'Pick a team.' : '';
+  if (bad) { err.textContent = bad; err.classList.remove('hidden'); return; }
+  const btn = $('ap-add'); btn.disabled = true;
+  try {
+    const content = ['First Name,Last Name,Birth Year,Parent Email,Parent Phone',
+      [f('ap-first'), f('ap-last'), f('ap-year'), f('ap-email'), f('ap-phone')].map(csvCell).join(',')].join('\n');
+    const res = await api('/api/coach/roster/import', { method: 'POST', body: {
+      content, team_id: Number($('ap-team').value), invite_guardians: true,
+      filename: `Added by hand: ${f('ap-first')} ${f('ap-last')}` } });
+    if (!res.created.length && !res.updated.length) {
+      const why = res.skipped && res.skipped[0] ? (res.skipped[0].problems || []).join(' ') : '';
+      throw new Error(why || 'That player could not be added.');
+    }
+    $('ap-ok').textContent = res.created.length
+      ? `${f('ap-first')} ${f('ap-last')} is on the team. Their parent's invite is below.`
+      : `${f('ap-first')} ${f('ap-last')} was already here; their details are updated.`;
+    ['ap-first', 'ap-last', 'ap-year', 'ap-email', 'ap-phone'].forEach((id) => { $(id).value = ''; });
+    renderSlips(res);
+    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadUploads()]);
+    if (IS_DIRECTOR) loadBilling();
+  } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
+  finally { btn.disabled = false; }
+});
+
+// Files already uploaded, each with Delete. Delete takes the upload back.
+async function loadUploads() {
+  let data;
+  try { data = await api('/api/coach/roster/imports'); } catch { return; }
+  const box = $('uploads');
+  box.classList.toggle('hidden', !data.imports.length);
+  $('uploads-list').innerHTML = data.imports.map((u) => `
+    <div class="staff-row" style="align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="flex:1 1 220px;min-width:0">
+        <b style="word-break:break-word">${esc(u.filename)}</b>
+        <div class="small muted">${esc(u.created_at.slice(0, 10))}${u.team ? ' &middot; ' + esc(u.team) : ''} &middot;
+          ${u.created} added${u.updated ? `, ${u.updated} updated` : ''}${u.still_here !== u.created ? `, ${u.still_here} still here` : ''}</div>
+      </div>
+      ${IS_DIRECTOR ? `<button class="secondary inline" data-del-import="${u.id}" data-del-name="${esc(u.filename)}" data-del-n="${u.still_here}" data-del-keeps="${u.keeps}">Delete</button>` : ''}
+    </div>`).join('');
+  $('uploads-list').querySelectorAll('[data-del-import]').forEach((btn) => btn.addEventListener('click', async () => {
+    const n = Number(btn.dataset.delN), keeps = Number(btn.dataset.delKeeps);
+    const msg = `Delete ${btn.dataset.delName}?\n\n` +
+      `This removes the ${n - keeps} athlete${n - keeps === 1 ? '' : 's'} it added, and their parents' invites.` +
+      (keeps ? `\n${keeps} will stay: they have already trained or a parent has signed up.` : '') +
+      `\nAthletes it only updated are left as they are.`;
+    if (!window.confirm(msg)) return;
+    btn.disabled = true;
+    try {
+      const res = await api(`/api/coach/roster/imports/${btn.dataset.delImport}`, { method: 'DELETE' });
+      $('import-err').classList.add('hidden');
+      if (res.kept.length) {
+        $('import-err').textContent = `Removed ${res.removed}. Kept ${res.kept.map((k) => `${k.name} (${k.why})`).join(', ')}.`;
+        $('import-err').classList.remove('hidden');
+      }
+      $('slips-card').classList.add('hidden');
+      await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadUploads()]);
+      await wizardRefresh();
+    } catch (e) { btn.disabled = false; showError(e.message); }
+  }));
 }
 
 function renderSlips(res) {
@@ -3412,7 +3521,21 @@ $('send-yourself-copy').addEventListener('click', async () => {
   $('send-yourself-copied').textContent = `Copied ${pendingMail.length} message${pendingMail.length === 1 ? '' : 's'}.`;
 });
 
+let pendingName = '';
 function readFile(file) {
+  $('import-err').classList.add('hidden');
+  if (!/\.(csv|tsv|txt)$/i.test(file.name) && !/^text\//.test(file.type)) {
+    $('import-err').textContent = `${file.name} is not a CSV, TSV or TXT file. Export the roster as CSV from TeamSnap or your spreadsheet.`;
+    $('import-err').classList.remove('hidden');
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    $('import-err').textContent = `${file.name} is ${(file.size / 1048576).toFixed(1)} MB; a roster file is under 2 MB. Is it the right file?`;
+    $('import-err').classList.remove('hidden');
+    return;
+  }
+  pendingName = file.name;
+  $('chosen-file').textContent = `${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`;
   const reader = new FileReader();
   reader.onload = () => previewFile(String(reader.result || ''));
   reader.onerror = () => {
@@ -3423,8 +3546,13 @@ function readFile(file) {
 }
 
 $('dropzone').addEventListener('click', () => $('file-input').click());
+$('browse-btn').addEventListener('click', (e) => { e.stopPropagation(); $('file-input').click(); });
+$('dropzone').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file-input').click(); }
+});
 $('file-input').addEventListener('change', (e) => {
   if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
+  e.target.value = '';   // choosing the same file again must fire change again
 });
 ['dragenter', 'dragover'].forEach((evt) =>
   $('dropzone').addEventListener(evt, (e) => {
@@ -3651,6 +3779,7 @@ $('signout').addEventListener('click', logout);
     await loadFamilies();
     await loadBadge(orgs.role === 'director');
     await loadContact(true);
+    await loadUploads();
     await loadTeams();
     await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.

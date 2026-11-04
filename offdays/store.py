@@ -4006,6 +4006,7 @@ class Store:
         created_by: int,
         *,
         issue_guardian_invites: bool = True,
+        filename: str = "",
     ) -> dict[str, Any]:
         """Create and update athletes from a resolved plan.
 
@@ -4141,13 +4142,93 @@ class Store:
                     # imported successfully.
                     pass
 
+        import json as _json
+        with transaction(self.conn) as c:
+            cur = c.execute(
+                "INSERT INTO roster_imports(org_id, team_id, filename, created_by, created_at, "
+                "created_ids, updated_n) VALUES (?,?,?,?,?,?,?)",
+                (org_id, team_id, (filename or "").strip()[:200], created_by, now,
+                 _json.dumps([a["athlete_id"] for a in created]), len(updated)),
+            )
         return {
+            "import_id": int(cur.lastrowid),
             "created": created,
             "updated": updated,
             "guardian_invites": invites,
             "emailed": emailed,
             "skipped": [a.to_dict() for a in plan.athletes if not a.ok],
         }
+
+    def roster_imports(self, org_id: int) -> list[dict[str, Any]]:
+        """Files applied to this program, newest first, with how many of the
+        athletes each created are still here and how many can be taken back."""
+        import json as _json
+        rows = self.conn.execute(
+            "SELECT ri.id, ri.filename, ri.created_at, ri.created_ids, ri.updated_n, ri.team_id, "
+            "       t.name AS team_name "
+            "FROM roster_imports ri LEFT JOIN teams t ON t.id = ri.team_id "
+            "WHERE ri.org_id = ? AND ri.deleted_at IS NULL ORDER BY ri.id DESC",
+            (org_id,),
+        ).fetchall()
+        out = []
+        for r in rows:
+            ids = _json.loads(r["created_ids"] or "[]")
+            here, blocked = self._import_status(org_id, ids)
+            out.append({
+                "id": r["id"], "filename": r["filename"] or "(pasted roster)",
+                "created_at": r["created_at"], "team": r["team_name"] or "",
+                "created": len(ids), "still_here": len(here), "keeps": len(blocked),
+                "updated": r["updated_n"],
+            })
+        return out
+
+    def _import_status(self, org_id: int, ids: list[int]) -> tuple[list[int], list[dict[str, Any]]]:
+        """(athletes from this file still in the program, those that must be kept and why)."""
+        if not ids:
+            return [], []
+        marks = ",".join("?" for _ in ids)
+        here = [int(r["id"]) for r in self.conn.execute(
+            f"SELECT id FROM users WHERE org_id = ? AND role = 'athlete' AND id IN ({marks})",
+            (org_id, *ids)).fetchall()]
+        blocked = []
+        for aid in here:
+            name = self.conn.execute("SELECT display_name FROM users WHERE id = ?", (aid,)).fetchone()["display_name"]
+            trained = self.conn.execute(
+                "SELECT COUNT(*) AS n FROM sessions WHERE athlete_id = ?", (aid,)).fetchone()["n"]
+            parent = self.conn.execute(
+                "SELECT COUNT(*) AS n FROM guardians WHERE athlete_id = ?", (aid,)).fetchone()["n"]
+            if trained:
+                blocked.append({"athlete_id": aid, "name": name, "why": "has already trained"})
+            elif parent:
+                blocked.append({"athlete_id": aid, "name": name, "why": "a parent has already signed up"})
+        return here, blocked
+
+    def delete_roster_import(self, org_id: int, import_id: int) -> dict[str, Any]:
+        """Take back an upload: remove the athletes that file created.
+
+        Anyone who has trained, or whose parent has signed up, is kept and
+        named -- removing them would delete a child's record or a parent's
+        account over a mistake that is about a file. Their parents' roster
+        contacts and any unredeemed invites for removed athletes go with
+        them (they cascade). Athletes the file only *updated* are not
+        reverted.
+        """
+        import json as _json
+        row = self.conn.execute(
+            "SELECT id, filename, created_ids FROM roster_imports "
+            "WHERE id = ? AND org_id = ? AND deleted_at IS NULL", (import_id, org_id)).fetchone()
+        if row is None:
+            raise StoreError("no such upload")
+        ids = _json.loads(row["created_ids"] or "[]")
+        here, blocked = self._import_status(org_id, ids)
+        keep = {b["athlete_id"] for b in blocked}
+        remove = [a for a in here if a not in keep]
+        with transaction(self.conn) as c:
+            for aid in remove:
+                c.execute("DELETE FROM users WHERE id = ? AND org_id = ? AND role = 'athlete'", (aid, org_id))
+            c.execute("UPDATE roster_imports SET deleted_at = ? WHERE id = ?", (_iso(_now()), import_id))
+        return {"deleted": True, "import_id": import_id, "filename": row["filename"],
+                "removed": len(remove), "kept": blocked}
 
     def _invite_sender(self, org_id: int, staff_id: int) -> dict[str, str]:
         """Who the invite email says it is from: the program and the coach."""

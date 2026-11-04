@@ -1436,6 +1436,28 @@ tbody tr:hover { background: var(--surface-2); }
    Populate .sponsor-logo with an <img> and .sponsor-text
    with the sponsor name; hide the whole slot when empty.
    ============================================================ */
+/* A small form: two columns on a desktop, one on a phone. */
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin-top: 10px; }
+.form-grid label { display: block; margin-bottom: 4px; }
+@media (max-width: 640px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* The roster drop box. A real target: dashed, big, obviously a place to
+   put a file, with a Browse button for anyone who would rather click. */
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  border: 2px dashed var(--border-light, var(--border)); border-radius: var(--radius);
+  padding: 28px 18px; text-align: center; cursor: pointer;
+  background: var(--surface-2);
+  transition: border-color .15s ease, background .15s ease;
+}
+.dropzone:hover, .dropzone:focus-visible, .dropzone.over { border-color: var(--accent); background: var(--surface); outline: none; }
+.dropzone.over { box-shadow: inset 0 0 0 2px var(--accent); }
+.dropzone-icon { font-size: 2rem; line-height: 1; color: var(--accent); }
+.dropzone b { font-size: 1.05rem; }
+.dropzone span { font-size: .8rem; color: var(--text-muted); }
+.dropzone .dropzone-or { text-transform: uppercase; letter-spacing: .1em; font-size: .7rem; }
+.dropzone button { margin-top: 2px; }
+
 /* Setup walkthrough: while it is on, the rest of the dashboard waits. The
    embedded card loses its own frame so the step reads as one thing. */
 /* One rule for every role's walkthrough (#wizard director, #pwizard
