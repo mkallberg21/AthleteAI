@@ -367,10 +367,32 @@ button:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) {
 }
 button:not([class*="btn"]):active { transform: scale(0.97); }
 button:not([class*="btn"]):disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-light); box-shadow: none; }
+button.secondary, button.secondary:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-light); box-shadow: none; }
 #ball-calibrate { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-light); box-shadow: none; min-height: 44px; font-size: 0.9rem; }
-button.danger { background: var(--danger); color: #fff; box-shadow: 0 2px 8px rgba(239,68,68,0.35); }
-button.inline { width: auto; padding: 0.5rem 0.9rem; min-height: 38px; font-size: 0.875rem; border-radius: var(--radius-sm); }
+button.danger, button.danger:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) { background: var(--danger); color: #fff; box-shadow: 0 2px 8px rgba(239,68,68,0.35); }
+button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) { width: auto; padding: 0.5rem 0.9rem; min-height: 38px; font-size: 0.875rem; border-radius: var(--radius-sm); }
+
+/* Status pills (coach roster, families). Lost in the v3 re-skin. */
+.pill {
+  display: inline-block; padding: 3px 9px; border-radius: 99px;
+  font-size: .7rem; font-weight: 700; letter-spacing: .03em; white-space: nowrap;
+  background: var(--surface-3); color: var(--text-muted);
+}
+.pill.ok { background: color-mix(in srgb, var(--go) 18%, transparent); color: var(--go); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.pill.bad { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+
+/* Families card: one stacked row per family, never a four-column table --
+   at tablet width the table folded every cell into a column of words. */
+.family-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.family-row:last-child { border-bottom: none; }
+.family-row .family-main { min-width: 0; }
+.family-row .family-stage { margin-top: 3px; }
+.family-row .family-parent { font-size: .85rem; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
+.family-row button { width: auto; }
 
 /* The one button that matters on the capture screen. Pinned to the bottom
    of the phone so it is on screen the moment the camera opens and still

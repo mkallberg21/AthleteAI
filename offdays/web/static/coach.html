@@ -138,6 +138,32 @@
     <div id="bounces" class="hidden" style="margin-top:12px"></div>
   </div>
 
+  <div class="card hidden" id="families-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h2 style="margin:0">Families</h2>
+      <span class="small muted" id="families-through"></span>
+    </div>
+    <p class="small muted">
+      Every athlete on the roster, and where their family is between the
+      upload and a kid who trains. Each row says whose move it is. Where the
+      next move is a parent who has not opened their invite, <b>Nudge</b>
+      sends them a fresh one at the address the roster gave.
+    </p>
+    <div id="families-counts" class="small" style="margin:8px 0 10px"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <label class="small muted" for="families-filter">Show</label>
+      <select id="families-filter" style="width:auto">
+        <option value="stuck">Not training yet</option>
+        <option value="parent">Waiting on a parent</option>
+        <option value="athlete">Waiting on the athlete</option>
+        <option value="program">Waiting on the program</option>
+        <option value="all">Everyone</option>
+      </select>
+    </div>
+    <div id="families"></div>
+    <div id="families-err" class="err hidden"></div>
+  </div>
+
   <div class="card" id="attention-card">
     <h2>Needs a nudge</h2>
     <div id="attention"></div>
@@ -2171,6 +2197,90 @@ function defaultGoalDates() {
 
 // ------------------------------------------------------------ season phase
 
+let familiesData = null;
+
+async function loadFamilies() {
+  try {
+    familiesData = await api('/api/coach/families');
+  } catch (err) {
+    $('families-err').textContent = err.message || 'Could not load families.';
+    $('families-err').classList.remove('hidden');
+    return;
+  }
+  const d = familiesData;
+  $('families-card').classList.toggle('hidden', d.total === 0);
+  if (!d.total) return;
+  $('families-through').textContent = `${d.through} of ${d.total} training`;
+  // One chip per stage that has anyone in it, in funnel order, so the
+  // director reads the shape of the problem before any names.
+  $('families-counts').innerHTML = d.stages
+    .filter((s) => d.counts[s.key])
+    .map((s) => `<span class="pill ${s.key === 'training' ? 'ok' : s.who === 'parent' ? 'warn' : ''}"
+        style="margin:0 6px 6px 0;display:inline-block">${d.counts[s.key]} &middot; ${esc(s.label)}</span>`)
+    .join('');
+  renderFamilies();
+}
+
+function renderFamilies() {
+  const d = familiesData;
+  if (!d) return;
+  const mode = $('families-filter').value;
+  const rows = d.athletes.filter((a) => {
+    if (mode === 'all') return true;
+    if (mode === 'stuck') return a.stage !== 'training';
+    return a.who === mode;
+  });
+  $('families').innerHTML = rows.length ? rows.map((a) => {
+    const when = a.stage === 'invited' && a.last_invited_at ? ` <span class="muted">(invited ${fmtDate(a.last_invited_at)})</span>`
+      : a.stage === 'link_sent' && a.link_sent_at ? ` <span class="muted">(sent ${fmtDate(a.link_sent_at)})</span>`
+      : a.stage === 'signed_in' && a.last_seen_at ? ` <span class="muted">(last in ${fmtDate(a.last_seen_at)})</span>`
+      : '';
+    const whose = a.who === 'parent' ? '<span class="pill warn">parent</span>'
+      : a.who === 'athlete' ? '<span class="pill">athlete</span>'
+      : a.who === 'program' ? '<span class="pill bad">you</span>'
+      : '<span class="pill ok">done</span>';
+    const parent = a.parent_name || a.parent_email
+      ? `${esc(a.parent_name)}${a.parent_name && a.parent_email ? ' &middot; ' : ''}${esc(a.parent_email)}`
+      : 'No parent on file';
+    const action = a.can_nudge
+      ? `<button class="secondary inline" data-nudge="${a.athlete_id}">Nudge</button>`
+      : '';
+    return `<div class="family-row">
+      <div class="family-main">
+        <b>${esc(a.display_name)}</b> <span class="small muted">${esc(a.team_name || 'No team')}</span>
+        <div class="family-stage">${whose} ${esc(a.label)}${when}</div>
+        <div class="family-parent">${parent}</div>
+      </div>
+      <div>${action}</div>
+    </div>`;
+  }).join('') : `<p class="muted small">${mode === 'stuck' ? 'Everyone is training.' : 'Nobody here.'}</p>`;
+}
+
+$('families-filter').addEventListener('change', renderFamilies);
+
+$('families').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-nudge]');
+  if (!btn) return;
+  btn.disabled = true;
+  const before = btn.textContent;
+  btn.textContent = 'Sending…';
+  try {
+    const res = await api('/api/coach/families/nudge', {
+      method: 'POST', body: { athlete_id: Number(btn.dataset.nudge) },
+    });
+    btn.replaceWith(Object.assign(document.createElement('span'), {
+      className: 'small muted',
+      textContent: res.emailed ? `Sent to ${res.email}` : `Queued for ${res.email}`,
+    }));
+    // The stage moved; pull the fresh picture rather than guessing at it.
+    loadFamilies();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = before;
+    alert(err.message || 'Could not send the invite.');
+  }
+});
+
 async function loadParents(isDirector) {
   if (!isDirector) return;
   try {
@@ -2606,7 +2716,7 @@ async function doImport() {
     });
     renderSlips(res);
     $('preview').classList.add('hidden');
-    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR)]);
+    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies()]);
   } catch (e) {
     $('import-err').textContent = e.message;
     $('import-err').classList.remove('hidden');
@@ -2836,6 +2946,7 @@ $('signout').addEventListener('click', logout);
     await loadPositionSettings(orgs.role === 'director');
     await loadSeason(orgs.role === 'director');
     await loadParents(orgs.role === 'director');
+    await loadFamilies();
     await loadTeams();
     await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.
