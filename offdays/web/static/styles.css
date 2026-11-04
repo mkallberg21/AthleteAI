@@ -1436,6 +1436,17 @@ tbody tr:hover { background: var(--surface-2); }
    Populate .sponsor-logo with an <img> and .sponsor-text
    with the sponsor name; hide the whole slot when empty.
    ============================================================ */
+/* Setup walkthrough: while it is on, the rest of the dashboard waits. The
+   embedded card loses its own frame so the step reads as one thing. */
+body.wizard-on .wrap > .card:not(#wizard),
+body.wizard-on .wrap > details,
+body.wizard-on .wrap > .sponsor-slot,
+body.wizard-on #summary { display: none !important; }
+body.wizard-on #wizard { grid-column: 1 / -1; }
+.wizard-embedded { border: none; background: transparent; padding: 0; margin: 0; box-shadow: none; }
+.wizard-embedded > h2:first-child { display: none; }
+#wizard-next:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* Landing page on a laptop: brand and the four role buttons on the left,
    the chosen role's form on the right, nothing to scroll. On a phone the
    two columns stack and it is the one-screen page. */

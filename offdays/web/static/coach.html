@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 <div class="topbar">
@@ -63,6 +63,29 @@
   </div>
 
   <div class="stat-row" id="summary"></div>
+
+  <!-- Setup walkthrough: a new director's whole screen until setup is
+       done. One step at a time; the real card for that step is moved into
+       the slot, so there is one place to do each thing and the director
+       never has to guess what is next. Finish (or skip) and the ordinary
+       dashboard appears with the cards back where they live. -->
+  <div class="card card--wide hidden" id="wizard">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="small muted" id="wizard-count">Step 1 of 5</div>
+        <h2 style="margin:2px 0 0" id="wizard-title">Set up your program</h2>
+      </div>
+      <button class="secondary inline" id="wizard-skip">Skip the walkthrough</button>
+    </div>
+    <div class="setup-bar" style="margin-top:10px"><i id="wizard-fill" style="width:0%"></i></div>
+    <p class="small muted" id="wizard-lede" style="margin:10px 0 0"></p>
+    <div id="wizard-slot" style="margin-top:14px"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap">
+      <button class="secondary inline hidden" id="wizard-back">Back</button>
+      <button class="inline" id="wizard-next" disabled>Next</button>
+      <span class="small muted" id="wizard-hint"></span>
+    </div>
+  </div>
 
   <div class="card hidden" id="setup-card">
     <div class="budget-head">
@@ -1568,6 +1591,142 @@ $('wellness-watch').addEventListener('click', async (event) => {
  * describes goes away, which is the difference between a checklist that is
  * true and one that was true once.
  */
+// ------------------------------------------------------------ walkthrough
+//
+// Steps, in the order a director should do them. Each names the card that
+// does the work (moved into the slot while the step is showing), how to
+// tell it is done (read from the same /api/coach/onboarding the checklist
+// uses, plus a couple of direct reads), and the sentence at the top.
+const WIZARD_STEPS = [
+  { key: 'badge', card: 'badge-card', title: 'Your badge',
+    lede: 'Upload your program\u2019s logo. It leads the top of every screen your coaches, athletes and parents see. You can skip this and do it later.',
+    done: (st) => st.badge, optional: true },
+  { key: 'season', card: 'season-card', title: 'When the season runs',
+    lede: 'Set the start and end dates. Athletes train between them, and the program is billed per rostered athlete per day between them. Nothing is charged until both are set.',
+    done: (st) => st.season },
+  { key: 'teams', card: 'teams-card', title: 'Your teams and their coaches',
+    lede: 'Name each team the way your club does (\u201c2031 Red\u201d), name its coach, and the day\u2019s wall-ball and shooting numbers fill in from the team\u2019s age. One team is enough to continue; add the rest now or later.',
+    done: (st) => st.teams > 0 },
+  { key: 'roster', card: 'import-card', title: 'The roster, with parents\u2019 emails',
+    lede: 'Drop in the roster file (TeamSnap or SportsEngine export, or any spreadsheet) with a parent email and mobile per player. Every parent gets an invite; from here the system takes over.',
+    done: (st) => st.athletes > 0 },
+  { key: 'send', card: 'slips-card', title: 'Send the invites',
+    lede: 'If the program is not sending email, send each invite from your own email with one click. Then you are done: parents sign up, say yes, send their kid the link, and your Families card shows who is where.',
+    done: (st) => st.athletes > 0, optional: true },
+];
+const WIZARD_HOME = {};   // card id -> { parent, next } so cards go back where they live
+let wizardStep = 0;
+let wizardOn = false;
+
+async function wizardStatus() {
+  const [ob, brand, season, teams] = await Promise.all([
+    api('/api/coach/onboarding').catch(() => null),
+    api('/api/branding').catch(() => ({ logo: '' })),
+    api('/api/org/season').catch(() => ({})),
+    api('/api/coach/teams').catch(() => ({ teams: [] })),
+  ]);
+  const step = (k) => (ob && ob.steps.find((s) => s.key === k)) || {};
+  return {
+    badge: !!brand.logo,
+    season: !!(season.starts_on && season.ends_on),
+    teams: teams.teams.length,
+    athletes: teams.teams.reduce((n, t) => n + (t.roster || 0), 0),
+    complete: !!(ob && ob.complete),
+    firstSession: !!step('first_session').done,
+  };
+}
+
+function wizardPlace(cardId) {
+  const card = $(cardId);
+  if (!card) return;
+  if (!WIZARD_HOME[cardId]) WIZARD_HOME[cardId] = { parent: card.parentNode, next: card.nextSibling };
+  $('wizard-slot').appendChild(card);
+  card.classList.remove('hidden');
+  card.classList.add('wizard-embedded');
+}
+function wizardRestore() {
+  for (const [id, home] of Object.entries(WIZARD_HOME)) {
+    const card = $(id);
+    card.classList.remove('wizard-embedded');
+    home.parent.insertBefore(card, home.next && home.next.parentNode === home.parent ? home.next : null);
+  }
+}
+
+async function wizardShow(i) {
+  wizardStep = Math.max(0, Math.min(WIZARD_STEPS.length - 1, i));
+  const s = WIZARD_STEPS[wizardStep];
+  const st = await wizardStatus();
+  wizardRestore();
+  wizardPlace(s.card);
+  $('wizard-count').textContent = `Step ${wizardStep + 1} of ${WIZARD_STEPS.length}`;
+  $('wizard-title').textContent = s.title;
+  $('wizard-lede').textContent = s.lede;
+  $('wizard-fill').style.width = `${Math.round((wizardStep / WIZARD_STEPS.length) * 100)}%`;
+  $('wizard-back').classList.toggle('hidden', wizardStep === 0);
+  const done = !!s.done(st);
+  const last = wizardStep === WIZARD_STEPS.length - 1;
+  $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
+  $('wizard-next').disabled = !(done || s.optional);
+  $('wizard-hint').textContent = done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.');
+  // Cards in the slot are director-only or already role-gated; make sure the
+  // ones we embed are visible even when their own loader hid them.
+  if (s.card === 'season-card') $('season-card').classList.remove('hidden');
+  if (s.card === 'slips-card') {
+    $('slips-card').classList.remove('hidden');
+    if (!$('slips-card').querySelector('.slip, #send-yourself-list > *')) {
+      $('slips-note').textContent = 'The roster import on the previous step puts every invite here. If the program is sending email, they have already gone and there is nothing to do.';
+    }
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Anything that changes the program re-reads the step. Cheap, and it is
+// what makes Next light up the moment the team is created.
+async function wizardRefresh() {
+  if (!wizardOn) return;
+  const s = WIZARD_STEPS[wizardStep];
+  const st = await wizardStatus();
+  const done = !!s.done(st);
+  const last = wizardStep === WIZARD_STEPS.length - 1;
+  $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
+  $('wizard-next').disabled = !(done || s.optional);
+  $('wizard-hint').textContent = done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.');
+}
+
+function wizardFinish() {
+  wizardOn = false;
+  wizardRestore();
+  $('wizard').classList.add('hidden');
+  document.body.classList.remove('wizard-on');
+  try { localStorage.setItem(`offdays.wizard.${CURRENT_ORG}`, 'done'); } catch { /* fine */ }
+  loadSetup();
+}
+
+async function startWizardIfNew(isDirector) {
+  if (!isDirector) return;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(`offdays.wizard.${CURRENT_ORG}`) === 'done'; } catch { /* fine */ }
+  const st = await wizardStatus();
+  // A program that has already imported athletes has been set up; the
+  // walkthrough is for the director's first visits.
+  if (dismissed || st.athletes > 0) return;
+  wizardOn = true;
+  document.body.classList.add('wizard-on');
+  $('wizard').classList.remove('hidden');
+  // Start at the first step not yet done, optional ones included: a
+  // brand-new director walks all five in order; one who comes back
+  // resumes where they left off.
+  const first = WIZARD_STEPS.findIndex((s) => !s.done(st));
+  await wizardShow(first === -1 ? WIZARD_STEPS.length - 1 : first);
+}
+
+$('wizard-next').addEventListener('click', async () => {
+  if (wizardStep === WIZARD_STEPS.length - 1) return wizardFinish();
+  await wizardShow(wizardStep + 1);
+});
+$('wizard-back').addEventListener('click', () => wizardShow(wizardStep - 1));
+$('wizard-skip').addEventListener('click', wizardFinish);
+
 async function loadSetup() {
   let data;
   try { data = await api('/api/coach/onboarding'); } catch { return; }
@@ -2424,6 +2583,7 @@ $('badge-file').addEventListener('change', async (e) => {
     await api('/api/org/logo', { method: 'POST', body: form });
     $('badge-status').textContent = 'Saved. It is on every screen now.';
     await Promise.all([loadBadge(true), renderBranding('masthead', '')]);
+    await wizardRefresh();
   } catch (err) {
     $('badge-status').textContent = '';
     $('badge-err').textContent = err.message || 'Could not upload that image.';
@@ -2633,6 +2793,7 @@ async function loadSeason(isDirector) {
       });
       endsState(res);
       await showBill();
+      await wizardRefresh();
     } catch (e) {
       $('season-err').textContent = e.message;
       $('season-err').classList.remove('hidden');
@@ -3045,6 +3206,7 @@ async function doImport() {
     $('preview').classList.add('hidden');
     await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadBadge(IS_DIRECTOR)]);
     await loadTeamSnap();
+    await wizardRefresh();
   } catch (e) {
     $('import-err').textContent = e.message;
     $('import-err').classList.remove('hidden');
@@ -3239,6 +3401,7 @@ $('add-team').addEventListener('click', async () => {
     for (const id of ['new-team', 'new-team-coach', 'new-team-coach-email', 'new-team-wall', 'new-team-shots']) $(id).value = '';
     $('new-team-age').textContent = ''; suggested = { wall_ball: null, shots: null };
     await Promise.all([loadTeams(), loadStaff(IS_DIRECTOR)]);
+    await wizardRefresh();
   } catch (e) {
     $('new-team-err').textContent = e.message || 'Could not create the team.'; $('new-team-err').classList.remove('hidden');
   } finally { btn.disabled = false; $('new-team-status').textContent = ''; }
@@ -3341,6 +3504,7 @@ $('signout').addEventListener('click', logout);
     setRole(me.role);
 
     const orgs = await api('/api/orgs/mine');
+    CURRENT_ORG = orgs.active_org_id;
     if (orgs.memberships.length > 1) {
       const select = $('org-switch');
       select.innerHTML = orgs.memberships
@@ -3383,6 +3547,8 @@ $('signout').addEventListener('click', logout);
       $('library-card').classList.add('hidden');
     });
     await loadAll();
+    // Last, after every card has rendered: a new director's first visits are the walkthrough.
+    await startWizardIfNew(orgs.role === 'director');
   } catch (e) { showError(e.message); }
 })();
 
@@ -3406,6 +3572,7 @@ let LIB = null;
 // Set once the role is known. The program list and the team-drill card both
 // behave differently for a director and a coach.
 let IS_DIRECTOR = false;
+let CURRENT_ORG = 0;
 let libFilter = 'offered';
 
 const LIB_FILTERS = [

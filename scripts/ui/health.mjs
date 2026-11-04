@@ -108,6 +108,18 @@ else {
     await page.waitForURL(/coach\.html/, { timeout: 15000 }).catch(() => bad(`${tag}: director code did not land on the dashboard`));
     await page.waitForTimeout(2500);
     await assertStylesheetCurrent(page, `dashboard ${tag}`);
+    // A brand-new director meets the walkthrough: one step, nothing else, Next gated.
+    const wiz = await page.locator('#wizard').isVisible().catch(() => false);
+    if (!wiz) bad(`dashboard ${tag}: a new director did not get the setup walkthrough`);
+    else {
+      const others = await page.evaluate(() => [...document.querySelectorAll('.wrap > .card:not(#wizard)')].filter((c) => getComputedStyle(c).display !== 'none').map((c) => c.id));
+      if (others.length) bad(`dashboard ${tag}: walkthrough is on but other cards show: ${others.join(', ')}`);
+      const t = await page.locator('#wizard-title').textContent();
+      if (!/badge/i.test(t)) bad(`dashboard ${tag}: walkthrough starts at '${t}', expected the badge step`);
+      await page.screenshot({ path: `${out}/${tag}-walkthrough.png`, fullPage: false });
+      await page.click('#wizard-skip'); await page.waitForTimeout(600);
+      ok(`dashboard ${tag}: walkthrough shown first, skipped for the card checks`);
+    }
     if (failures.length) bad(`dashboard ${tag}: ${failures.join('; ')}`);
     for (const [sel, name] of [['#badge-card', 'badge card'], ['#billing-card', 'cost card'], ['#setup-card', 'setup checklist'], ['#sync-card', 'roster sync card']]) {
       const b = await box(page, sel);

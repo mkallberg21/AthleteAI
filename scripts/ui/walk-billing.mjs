@@ -16,6 +16,7 @@ const browser = await chromium.launch();
 const page = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage();
 await page.goto(`${base}/app/index.html?code=${made.director.token}`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(2000);
+await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
 const card = page.locator('#billing-card');
 console.log('BEFORE DATES:', (await card.innerText()).replace(/\s*\n\s*/g, ' | '));
 await card.screenshot({ path: `${out}/1-no-dates.png` });

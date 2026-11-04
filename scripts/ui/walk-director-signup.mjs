@@ -33,6 +33,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 860 } 
   await page.click('#open-dashboard');
   await page.waitForURL(/coach\.html/);
   await page.waitForTimeout(2500);
+  await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
   await page.screenshot({ path: `${out}/${tag}-4-dashboard-first.png`, fullPage: false });
 
   // Upload the shipped Nashville Dogs crest as the badge, through the real control.
