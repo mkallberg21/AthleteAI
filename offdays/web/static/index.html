@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#0A0A0B">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 <title>0FFDAYS</title>
 </head>
 <body>
@@ -33,10 +33,11 @@
   </div>
 
   <!-- Content -->
-  <main class="wrap wrap--narrow">
+  <main class="wrap wrap--narrow landing">
 
+    <div class="landing-left">
     <!-- Hero -->
-    <div class="card-elevated" style="text-align:center; padding:1.25rem 1.25rem 1rem;">
+    <div class="card-elevated landing-hero" style="text-align:center; padding:1.25rem 1.25rem 1rem;">
       <h1 style="font-size:1.5rem; margin-bottom:0.35rem;">Train on your own. Get the credit.</h1>
       <p class="small muted" style="margin:0">The phone counts the reps; the coach sees the numbers, never the footage.</p>
     </div>
@@ -55,6 +56,21 @@
       <button type="button" class="role-btn" data-role="director" role="tab" aria-controls="panel-director">
         <span class="role-icon">🏆</span><b>Director</b><span>Start or run a program</span>
       </button>
+    </div>
+
+    <div class="privacy-note landing-privacy" style="margin-top:1rem;">
+      <strong style="color:var(--accent-bright)">Video never leaves the phone.</strong> It is not uploaded, not saved, not stored anywhere. Only the counts are sent: reps, which hand, how long.
+    </div>
+    </div><!-- /landing-left -->
+
+    <div class="landing-right">
+    <!-- Nothing chosen yet: on a laptop the right column says so; on a phone this is hidden. -->
+    <div class="landing-empty" id="landing-empty">
+      <div class="landing-empty-inner">
+        <div style="font-size:2.2rem">&larr;</div>
+        <b>Pick who you are</b>
+        <span class="small muted">Athletes use the link a parent sent. Parents set up their child. Coaches and directors sign in with their code.</span>
+      </div>
     </div>
 
     <!-- ATHLETE: the link from a parent signs them in; the code is the fallback -->
@@ -208,10 +224,7 @@
       </form>
     </div>
     </div>
-
-    <div class="privacy-note" style="margin-top:1rem;">
-      <strong style="color:var(--accent-bright)">Video never leaves the phone.</strong> It is not uploaded, not saved, not stored anywhere. Only the counts are sent: reps, which hand, how long.
-    </div>
+    </div><!-- /landing-right -->
 
   </main>
 </div>
@@ -232,10 +245,14 @@ function showRole(role, { focus = true } = {}) {
     btn.classList.toggle('active', r === role);
     btn.setAttribute('aria-selected', r === role ? 'true' : 'false');
   }
+  $('landing-empty').classList.toggle('hidden', !!role);
+  document.querySelector('main.landing').classList.toggle('has-role', !!role);
   if (!role) return;
   history.replaceState(null, '', `#${role}`);
   const panel = $(`panel-${role}`);
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // On a phone the panel is below the buttons: bring it up. On a laptop it
+  // is beside them and already on screen.
+  if (window.matchMedia('(max-width: 899px)').matches) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (focus) {
     const first = panel.querySelector('input');
     if (first) setTimeout(() => first.focus({ preventScroll: true }), 300);

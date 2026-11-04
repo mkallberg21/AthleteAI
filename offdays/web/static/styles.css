@@ -1414,6 +1414,37 @@ button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-
    Populate .sponsor-logo with an <img> and .sponsor-text
    with the sponsor name; hide the whole slot when empty.
    ============================================================ */
+/* Landing page on a laptop: brand and the four role buttons on the left,
+   the chosen role's form on the right, nothing to scroll. On a phone the
+   two columns stack and it is the one-screen page. */
+.landing-empty { display: none; }
+@media (min-width: 900px) {
+  main.landing.wrap--narrow { max-width: 1100px; }
+  main.landing {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: 28px;
+    align-items: start;
+    padding-top: 28px;
+  }
+  .landing-hero { text-align: left !important; padding: 1.5rem 1.5rem 1.25rem !important; }
+  .landing-hero h1 { font-size: 2rem !important; line-height: 1.1; }
+  .landing-hero p { font-size: 0.95rem; }
+  .landing .role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .landing .role-btn { min-height: 108px; }
+  .landing-right { position: sticky; top: 84px; min-height: 420px; }
+  .landing-empty {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 420px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+  }
+  .landing-empty-inner { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 320px; text-align: center; }
+  .landing-empty-inner b { color: var(--text); font-family: var(--font-condensed); font-size: 1.3rem; }
+  .landing .role-panel { margin-top: 0; }
+}
+
 /* Landing page: four role buttons, one panel open at a time. */
 .role-grid {
   display: grid;

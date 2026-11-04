@@ -16,7 +16,7 @@ const imp = await (await fetch(`${base}/api/coach/roster/import`, { method: 'POS
   body: JSON.stringify({ content: 'First Name,Last Name,Birth Year,Parent Name,Parent Email\nMason,Reed,2013,Dana Reed,dana@example.com', team_id: team.id }) })).json();
 const invite = imp.guardian_invites[0];
 // Links are minted for the public host; point them at the server under test.
-const local = (u) => u.replace(/^https?:\/\/[^/]+/, base);
+const local = (u) => /^https?:/.test(u) ? u.replace(/^https?:\/\/[^/]+/, base) : base + u;
 console.log('invite link:', invite.link);
 
 const browser = await chromium.launch();
