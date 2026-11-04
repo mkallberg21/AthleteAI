@@ -31,6 +31,7 @@ from .config import CONFIG
 from . import assignments as assignments_mod
 from . import benchmarks as benchmarks_mod
 from . import billing as billing_mod
+from . import funnel as funnel_mod
 from . import digest as digest_mod
 from . import mailer
 from . import invites as invites_mod
@@ -2287,6 +2288,82 @@ def create_guardian_invite(
         store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
     )
     return {**invite, "link": invites_mod.invite_link(invite["code"]), "emailed": sent}
+
+
+@app.get("/api/coach/families")
+def coach_families(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Where every family is between the roster upload and a kid who trains.
+
+    One row per athlete with the stage they are at, whose move it is, and
+    the parent the program holds for them. A coach sees their teams; a
+    director sees the program. Read fresh every call.
+    """
+    return funnel_mod.funnel(store.conn, principal.org_id, team_ids=principal.team_ids)
+
+
+class NudgeRequest(BaseModel):
+    athlete_id: int
+
+
+@app.post("/api/coach/families/nudge", status_code=201)
+def nudge_family(
+    body: NudgeRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Send (or re-send) the parent invite to the address the roster gave.
+
+    The one thing a director can do from the dashboard for a family that
+    has not moved: a fresh invite, emailed to the parent on file. Any open
+    invite for the athlete is revoked first so exactly one code is live.
+    Refused once a parent is linked -- from there the next move is the
+    parent's, and the dashboard says so instead of sending mail.
+    """
+    owner = store.conn.execute(
+        "SELECT org_id FROM users WHERE id = ? AND role = 'athlete' AND active = 1",
+        (body.athlete_id,),
+    ).fetchone()
+    if owner is None:
+        raise HTTPException(status_code=404, detail="unknown athlete")
+    if owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=403, detail="athlete belongs to another program")
+    if not store.staff_can_see_athlete(principal, body.athlete_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that athlete's team")
+    if store.conn.execute(
+        "SELECT 1 FROM guardians WHERE athlete_id = ?", (body.athlete_id,)
+    ).fetchone():
+        raise HTTPException(
+            status_code=409,
+            detail="a parent is already signed up for this athlete; the next step is theirs",
+        )
+    contact = store.conn.execute(
+        "SELECT email FROM guardian_contacts WHERE athlete_id = ? AND email <> '' "
+        "ORDER BY id LIMIT 1",
+        (body.athlete_id,),
+    ).fetchone()
+    if contact is None:
+        raise HTTPException(status_code=409, detail="no parent email on file for this athlete")
+    with transaction(store.conn) as c:
+        c.execute(
+            "UPDATE guardian_invites SET revoked_at = ? WHERE athlete_id = ? "
+            "AND redeemed_at IS NULL AND revoked_at IS NULL",
+            (guardians_mod._iso(guardians_mod._now()), body.athlete_id),
+        )
+    invite = guardians_mod.create_invite(
+        store.conn, body.athlete_id, principal.id, contact["email"]
+    )
+    sent = invites_mod.deliver(
+        store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
+    )
+    return {
+        "athlete_id": body.athlete_id,
+        "invite_id": invite["invite_id"],
+        "email": contact["email"],
+        "emailed": sent,
+    }
 
 
 @app.get("/api/org/parents")

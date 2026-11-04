@@ -2719,6 +2719,17 @@ class Store:
                 "opens the next one. Nothing is lost."
             )
 
+        if row["role"] == "athlete":
+            # The funnel reads this; once a day is enough and keeps the sign-in
+            # path from writing on every request.
+            today = _now().strftime("%Y-%m-%d")
+            self.conn.execute(
+                "UPDATE users SET last_seen_at = ? WHERE id = ? "
+                "AND (last_seen_at IS NULL OR substr(last_seen_at, 1, 10) < ?)",
+                (_iso(_now()), row["id"], today),
+            )
+            self.conn.commit()
+
         memberships = [
             Membership(org_id=m["org_id"], org_name=m["org_name"], role=m["role"])
             for m in self.conn.execute(

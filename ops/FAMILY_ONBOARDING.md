@@ -158,9 +158,15 @@ Erasing an athlete ("delete the whole account") removes their contact rows.
    in `ops/GUARDIAN_VERIFICATION.md` by construction (possession of the roster
    inbox), but a bare code typed on the sign-up page is still accepted with
    no email check. The verified/unverified split in that doc is not built.
-2. **Re-send.** A coach cannot re-send an invite from the dashboard; the
-   workaround is **Invite** on the roster row, which mints a new code and
-   emails it. The old one stays valid until it expires or is revoked.
+2. **Re-send.** Built: the **Families** card on the dashboard shows every
+   athlete's stage (`GET /api/coach/families`, `offdays/funnel.py`: no parent
+   on file -> not invited -> invited -> signed up, consent pending -> link
+   not sent -> link sent -> signed in -> training) and whose move it is.
+   **Nudge** (`POST /api/coach/families/nudge`) revokes any open invite and
+   emails a fresh one to the roster's parent address; refused once a parent
+   is linked, because from there the move is theirs. `users.link_sent_at`
+   and `users.last_seen_at` (athletes only) are the two stamps that were
+   missing for the last three stages.
 3. **Two parents.** One invite per roster row. A second parent joins via the
    first parent's code (`/api/guardians/link`) or a second coach invite.
 4. **Mail flush cadence.** Hourly. A parent who signs up in the car park

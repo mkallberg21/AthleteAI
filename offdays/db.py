@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -142,7 +142,13 @@ CREATE TABLE IF NOT EXISTS users (
     -- The lens of the phone this athlete shoots with, as a share of the
     -- frame's short side, learned from sessions where the camera's distance
     -- and the paced distance agreed (offdays/distance.py). NULL = not yet.
-    camera_focal     REAL
+    camera_focal     REAL,
+    -- Family funnel, athletes only. When a parent last issued this child's
+    -- sign-in link (guardians.athlete_signin_link), and when the child last
+    -- signed in with it. Together with the invite and consent tables these
+    -- say which family is stuck where, and who the director should nudge.
+    link_sent_at     TEXT,
+    last_seen_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_users_external ON users(org_id, external_id);
 CREATE INDEX IF NOT EXISTS idx_users_org_role ON users(org_id, role);
@@ -1174,6 +1180,8 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # English-speaking club is the common case, not the edge one.
         ("locale", "TEXT NOT NULL DEFAULT 'en'"),
         ("camera_focal", "REAL"),
+        ("link_sent_at", "TEXT"),
+        ("last_seen_at", "TEXT"),
     ],
     # One entry per table. A dict literal keeps only the LAST duplicate key,
     # so a second "organizations" block here would silently drop the first
