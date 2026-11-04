@@ -74,6 +74,88 @@
     <p class="small muted" id="setup-done-note" style="margin-top:10px"></p>
   </div>
 
+  <div class="card card--wide" id="teams-card">
+    <h2>Teams</h2>
+
+    <!-- Create a team: one form. Name it the way the club does ("2031
+         Red", "U13"), name the coach, and the day's numbers fill in from
+         the team's age. Director only; coaches see the table. -->
+    <div id="create-team" class="hidden" style="padding:12px 14px;margin:0 0 14px;background:var(--surface-2);border-radius:var(--radius-sm)">
+      <b>Create a team</b>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <div style="flex:1 1 160px">
+          <label for="new-team">Team</label>
+          <input id="new-team" placeholder="2031 Red" autocomplete="off">
+          <div class="small muted" id="new-team-age" style="margin-top:4px;min-height:1.2em"></div>
+        </div>
+        <div style="flex:1 1 160px">
+          <label for="new-team-coach">Coach</label>
+          <input id="new-team-coach" placeholder="Sam Hill" autocomplete="off">
+        </div>
+        <div style="flex:1 1 200px">
+          <label for="new-team-coach-email">Coach's email</label>
+          <input id="new-team-coach-email" type="email" placeholder="sam@example.com" autocomplete="off">
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
+        <div style="flex:0 1 150px">
+          <label for="new-team-wall">Wall ball a day</label>
+          <input id="new-team-wall" type="number" inputmode="numeric" min="0" step="10" placeholder="auto">
+        </div>
+        <div style="flex:0 1 150px">
+          <label for="new-team-shots">Shots a day</label>
+          <input id="new-team-shots" type="number" inputmode="numeric" min="0" step="5" placeholder="auto">
+        </div>
+        <div style="flex:1 1 220px" class="small muted" id="new-team-note">
+          Filled in from the team's age once you name it. Each kid's own age ceiling still applies on top.
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <button class="inline" id="add-team">Create team</button>
+        <span class="small muted" id="new-team-status"></span>
+      </div>
+      <div id="new-team-out" class="small hidden" style="margin-top:8px"></div>
+      <div id="new-team-err" class="err hidden"></div>
+    </div>
+
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Team</th><th>Coach</th><th class="num">Roster</th><th class="num">Wall ball/day</th><th class="num">Shots/day</th><th>Join code</th></tr></thead>
+        <tbody id="teams"></tbody>
+      </table>
+    </div>
+    <p class="small muted" style="margin:8px 0 0">Wall ball and shots are the program's daily guidance per team, from each age's table. Staff see them here; athletes and parents never see a number to beat.</p>
+    <details style="margin-top:14px">
+      <summary class="small muted" style="cursor:pointer">Add an athlete by hand</summary>
+      <div style="margin-top:12px">
+
+        <label for="new-athlete">New athlete name</label>
+        <input id="new-athlete" placeholder="Jordan P.">
+        <label for="new-birth-year">Birth year</label>
+        <input id="new-birth-year" type="number" inputmode="numeric"
+               min="1900" max="2100" placeholder="2013">
+        <p class="small muted" style="margin:-4px 0 8px">
+          Everything is scaled by age: the weekly time budget, when position
+          training starts, and whether their full name shows on shared boards.
+          Without it they are treated as a minor on the safest settings.
+        </p>
+        <label for="new-hand">Dominant hand</label>
+        <select id="new-hand"><option value="right">Right</option><option value="left">Left</option></select>
+        <label for="new-position">Position</label>
+        <select id="new-position"><option value="">Not set</option></select>
+        <p class="small muted" style="margin:-4px 0 8px" id="new-position-note"></p>
+        <label for="new-code">Join code (optional)</label>
+        <input id="new-code" placeholder="ABC123">
+        <label style="display:flex;gap:8px;align-items:center;font-size:.85rem">
+          <input type="checkbox" id="new-consent" style="width:auto;min-height:auto;margin:0">
+          Guardian consent on file
+        </label>
+        <button class="secondary" id="add-athlete">Create athlete</button>
+        <div id="new-token" class="small hidden" style="margin-top:10px"></div>
+      </div>
+    </details>
+  </div>
+
   <div class="card hidden" id="badge-card">
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
       <div id="badge-preview" style="flex:0 0 auto;min-width:72px;min-height:72px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--radius-sm);padding:6px"></div>
@@ -133,8 +215,8 @@
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
       <b>Add a coach</b>
       <p class="small muted" style="margin:4px 0 8px">
-        They get an email with their sign-in link. Pick their teams now and
-        they see only those athletes from the first tap.
+        Coaches are added with their team: <a href="#teams-card" id="go-create-team">create the team</a>
+        and name its coach in the same form. Use this only to add a second coach to teams that already exist.
       </p>
       <div class="inline-form">
         <div style="flex:1 1 160px">
@@ -801,88 +883,6 @@
       and is not stored anywhere you can read it again, so print this now.
     </p>
     <div class="slips" id="slips"></div>
-  </div>
-
-  <div class="card card--wide" id="teams-card">
-    <h2>Teams</h2>
-
-    <!-- Create a team: one form. Name it the way the club does ("2031
-         Red", "U13"), name the coach, and the day's numbers fill in from
-         the team's age. Director only; coaches see the table. -->
-    <div id="create-team" class="hidden" style="padding:12px 14px;margin:0 0 14px;background:var(--surface-2);border-radius:var(--radius-sm)">
-      <b>Create a team</b>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
-        <div style="flex:1 1 160px">
-          <label for="new-team">Team</label>
-          <input id="new-team" placeholder="2031 Red" autocomplete="off">
-          <div class="small muted" id="new-team-age" style="margin-top:4px;min-height:1.2em"></div>
-        </div>
-        <div style="flex:1 1 160px">
-          <label for="new-team-coach">Coach</label>
-          <input id="new-team-coach" placeholder="Sam Hill" autocomplete="off">
-        </div>
-        <div style="flex:1 1 200px">
-          <label for="new-team-coach-email">Coach's email</label>
-          <input id="new-team-coach-email" type="email" placeholder="sam@example.com" autocomplete="off">
-        </div>
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
-        <div style="flex:0 1 150px">
-          <label for="new-team-wall">Wall ball a day</label>
-          <input id="new-team-wall" type="number" inputmode="numeric" min="0" step="10" placeholder="auto">
-        </div>
-        <div style="flex:0 1 150px">
-          <label for="new-team-shots">Shots a day</label>
-          <input id="new-team-shots" type="number" inputmode="numeric" min="0" step="5" placeholder="auto">
-        </div>
-        <div style="flex:1 1 220px" class="small muted" id="new-team-note">
-          Filled in from the team's age once you name it. Each kid's own age ceiling still applies on top.
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
-        <button class="inline" id="add-team">Create team</button>
-        <span class="small muted" id="new-team-status"></span>
-      </div>
-      <div id="new-team-out" class="small hidden" style="margin-top:8px"></div>
-      <div id="new-team-err" class="err hidden"></div>
-    </div>
-
-    <div style="overflow-x:auto">
-      <table>
-        <thead><tr><th>Team</th><th>Coach</th><th class="num">Roster</th><th class="num">Wall ball/day</th><th class="num">Shots/day</th><th>Join code</th></tr></thead>
-        <tbody id="teams"></tbody>
-      </table>
-    </div>
-    <p class="small muted" style="margin:8px 0 0">Wall ball and shots are the program's daily guidance per team, from each age's table. Staff see them here; athletes and parents never see a number to beat.</p>
-    <details style="margin-top:14px">
-      <summary class="small muted" style="cursor:pointer">Add an athlete by hand</summary>
-      <div style="margin-top:12px">
-
-        <label for="new-athlete">New athlete name</label>
-        <input id="new-athlete" placeholder="Jordan P.">
-        <label for="new-birth-year">Birth year</label>
-        <input id="new-birth-year" type="number" inputmode="numeric"
-               min="1900" max="2100" placeholder="2013">
-        <p class="small muted" style="margin:-4px 0 8px">
-          Everything is scaled by age: the weekly time budget, when position
-          training starts, and whether their full name shows on shared boards.
-          Without it they are treated as a minor on the safest settings.
-        </p>
-        <label for="new-hand">Dominant hand</label>
-        <select id="new-hand"><option value="right">Right</option><option value="left">Left</option></select>
-        <label for="new-position">Position</label>
-        <select id="new-position"><option value="">Not set</option></select>
-        <p class="small muted" style="margin:-4px 0 8px" id="new-position-note"></p>
-        <label for="new-code">Join code (optional)</label>
-        <input id="new-code" placeholder="ABC123">
-        <label style="display:flex;gap:8px;align-items:center;font-size:.85rem">
-          <input type="checkbox" id="new-consent" style="width:auto;min-height:auto;margin:0">
-          Guardian consent on file
-        </label>
-        <button class="secondary" id="add-athlete">Create athlete</button>
-        <div id="new-token" class="small hidden" style="margin-top:10px"></div>
-      </div>
-    </details>
   </div>
 
   <div id="err" class="err hidden"></div>
@@ -3210,6 +3210,7 @@ async function suggestFromName() {
   } catch { /* leave as is */ }
 }
 $('new-team').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(suggestFromName, 250); });
+$('go-create-team').addEventListener('click', (e) => { e.preventDefault(); $('teams-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => $('new-team').focus(), 400); });
 
 $('add-team').addEventListener('click', async () => {
   const name = $('new-team').value.trim();
