@@ -146,10 +146,27 @@ code, .code, .claim-code {
 /* ============================================================
    LAYOUT
    ============================================================ */
+/* Phone-first pages (capture, parent, leaderboard, sign-in) are one narrow
+   column. The coach dashboard is read on a laptop or a tablet and gets the
+   width it had before the re-skin: a 480px column on a 1280px screen is a
+   phone app in a desktop window. Cards on it flow into two columns. */
 .wrap {
-  max-width: 480px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 0 16px 80px;
+}
+.wrap--narrow { max-width: 480px; }
+@media (min-width: 900px) {
+  .wrap.wrap--grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 16px;
+    align-items: start;
+  }
+  .wrap.wrap--grid > .card,
+  .wrap.wrap--grid > .sponsor-slot,
+  .wrap.wrap--grid > details { min-width: 0; }
+  .wrap.wrap--grid > .card.card--wide { grid-column: 1 / -1; }
 }
 
 .card {
@@ -1397,6 +1414,7 @@ button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-
    Populate .sponsor-logo with an <img> and .sponsor-text
    with the sponsor name; hide the whole slot when empty.
    ============================================================ */
+.sponsor-slot:not(.has-sponsor) { display: none; }
 .sponsor-slot {
   display: flex;
   align-items: center;

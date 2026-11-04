@@ -28,8 +28,8 @@
   <div class="sponsor-text">Sponsored by</div>
 </div>
 
-<div class="wrap">
-  <div class="card">
+<div class="wrap wrap--grid">
+  <div class="card card--wide">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div style="flex:1;min-width:180px">
         <label for="team">Team</label>
@@ -74,6 +74,26 @@
     <p class="small muted" id="setup-done-note" style="margin-top:10px"></p>
   </div>
 
+  <div class="card hidden" id="badge-card">
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div id="badge-preview" style="flex:0 0 auto;min-width:72px;min-height:72px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--radius-sm);padding:6px"></div>
+      <div style="flex:1 1 220px;min-width:0">
+        <b>Your program's badge</b>
+        <p class="small muted" style="margin:4px 0 8px" id="badge-note">
+          It leads the top of every screen your coaches, athletes and parents
+          see. PNG, JPEG, WebP or SVG, up to 2 MB; wide marks read best.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input type="file" id="badge-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+          <button class="secondary inline" id="badge-upload">Upload a badge</button>
+          <button class="secondary inline hidden" id="badge-remove">Remove</button>
+          <span class="small muted" id="badge-status"></span>
+        </div>
+        <div id="badge-err" class="err hidden"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="card hidden" id="blockers-card">
     <div id="blockers"></div>
   </div>
@@ -102,7 +122,7 @@
     <div class="sponsor-text">Sponsored by</div>
     </div>
 
-    <div class="card hidden" id="staff-card">
+    <div class="card card--wide hidden" id="staff-card">
     <h2>Coaches &amp; team access</h2>
     <p class="small muted">
       A coach sees the athletes on the teams they are assigned to. Assigning a
@@ -136,7 +156,7 @@
     </div>
   </div>
 
-  <div class="card" id="digest-card">
+  <div class="card card--wide" id="digest-card">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
       <h2 style="margin:0">Last week's team numbers</h2>
       <span class="small muted" id="digest-week"></span>
@@ -162,7 +182,7 @@
     <div id="bounces" class="hidden" style="margin-top:12px"></div>
   </div>
 
-  <div class="card hidden" id="families-card">
+  <div class="card card--wide hidden" id="families-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <h2 style="margin:0">Families</h2>
       <span class="small muted" id="families-through"></span>
@@ -296,7 +316,7 @@
     </details>
   </div>
 
-  <div class="card" id="recognition-card">
+  <div class="card card--wide" id="recognition-card">
     <h2>Automatic recognition</h2>
     <p class="small muted" id="recognition-intro"></p>
     <div id="voice-box" style="margin-bottom:14px">
@@ -320,7 +340,7 @@
     </details>
   </div>
 
-  <div class="card hidden" id="shared-clips-card">
+  <div class="card card--wide hidden" id="shared-clips-card">
     <h2>Clips sent to you</h2>
     <p class="small muted" id="shared-clips-note"></p>
     <div id="shared-clips"></div>
@@ -610,7 +630,7 @@
     <div id="b-note" class="small muted hidden" style="margin-top:8px"></div>
   </div>
 
-  <div class="card" id="roster-card">
+  <div class="card card--wide" id="roster-card">
     <h2>Roster</h2>
     <div style="overflow-x:auto">
       <table>
@@ -647,7 +667,7 @@
     <div id="review"></div>
   </div>
 
-  <div class="card" id="import-card">
+  <div class="card card--wide" id="import-card">
     <h2>Import a roster</h2>
     <p class="small muted">
       Drop in a CSV from TeamSnap, SportsEngine, a school export, or a
@@ -672,7 +692,7 @@
     <div id="import-err" class="err hidden"></div>
   </div>
 
-  <div class="card" id="sync-card">
+  <div class="card card--wide" id="sync-card">
     <h2>Keep a roster in step</h2>
     <p class="small muted">
       A CSV is a snapshot. Connect a team to wherever its roster actually
@@ -710,7 +730,7 @@
     <div id="sync-err" class="err hidden"></div>
   </div>
 
-  <div class="card hidden" id="parents-card">
+  <div class="card card--wide hidden" id="parents-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
       <h2 style="margin:0">Parents</h2>
       <button class="secondary inline" id="parents-csv">Download CSV</button>
@@ -726,7 +746,7 @@
     <div id="parents-err" class="err hidden"></div>
   </div>
 
-  <div class="card hidden" id="slips-card">
+  <div class="card card--wide hidden" id="slips-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px" class="no-print">
       <h2 style="margin:0">Claim codes</h2>
       <button class="secondary inline" id="print-slips">Print</button>
@@ -2273,6 +2293,50 @@ $('new-coach-add').addEventListener('click', async () => {
   }
 });
 
+async function loadBadge(isDirector) {
+  $('badge-card').classList.toggle('hidden', !isDirector);
+  if (!isDirector) return;
+  let brand = { name: '', logo: '' };
+  try { brand = await api('/api/branding'); } catch { return; }
+  $('badge-preview').innerHTML = brand.logo
+    ? `<img src="${esc(brand.logo)}?t=${Date.now()}" alt="${esc(brand.name)}" style="max-height:72px;max-width:220px;display:block">`
+    : `<span class="club-name" style="padding:0 6px">${esc(brand.name)}</span>`;
+  $('badge-remove').classList.toggle('hidden', !brand.logo);
+  $('badge-upload').textContent = brand.logo ? 'Replace the badge' : 'Upload a badge';
+}
+
+$('badge-upload').addEventListener('click', () => $('badge-file').click());
+$('badge-file').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  $('badge-err').classList.add('hidden');
+  $('badge-status').textContent = 'Uploading…';
+  const form = new FormData();
+  form.append('file', file, file.name);
+  try {
+    await api('/api/org/logo', { method: 'POST', body: form });
+    $('badge-status').textContent = 'Saved. It is on every screen now.';
+    await Promise.all([loadBadge(true), renderBranding('masthead', '')]);
+  } catch (err) {
+    $('badge-status').textContent = '';
+    $('badge-err').textContent = err.message || 'Could not upload that image.';
+    $('badge-err').classList.remove('hidden');
+  } finally {
+    e.target.value = '';
+  }
+});
+$('badge-remove').addEventListener('click', async () => {
+  $('badge-err').classList.add('hidden');
+  try {
+    await api('/api/org/logo', { method: 'DELETE' });
+    $('badge-status').textContent = 'Removed. Your program name shows instead.';
+    await Promise.all([loadBadge(true), renderBranding('masthead', '')]);
+  } catch (err) {
+    $('badge-err').textContent = err.message || 'Could not remove the badge.';
+    $('badge-err').classList.remove('hidden');
+  }
+});
+
 let familiesData = null;
 
 async function loadFamilies() {
@@ -2800,7 +2864,7 @@ async function doImport() {
     });
     renderSlips(res);
     $('preview').classList.add('hidden');
-    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies()]);
+    await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadBadge(IS_DIRECTOR)]);
   } catch (e) {
     $('import-err').textContent = e.message;
     $('import-err').classList.remove('hidden');
@@ -3075,6 +3139,7 @@ $('signout').addEventListener('click', logout);
     await loadSeason(orgs.role === 'director');
     await loadParents(orgs.role === 'director');
     await loadFamilies();
+    await loadBadge(orgs.role === 'director');
     await loadTeams();
     await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.

@@ -1427,7 +1427,11 @@ class Store:
             return {"name": "", "logo": ""}
         logo = (row["logo_file"] or "").strip()
         # Only serve a file that is actually there. A broken image in the
-        # header is worse than no image at all.
+        # header is worse than no image at all. Two homes: a file shipped in
+        # the repo under teams/, or one the director uploaded, which lives
+        # beside the database and is served at /uploads/.
+        if logo and (CONFIG.uploads_dir / logo).exists():
+            return {"name": row["name"], "logo": f"/uploads/{logo}"}
         if logo and not (TEAM_LOGOS / logo).exists():
             logo = ""
         return {"name": row["name"], "logo": f"teams/{logo}" if logo else ""}
@@ -1436,7 +1440,7 @@ class Store:
         name = (filename or "").strip()
         if name and ("/" in name or "\\" in name or name.startswith(".")):
             raise StoreError("a logo is a file name, not a path")
-        if name and not (TEAM_LOGOS / name).exists():
+        if name and not ((TEAM_LOGOS / name).exists() or (CONFIG.uploads_dir / name).exists()):
             raise StoreError(f"no such logo: {name}")
         with transaction(self.conn) as conn:
             conn.execute("UPDATE organizations SET logo_file = ? WHERE id = ?",

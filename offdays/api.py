@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 import anyio
-from fastapi import Depends, FastAPI, Form, Header, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -29,6 +29,7 @@ from starlette.types import ASGIApp
 from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
+from . import badge as badge_mod
 from . import benchmarks as benchmarks_mod
 from . import billing as billing_mod
 from . import funnel as funnel_mod
@@ -958,6 +959,37 @@ def submit_session(
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/org/logo", status_code=201)
+async def upload_org_logo(
+    file: UploadFile = File(...),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The program's badge, uploaded by its director. See offdays/badge.py."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can set the program's badge")
+    data = await file.read(badge_mod.MAX_BYTES + 1)
+    try:
+        name = badge_mod.save(CONFIG.uploads_dir, principal.org_id, data)
+    except badge_mod.BadgeError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=413 if "over" in str(exc) else 400, detail=str(exc)) from exc
+    return store.set_org_logo(principal.org_id, name)
+
+
+@app.delete("/api/org/logo")
+def remove_org_logo(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Back to the program's name in the header."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can set the program's badge")
+    badge_mod.remove(CONFIG.uploads_dir, principal.org_id)
+    return store.set_org_logo(principal.org_id, "")
 
 
 @app.get("/api/branding")
@@ -4914,6 +4946,21 @@ def decide_review(
 # ----------------------------------------------------------------------
 # Static app
 # ----------------------------------------------------------------------
+
+@app.get("/uploads/{name}")
+def serve_upload(name: str) -> FileResponse:
+    """A program's uploaded badge. Flat names only; the directory is the
+    config's at request time, so a test (or an operator moving the data
+    volume) does not have to restart the process to be believed."""
+    if "/" in name or "\\" in name or name.startswith(".") or not name.startswith("org-"):
+        raise HTTPException(status_code=404)
+    path = CONFIG.uploads_dir / name
+    if not path.is_file():
+        raise HTTPException(status_code=404)
+    media = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "svg": "image/svg+xml"}.get(
+        path.suffix.lstrip("."), "application/octet-stream")
+    return FileResponse(path, media_type=media, headers={"Cache-Control": "public, max-age=300"})
+
 
 if CONFIG.static_dir.is_dir():
     app.mount(

@@ -26,7 +26,10 @@ export function setOrg(orgId) {
 }
 
 export async function api(path, { method = 'GET', body, raw = false } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  // A FormData body (a file upload) sets its own multipart boundary; a
+  // JSON content-type on it makes the server reject the form.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers = isForm ? {} : { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   // Someone with roles in two clubs is one account; this says which hat.
@@ -36,7 +39,7 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
   const res = await fetch(path, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
 
   if (res.status === 401) {

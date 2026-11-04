@@ -195,6 +195,15 @@ class Config:
         )
     )
     static_dir: Path = field(default_factory=lambda: _BASE / "web" / "static")
+    #: Files programs upload (their badge). Beside the database, not under
+    #: static/: static/ is rebuilt on every deploy and the badge must outlive
+    #: it. Served at /uploads/.
+    uploads_dir: Path = field(
+        default_factory=lambda: Path(
+            os.environ.get("OFFDAYS_UPLOADS_DIR", "")
+            or Path(os.environ.get("OFFDAYS_DB_PATH", _BASE.parent / "data" / "offdays.db")).parent / "uploads"
+        )
+    )
 
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     integrity: IntegrityConfig = field(default_factory=IntegrityConfig)

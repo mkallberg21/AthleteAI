@@ -486,6 +486,16 @@ class TestCoachDashboard:
 #: legitimate form arrived. This is the rule itself.
 BODY_TYPES_ALLOWED = {"application/json", "application/x-www-form-urlencoded"}
 
+#: The one endpoint that takes a file, named here with its reason so the
+#: invariant stays "no endpoint accepts a file except these, and here is
+#: why". A program's badge is a director's own image of their own club,
+#: typed from its bytes, capped at 2 MB, with SVG scripting stripped
+#: (offdays/badge.py, tests/test_badge_upload.py). It never carries a
+#: child's likeness or footage: a logo is not a photo, and the director is
+#: the only role that can send it.
+MULTIPART_ALLOWED = {("post", "/api/org/logo")}
+
+
 
 class TestPrivacy:
     def test_no_endpoint_accepts_video_or_image_data(self, client):
@@ -550,8 +560,12 @@ class TestPrivacy:
             for method, op in methods.items():
                 content = (op.get("requestBody") or {}).get("content", {})
                 for media_type in content:
+                    if (method, path) in MULTIPART_ALLOWED and media_type == "multipart/form-data":
+                        continue
                     assert media_type in BODY_TYPES_ALLOWED, \
                         f"{method.upper()} {path} accepts {media_type}"
+        for method, path in MULTIPART_ALLOWED:
+            assert method in schema["paths"].get(path, {}), f"{method} {path} is listed but not served"
 
     def test_the_review_module_has_no_network_path(self, client):
         """Self-review keeps footage on the phone, so it must not be able to
@@ -1539,6 +1553,8 @@ class TestRosterEndpoints:
             for method, op in methods.items():
                 content = (op.get("requestBody") or {}).get("content", {})
                 for media_type in content:
+                    if (method, path) in MULTIPART_ALLOWED and media_type == "multipart/form-data":
+                        continue
                     assert media_type in BODY_TYPES_ALLOWED, f"{method} {path}"
 
 
