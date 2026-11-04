@@ -417,6 +417,15 @@ button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-
 .inline-form label { margin-bottom: 4px; }
 .inline-form select[multiple] { min-height: 72px; padding: 4px; }
 
+/* A link styled as a small secondary button (mailto: and the like). */
+.btn-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.5rem 0.9rem; min-height: 38px; font-size: 0.875rem; font-weight: 600;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); text-decoration: none; white-space: nowrap;
+}
+.btn-link:hover { background: var(--surface-3); border-color: var(--accent-dim); }
+
 /* The one button that matters on the capture screen. Pinned to the bottom
    of the phone so it is on screen the moment the camera opens and still
    under the thumb when the kid comes back to end the session -- never

@@ -1655,14 +1655,21 @@ def create_staff(
         director_name=sender["coach_name"],
         code=coach["token"],
     )
+    subject, _html, text = invites_mod.compose_staff(
+        coach_name=body.display_name, org_name=sender["org_name"],
+        director_name=sender["coach_name"], code=coach["token"],
+    )
     return {
         "user_id": coach["id"],
         "display_name": body.display_name,
         "email": email,
         "code": coach["token"],
         "link": guardians_mod.signin_link(coach["token"]),
+        "subject": subject,
+        "text": text,
         "team_ids": body.team_ids,
         "emailed": emailed,
+        "smtp_configured": CONFIG.smtp_configured,
     }
 
 
@@ -2122,7 +2129,7 @@ def import_roster(
         principal.org_id, body.team_id, plan, principal.id,
         issue_guardian_invites=body.invite_guardians,
     )
-    return {"summary": plan.to_dict()["summary"], **result}
+    return {"summary": plan.to_dict()["summary"], **result, "smtp_configured": CONFIG.smtp_configured}
 
 
 # ---------------------------------------------------------------------------
@@ -2340,7 +2347,15 @@ def create_guardian_invite(
     sent = invites_mod.deliver(
         store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
     )
-    return {**invite, "link": invites_mod.invite_link(invite["code"]), "emailed": sent}
+    subject, _html, text = invites_mod.compose(
+        athlete_name=invite["athlete_name"], code=invite["code"],
+        **store._invite_sender(principal.org_id, principal.id),
+    )
+    return {
+        **invite, "link": invites_mod.invite_link(invite["code"]),
+        "subject": subject, "text": text, "emailed": sent,
+        "smtp_configured": CONFIG.smtp_configured,
+    }
 
 
 @app.get("/api/coach/families")
@@ -2411,11 +2426,20 @@ def nudge_family(
     sent = invites_mod.deliver(
         store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
     )
+    subject, _html, text = invites_mod.compose(
+        athlete_name=invite["athlete_name"], code=invite["code"],
+        **store._invite_sender(principal.org_id, principal.id),
+    )
     return {
         "athlete_id": body.athlete_id,
         "invite_id": invite["invite_id"],
         "email": contact["email"],
+        "code": invite["code"],
+        "link": invites_mod.invite_link(invite["code"]),
+        "subject": subject,
+        "text": text,
         "emailed": sent,
+        "smtp_configured": CONFIG.smtp_configured,
     }
 
 

@@ -11,6 +11,15 @@
 4. **Roster with a Parent Email column** -- import into a team. Every parent
    is emailed an invite on import (`invite_guardians` defaults on).
 
+**No SMTP on the server (the pilot's starting state):** nothing is queued and
+nothing claims to be sent (`invites.deliver` returns False). Every invite --
+roster import, single invite, Nudge, new coach -- comes back with `link`,
+`subject` and `text`, and the dashboard shows a "Send these from your own
+email" block: one `mailto:` per parent with to/subject/body filled in, a Copy
+per message, and Copy all. The director sends from his own account. Turning
+on Resend (`scripts/setup_resend.py`) makes the same invites go out on their
+own with no other change.
+
 From here the system runs it: parents sign up and say yes, send the kid the
 link, the kid trains. The Families card shows every family's stage and a
 Nudge for parents who have not opened the invite. `onboarding.PROGRAM_STEPS`

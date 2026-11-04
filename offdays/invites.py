@@ -146,9 +146,9 @@ def deliver_staff(
     director_name: str,
     code: str,
 ) -> bool:
-    """Queue the coach's sign-in email. True if queued."""
+    """Queue the coach's sign-in email. True only if the program can send it."""
     email = (email or "").strip()
-    if not email:
+    if not email or not CONFIG.smtp_configured:
         return False
     subject, html, text = compose_staff(
         coach_name=coach_name, org_name=org_name, director_name=director_name, code=code,
@@ -173,15 +173,21 @@ def deliver(
     org_name: str,
     coach_name: str,
 ) -> bool:
-    """Queue the invite email. True if it was queued.
+    """Queue the invite email. True only if the program can actually send it.
 
     Transactional, so a digest opt-out never holds it back, and keyed on the
     invite id so a refreshed import cannot send the same code twice. An
     invite with no email (a family the roster had no address for) is simply
     not queued: that family gets the printed slip.
+
+    With no SMTP configured nothing is queued and this returns False, so the
+    dashboard offers the director the message to send from their own mail
+    rather than telling them it went out. (The console transport reports
+    success so dev queues drain; that is a fact about the queue, not about
+    whether a parent will ever see the email.)
     """
     email = (invite.get("email") or "").strip()
-    if not email:
+    if not email or not CONFIG.smtp_configured:
         return False
     subject, html, text = compose(
         athlete_name=invite["athlete_name"], org_name=org_name,

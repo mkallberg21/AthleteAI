@@ -4043,12 +4043,21 @@ class Store:
                     )
                     sent = invites_mod.deliver(self.conn, invite, **sender)
                     emailed += 1 if sent else 0
+                    # The whole message, not just the code: when the program
+                    # has no outbound email, the director sends this from
+                    # their own account, and a code alone is not a message.
+                    subject, _html, text = invites_mod.compose(
+                        athlete_name=athlete.display_name, code=invite["code"], **sender,
+                    )
                     invites.append({
                         "invite_id": invite["invite_id"],
                         "athlete_id": athlete_id,
                         "athlete_name": athlete.display_name,
                         "email": athlete.guardian_email,
                         "code": invite["code"],
+                        "link": invites_mod.invite_link(invite["code"]),
+                        "subject": subject,
+                        "text": text,
                         "emailed": sent,
                     })
                 except guardians_mod.GuardianError:

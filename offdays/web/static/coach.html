@@ -732,6 +732,20 @@
       <button class="secondary inline" id="print-slips">Print</button>
     </div>
     <p class="small muted no-print" id="slips-note"></p>
+    <div id="send-yourself" class="hidden no-print" style="margin:10px 0 14px;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm)">
+      <b>Send these from your own email</b>
+      <p class="small muted" style="margin:4px 0 8px">
+        The program is not sending email, so nothing has gone out. Each button
+        opens a message in your mail app, addressed and written, with the
+        parent's link in it: read it, press send. Or copy them all and paste
+        into one email per family.
+      </p>
+      <div id="send-yourself-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+        <button class="secondary inline" id="send-yourself-copy">Copy all messages</button>
+        <span class="small muted" id="send-yourself-copied"></span>
+      </div>
+    </div>
     <p class="small muted no-print">
       Cut these up and hand them out. Each code works once, expires in 30 days,
       and is not stored anywhere you can read it again, so print this now.
@@ -2238,9 +2252,15 @@ $('new-coach-add').addEventListener('click', async () => {
   btn.disabled = true;
   try {
     const res = await api('/api/coach/staff', { method: 'POST', body: { display_name: name, email, team_ids } });
+    const mail = res.email
+      ? `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`
+      : '';
     $('new-coach-out').innerHTML = res.emailed
       ? `<b>${esc(res.display_name)}</b> added. Their sign-in link went to ${esc(res.email)}.`
-      : `<b>${esc(res.display_name)}</b> added. No email, so read them this code: <code>${esc(res.code)}</code> (shown once).`;
+      : res.email
+        ? `<b>${esc(res.display_name)}</b> added. The program is not sending email, so send it yourself:
+           <a class="btn-link" href="${mail}">Open in my email</a> &middot; or read them this code: <code>${esc(res.code)}</code> (shown once).`
+        : `<b>${esc(res.display_name)}</b> added. No email, so read them this code: <code>${esc(res.code)}</code> (shown once).`;
     $('new-coach-out').classList.remove('hidden');
     $('new-coach-name').value = '';
     $('new-coach-email').value = '';
@@ -2324,10 +2344,18 @@ $('families').addEventListener('click', async (e) => {
     const res = await api('/api/coach/families/nudge', {
       method: 'POST', body: { athlete_id: Number(btn.dataset.nudge) },
     });
-    btn.replaceWith(Object.assign(document.createElement('span'), {
-      className: 'small muted',
-      textContent: res.emailed ? `Sent to ${res.email}` : `Queued for ${res.email}`,
-    }));
+    if (res.emailed) {
+      btn.replaceWith(Object.assign(document.createElement('span'), {
+        className: 'small muted', textContent: `Sent to ${res.email}`,
+      }));
+    } else {
+      const a = document.createElement('a');
+      a.className = 'btn-link';
+      a.href = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
+      a.textContent = 'Open in my email';
+      a.title = 'The program is not sending email; this opens the invite in your mail app, ready to send.';
+      btn.replaceWith(a);
+    }
     // The stage moved; pull the fresh picture rather than guessing at it.
     loadFamilies();
   } catch (err) {
@@ -2813,8 +2841,52 @@ function renderSlips(res) {
       : '';
   }
 
+  renderSendYourself(invites.filter((g) => !g.emailed && g.email), res.smtp_configured);
+
   if (slips.length) $('slips-card').scrollIntoView({ behavior: 'smooth' });
 }
+
+/**
+ * Invites the program could not send, as mail the director sends himself:
+ * a mailto per parent (to, subject and the full message filled in) and one
+ * copy-all for pasting. Works with no email configured on the server at
+ * all, which is the pilot's starting state.
+ */
+let pendingMail = [];
+function renderSendYourself(invites, smtpConfigured) {
+  pendingMail = invites;
+  const box = $('send-yourself');
+  box.classList.toggle('hidden', invites.length === 0);
+  if (!invites.length) return;
+  $('send-yourself-list').innerHTML = invites.map((g, i) => {
+    const href = `mailto:${encodeURIComponent(g.email)}?subject=${encodeURIComponent(g.subject)}&body=${encodeURIComponent(g.text)}`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span><b>${esc(g.athlete_name)}</b> <span class="small muted">${esc(g.email)}</span></span>
+      <span style="display:flex;gap:6px">
+        <a class="btn-link" href="${href}">Open in my email</a>
+        <button class="secondary inline" data-copy-mail="${i}">Copy</button>
+      </span>
+    </div>`;
+  }).join('');
+  if (smtpConfigured === false) {
+    $('slips-note').textContent = `${invites.length} parent invite${invites.length === 1 ? '' : 's'} ready to send from your own email. Printed slips are below for families with no address.`;
+  }
+}
+
+$('send-yourself-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-copy-mail]');
+  if (!btn) return;
+  const g = pendingMail[Number(btn.dataset.copyMail)];
+  await navigator.clipboard.writeText(`To: ${g.email}\nSubject: ${g.subject}\n\n${g.text}`);
+  btn.textContent = 'Copied';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+});
+
+$('send-yourself-copy').addEventListener('click', async () => {
+  const all = pendingMail.map((g) => `To: ${g.email}\nSubject: ${g.subject}\n\n${g.text}`).join('\n\n' + '-'.repeat(40) + '\n\n');
+  await navigator.clipboard.writeText(all);
+  $('send-yourself-copied').textContent = `Copied ${pendingMail.length} message${pendingMail.length === 1 ? '' : 's'}.`;
+});
 
 function readFile(file) {
   const reader = new FileReader();

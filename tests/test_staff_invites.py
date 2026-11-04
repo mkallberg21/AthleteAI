@@ -13,8 +13,17 @@ from fastapi.testclient import TestClient
 
 import offdays.api as api_module
 from offdays import mailer
+from offdays import invites
+from offdays.config import CONFIG
 from offdays.db import connect
 from offdays.store import Store
+
+
+@pytest.fixture(autouse=True)
+def smtp_on(monkeypatch):
+    """Email "goes out" only when SMTP is configured; these tests assert it does."""
+    from dataclasses import replace
+    monkeypatch.setattr(invites, "CONFIG", replace(CONFIG, smtp_host="smtp.test"))
 
 
 @pytest.fixture

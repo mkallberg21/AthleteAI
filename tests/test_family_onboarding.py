@@ -31,6 +31,20 @@ CSV = (
 )
 
 
+@pytest.fixture(autouse=True)
+def smtp_on(monkeypatch):
+    """Pretend the program can send email, the way prod will once Resend is set.
+
+    `invites.deliver` reports sent only when SMTP is configured, so a test
+    that asserts "the parent was emailed" needs this; the ConsoleTransport
+    still drains the queue, so the outbox can be read as before.
+    """
+    from dataclasses import replace
+    patched = replace(CONFIG, smtp_host="smtp.test", app_base_url=CONFIG.app_base_url)
+    monkeypatch.setattr(invites, "CONFIG", patched)
+    return patched
+
+
 @pytest.fixture
 def store(tmp_path):
     return Store(connect(tmp_path / "f.db"))
@@ -72,7 +86,7 @@ class TestImportEmailsTheParent:
     ):
         # CONFIG is frozen; swap the whole object the way the mailer reads it.
         from dataclasses import replace
-        patched = replace(CONFIG, app_base_url="https://app.0ffdays.com")
+        patched = replace(CONFIG, app_base_url="https://app.0ffdays.com", smtp_host="smtp.test")
         monkeypatch.setattr(invites, "CONFIG", patched)
         result = import_roster(store, program)
         invite = next(i for i in result["guardian_invites"] if i["emailed"])

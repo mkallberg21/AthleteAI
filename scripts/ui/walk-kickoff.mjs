@@ -56,6 +56,14 @@ await page.waitForSelector('#preview:not(.hidden)');
 await page.click('#confirm-import');
 await page.waitForTimeout(3000);
 console.log('5 import done; slips card visible:', await page.locator('#slips-card').isVisible());
+const sy = page.locator('#send-yourself');
+console.log('   send-yourself visible:', await sy.isVisible(), '| rows:', await page.locator('#send-yourself-list > div').count());
+const href = await page.locator('#send-yourself-list a').first().getAttribute('href');
+const u = new URL(href);
+console.log('   mailto to:', decodeURIComponent(u.pathname), '| subject:', decodeURIComponent(u.searchParams.get('subject')));
+console.log('   body head:', decodeURIComponent(u.searchParams.get('body')).split('\n')[0].slice(0, 90));
+console.log('   body has link:', /app[.]0ffdays[.]com[/]app[/]index[.]html[?]invite=[A-Z0-9-]+/.test(decodeURIComponent(u.searchParams.get('body'))));
+await page.locator('#slips-card').screenshot({ path: `${out}/5-send-yourself.png` });
 
 // 6. Families card.
 await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(2500);
