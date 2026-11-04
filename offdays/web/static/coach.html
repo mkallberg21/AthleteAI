@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 <div class="topbar">
@@ -1639,7 +1639,24 @@ const WIZARD_STEPS = [
     lede: 'If the program is not sending email, send each invite from your own email with one click. Then you are done: parents sign up, say yes, send their kid the link, and your Families card shows who is where.',
     done: (st) => st.athletes > 0, optional: true },
 ];
+// A coach's first visit. They were added by the director with their team
+// already on them; nothing to set up, three things to know and one to do.
+const COACH_STEPS = [
+  { key: 'contact', card: 'contact-card', title: 'How the program reaches you',
+    lede: 'Your email and mobile, so the program can send you your team\u2019s weekly digest and anything that needs a coach.',
+    done: (st) => st.contact },
+  { key: 'roster', card: 'roster-card', title: 'Your team',
+    lede: 'These are your athletes. Each one trains on their own phone; what you see here is their numbers, never their footage. A kid who has not started yet shows that way, and their parent is the one to nudge.',
+    done: () => true, optional: true },
+  { key: 'drills', card: 'team-drills-card', title: 'What they train on',
+    lede: 'Every team starts on four drills: ground balls, wall ball strong hand, wall ball off hand, shooting. Tick more from the library if you want; untick nothing yet.',
+    done: () => true, optional: true },
+  { key: 'voice', card: 'recognition-card', title: 'Say it in your own words',
+    lede: 'When a kid hits a milestone they get a message signed by you. The defaults are fine; yours are better. Write one or skip.',
+    done: () => true, optional: true },
+];
 const WIZARD_HOME = {};   // card id -> { parent, next } so cards go back where they live
+let WIZARD = WIZARD_STEPS;   // the active list: director's or coach's
 let wizardStep = 0;
 let wizardOn = false;
 
@@ -1680,18 +1697,18 @@ function wizardRestore() {
 }
 
 async function wizardShow(i) {
-  wizardStep = Math.max(0, Math.min(WIZARD_STEPS.length - 1, i));
-  const s = WIZARD_STEPS[wizardStep];
+  wizardStep = Math.max(0, Math.min(WIZARD.length - 1, i));
+  const s = WIZARD[wizardStep];
   const st = await wizardStatus();
   wizardRestore();
   wizardPlace(s.card);
-  $('wizard-count').textContent = `Step ${wizardStep + 1} of ${WIZARD_STEPS.length}`;
+  $('wizard-count').textContent = `Step ${wizardStep + 1} of ${WIZARD.length}`;
   $('wizard-title').textContent = s.title;
   $('wizard-lede').textContent = s.lede;
-  $('wizard-fill').style.width = `${Math.round((wizardStep / WIZARD_STEPS.length) * 100)}%`;
+  $('wizard-fill').style.width = `${Math.round((wizardStep / WIZARD.length) * 100)}%`;
   $('wizard-back').classList.toggle('hidden', wizardStep === 0);
   const done = !!s.done(st);
-  const last = wizardStep === WIZARD_STEPS.length - 1;
+  const last = wizardStep === WIZARD.length - 1;
   $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
   $('wizard-next').disabled = !(done || s.optional);
   $('wizard-hint').textContent = done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.');
@@ -1711,10 +1728,10 @@ async function wizardShow(i) {
 // what makes Next light up the moment the team is created.
 async function wizardRefresh() {
   if (!wizardOn) return;
-  const s = WIZARD_STEPS[wizardStep];
+  const s = WIZARD[wizardStep];
   const st = await wizardStatus();
   const done = !!s.done(st);
-  const last = wizardStep === WIZARD_STEPS.length - 1;
+  const last = wizardStep === WIZARD.length - 1;
   $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
   $('wizard-next').disabled = !(done || s.optional);
   $('wizard-hint').textContent = done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.');
@@ -1725,30 +1742,30 @@ function wizardFinish() {
   wizardRestore();
   $('wizard').classList.add('hidden');
   document.body.classList.remove('wizard-on');
-  try { localStorage.setItem(`offdays.wizard.${CURRENT_ORG}`, 'done'); } catch { /* fine */ }
+  try { localStorage.setItem(`offdays.wizard.${CURRENT_ORG}.${IS_DIRECTOR ? 'd' : 'c'}`, 'done'); } catch { /* fine */ }
   loadSetup();
 }
 
 async function startWizardIfNew(isDirector) {
-  if (!isDirector) return;
+  WIZARD = isDirector ? WIZARD_STEPS : COACH_STEPS;
   let dismissed = false;
-  try { dismissed = localStorage.getItem(`offdays.wizard.${CURRENT_ORG}`) === 'done'; } catch { /* fine */ }
+  try { dismissed = localStorage.getItem(`offdays.wizard.${CURRENT_ORG}.${isDirector ? 'd' : 'c'}`) === 'done'; } catch { /* fine */ }
   const st = await wizardStatus();
   // A program that has already imported athletes has been set up; the
-  // walkthrough is for the director's first visits.
-  if (dismissed || st.athletes > 0) return;
+  // director's walkthrough is for his first visits. A coach's is for theirs.
+  if (dismissed || (isDirector && st.athletes > 0)) return;
   wizardOn = true;
   document.body.classList.add('wizard-on');
   $('wizard').classList.remove('hidden');
   // Start at the first step not yet done, optional ones included: a
   // brand-new director walks all five in order; one who comes back
   // resumes where they left off.
-  const first = WIZARD_STEPS.findIndex((s) => !s.done(st));
-  await wizardShow(first === -1 ? WIZARD_STEPS.length - 1 : first);
+  const first = WIZARD.findIndex((s) => !s.done(st));
+  await wizardShow(first === -1 ? WIZARD.length - 1 : first);
 }
 
 $('wizard-next').addEventListener('click', async () => {
-  if (wizardStep === WIZARD_STEPS.length - 1) return wizardFinish();
+  if (wizardStep === WIZARD.length - 1) return wizardFinish();
   await wizardShow(wizardStep + 1);
 });
 $('wizard-back').addEventListener('click', () => wizardShow(wizardStep - 1));
@@ -2586,8 +2603,8 @@ $('new-coach-add').addEventListener('click', async () => {
 });
 
 async function loadContact(isDirector) {
-  $('contact-card').classList.toggle('hidden', !isDirector);
-  if (!isDirector) return;
+  // Staff of either role keep their own contact details here.
+  $('contact-card').classList.remove('hidden');
   try {
     const c = await api('/api/me/contact');
     $('contact-email').value = c.email || '';
@@ -3586,7 +3603,7 @@ $('signout').addEventListener('click', logout);
     await loadParents(orgs.role === 'director');
     await loadFamilies();
     await loadBadge(orgs.role === 'director');
-    await loadContact(orgs.role === 'director');
+    await loadContact(true);
     await loadTeams();
     await loadProviders();
     // Before loadAll, because the skill-work table names drills from it.

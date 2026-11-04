@@ -6,7 +6,7 @@
 <title>0FFDAYS · Parent</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0A0A0B">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 <div class="topbar">
@@ -24,6 +24,22 @@
 </div>
 
 <div class="wrap wrap--narrow">
+  <!-- A parent's first visit: three steps per child, one on screen at a
+       time. Say yes, send the link, done. Everything else waits. -->
+  <div class="card hidden" id="pwizard">
+    <div class="small muted" id="pwizard-count"></div>
+    <h2 style="margin:2px 0 0" id="pwizard-title"></h2>
+    <div class="setup-bar" style="margin-top:10px"><i id="pwizard-fill" style="width:0%"></i></div>
+    <p class="small muted" id="pwizard-lede" style="margin:10px 0 0"></p>
+    <div id="pwizard-body" style="margin-top:14px"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap">
+      <button class="inline" id="pwizard-next" disabled>Next</button>
+      <span class="small muted" id="pwizard-hint"></span>
+      <button class="secondary inline" id="pwizard-skip" style="margin-left:auto">Skip</button>
+    </div>
+    <div id="pwizard-err" class="err hidden"></div>
+  </div>
+
   <div class="card">
     <p class="privacy-note" style="margin:0">
       <b>Your athlete's video never leaves their phone.</b> The app analyses it
@@ -860,11 +876,130 @@ $('link-btn').addEventListener('click', async () => {
 
 $('signout').addEventListener('click', logout);
 
+// ------------------------------------------------------------ first visit
+//
+// Three steps per child, in order: say yes (participation), send them the
+// link, done. The whole screen, so a parent who just came from the invite
+// email is never looking for what to do. It shows while any child is
+// undecided or has not been sent a link; after that the portal is itself.
+const PW = { steps: [], i: 0, on: false };
+
+function pwStepsFor(me) {
+  const steps = [];
+  for (const a of me.athletes) {
+    const first = firstName(a.display_name);
+    const decided = !!a.participation_answered;
+    const yes = (a.consents || []).some((c) => c.scope === 'participation' && c.granted);
+    steps.push({
+      key: `yes-${a.athlete_id}`, athlete: a, kind: 'yes',
+      title: `Can ${first} train?`,
+      lede: `${first}'s phone counts the reps; the video never leaves it. Their coach sees numbers, never footage. Say yes and ${first} can train; say no and nothing is recorded. You can change this any time.`,
+      done: () => yes, skippable: decided && !yes,
+    });
+    steps.push({
+      key: `link-${a.athlete_id}`, athlete: a, kind: 'link',
+      title: `Send ${first} their sign-in link`,
+      lede: `${first} taps the link and is in; nothing to type. Text it, email it, or copy it. It keeps working all season on any phone.`,
+      done: () => !!a.link_sent_at, needs: () => yes,
+    });
+  }
+  steps.push({ key: 'done', kind: 'done', title: 'That is everything',
+    lede: 'You will see every message your athlete is sent, their training each week, and a monthly report. Nothing more is asked of you.', done: () => true });
+  return steps;
+}
+
+async function pwRender() {
+  const me = await api('/api/guardians/me');
+  PW.steps = pwStepsFor(me);
+  if (PW.i >= PW.steps.length) PW.i = PW.steps.length - 1;
+  const s = PW.steps[PW.i];
+  $('pwizard-count').textContent = `Step ${PW.i + 1} of ${PW.steps.length}`;
+  $('pwizard-title').textContent = s.title;
+  $('pwizard-lede').textContent = s.lede;
+  $('pwizard-fill').style.width = `${Math.round((PW.i / PW.steps.length) * 100)}%`;
+  const body = $('pwizard-body');
+  $('pwizard-err').classList.add('hidden');
+  if (s.kind === 'yes') {
+    const a = s.athlete;
+    const yes = s.done();
+    body.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="inline" data-pw-yes="${a.athlete_id}" ${yes ? 'disabled' : ''}>${yes ? 'Yes, ' + esc(firstName(a.display_name)) + ' can train' : 'Yes, ' + esc(firstName(a.display_name)) + ' can train'}</button>
+        <button class="secondary inline" data-pw-no="${a.athlete_id}">Not now</button>
+      </div>
+      <p class="small muted" style="margin:10px 0 0">${yes ? 'Said yes. Next: send the link.' : 'Four more switches (full name on boards, keep detailed timings, let a coach see a clip, sponsor contact) are on the portal and all start off. None is needed to train.'}</p>`;
+    body.querySelector('[data-pw-yes]')?.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        await api('/api/guardians/consent', { method: 'POST', body: { athlete_id: a.athlete_id, scope: 'participation', granted: true } });
+        await pwRender();
+      } catch (err) { e.target.disabled = false; $('pwizard-err').textContent = err.message; $('pwizard-err').classList.remove('hidden'); }
+    });
+    body.querySelector('[data-pw-no]')?.addEventListener('click', async () => {
+      try {
+        await api('/api/guardians/consent', { method: 'POST', body: { athlete_id: a.athlete_id, scope: 'participation', granted: false } });
+      } catch { /* still move on */ }
+      PW.i += 2; // skip this child's link step; they cannot train
+      await pwRender();
+    });
+  } else if (s.kind === 'link') {
+    const a = s.athlete;
+    body.innerHTML = `<div data-signin-wrap="${a.athlete_id}">
+      <button class="inline" data-pw-link="${a.athlete_id}">Get ${esc(firstName(a.display_name))}'s link</button>
+    </div>`;
+    body.querySelector('[data-pw-link]').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        const res = await api(`/api/guardians/athlete-link/${a.athlete_id}`, { method: 'POST' });
+        renderSigninLink(body.querySelector('[data-signin-wrap]'), res);
+        $('pwizard-next').disabled = false; $('pwizard-hint').textContent = 'Sent it? Next.';
+      } catch (err) { e.target.disabled = false; $('pwizard-err').textContent = err.message; $('pwizard-err').classList.remove('hidden'); }
+    });
+  } else {
+    body.innerHTML = '';
+  }
+  const last = PW.i === PW.steps.length - 1;
+  const done = s.done();
+  $('pwizard-next').textContent = last ? 'Open my portal' : 'Next';
+  $('pwizard-next').disabled = !(done || s.skippable || (s.kind === 'link' && body.querySelector('[data-link-field]')));
+  $('pwizard-hint').textContent = last ? '' : done ? 'Done.' : s.kind === 'yes' ? 'Next unlocks when you have answered.' : 'Next unlocks when the link is ready.';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function pwFinish() {
+  PW.on = false;
+  $('pwizard').classList.add('hidden');
+  document.body.classList.remove('wizard-on');
+  try { localStorage.setItem('offdays.pwizard', 'done'); } catch { /* fine */ }
+  load().catch((e) => showError(e.message));
+}
+
+async function pwStartIfNew() {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('offdays.pwizard') === 'done'; } catch { /* fine */ }
+  if (dismissed) return false;
+  const me = await api('/api/guardians/me');
+  if (!me.athletes.length) return false;
+  const steps = pwStepsFor(me);
+  const first = steps.findIndex((s) => !s.done() && s.kind !== 'done');
+  if (first === -1) return false;           // everything already done: no wizard
+  PW.on = true; PW.i = first;
+  document.body.classList.add('wizard-on');
+  $('pwizard').classList.remove('hidden');
+  await pwRender();
+  return true;
+}
+$('pwizard-next').addEventListener('click', async () => {
+  if (PW.i === PW.steps.length - 1) return pwFinish();
+  PW.i += 1; await pwRender();
+});
+$('pwizard-skip').addEventListener('click', pwFinish);
+
 // Language first: the consent copy and the monthly report come back from the
 // server already translated, so fetching them before the locale is known
 // would render the page once in the wrong one.
 loadLanguage()
-  .then(load)
+  .then(async () => { if (!(await pwStartIfNew())) await load(); })
   .catch((e) => showError(e.message));
 
 // The club's badge first, before anything else loads.

@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 <div class="topbar">
@@ -28,6 +28,18 @@
 </div>
 
 <div class="wrap wrap--narrow">
+
+  <!-- A kid's first visit: three screens, then home. Their parent already
+       said yes; this is hello, how it works, pick a drill. -->
+  <div class="card hidden" id="awizard">
+    <div class="small muted" id="awizard-count"></div>
+    <h2 style="margin:2px 0 0" id="awizard-title"></h2>
+    <div class="setup-bar" style="margin-top:10px"><i id="awizard-fill" style="width:0%"></i></div>
+    <div id="awizard-body" style="margin-top:12px"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
+      <button class="btn btn-primary" id="awizard-next" style="flex:1">Next</button>
+    </div>
+  </div>
 
   <!-- ---------- Home ---------- -->
   <section id="view-home">
@@ -522,6 +534,7 @@ let SIDE = { noun: 'hand', label: 'Off-hand', weaker: 'weaker hand', both: 'Both
 
 async function loadHome(prefetched) {
   profile = prefetched || await api('/api/me');
+  awStartIfNew(profile).catch(() => {});
   if (profile.side) SIDE = profile.side;
   const weekPlan = await loadWeekPlan();
   homeSport = profile.sport || null;
@@ -829,6 +842,60 @@ const FEELINGS = [
  * read one. Computed from real state like the coach's, so it un-ticks itself
  * and disappears when there is nothing left to say.
  */
+// ------------------------------------------------------------ first visit
+//
+// Three screens, no settings: a kid arriving from the link their parent
+// sent should be told what this is and tap a drill within a minute.
+const AW = { i: 0, on: false };
+const AW_STEPS = [
+  { title: (p) => `Hi ${esc((p.display_name || '').split(' ')[0] || 'there')}`,
+    body: (p, ob) => `<p>${esc(ob.promise || 'Your phone counts your reps. The video never leaves it; your coach sees the numbers.')}</p>
+      <p class="small muted">Your parent set this up for you. Same link signs you in all season, on any phone.</p>` },
+  { title: () => 'How it works',
+    body: () => `<ol style="padding-left:20px;margin:0;line-height:1.7">
+      <li><b>Pick a drill</b> on the home screen.</li>
+      <li>Prop your phone so it can see you. <b>Start</b> is the big button at the bottom.</li>
+      <li>Do the drill. The phone counts.</li>
+      <li>Tap <b>Finish</b>. Your reps go to your coach; the video does not.</li>
+    </ol>
+    <p class="small muted" style="margin-top:10px">Each drill counts up to a daily amount for your age. The rest is practice, not points.</p>` },
+  { title: () => 'Pick your first drill',
+    body: () => `<p class="small muted">Tap Start training and choose one. Wall ball is a good first one: a wall, a ball, your stick.</p>`, last: true },
+];
+
+async function awRender(profile, ob) {
+  const s = AW_STEPS[AW.i];
+  $('awizard-count').textContent = `${AW.i + 1} of ${AW_STEPS.length}`;
+  $('awizard-title').innerHTML = s.title(profile);
+  $('awizard-body').innerHTML = s.body(profile, ob);
+  $('awizard-fill').style.width = `${Math.round((AW.i / AW_STEPS.length) * 100)}%`;
+  $('awizard-next').textContent = s.last ? 'Start training' : 'Next';
+  window.scrollTo({ top: 0 });
+}
+function awFinish() {
+  AW.on = false;
+  $('awizard').classList.add('hidden');
+  document.body.classList.remove('wizard-on');
+  try { localStorage.setItem('offdays.awizard', 'done'); } catch { /* fine */ }
+}
+async function awStartIfNew(profile) {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('offdays.awizard') === 'done'; } catch { /* fine */ }
+  if (dismissed) return;
+  let ob = {};
+  try { ob = await api('/api/me/onboarding'); } catch { return; }
+  const trained = (ob.steps || []).some((s) => s.key === 'first_session' && s.done);
+  if (trained) return;   // has recorded before: not a first visit
+  AW.on = true; AW.i = 0;
+  document.body.classList.add('wizard-on');
+  $('awizard').classList.remove('hidden');
+  await awRender(profile, ob);
+  $('awizard-next').onclick = async () => {
+    if (AW_STEPS[AW.i].last) return awFinish();
+    AW.i += 1; await awRender(profile, ob);
+  };
+}
+
 async function loadStart() {
   let data;
   try { data = await api('/api/me/onboarding'); } catch { return; }

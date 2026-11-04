@@ -4248,6 +4248,14 @@ class Store:
                 # In the guardian's own language, not the program's.
                 "consents": guardians_mod.consent_detail(
                     self.conn, athlete_id, locale),
+                # For the first-visit walkthrough: has the participation
+                # question been answered at all (a no is an answer), and has
+                # a sign-in link been issued for this child yet.
+                "participation_answered": guardians_mod.Scope.PARTICIPATION
+                    in guardians_mod.answered_scopes(self.conn, athlete_id),
+                "link_sent_at": self.conn.execute(
+                    "SELECT COALESCE(link_sent_at, '') AS t FROM users WHERE id = ?",
+                    (athlete_id,)).fetchone()["t"],
             })
 
         return {"athletes": athletes}
