@@ -26,9 +26,14 @@ from typing import Any, Protocol
 
 TRIAL_DAYS = 30
 
-# What a new program is given for its trial: full capability, so an evaluation
-# is not shaped by limits the club would not hit in practice anyway.
-TRIAL_PLAN = "program"
+# What a new program is put on at sign-up: the club plan. Fifty cents per
+# rostered athlete per day of the season the director sets, nothing else.
+# There is no trial because there is nothing to trial into -- the price is
+# the price from day one, and the invoice is zero until the season dates
+# are set. The old seat-tier plans (Team / Program / Club) are kept for
+# programs that were on them; no new program lands there.
+TRIAL_PLAN = "club_roster"
+SIGNUP_PLAN = TRIAL_PLAN
 
 # How far a program may exceed its seat count before adding more is blocked.
 # A few over at the start of a season is a roster still being built, not abuse.
@@ -78,7 +83,11 @@ class Plan:
             "code": self.code,
             "name": self.name,
             "price_cents": self.price_cents,
-            "price_display": f"${self.price_cents / 100:,.0f}/mo" if self.price_cents else "Free",
+            "price_display": (
+                f"${self.per_athlete_day_cents / 100:.2f} per athlete per day"
+                if self.per_athlete_day_cents
+                else f"${self.price_cents / 100:,.0f}/mo" if self.price_cents else "Free"),
+            "per_athlete_day_cents": self.per_athlete_day_cents,
             "included_seats": self.included_seats,
             "extra_seat_cents": self.extra_seat_cents,
             "max_teams": self.max_teams,
@@ -162,9 +171,9 @@ PLANS: tuple[Plan, ...] = (
         max_staff=0,
         payer=PAYER_PROGRAM,
         blurb=(
-            "Every rostered athlete, fifty cents a day for the season, billed "
-            "to the club. Clubs cover it by adding a line to their own season "
-            "fee, which costs the club nothing and returns a sponsorship rebate."
+            "Every rostered athlete, fifty cents a day for the season the "
+            "director sets, billed to the club. Most clubs cover it by adding "
+            "a line to their own season dues."
         ),
     ),
     Plan(

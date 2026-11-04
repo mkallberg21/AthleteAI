@@ -104,7 +104,7 @@
 
   <div class="card" id="billing-card">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <h2 style="margin:0">Plan &amp; seats</h2>
+      <h2 style="margin:0">What the season costs</h2>
       <span id="billing-status"></span>
     </div>
     <div id="billing-summary"></div>
@@ -858,7 +858,34 @@ function showError(message) {
 
 // --------------------------------------------------------------- billing
 
+/**
+ * The club plan: fifty cents per rostered athlete per day of the season.
+ * One card, the director's three numbers (athletes, days, total), and what
+ * that is per athlete so he can put it on dues. No seats, no tiers, no
+ * monthly figure: the invoice is the season, and the season is his dates.
+ */
+function renderRosterBilling(b, inv) {
+  $('billing-status').innerHTML = inv.season_set
+    ? `<span class="pill ok">${inv.season_days} days</span>`
+    : `<span class="pill warn">season dates not set</span>`;
+  const perDay = (inv.per_athlete_day_cents / 100).toFixed(2);
+  $('billing-summary').innerHTML = `
+    <div class="stat-row" style="margin-top:12px">
+      <div class="stat"><b>${inv.athletes}</b><span>Rostered athletes</span></div>
+      <div class="stat"><b>${inv.season_set ? inv.season_days : '—'}</b><span>Season days</span></div>
+      <div class="stat"><b>$${perDay}</b><span>Per athlete per day</span></div>
+      <div class="stat"><b>${inv.season_set ? esc(inv.total_display) : '—'}</b><span>Season total</span></div>
+    </div>
+    <p class="small muted" style="margin:10px 0 0">${inv.season_set
+      ? `${esc(inv.per_athlete_display)} per athlete for the whole season. Most programs add that to team dues at the start of the season; a late joiner is billed from the day they are added. Change the dates on the Season card.`
+      : 'Set the season start and end dates on the Season card. The invoice is the number of days between them, times fifty cents, per rostered athlete. Example: 100 athletes for a 150-day season is $7,500, or $75 a head.'}</p>`;
+  $('seatbar-fill').parentElement.classList.add('hidden');
+  $('seat-text').textContent = '';
+  $('plans').parentElement.classList.add('hidden');
+}
+
 function renderBilling(b) {
+  if (b.plan && b.plan.per_athlete_day_cents > 0) return;  // handled by renderRosterBilling
   const status = {
     trialing: ['ok', `trial · ${b.trial_days_left} days left`],
     active: ['ok', 'active'],
@@ -915,7 +942,12 @@ function renderBilling(b) {
 
 async function loadBilling() {
   try {
-    renderBilling(await api('/api/billing'));
+    const b = await api('/api/billing');
+    if (b.plan && b.plan.per_athlete_day_cents > 0) {
+      renderRosterBilling(b, await api('/api/org/invoice'));
+    } else {
+      renderBilling(b);
+    }
   } catch (e) {
     $('billing-card').classList.add('hidden');
   }

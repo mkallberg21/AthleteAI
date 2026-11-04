@@ -100,12 +100,33 @@ class TestPlans:
 
 
 class TestSubscription:
-    def test_a_new_program_starts_on_a_trial(self, store, org):
-        """Hitting a paywall before the product has shown anything ends an evaluation."""
+    def test_a_new_program_is_on_the_club_plan_with_no_trial_clock(self, store, org):
+        """Fifty cents per rostered athlete per day of the season, from sign-up.
+
+        No trial: there is nothing to trial into. The invoice is zero until
+        the director sets season dates, and then it is athletes x days x
+        $0.50 -- so a new program is never 'past due' on a clock it did not
+        know was running, and never sees seat tiers or a monthly figure.
+        """
         subscription = B.get_subscription(store.conn, org)
-        assert subscription.status == "trialing"
-        assert subscription.plan.code == B.TRIAL_PLAN
-        assert subscription.trial_days_left == B.TRIAL_DAYS
+        assert subscription.plan.code == "club_roster"
+        assert subscription.status == "active"
+        assert subscription.trial_days_left is None
+        assert subscription.unlimited_seats
+        assert subscription.monthly_cents == 0
+        assert B.roster_invoice(store.conn, org).total_cents == 0
+
+    def test_the_worked_example(self, store, org):
+        """100 athletes, 150-day season = $7,500 = $75 a head."""
+        add_athletes(store, org, 100)
+        store.conn.execute(
+            "UPDATE organizations SET season_starts_on = '2027-02-01', "
+            "season_ends_on = '2027-06-30' WHERE id = ?", (org,))
+        store.conn.commit()
+        inv = B.roster_invoice(store.conn, org)
+        assert inv.days == 150
+        assert inv.per_athlete_cents == 7500
+        assert inv.total_cents == 750_000
 
     def test_a_program_with_no_row_falls_back_to_free_not_broken(self, store):
         org_id = store.create_org("Legacy")
@@ -116,6 +137,8 @@ class TestSubscription:
         assert subscription.can_grow
 
     def test_an_expired_trial_becomes_past_due(self, store, org):
+        """Legacy seat-tier programs on a trial still fall due; new ones have no clock."""
+        B.start_subscription(store.conn, org, "program", trial=True)
         store.conn.execute(
             "UPDATE subscriptions SET trial_ends_at = ? WHERE org_id = ?",
             ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(), org),

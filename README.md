@@ -335,24 +335,26 @@ athletes train, coaches see rosters, parents keep their portal, safety
 advisories keep flowing. A program that stops paying stops growing, and someone
 calls them. There is a test class holding this.
 
-| Plan | Athletes | Teams | Price |
+**Every new program is on one plan: fifty cents per rostered athlete per day
+of the season.** The director sets the season's start and end dates on the
+Season card; the invoice is athletes × days × $0.50, and nothing else. 100
+athletes for a 150-day season is $7,500 — $75 a head, which most programs
+put on team dues at the start of the season. There is no trial clock, no
+seat tier and no monthly figure: the price is the price from sign-up, the
+invoice is zero until the dates are set, and a late joiner is billed from
+the day they were added. The full model is under [One price for a paying
+club](#one-price-for-a-paying-club).
+
+The seat-tier plans below (Single Team / Team / Program / Club, monthly) are
+kept in `billing.py` for programs that were put on them before the club plan
+existed; `offered=False` keeps them out of every new program's view.
+
+| Legacy plan | Athletes | Teams | Price |
 |---|---|---|---|
 | Single Team | 25 | 1 | Free |
 | Team | 60 | 3 | $49/mo |
 | Program | 200 | 12 | $149/mo |
 | Club | 600 | unlimited | $399/mo |
-
-Extra seats are billed per athlete at a rate that falls with plan size, so
-upgrading is genuinely cheaper at scale — 250 athletes costs $189 on Program
-against $239 on Team, and `recommend()` picks the cheapest plan that actually
-fits.
-
-Two onboarding decisions worth naming. **New programs start on a Program
-trial**, not the free tier: hitting a paywall on your second team before the
-product has shown anyone anything is how an evaluation ends. And **existing
-programs are backfilled onto a plan that fits what they already run** — telling
-a club with six teams that they are now on a one-team plan is the wrong way to
-introduce billing to someone already using the thing.
 
 No payment processor is wired in. `Gateway` is the seam one drops into, and the
 default `ManualGateway` records the invoice without charging — which is also

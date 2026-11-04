@@ -2577,11 +2577,12 @@ class Store:
                 (name, sport, _iso(_now())),
             )
         org_id = int(cur.lastrowid)
-        # New programs start on a full-capability trial rather than the free
-        # plan. Hitting a paywall on your second team before the product has
-        # shown anyone anything is how an evaluation ends.
+        # New programs go straight on the club plan: fifty cents per rostered
+        # athlete per day of the season the director sets. No trial clock
+        # and no seat tiers -- the invoice is zero until the dates are set
+        # and then it is exactly athletes x days x $0.50.
         billing_mod.start_subscription(
-            self.conn, org_id, billing_mod.TRIAL_PLAN, trial=True, actor="signup"
+            self.conn, org_id, billing_mod.SIGNUP_PLAN, trial=False, actor="signup"
         )
         return org_id
 
