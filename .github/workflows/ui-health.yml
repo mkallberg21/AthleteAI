@@ -1,0 +1,39 @@
+name: UI health
+
+# Does the live interface still look right? Every six hours, after every
+# deploy, and on demand. Fails the run (red badge, email to whoever watches
+# the repo) when the landing page or the director's dashboard is wrong, and
+# keeps screenshots of every screen for a human to look at.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - name: Check the live interface
+        run: node scripts/ui/health.mjs https://app.0ffdays.com ui-health
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-health-${{ github.run_number }}
+          path: ui-health/
+          retention-days: 14

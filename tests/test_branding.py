@@ -164,3 +164,29 @@ def test_the_braces_balance():
     assert CSS.count("{") == CSS.count("}"), (
         f"{CSS.count('{')} opening braces against {CSS.count('}')} closing"
     )
+
+#: The stylesheet every page pins (`styles.css?v=N`) and the content that
+#: pin was last bumped for. Browsers keep a versioned sheet for a long time
+#: on purpose, so a CSS change that ships under the old pin reaches nobody
+#: who has visited before: that is how a phone showed every landing-page
+#: panel unfolded while a fresh browser showed four buttons. When this
+#: fails, bump ?v= on EVERY page and paste the new hash here.
+STYLESHEET_PIN = "v=4"
+STYLESHEET_HASH = "6c6f8de62e89"
+
+
+def test_every_page_pins_the_stylesheet_and_the_pin_matches_the_content():
+    import hashlib
+    pages = sorted(STATIC.glob("*.html"))
+    assert pages
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        if "styles.css" not in html:
+            continue
+        assert f'styles.css?{STYLESHEET_PIN}"' in html, (
+            f"{page.name} asks for a different styles.css pin than {STYLESHEET_PIN}")
+    digest = hashlib.sha256((STATIC / "styles.css").read_bytes()).hexdigest()[:12]
+    assert digest == STYLESHEET_HASH, (
+        f"styles.css changed (now {digest}) but the pin is still {STYLESHEET_PIN}: "
+        "bump ?v= on every page and set STYLESHEET_HASH here")
+
