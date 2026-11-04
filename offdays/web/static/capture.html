@@ -31,6 +31,12 @@
 
   <!-- ---------- Home ---------- -->
   <section id="view-home">
+    <div class="card" id="drill-card">
+      <h2>Pick a drill</h2>
+      <p class="small muted" style="margin:-4px 0 8px">Tap one. The camera opens and the Start button is at the bottom of the screen.</p>
+      <div class="drill-list" id="drill-list"></div>
+    </div>
+
     <div class="card hidden" id="start-card">
       <b id="start-title">First time here</b>
       <p class="small muted" id="start-promise"></p>
@@ -206,11 +212,6 @@
       <div id="streak-warn" class="banner warn hidden" style="position:static;margin-top:12px"></div>
     </div>
 
-    <div class="card">
-      <h2>Pick a drill</h2>
-      <div class="drill-list" id="drill-list"></div>
-    </div>
-
     <div class="card" id="badges-card">
       <h2>Badges</h2>
       <div class="badge-grid" id="badge-grid"></div>
@@ -321,7 +322,9 @@
       </button>
       <div class="privacy-note">Nothing you see here is recorded or uploaded. Counts only.</div>
 
-      <button id="startstop" style="margin-top:12px" disabled>Start</button>
+      <div class="startstop-dock">
+        <button id="startstop" disabled>Start</button>
+      </div>
       <div id="cap-err" class="err hidden"></div>
     </div>
   </section>
@@ -2158,6 +2161,7 @@ async function startSession() {
   running = true;
   $('startstop').textContent = 'Finish';
   $('startstop').classList.add('danger');
+  $('view-capture').classList.add('running');
   setBanner('');
 }
 
@@ -2258,6 +2262,8 @@ function stopCamera({ keepRecording = false } = {}) {
   if (video) video.srcObject = null;
   const startstop = $('startstop');
   if (startstop) startstop.classList.remove('danger');
+  const cap = $('view-capture');
+  if (cap) cap.classList.remove('running');
   if (!keepRecording) discardRecording();
 }
 

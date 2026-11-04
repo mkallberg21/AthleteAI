@@ -340,6 +340,61 @@ code, .code, .claim-code {
   border-radius: var(--radius-sm);
 }
 
+/* Plain <button>s (capture.html, coach.html, parent.html still use them)
+   get the same treatment as .btn, with the three modifiers those pages
+   rely on. Without this a bare <button> is the browser default -- a
+   44x21 grey chip, which is how Start/Finish shipped on 2026-11-02. */
+button:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0.8rem 1.25rem;
+  min-height: 52px;
+  font-family: var(--font);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+button:not([class*="btn"]):active { transform: scale(0.97); }
+button:not([class*="btn"]):disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-light); box-shadow: none; }
+#ball-calibrate { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-light); box-shadow: none; min-height: 44px; font-size: 0.9rem; }
+button.danger { background: var(--danger); color: #fff; box-shadow: 0 2px 8px rgba(239,68,68,0.35); }
+button.inline { width: auto; padding: 0.5rem 0.9rem; min-height: 38px; font-size: 0.875rem; border-radius: var(--radius-sm); }
+
+/* The one button that matters on the capture screen. Pinned to the bottom
+   of the phone so it is on screen the moment the camera opens and still
+   under the thumb when the kid comes back to end the session -- never
+   below a demo figure or a paragraph of hints. */
+#view-capture .startstop-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 12px -12px -12px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent 0%, var(--surface) 28%);
+}
+#startstop {
+  min-height: 64px;
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+}
+#startstop:not(:disabled):not(.danger) { box-shadow: 0 4px 18px rgba(59,130,246,0.45); }
+#startstop.danger { background: var(--danger); box-shadow: 0 4px 18px rgba(239,68,68,0.45); }
+/* Once recording, the demo figure has done its job; the camera and the
+   count are what the kid needs to see, with Finish right under them. */
+#view-capture.running .demo { display: none; }
+
 .btn-lg {
   padding: 1rem 1.5rem;
   min-height: 58px;
@@ -409,7 +464,8 @@ code, .code, .claim-code {
   flex-wrap: wrap;
   margin: 0.75rem 0;
 }
-.feel-btn {
+.feel-btn, .feel {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   flex: 1;
   min-width: 70px;
   padding: 0.65rem 0.5rem;
@@ -425,14 +481,14 @@ code, .code, .claim-code {
   transition: all 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.feel-btn:hover { border-color: var(--accent-dim); color: var(--text); }
-.feel-btn.selected {
+.feel-btn:hover, .feel:hover { border-color: var(--accent-dim); color: var(--text); }
+.feel-btn.selected, .feel.selected {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
   box-shadow: 0 0 12px rgba(59,130,246,0.3);
 }
-.feel-btn:active { transform: scale(0.96); }
+.feel-btn:active, .feel:active { transform: scale(0.96); }
 
 .form-error {
   font-size: 0.8rem;
@@ -1097,7 +1153,7 @@ code, .code, .claim-code {
 /* ============================================================
    BELL / NOTIFICATION BUTTON
    ============================================================ */
-.bell-btn {
+.bell-btn, .bell {
   position: relative;
   display: flex;
   align-items: center;
@@ -1114,8 +1170,8 @@ code, .code, .claim-code {
   min-height: auto;
 }
 
-.bell-btn:hover { border-color: var(--border-light); }
-.bell-btn .badge {
+.bell-btn:hover, .bell:hover { border-color: var(--border-light); }
+.bell-btn .badge, .bell .dot {
   position: absolute;
   top: -5px;
   right: -5px;
