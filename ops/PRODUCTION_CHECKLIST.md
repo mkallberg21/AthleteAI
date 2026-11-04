@@ -55,6 +55,7 @@ weaker product, so the deploy is where it gets caught.
 | Variable | Required | If unset | Notes |
 |---|---|---|---|
 | `OFFDAYS_SECRET` | **yes** | Unsubscribe links fall back to a public dev key, so anyone could forge one to switch off another person's mail. | `python3 -c "import secrets;print(secrets.token_urlsafe(48))"`. Rotating it breaks existing unsubscribe links, nothing else. |
+| `OFFDAYS_TEAMSNAP_CLIENT_ID` / `OFFDAYS_TEAMSNAP_CLIENT_SECRET` | no | Without them the dashboard's **Connect TeamSnap** button is not offered; rosters still import by CSV. | An OAuth application registered under the operator's TeamSnap account at auth.teamsnap.com/oauth/applications with callback `https://app.0ffdays.com/api/teamsnap/callback`. The director's consent token is stored on the organisation (`organizations.teamsnap_token`), never returned by the API; Disconnect blanks it. |
 | `OFFDAYS_BASE_URL` | **yes** | Links in emails are relative/broken. | `https://app.0ffdays.com`, no trailing slash. |
 | `OFFDAYS_STRICT_TEAM_SCOPE` | should be `1` | A coach with no team assignment sees the **whole program**. | Off only for upgrading old installs. |
 | `OFFDAYS_DB_PATH` | set by compose | — | `/data/offdays.db` on the `offdays_data` volume. |

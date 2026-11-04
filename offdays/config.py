@@ -267,6 +267,16 @@ class Config:
     # a development default rather than a production one.
     secret_key: str = field(default_factory=lambda: os.environ.get("OFFDAYS_SECRET", ""))
 
+    #: TeamSnap OAuth application (auth.teamsnap.com/oauth/applications),
+    #: registered under the operator's own TeamSnap account. Blank = the
+    #: Connect TeamSnap button is not offered.
+    teamsnap_client_id: str = field(default_factory=lambda: os.environ.get("OFFDAYS_TEAMSNAP_CLIENT_ID", ""))
+    teamsnap_client_secret: str = field(default_factory=lambda: os.environ.get("OFFDAYS_TEAMSNAP_CLIENT_SECRET", ""))
+
+    @property
+    def teamsnap_configured(self) -> bool:
+        return bool(self.teamsnap_client_id and self.teamsnap_client_secret)
+
     # Per-provider webhook secrets. An empty secret means that provider's
     # endpoint is disabled -- absent configuration must never mean "trust
     # anything", since this endpoint takes instructions from the public

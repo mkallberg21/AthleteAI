@@ -2381,6 +2381,32 @@ class Store:
     # Keeping a roster in step with wherever it lives
     # ------------------------------------------------------------------
 
+    # ----------------------------------------------------------- TeamSnap
+
+    def set_teamsnap(self, org_id: int, token: str, user_label: str) -> None:
+        """The program's TeamSnap connection: one token for the organisation,
+        obtained by the director's consent. Blank token = disconnected."""
+        with transaction(self.conn) as c:
+            c.execute(
+                "UPDATE organizations SET teamsnap_token = ?, teamsnap_user = ?, "
+                "teamsnap_connected_at = ? WHERE id = ?",
+                (token, user_label if token else "", _iso(_now()) if token else "", org_id),
+            )
+
+    def teamsnap_token(self, org_id: int) -> str:
+        row = self.conn.execute(
+            "SELECT COALESCE(teamsnap_token, '') AS t FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        return row["t"] if row else ""
+
+    def teamsnap_status(self, org_id: int) -> dict[str, Any]:
+        row = self.conn.execute(
+            "SELECT COALESCE(teamsnap_token, '') AS t, COALESCE(teamsnap_user, '') AS u, "
+            "COALESCE(teamsnap_connected_at, '') AS at FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        return {"connected": bool(row and row["t"]), "user": row["u"] if row else "",
+                "connected_at": row["at"] if row else ""}
+
     def link_roster(
         self,
         org_id: int,

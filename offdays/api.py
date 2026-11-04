@@ -30,6 +30,7 @@ from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
 from . import badge as badge_mod
+from . import teamsnap as teamsnap_mod
 from . import benchmarks as benchmarks_mod
 from . import billing as billing_mod
 from . import funnel as funnel_mod
@@ -2195,6 +2196,122 @@ class RosterLink(BaseModel):
     # stored, used by the sync, and never read back out.
     token: str = Field(min_length=1, max_length=4_000)
     remote_ref: str = Field(min_length=1, max_length=200)
+
+
+# ------------------------------------------------------------ TeamSnap
+#
+# The director connects his TeamSnap account once (OAuth, read scope);
+# the token lives on the organisation. Then any team in the program can be
+# linked to a TeamSnap team by picking it from a list, and the existing
+# roster-link machinery (preview, apply, auto-sync, departures reported not
+# applied) does the rest with that token.
+
+
+@app.get("/api/teamsnap/status")
+def teamsnap_status(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    return {"offered": CONFIG.teamsnap_configured, **store.teamsnap_status(principal.org_id)}
+
+
+@app.get("/api/teamsnap/connect")
+def teamsnap_connect(
+    principal: Principal = Depends(_staff),
+) -> dict[str, Any]:
+    """Where to send the director. The page opens it; TeamSnap sends him back
+    to /api/teamsnap/callback with a code tied to this program by the signed
+    state."""
+    if not CONFIG.teamsnap_configured:
+        raise HTTPException(status_code=404, detail="TeamSnap is not set up on this server")
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can connect TeamSnap")
+    state = teamsnap_mod.make_state(CONFIG.secret_key or "dev", principal.org_id, principal.id)
+    return {"url": teamsnap_mod.authorize_url(
+        CONFIG.teamsnap_client_id, _teamsnap_redirect(), state)}
+
+
+def _teamsnap_redirect() -> str:
+    return CONFIG.app_base_url.rstrip("/") + "/api/teamsnap/callback"
+
+
+@app.get("/api/teamsnap/callback")
+async def teamsnap_callback(
+    code: str = Query(default=""),
+    state: str = Query(default=""),
+    error: str = Query(default=""),
+    store: Store = Depends(get_store),
+) -> Response:
+    """TeamSnap sends the director here after consent. No bearer token on
+    this request (it is a browser redirect), so the signed state is what
+    says which program and which director."""
+    from fastapi.responses import RedirectResponse
+    from urllib.parse import quote
+    back = "/app/coach.html?teamsnap=1"
+    if error:
+        return RedirectResponse(back + "&teamsnap=denied", status_code=303)
+    try:
+        org_id, user_id = teamsnap_mod.read_state(CONFIG.secret_key or "dev", state)
+        tok = await run_in_threadpool(
+            teamsnap_mod.exchange_code, CONFIG.teamsnap_client_id,
+            CONFIG.teamsnap_client_secret, _teamsnap_redirect(), code)
+        who = await run_in_threadpool(teamsnap_mod.me, tok["access_token"])
+        label = " ".join(x for x in (who.get("first_name"), who.get("last_name")) if x) or "TeamSnap account"
+        store.set_teamsnap(org_id, tok["access_token"], label)
+    except teamsnap_mod.TeamSnapError as exc:
+        return RedirectResponse(back + "&teamsnap=error&why=" + quote(str(exc)), status_code=303)
+    return RedirectResponse(back + "&teamsnap=connected", status_code=303)
+
+
+@app.get("/api/teamsnap/teams")
+async def teamsnap_teams(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The TeamSnap teams the connected account can see, to pick from."""
+    token = store.teamsnap_token(principal.org_id)
+    if not token:
+        raise HTTPException(status_code=409, detail="connect TeamSnap first")
+    try:
+        teams = await run_in_threadpool(teamsnap_mod.teams, token)
+    except teamsnap_mod.TeamSnapError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"teams": teams}
+
+
+class TeamSnapLink(BaseModel):
+    team_id: int
+    teamsnap_team_id: str = Field(min_length=1, max_length=40)
+
+
+@app.post("/api/teamsnap/link", status_code=201)
+def teamsnap_link(
+    body: TeamSnapLink,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Link one of our teams to one of theirs, using the program's token,
+    then dry-run it exactly like any other roster link."""
+    if not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    token = store.teamsnap_token(principal.org_id)
+    if not token:
+        raise HTTPException(status_code=409, detail="connect TeamSnap first")
+    link = store.link_roster(
+        principal.org_id, body.team_id, "teamsnap", token, body.teamsnap_team_id, principal.id)
+    return {"link": link, "preview": store.sync_roster(
+        principal.org_id, body.team_id, "teamsnap", dry_run=True)}
+
+
+@app.delete("/api/teamsnap")
+def teamsnap_disconnect(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can disconnect TeamSnap")
+    store.set_teamsnap(principal.org_id, "", "")
+    return {"connected": False}
 
 
 @app.post("/api/coach/roster/link", status_code=201)

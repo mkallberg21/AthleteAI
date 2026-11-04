@@ -700,6 +700,36 @@
       re-export in week three when two players join.
     </p>
 
+    <!-- TeamSnap: sign in once, pick a team, done. Hidden when the server
+         has no TeamSnap app credentials. -->
+    <div id="teamsnap-block" class="hidden" style="padding:12px 14px;margin:8px 0 14px;background:var(--surface-2);border-radius:var(--radius-sm)">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+        <div>
+          <b>TeamSnap</b>
+          <div class="small muted" id="teamsnap-state">Not connected.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="inline" id="teamsnap-connect">Connect TeamSnap</button>
+          <button class="secondary inline hidden" id="teamsnap-disconnect">Disconnect</button>
+        </div>
+      </div>
+      <div id="teamsnap-pick" class="hidden" style="margin-top:10px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div style="flex:1 1 220px">
+            <label for="teamsnap-remote">TeamSnap team</label>
+            <select id="teamsnap-remote"></select>
+          </div>
+          <div style="flex:1 1 200px">
+            <label for="teamsnap-local">Goes into</label>
+            <select id="teamsnap-local"></select>
+          </div>
+        </div>
+        <button class="inline" id="teamsnap-link" style="margin-top:10px">Pull this roster and preview</button>
+        <p class="small muted" style="margin:8px 0 0">Players and their parents' names, emails and mobiles come across. You read the preview, then apply; after that it keeps itself current.</p>
+      </div>
+      <div id="teamsnap-err" class="err hidden"></div>
+    </div>
+
     <div style="display:flex;gap:12px;flex-wrap:wrap">
       <div style="flex:1 1 200px">
         <label for="sync-provider">Where the roster lives</label>
@@ -2793,6 +2823,78 @@ $('sync-links').addEventListener('change', async (event) => {
   await renderSyncLinks();
 });
 
+// ------------------------------------------------------------ TeamSnap
+
+async function loadTeamSnap() {
+  let st;
+  try { st = await api('/api/teamsnap/status'); } catch { return; }
+  const block = $('teamsnap-block');
+  block.classList.toggle('hidden', !st.offered);
+  if (!st.offered) return;
+  $('teamsnap-connect').textContent = st.connected ? 'Reconnect' : 'Connect TeamSnap';
+  $('teamsnap-disconnect').classList.toggle('hidden', !st.connected || !IS_DIRECTOR);
+  $('teamsnap-connect').classList.toggle('hidden', !IS_DIRECTOR && !st.connected);
+  $('teamsnap-state').textContent = st.connected
+    ? `Connected as ${st.user}${st.connected_at ? ' on ' + st.connected_at.slice(0, 10) : ''}.`
+    : IS_DIRECTOR ? 'Sign in to TeamSnap once; your teams appear here.' : 'Ask your director to connect TeamSnap.';
+  $('teamsnap-pick').classList.toggle('hidden', !st.connected);
+  if (st.connected) {
+    try {
+      const [{ teams: remote }, { teams: ours }] = await Promise.all([api('/api/teamsnap/teams'), api('/api/coach/teams')]);
+      $('teamsnap-remote').innerHTML = remote.length
+        ? remote.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}${t.season ? ' · ' + esc(t.season) : ''}${t.member_count ? ' (' + t.member_count + ')' : ''}</option>`).join('')
+        : '<option value="">No teams on that TeamSnap account</option>';
+      $('teamsnap-local').innerHTML = ours.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+    } catch (e) {
+      $('teamsnap-err').textContent = e.message; $('teamsnap-err').classList.remove('hidden');
+    }
+  }
+}
+
+$('teamsnap-connect').addEventListener('click', async () => {
+  $('teamsnap-err').classList.add('hidden');
+  try {
+    const { url } = await api('/api/teamsnap/connect');
+    window.location.href = url;   // TeamSnap's consent screen, then back here
+  } catch (e) {
+    $('teamsnap-err').textContent = e.message; $('teamsnap-err').classList.remove('hidden');
+  }
+});
+$('teamsnap-disconnect').addEventListener('click', async () => {
+  try { await api('/api/teamsnap', { method: 'DELETE' }); await loadTeamSnap(); }
+  catch (e) { $('teamsnap-err').textContent = e.message; $('teamsnap-err').classList.remove('hidden'); }
+});
+$('teamsnap-link').addEventListener('click', async () => {
+  const btn = $('teamsnap-link');
+  $('teamsnap-err').classList.add('hidden');
+  const remote = $('teamsnap-remote').value;
+  if (!remote) return;
+  btn.disabled = true; btn.textContent = 'Pulling\u2026';
+  try {
+    const res = await api('/api/teamsnap/link', {
+      method: 'POST', body: { team_id: Number($('teamsnap-local').value), teamsnap_team_id: remote },
+    });
+    renderSyncResult(res.preview);
+    await renderSyncLinks();
+  } catch (e) {
+    $('teamsnap-err').textContent = e.message; $('teamsnap-err').classList.remove('hidden');
+  } finally { btn.disabled = false; btn.textContent = 'Pull this roster and preview'; }
+});
+
+// Back from TeamSnap's consent screen: say how it went, and open the card.
+{
+  const q = new URLSearchParams(window.location.search);
+  const ts = q.get('teamsnap');
+  if (ts) {
+    history.replaceState(null, '', window.location.pathname);
+    setTimeout(() => {
+      $('sync-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (ts === 'denied') { $('teamsnap-err').textContent = 'TeamSnap connection was cancelled.'; $('teamsnap-err').classList.remove('hidden'); }
+      if (ts === 'error') { $('teamsnap-err').textContent = 'TeamSnap: ' + (q.get('why') || 'something went wrong'); $('teamsnap-err').classList.remove('hidden'); }
+    }, 800);
+  }
+}
+
 async function loadProviders() {
   ({ providers } = await api('/api/coach/roster/providers'));
   $('sync-provider').innerHTML = providers
@@ -2897,6 +2999,7 @@ async function doImport() {
     renderSlips(res);
     $('preview').classList.add('hidden');
     await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadBadge(IS_DIRECTOR)]);
+    await loadTeamSnap();
   } catch (e) {
     $('import-err').textContent = e.message;
     $('import-err').classList.remove('hidden');

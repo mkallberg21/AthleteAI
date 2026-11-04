@@ -157,6 +157,22 @@ def _rows_from_json(
 # ---------------------------------------------------------------------------
 
 def _teamsnap(token: str, team_id: str) -> list[dict[str, str]]:
+    """Players with their parents' names, emails and phones.
+
+    TeamSnap keeps parents on separate contact rows, and their emails and
+    phones on rows separate again; offdays.teamsnap joins the four requests
+    by member id. The token is the one the director's Connect TeamSnap
+    consent produced (stored on the organisation), or a personal access
+    token pasted the old way -- the API accepts either.
+    """
+    from . import teamsnap as ts
+    try:
+        return ts.roster(token, team_id)
+    except ts.TeamSnapError as exc:
+        raise SyncError(str(exc)) from exc
+
+
+def _teamsnap_members_only(token: str, team_id: str) -> list[dict[str, str]]:
     body = _get(
         "https://api.teamsnap.com/v3/members/search?"
         + urllib.parse.urlencode({"team_id": team_id}),
@@ -246,13 +262,14 @@ PROVIDERS: tuple[Provider, ...] = (
     Provider(
         key="teamsnap",
         label="TeamSnap",
-        credential_label="Personal access token",
+        credential_label="Personal access token (or Connect TeamSnap above)",
         team_field="TeamSnap team ID",
         help_url="https://auth.teamsnap.com/oauth/applications",
         fetch=_teamsnap,
         note=(
-            "Written against TeamSnap's published v3 API. Not yet run against "
-            "a live account, so treat the first sync as a dry run."
+            "Connect TeamSnap once and pick the team; players and their "
+            "parents' names, emails and mobiles come across. Not yet run "
+            "against a live account, so treat the first sync as a dry run."
         ),
     ),
     Provider(

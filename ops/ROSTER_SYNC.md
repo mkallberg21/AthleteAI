@@ -28,7 +28,8 @@ up. Nobody has run those adapters against a real account yet (see
 |---|---|---|
 | **Upload** | Dashboard → Roster → upload a CSV/TSV. Preview, then import. | Day one. Any time. |
 | **Export link** (`csv_url`) | Paste a URL that returns a CSV (plus a token if it needs one). | The roster changes during the season and the platform can publish a CSV link. |
-| **TeamSnap / SportsEngine** | Paste an API token and the team id. | After it has been [verified](#verifying-a-hosted-adapter) against the club's real account. |
+| **TeamSnap** | Director clicks **Connect TeamSnap**, signs in to TeamSnap once, picks the team. Players and parents (name, email, mobile) come across. | After it has been [verified](#verifying-a-hosted-adapter) against the club's real account; until then read the preview. |
+| **SportsEngine** | Paste an API token and the team id. | After it has been [verified](#verifying-a-hosted-adapter) against the club's real account. |
 
 All three end in the same place. A provider's only job is to return rows. Those
 rows are turned back into CSV (`roster_sync.rows_to_csv`) and parsed by
@@ -140,7 +141,7 @@ has gone missing on every sync.
 | Provider | `verified` | Endpoint used | Credential |
 |---|---|---|---|
 | Export link (`csv_url`) | **yes** | the URL you paste | optional bearer token |
-| TeamSnap | **no** | `GET https://api.teamsnap.com/v3/members/search?team_id=…` (Collection+JSON) | personal access token |
+| TeamSnap | **no** | OAuth (read scope) via `/api/teamsnap/connect`; then `members/search`, `contacts/search`, `contact_email_addresses/search`, `contact_phone_numbers/search` joined by member id in `offdays/teamsnap.py` (Collection+JSON) | the director's consent token, stored on the organisation |
 | SportsEngine | **no** | `GET https://api.sportngin.com/v3/teams/{id}/members` | API token |
 
 "Not verified" means the adapter was written against the platform's published

@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- the right answer differs between a rec league and a high-school program,
     -- and that call belongs to the director, not to us. Set above the oldest
     -- band (99) to keep every athlete on the general mix permanently.
+    teamsnap_token      TEXT NOT NULL DEFAULT '',
+    teamsnap_user       TEXT NOT NULL DEFAULT '',
+    teamsnap_connected_at TEXT NOT NULL DEFAULT '',
     position_emphasis_min_age INTEGER NOT NULL DEFAULT 15,
     -- Where the program is in its year. Scales the self-directed weekly
     -- budget, because the age bands know how old a child is and not whether
@@ -1188,6 +1191,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     # one's columns from every upgraded deployment -- which is exactly what
     # happened once. tests/test_db_upgrade.py guards against it.
     "organizations": [
+        ("teamsnap_token", "TEXT NOT NULL DEFAULT ''"),
+        ("teamsnap_user", "TEXT NOT NULL DEFAULT ''"),
+        ("teamsnap_connected_at", "TEXT NOT NULL DEFAULT ''"),
         ("position_emphasis_min_age", "INTEGER NOT NULL DEFAULT 15"),
         ("voice_name", "TEXT NOT NULL DEFAULT ''"),
         ("voice_title", "TEXT NOT NULL DEFAULT ''"),
