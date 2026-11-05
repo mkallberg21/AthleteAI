@@ -1454,6 +1454,17 @@ tbody tr:hover { background: var(--surface-2); }
 .source-btn.active { border-color: var(--accent); background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent); }
 @media (max-width: 760px) { .source-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .src-panel { margin-top: 4px; }
+/* The one we recommend: always outlined, with a flag, so a director who is
+   unsure which to pick has an answer. Active still reads as selected. */
+.source-btn { position: relative; }
+.source-btn--easiest { border-color: var(--accent); }
+.source-btn--easiest.active { box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35), inset 0 0 0 1px var(--accent); }
+.source-flag {
+  position: absolute; top: -10px; right: 12px; font-style: normal;
+  background: var(--accent); color: #fff; font-size: .68rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px;
+}
+
 
 /* The roster drop box. A real target: dashed, big, obviously a place to
    put a file, with a Browse button for anyone who would rather click. */
