@@ -176,6 +176,24 @@ def looks_like_email(value: str | None) -> bool:
     return bool(local) and "." in domain and not domain.endswith(".")
 
 
+def mail_held(conn: sqlite3.Connection, org_id: int | None) -> bool:
+    """True while this program's email is on hold (the default).
+
+    A program that cannot be found is held: when in doubt, nothing is sent.
+    """
+    if org_id is None:
+        return True
+    row = conn.execute(
+        "SELECT mail_hold FROM organizations WHERE id = ?", (org_id,)
+    ).fetchone()
+    return row is None or bool(row["mail_hold"])
+
+
+def can_send(conn: sqlite3.Connection, org_id: int | None) -> bool:
+    """The server has a mail provider AND the director has released the hold."""
+    return CONFIG.smtp_configured and not mail_held(conn, org_id)
+
+
 def enqueue(
     conn: sqlite3.Connection,
     *,

@@ -26,7 +26,11 @@ from offdays.store import Store
 def smtp_on(monkeypatch):
     """Email "goes out" only when SMTP is configured; these tests assert it does."""
     from dataclasses import replace
-    monkeypatch.setattr(invites, "CONFIG", replace(CONFIG, smtp_host="smtp.test"))
+    patched = replace(CONFIG, smtp_host="smtp.test")
+    monkeypatch.setattr(invites, "CONFIG", patched)
+    from offdays import mailer
+    monkeypatch.setattr(mailer, "CONFIG", patched)
+    monkeypatch.setattr(mailer, "mail_held", lambda conn, org_id: False)
 
 
 @pytest.fixture

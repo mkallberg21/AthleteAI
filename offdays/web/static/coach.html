@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
 <div class="topbar">
@@ -325,6 +325,18 @@
     <div id="digest-note" class="small muted hidden" style="margin-top:8px"></div>
     <div id="delivery" class="hidden" style="margin-top:12px"></div>
     <div id="bounces" class="hidden" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card card--wide hidden" id="mailhold-card">
+    <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+      <div style="flex:1 1 260px">
+        <h2 style="margin:0">Email to families</h2>
+        <p class="small" id="mailhold-state" style="margin:4px 0 0"></p>
+      </div>
+      <button class="inline" id="mailhold-toggle"></button>
+    </div>
+    <p class="small muted" id="mailhold-note" style="margin:8px 0 0"></p>
+    <div id="mailhold-err" class="err hidden"></div>
   </div>
 
   <div class="card card--wide hidden" id="families-card">
@@ -2389,7 +2401,7 @@ function renderRoster(athletes) {
     return `<tr>
       <td><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
           <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span>
-          <button class="linkish" data-invite="${a.athlete_id}"
+          <button class="tiny" data-invite="${a.athlete_id}"
                 title="Prepare the invite email to this player's parent, with the player code in it. Nothing is sent until you send it.">Email parent</button></td>
       <td class="num">${a.window_sessions}</td>
       <td class="num" ${shareCls}><span class="muted">${strong}</span> / ${share}</td>
@@ -2421,8 +2433,8 @@ async function inviteGuardian(btn) {
     } else {
       const href = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
       out.innerHTML = `Email to <b>${esc(res.email)}</b> is ready, with the player code <code>${esc(res.code)}</code> in it. `
-        + `<a class="btn-link" href="${esc(href)}">Open in my email</a> `
-        + `<button type="button" class="secondary inline" data-copy-invite="${esc(res.link)}">Copy link</button>`;
+        + `<a class="tiny" href="${esc(href)}">Open in my email</a>`
+        + `<button type="button" class="tiny" data-copy-invite="${esc(res.link)}">Copy link</button>`;
       out.querySelector('[data-copy-invite]').addEventListener('click', async (e) => {
         try { await navigator.clipboard.writeText(res.link); e.target.textContent = 'Copied'; }
         catch { e.target.textContent = res.link; }
@@ -2784,6 +2796,52 @@ async function loadFamilies() {
     .join('');
   renderFamilies();
 }
+
+// Whether the program's email to parents and coaches is on hold. On by
+// default: connecting the server to a mail provider never starts emailing
+// families by itself. Only a director can release it.
+async function loadMailHold() {
+  if (!IS_DIRECTOR) return;
+  let st;
+  try { st = await api('/api/org/mail-hold'); } catch { return; }
+  $('mailhold-card').classList.remove('hidden');
+  const btn = $('mailhold-toggle');
+  if (st.held) {
+    $('mailhold-state').innerHTML = '<span class="pill warn">On hold</span> Nothing is emailed to parents or coaches. Invites are prepared for you to send yourself.';
+    btn.textContent = 'Start sending email';
+    btn.className = 'inline';
+    btn.disabled = !st.provider_configured;
+    $('mailhold-note').textContent = st.provider_configured
+      ? 'When you start, the program emails parents itself: roster imports and Resend invite send real email immediately.'
+      : 'Email is not connected to a mail service yet, so there is nothing to start. Until it is, you send invites from your own email.';
+  } else {
+    $('mailhold-state').innerHTML = st.sending
+      ? '<span class="pill ok">Sending</span> Invites and coach welcomes are emailed as they are made.'
+      : '<span class="pill warn">Released, but no mail service</span> Nothing can leave yet.';
+    btn.textContent = 'Hold all email';
+    btn.className = 'secondary inline';
+    btn.disabled = false;
+    $('mailhold-note').textContent = 'Holding stops new email at once. Email already handed to the mail service cannot be recalled.';
+  }
+  btn.dataset.held = st.held ? '1' : '0';
+}
+
+$('mailhold-toggle').addEventListener('click', async () => {
+  const btn = $('mailhold-toggle');
+  const releasing = btn.dataset.held === '1';
+  if (releasing && !window.confirm('Start emailing parents and coaches?\n\nFrom now on, importing a roster or pressing Resend invite sends real email to real parents.')) return;
+  btn.disabled = true;
+  $('mailhold-err').classList.add('hidden');
+  try {
+    await api('/api/org/mail-hold', { method: 'PUT', body: { held: !releasing } });
+    await loadMailHold();
+    loadFamilies();
+  } catch (e) {
+    $('mailhold-err').textContent = e.message;
+    $('mailhold-err').classList.remove('hidden');
+    btn.disabled = false;
+  }
+});
 
 const resent = new Map();   // athlete_id -> the invite just made, until the page reloads
 function resentHtml(r) {
@@ -3840,6 +3898,7 @@ $('signout').addEventListener('click', logout);
     // was only asked after an import, so the button said "not switched on"
     // on a server where it was.
     await loadTeamSnap();
+    await loadMailHold();
     // Before loadAll, because the skill-work table names drills from it.
     await loadDrillOptions();
     defaultAssignmentDates();

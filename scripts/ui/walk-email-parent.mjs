@@ -22,7 +22,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await btn.click(); await page.waitForTimeout(1500);
   const cell = page.locator('#roster tr').first();
   console.log(tag, 'after click:', (await cell.innerText()).split(/\r?\n/).map((x) => x.trim()).filter(Boolean).join(' | ').slice(0, 220));
-  const href = decodeURIComponent(await cell.locator('a.btn-link').first().getAttribute('href'));
+  const href = decodeURIComponent(await cell.locator('a.tiny').first().getAttribute('href'));
   const to = href.slice(7, href.indexOf('?'));
   const code = (href.match(/invite code ([A-Z0-9-]+)/) || href.match(/invite=([A-Z0-9-]+)/) || [])[1];
   console.log(tag, 'mailto to:', to, '| subject:', (href.match(/subject=([^&]*)/) || [])[1]);

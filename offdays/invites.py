@@ -148,7 +148,8 @@ def deliver_staff(
 ) -> bool:
     """Queue the coach's sign-in email. True only if the program can send it."""
     email = (email or "").strip()
-    if not email or not CONFIG.smtp_configured:
+    owner = conn.execute("SELECT org_id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not email or not mailer.can_send(conn, owner["org_id"] if owner else None):
         return False
     subject, html, text = compose_staff(
         coach_name=coach_name, org_name=org_name, director_name=director_name, code=code,
@@ -187,7 +188,12 @@ def deliver(
     whether a parent will ever see the email.)
     """
     email = (invite.get("email") or "").strip()
-    if not email or not CONFIG.smtp_configured:
+    if not email:
+        return False
+    owner = conn.execute(
+        "SELECT org_id FROM users WHERE id = ?", (invite.get("athlete_id"),)
+    ).fetchone()
+    if not mailer.can_send(conn, owner["org_id"] if owner else None):
         return False
     subject, html, text = compose(
         athlete_name=invite["athlete_name"], org_name=org_name,

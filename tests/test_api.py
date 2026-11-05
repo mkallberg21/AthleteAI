@@ -1807,6 +1807,14 @@ class TestBillingEndpoints:
 
 
 class TestDigestDelivery:
+    @pytest.fixture(autouse=True)
+    def _released(self, monkeypatch):
+        """The weekly digest is held with the rest of a program's email until
+        its director releases it; these tests are about delivery, not the hold
+        (tests/test_mail_hold.py covers that)."""
+        from offdays import mailer
+        monkeypatch.setattr(mailer, "mail_held", lambda conn, org_id: False)
+
     def _staff(self, client, program):
         """A director with an address, and a JV-scoped coach with their own."""
         store = api_module._store

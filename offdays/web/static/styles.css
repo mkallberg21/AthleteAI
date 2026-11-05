@@ -389,6 +389,19 @@ button.secondary, button.secondary:not([class*="btn"]):not(.bell):not(.feel):not
 button.danger, button.danger:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) { background: var(--danger); color: #fff; box-shadow: 0 2px 8px rgba(239,68,68,0.35); }
 button.inline, button.inline:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) { width: auto; padding: 0.5rem 0.9rem; min-height: 38px; font-size: 0.875rem; border-radius: var(--radius-sm); }
 
+/* A small button for a row of a table: about half the height of .inline, and
+   only as wide as its words. The roster's "Email parent" sat in the athlete
+   cell as a full-width 52px blue slab, bigger than the name above it. */
+button.tiny, button.tiny:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn),
+a.tiny {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: auto; min-height: 26px; padding: 0.2rem 0.65rem; margin: 4px 6px 0 0;
+  font-size: 0.75rem; font-weight: 600; line-height: 1.2; white-space: nowrap;
+  border-radius: var(--radius-sm); box-shadow: none;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border-light);
+}
+button.tiny:hover, a.tiny:hover { border-color: var(--accent); text-decoration: none; }
+
 /* Status pills (coach roster, families). Lost in the v3 re-skin. */
 .pill {
   display: inline-block; padding: 3px 9px; border-radius: 99px;

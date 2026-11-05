@@ -338,7 +338,7 @@ def send_coach_digests(
                 dedupe_key=f"{Kind.COACH_DIGEST}:{week}:{team_id or 'org'}",
             )
 
-            if dry_run:
+            if dry_run or mailer.mail_held(conn, member["org_id"]):
                 stats["not_queued"] += 1
                 continue
 

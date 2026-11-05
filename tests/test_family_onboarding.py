@@ -42,6 +42,10 @@ def smtp_on(monkeypatch):
     from dataclasses import replace
     patched = replace(CONFIG, smtp_host="smtp.test", app_base_url=CONFIG.app_base_url)
     monkeypatch.setattr(invites, "CONFIG", patched)
+    # Email now needs the server AND the director to have released the hold,
+    # and the mailer reads its own copy of CONFIG.
+    monkeypatch.setattr(mailer, "CONFIG", patched)
+    monkeypatch.setattr(mailer, "mail_held", lambda conn, org_id: False)
     return patched
 
 

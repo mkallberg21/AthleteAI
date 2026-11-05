@@ -1808,7 +1808,7 @@ def create_staff(
         "text": text,
         "team_ids": body.team_ids,
         "emailed": emailed,
-        "smtp_configured": CONFIG.smtp_configured,
+        "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }
 
 
@@ -2274,7 +2274,7 @@ def import_roster(
         filename=body.filename,
         kid_claim_codes=body.print_slips,
     )
-    return {"summary": plan.to_dict()["summary"], **result, "smtp_configured": CONFIG.smtp_configured}
+    return {"summary": plan.to_dict()["summary"], **result, "smtp_configured": mailer.can_send(store.conn, principal.org_id)}
 
 
 @app.get("/api/coach/roster/imports")
@@ -2639,7 +2639,7 @@ def create_guardian_invite(
     return {
         **invite, "link": invites_mod.invite_link(invite["code"]),
         "subject": subject, "text": text, "emailed": sent,
-        "smtp_configured": CONFIG.smtp_configured,
+        "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }
 
 
@@ -2724,7 +2724,7 @@ def nudge_family(
         "subject": subject,
         "text": text,
         "emailed": sent,
-        "smtp_configured": CONFIG.smtp_configured,
+        "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }
 
 
@@ -2778,7 +2778,7 @@ def list_guardian_invites(
     delivery = invites_mod.delivery_status(store.conn, [int(r["id"]) for r in rows])
     return {
         "invites": [{**dict(r), "email_status": delivery.get(int(r["id"]), "none")} for r in rows],
-        "smtp_configured": CONFIG.smtp_configured,
+        "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }
 
 
@@ -3101,6 +3101,46 @@ def _shots_setting(store: Store, org_id: int) -> dict[str, Any]:
             for age, label in bands
         ],
     }
+
+
+class MailHoldSetting(BaseModel):
+    held: bool
+
+
+@app.get("/api/org/mail-hold")
+def get_mail_hold(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Is this program's email to families on hold, and could it send if not."""
+    return {
+        "held": mailer.mail_held(store.conn, principal.org_id),
+        "provider_configured": CONFIG.smtp_configured,
+        "sending": mailer.can_send(store.conn, principal.org_id),
+    }
+
+
+@app.put("/api/org/mail-hold")
+def set_mail_hold(
+    body: MailHoldSetting,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Hold or release all email to families. Directors only.
+
+    On by default, so connecting the server to a mail provider never starts
+    emailing parents by itself. Releasing it is a decision with a name on it.
+    Holding it again stops new mail at once; mail already handed to the
+    provider cannot be recalled.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can hold or release email")
+    with transaction(store.conn) as c:
+        c.execute(
+            "UPDATE organizations SET mail_hold = ? WHERE id = ?",
+            (1 if body.held else 0, principal.org_id),
+        )
+    return get_mail_hold(principal, store)
 
 
 @app.get("/api/org/season")

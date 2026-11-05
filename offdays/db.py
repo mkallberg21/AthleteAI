@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- rather than a blob: a logo is served to every screen on every load,
     -- and a database is the wrong place to read an image from all day.
     logo_file   TEXT,
+    -- Email to families is held until the director releases it. Connecting
+    -- the server to a mail provider must never, by itself, start emailing
+    -- parents.
+    mail_hold   INTEGER NOT NULL DEFAULT 1,
     -- Age at which position-specific training guidance switches on. Below it,
     -- every athlete gets the general-athlete drill mix regardless of the
     -- position on their jersey.
@@ -1235,6 +1239,10 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # to every screen on every load and a database is the wrong place to
         # read an image from a thousand times a day.
         ("logo_file", "TEXT"),
+        # Email to families is held until the director says otherwise. Turning
+        # outbound mail on for the server must never, by itself, start
+        # emailing parents: the director opens that door on purpose.
+        ("mail_hold", "INTEGER NOT NULL DEFAULT 1"),
     ],
     "notifications": [
         # Which wording went out, so the next athlete can be given a
