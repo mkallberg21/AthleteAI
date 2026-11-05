@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=15">
+<link rel="stylesheet" href="styles.css?v=17">
 </head>
 <body>
 <div class="topbar">
@@ -2434,7 +2434,9 @@ async function inviteGuardian(btn) {
       const href = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
       out.innerHTML = `Email to <b>${esc(res.email)}</b> is ready, with the player code <code>${esc(res.code)}</code> in it. `
         + `<a class="tiny" href="${esc(href)}">Open in my email</a>`
+        + `<button type="button" class="tiny" data-copy-message="1">Copy message</button>`
         + `<button type="button" class="tiny" data-copy-invite="${esc(res.link)}">Copy link</button>`;
+      out.querySelector('[data-copy-message]').addEventListener('click', (e) => copyInviteText(e.target, res));
       out.querySelector('[data-copy-invite]').addEventListener('click', async (e) => {
         try { await navigator.clipboard.writeText(res.link); e.target.textContent = 'Copied'; }
         catch { e.target.textContent = res.link; }
@@ -2843,6 +2845,16 @@ $('mailhold-toggle').addEventListener('click', async () => {
   }
 });
 
+// The whole invite as plain text -- to, subject, then the message -- for a
+// director on webmail, where "Open in my email" has no mail app to open.
+function inviteAsText(r) {
+  return `To: ${r.email}\nSubject: ${r.subject}\n\n${r.text}`;
+}
+async function copyInviteText(btn, r) {
+  try { await navigator.clipboard.writeText(inviteAsText(r)); btn.textContent = 'Copied'; }
+  catch { btn.textContent = 'Select and copy manually'; }
+}
+
 const resent = new Map();   // athlete_id -> the invite just made, until the page reloads
 function resentHtml(r) {
   const href = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent(r.subject)}&body=${encodeURIComponent(r.text)}`;
@@ -2850,7 +2862,8 @@ function resentHtml(r) {
     ? `<span class="small muted">Sent to ${esc(r.email)}</span>`
     : `<span class="small">New invite ready &middot;
          <a class="btn-link" href="${esc(href)}" title="Opens the invite in your mail app, ready for you to press send. The program sends nothing.">Open in my email</a>
-         <button type="button" class="secondary inline" data-copy-invite="${esc(r.link)}" style="margin-left:6px">Copy link</button>
+         <button type="button" class="tiny" data-copy-invite="${esc(r.link)}">Copy link</button>
+         <button type="button" class="tiny" data-copy-message="${r.athlete_id}">Copy message</button>
        </span>`;
 }
 
@@ -2893,6 +2906,8 @@ function renderFamilies() {
 $('families-filter').addEventListener('change', renderFamilies);
 
 $('families').addEventListener('click', async (e) => {
+  const msg = e.target.closest('button[data-copy-message]');
+  if (msg) { copyInviteText(msg, resent.get(Number(msg.dataset.copyMessage))); return; }
   const copy = e.target.closest('button[data-copy-invite]');
   if (copy) {
     try { await navigator.clipboard.writeText(copy.dataset.copyInvite); copy.textContent = 'Copied'; }

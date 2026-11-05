@@ -198,7 +198,10 @@ code, .code, .claim-code {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  padding: 0.75rem 16px;
+  /* Inside the phone app the page runs under the status bar (viewport-fit=
+     cover), so the clock and battery sat on top of the logo. The inset is 0
+     in an ordinary browser tab, so nothing changes there. */
+  padding: calc(0.75rem + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 0.75rem calc(16px + env(safe-area-inset-left, 0px));
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
@@ -1694,7 +1697,10 @@ body.wizard-on #wizard, body.wizard-on #pwizard, body.wizard-on #awizard { grid-
   .topbar {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas: "left right" "centre centre";
-    row-gap: 6px; padding: 10px 14px;
+    row-gap: 6px;
+    /* Keep the status-bar inset the base rule adds: this phone-width rule
+       used to replace the whole padding and put the clock on the logo. */
+    padding: calc(10px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px)) 10px calc(14px + env(safe-area-inset-left, 0px));
   }
   .mast-left { grid-area: left; }
   .club-badge, .club-name { grid-area: centre; justify-self: center; }
@@ -2094,3 +2100,6 @@ tr.mine td { border-color: var(--accent-dim); }
 /* Small links to the policy, on the pages a stranger can reach. */
 .legal-links { text-align: center; margin: 1.5rem 0 1rem; font-size: .8rem; }
 .legal-links a { color: var(--text-muted); text-decoration: underline; }
+
+/* App shell: keep content clear of the home indicator and the notch. */
+body { padding-bottom: env(safe-area-inset-bottom, 0px); }

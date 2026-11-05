@@ -21,20 +21,58 @@ notifications.
 
 ## Status: what is and is not proven
 
+Proven on an Android 15 emulator (hardware-accelerated, Windows host):
+
 - [x] Both native projects generate and `cap sync` runs clean.
+- [x] **Android compiles** (`./gradlew assembleDebug`, JDK 21, SDK 35) into a 4 MB APK
+      with the right package, name, permissions and icon.
+- [x] The app launches, loads the site and shows the landing page.
+- [x] Signing in as an athlete from a link reaches the drill list.
+- [x] **Camera and microphone work inside the app shell**: starting a drill gives a
+      live video track (720x1280, playing) and the microphone is granted. This was
+      the biggest risk and it is cleared **for the emulator's simulated camera**.
 - [x] Permissions and portrait lock are set; the iOS "why we ask" wording is written.
-- [ ] **Android has not been compiled or run.** This machine had no JDK or Android SDK.
-- [ ] **iOS has never been built.** It needs a Mac and Xcode.
-- [ ] **Camera, microphone and motion inside the app shell are untested.** This is
-      the biggest technical risk: rep counting depends on all three, and they
-      behave differently in an app webview than in Safari or Chrome. Test this
-      on a real phone before anything else.
+- [x] Safe-area insets: the status bar no longer sits on top of the logo.
+
+NOT proven:
+
+- [ ] **A real phone.** An emulator's camera is a recorded scene. Rep counting
+      accuracy, frame rate and heat on a real device are untested.
+- [ ] **Rep counting itself.** The camera feeds the drill screen; nobody has thrown a
+      ball at a wall in front of the app shell and checked the count.
+- [ ] **Motion sensors:** the emulator reports none (`hasMotion` false). Untested.
+- [ ] **iOS has never been built.** It needs a Mac and Xcode, and Safari's WebView
+      behaves differently from Android's.
+- [ ] **Release builds, signing, Play upload.** Only debug builds exist.
+- [ ] **Push notifications.** Not built.
+
+### The emulator needs a secure address
+
+A WebView only hands out the camera and microphone on a **secure context**: HTTPS, or
+`http://localhost`. Pointing the app at `http://10.0.2.2:8000` (the emulator's name for
+your PC) gives `navigator.mediaDevices === undefined` and the drill screen shows a grey
+box with no error. To test against a local server:
+
+```
+adb reverse tcp:8000 tcp:8000
+```
+and set `server.url` to `http://localhost:8000/app/index.html` with `cleartext: true` in
+`capacitor.config.json`, then `npx cap sync`. **Put the config back to
+`https://app.0ffdays.com` before committing**: the repo's config must point at production.
+
+To look inside the running WebView: `adb forward tcp:9222
+localabstract:webview_devtools_remote_<pid>` then
+`node scripts/ui/webview-eval.mjs "<expression>"` (Playwright cannot attach to a WebView;
+this talks the debugging protocol directly).
 
 ## Build on Android (Windows, Mac or Linux)
 
-1. Install JDK 21 and Android Studio (it brings the SDK).
-2. `cd mobile && npm install && npx cap sync android && npx cap open android`
-3. Run on a real phone with USB debugging on. An emulator has no real camera.
+1. Install JDK 21 and the Android SDK (platform 35, build-tools 35.0.0), or Android Studio.
+2. `cd mobile && npm install && npx cap sync android`
+3. `cd android && ./gradlew assembleDebug` (set `JAVA_HOME` and `ANDROID_HOME`).
+   The APK lands in `android/app/build/outputs/apk/debug/`.
+4. Install it: `adb install -r app-debug.apk`, then test on a **real phone** with USB
+   debugging on. The emulator proved the plumbing; it cannot prove rep counting.
 
 ## Build on iOS (needs a Mac)
 
@@ -46,7 +84,8 @@ notifications.
 
 ## Before a store submission
 
-- [ ] Real app icon and splash (1024x1024 icon, no transparency) from the OFFDAYS mark.
+- [x] App icon from the real mark: `python make_icons.py` (needs Pillow) writes the 1024 App Store icon, the 512 Play icon and every Android density into `assets/` and the native projects.
+- [ ] Splash screen: still Capacitor's default.
 - [ ] Privacy policy lawyer-reviewed and its contact block filled in: `/app/privacy.html`.
 - [ ] Apple "App Privacy" labels and Google "Data safety" form: answers are in `STORE_LISTING.md`.
 - [ ] Children: both stores have extra rules for apps used by kids (Apple Kids
