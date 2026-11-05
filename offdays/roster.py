@@ -113,6 +113,69 @@ def parse_phone(value: str | None) -> str | None:
     return value.strip()
 
 
+_CONTACT_WORDS = ("parent", "guardian", "contact", "mother", "mom", "father", "dad")
+_NUMBERED = re.compile(r"^(email|emailaddress|phone|phonenumber|mobile|mobilephone|cell|cellphone)(\d)$")
+
+
+def _contact_columns(normalized: dict[str, str]) -> dict[str, Any]:
+    """Map parent/guardian/contact columns by who and what they are.
+
+    Returns {field: header} for guardian_email / guardian_phone /
+    guardian_name and their guardian2_ twins, plus "_claim_only": headers
+    that describe a parent but carry nothing we store (a parent's last
+    name) and must not be mistaken for the athlete's own.
+    """
+    found: dict[str, str] = {}
+    claim_only: list[str] = []
+    for header, norm in normalized.items():
+        if not norm or "emergency" in norm:
+            continue
+        numbered = _NUMBERED.match(norm)
+        who = next((w for w in _CONTACT_WORDS if w in norm), None)
+        if not who and not numbered:
+            continue
+        # Which parent. A number says so; otherwise mom/primary come first,
+        # dad/secondary second, and a bare "Parent Email" is the first.
+        digit = re.search(r"(\d)", norm)
+        if numbered:
+            slot = int(numbered.group(2))
+        elif digit:
+            slot = int(digit.group(1))
+        elif who in ("father", "dad") or "secondary" in norm or "second" in norm:
+            slot = 2
+        else:
+            slot = 1
+        slot = 2 if slot >= 2 else 1
+        prefix = "guardian" if slot == 1 else "guardian2"
+
+        if "mail" in norm:
+            kind = "email"
+        elif any(k in norm for k in ("phone", "cell", "mobile")):
+            kind = "phone"
+        elif "name" in norm:
+            kind = "name"
+        else:
+            continue          # "Parent" alone: left to the alias match
+        if kind == "name" and "last" in norm:
+            claim_only.append(header)   # a parent's surname is not the athlete's
+            continue
+        fld = f"{prefix}_{kind}"
+        if fld not in found:
+            found[fld] = header
+        elif kind == "name":
+            claim_only.append(header)
+
+    # Only a second parent in the file (a "Dad Email" and no mom): they are
+    # the program's contact, so they are the first.
+    if "guardian_email" not in found and "guardian2_email" in found:
+        for kind in ("email", "phone", "name"):
+            if f"guardian2_{kind}" in found and f"guardian_{kind}" not in found:
+                found[f"guardian_{kind}"] = found.pop(f"guardian2_{kind}")
+    out: dict[str, Any] = dict(found)
+    out["_claim_only"] = claim_only
+    return out
+
+
 def detect_columns(headers: Iterable[str]) -> dict[str, str]:
     """Map our field names onto whatever this file calls them.
 
@@ -131,6 +194,21 @@ def detect_columns(headers: Iterable[str]) -> dict[str, str]:
             mapping[literal] = header
             claimed.add(header)
 
+    # Parent columns, read by what they say rather than by alias. Real
+    # exports name them every way there is -- "Contact 1 Email", "Parent/
+    # Guardian Phone", "Email Address 2", "Mom Cell" -- and the loose alias
+    # match below used to read "Parent/Guardian Phone" as the parent EMAIL
+    # (the word "parent" is in it) and miss "Contact 1 Email" entirely, so a
+    # roster whose parents were all there imported with no parent on file.
+    contact = _contact_columns(normalized)
+    claim_only = contact.pop("_claim_only", [])
+    mapping.update(contact)
+    claimed.update(contact.values())
+    claimed.update(claim_only)
+    # An emergency contact is not someone to invite, and the loose match
+    # below would otherwise take their phone for the parent's.
+    claimed.update(h for h, n in normalized.items() if "emergency" in n)
+
     # Exact alias matches first -- they are unambiguous.
     for field_name, aliases in FIELD_ALIASES.items():
         for header, norm in normalized.items():
@@ -148,7 +226,9 @@ def detect_columns(headers: Iterable[str]) -> dict[str, str]:
         for header, norm in normalized.items():
             if header in claimed or not norm:
                 continue
-            if any(alias in norm or norm in alias for alias in aliases if len(alias) > 3):
+            loose = [a for a in aliases if len(a) > 3
+                     and not (field_name.startswith("guardian") and a in ("parent", "guardian"))]
+            if any(alias in norm or norm in alias for alias in loose):
                 mapping[field_name] = header
                 claimed.add(header)
                 break

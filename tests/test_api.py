@@ -1471,7 +1471,7 @@ class TestRosterEndpoints:
     def test_import_creates_athletes_and_claim_codes(self, client, program):
         res = client.post(
             "/api/coach/roster/import",
-            json={"content": self.CSV, "team_id": program["team"]["id"]},
+            json={"content": self.CSV, "team_id": program["team"]["id"], "print_slips": True},
             headers=program["director"],
         )
         assert res.status_code == 201
@@ -1483,7 +1483,7 @@ class TestRosterEndpoints:
     def test_a_claim_code_signs_the_athlete_in(self, client, program):
         created = client.post(
             "/api/coach/roster/import",
-            json={"content": self.CSV, "team_id": program["team"]["id"]},
+            json={"content": self.CSV, "team_id": program["team"]["id"], "print_slips": True},
             headers=program["director"],
         ).json()["created"]
 
@@ -1498,10 +1498,20 @@ class TestRosterEndpoints:
         """An imported athlete has no credentials yet; requiring some is circular."""
         created = client.post(
             "/api/coach/roster/import",
-            json={"content": self.CSV, "team_id": program["team"]["id"]},
+            json={"content": self.CSV, "team_id": program["team"]["id"], "print_slips": True},
             headers=program["director"],
         ).json()["created"]
         assert client.post("/api/claim", json={"code": created[0]["claim_code"]}).status_code in (200, 201)
+
+    def test_a_normal_import_hands_no_kid_a_code(self, client, program):
+        """The parent invites the kid; the program never gives a kid a code."""
+        data = client.post(
+            "/api/coach/roster/import",
+            json={"content": self.CSV, "team_id": program["team"]["id"]},
+            headers=program["director"],
+        ).json()
+        assert data["created"] and all("claim_code" not in a for a in data["created"])
+        assert len(data["guardian_invites"]) == 1
 
     def test_a_bad_claim_code_is_refused(self, client):
         res = client.post("/api/claim", json={"code": "ZZZZ-ZZZZ"})

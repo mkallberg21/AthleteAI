@@ -4007,6 +4007,7 @@ class Store:
         *,
         issue_guardian_invites: bool = True,
         filename: str = "",
+        kid_claim_codes: bool = False,
     ) -> dict[str, Any]:
         """Create and update athletes from a resolved plan.
 
@@ -4034,7 +4035,11 @@ class Store:
                 continue
 
             if athlete.action == "create":
-                claim = roster_mod.new_claim_code()
+                # A kid is not handed a code by the program. Their parent
+                # signs up, says yes, and sends them a link. A printed claim
+                # code exists only if the director explicitly asked for
+                # slips (a family with no email on file).
+                claim = roster_mod.new_claim_code() if kid_claim_codes else None
                 with transaction(self.conn) as c:
                     cur = c.execute(
                         "INSERT INTO users(org_id, role, display_name, email, birth_year, "
@@ -4048,7 +4053,8 @@ class Store:
                             # unusable until the claim code is redeemed, which
                             # is what replaces it.
                             hash_token(new_token()), now, athlete.external_id,
-                            roster_mod.hash_claim(claim), roster_mod.claim_expiry(),
+                            roster_mod.hash_claim(claim) if claim else None,
+                            roster_mod.claim_expiry() if claim else None,
                             1 if athlete.birth_year_estimated else 0,
                         ),
                     )
@@ -4070,12 +4076,14 @@ class Store:
                         (team_id, athlete_id, athlete.jersey, athlete.position, now),
                     )
                     _write_imported_sports(c, athlete_id, athlete.sports, now)
-                created.append({
+                entry = {
                     "athlete_id": athlete_id,
                     "display_name": athlete.display_name,
                     "jersey": athlete.jersey,
-                    "claim_code": claim,
-                })
+                }
+                if claim:
+                    entry["claim_code"] = claim
+                created.append(entry)
 
             else:
                 athlete_id = athlete.existing_id

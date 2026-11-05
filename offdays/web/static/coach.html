@@ -966,7 +966,7 @@
 
   <div class="card card--wide hidden" id="slips-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px" class="no-print">
-      <h2 style="margin:0">Claim codes</h2>
+      <h2 style="margin:0">Parent invites</h2>
       <button class="secondary inline" id="print-slips">Print</button>
     </div>
     <p class="small muted no-print" id="slips-note"></p>
@@ -3361,6 +3361,14 @@ function renderPreview(plan) {
       <div class="stat"><b>${s.skip}</b><span>Skipped</span></div>
       <div class="stat"><b>${s.with_guardian_email}</b><span>Parent invites</span></div>
     </div>
+    ${(s.create + s.update) > s.with_guardian_email ? `
+      <div class="advisory caution" style="margin-bottom:12px">
+        <b>${(s.create + s.update) - s.with_guardian_email} of these players ${((s.create + s.update) - s.with_guardian_email) === 1 ? 'has' : 'have'} no parent email.</b>
+        A player gets in through a link their parent sends them, so without a
+        parent email there is nobody to invite and they cannot start. Add a
+        <code>Parent Email</code> column and import again, or use
+        <b>Add a player</b> for each one.
+      </div>` : ''}
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
       <table>
         <thead><tr><th>Row</th><th>Athlete</th><th class="num">#</th><th>Pos</th>
@@ -3497,17 +3505,12 @@ async function loadUploads() {
 }
 
 function renderSlips(res) {
-  const slips = [...res.created, ...res.guardian_invites.map((g) => ({
-    display_name: g.athlete_name, jersey: '', claim_code: g.code, guardian: g.email,
-  }))];
+  // Only PARENTS are given anything. A kid is never handed a code by the
+  // program: the parent signs up, says yes, and sends the kid a link.
+  const slips = res.guardian_invites || [];
 
-  $('slips-card').classList.toggle('hidden', slips.length === 0);
+  $('slips-card').classList.toggle('hidden', slips.length === 0 && !(res.created || []).length);
   $('slips').innerHTML = [
-    ...res.created.map((c) => `<div class="slip">
-        <b>${esc(c.display_name)}${c.jersey ? ` &middot; #${esc(c.jersey)}` : ''}</b>
-        <div class="code">${esc(c.claim_code)}</div>
-        <span>Athlete sign-in &middot; works once</span>
-      </div>`),
     ...res.guardian_invites.map((g) => `<div class="slip">
         <b>${esc(g.athlete_name)} &middot; parent</b>
         <div class="code">${esc(g.code)}</div>
@@ -3523,7 +3526,7 @@ function renderSlips(res) {
     note.textContent = invites.length
       ? (emailed
         ? `${emailed} of ${invites.length} parent invites were emailed with a link. `
-          + `Print the rest, and the athlete codes, for families without an address.`
+          + `Print the rest for families without an address.`
         : `No parent invites were emailed (no addresses, or email is not set up). `
           + `Print and hand out.`)
       : '';

@@ -218,8 +218,14 @@ class TestImport:
         ).fetchone()["n"]
         assert roster_rows == 3
 
-    def test_every_new_athlete_gets_a_claim_code(self, store, program):
+    def test_a_normal_import_hands_no_kid_a_code(self, store, program):
         _, result = self.run(store, program)
+        assert all("claim_code" not in a for a in result["created"])
+        assert store.conn.execute(
+            "SELECT COUNT(*) AS n FROM users WHERE claim_code_hash IS NOT NULL").fetchone()["n"] == 0
+
+    def test_every_new_athlete_gets_a_claim_code_when_slips_are_asked_for(self, store, program):
+        _, result = self.run(store, program, kid_claim_codes=True)
         codes = {a["claim_code"] for a in result["created"]}
         assert len(codes) == 3
         assert all(codes)
@@ -332,7 +338,8 @@ class TestClaimCodes:
     def test_a_code_exchanges_for_a_working_token(self, store, program):
         plan = store.resolve_import(program["org"], roster.parse("Name,#\nJordan Pierce,14\n"))
         result = store.apply_import(
-            program["org"], program["team"]["id"], plan, program["coach"]["id"]
+            program["org"], program["team"]["id"], plan, program["coach"]["id"],
+            kid_claim_codes=True,
         )
         claimed = store.claim_account(result["created"][0]["claim_code"])
         principal = store.authenticate(claimed["token"])
@@ -343,7 +350,8 @@ class TestClaimCodes:
         """A slip picked up off the floor afterwards has to be worthless."""
         plan = store.resolve_import(program["org"], roster.parse("Name,#\nJordan Pierce,14\n"))
         result = store.apply_import(
-            program["org"], program["team"]["id"], plan, program["coach"]["id"]
+            program["org"], program["team"]["id"], plan, program["coach"]["id"],
+            kid_claim_codes=True,
         )
         code = result["created"][0]["claim_code"]
         store.claim_account(code)
@@ -359,7 +367,7 @@ class TestClaimCodes:
 
         plan = store.resolve_import(program["org"], roster.parse("Name,#\nJordan Pierce,14\n"))
         result = store.apply_import(
-            program["org"], program["team"]["id"], plan, program["coach"]["id"]
+            program["org"], program["team"]["id"], plan, program["coach"]["id"], kid_claim_codes=True
         )
         store.conn.execute(
             "UPDATE users SET claim_expires_at = ? WHERE claim_code_hash IS NOT NULL",
@@ -372,7 +380,7 @@ class TestClaimCodes:
     def test_the_code_is_stored_only_as_a_hash(self, store, program):
         plan = store.resolve_import(program["org"], roster.parse("Name,#\nJordan Pierce,14\n"))
         result = store.apply_import(
-            program["org"], program["team"]["id"], plan, program["coach"]["id"]
+            program["org"], program["team"]["id"], plan, program["coach"]["id"], kid_claim_codes=True
         )
         code = result["created"][0]["claim_code"]
         stored = store.conn.execute(

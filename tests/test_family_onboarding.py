@@ -179,7 +179,7 @@ class TestParentForwardsTheSignInLink:
 
     def test_it_retires_the_printed_claim_code(self, store, program):
         """A slip that went astray stops working the moment the parent does this."""
-        result = import_roster(store, program)
+        result = import_roster(store, program, kid_claim_codes=True)
         slip = next(a for a in result["created"] if a["display_name"] == "Jordan Pierce")
         invite = next(i for i in result["guardian_invites"] if i["emailed"])
         guardian = G.redeem_invite(store.conn, invite["code"], "Dana Pierce")

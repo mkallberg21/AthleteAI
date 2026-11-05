@@ -2245,6 +2245,9 @@ class RosterImport(BaseModel):
     team_id: int
     invite_guardians: bool = True
     filename: str = Field(default="", max_length=200)
+    # Printed one-time athlete codes, for a family with no email on file.
+    # Off by default: a kid is invited by their parent, not by the program.
+    print_slips: bool = False
 
 
 @app.post("/api/coach/roster/import", status_code=201)
@@ -2269,6 +2272,7 @@ def import_roster(
         principal.org_id, body.team_id, plan, principal.id,
         issue_guardian_invites=body.invite_guardians,
         filename=body.filename,
+        kid_claim_codes=body.print_slips,
     )
     return {"summary": plan.to_dict()["summary"], **result, "smtp_configured": CONFIG.smtp_configured}
 
