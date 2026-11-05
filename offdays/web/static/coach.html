@@ -997,7 +997,7 @@
 </div>
 
 <script type="module">
-import { api, esc, fmtDate, getToken, logout, renderBranding, renderShotHistory, setOrg } from './api.js';
+import { api, esc, fmtDate, getToken, logout, renderBranding, setOrg } from './api.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -2390,9 +2390,7 @@ function renderRoster(athletes) {
       <td><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
           <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span>
           <button class="linkish" data-invite="${a.athlete_id}"
-                title="Issue a sign-in code for a parent or guardian">Invite</button>
-          <button class="linkish" data-shots="${a.athlete_id}"
-                title="This athlete's shot speeds over recent sessions">Shot speed</button></td>
+                title="Prepare the invite email to this player's parent, with the player code in it. Nothing is sent until you send it.">Email parent</button></td>
       <td class="num">${a.window_sessions}</td>
       <td class="num" ${shareCls}><span class="muted">${strong}</span> / ${share}</td>
       <td>${fmtDate(a.last_session)}</td>
@@ -2408,56 +2406,41 @@ async function inviteGuardian(btn) {
   const id = Number(btn.dataset.invite);
   btn.disabled = true;
   const before = btn.textContent;
-  btn.textContent = 'Issuing\u2026';
+  btn.textContent = 'Preparing\u2026';
   try {
-    const res = await api('/api/coach/guardian-invites', {
-      method: 'POST', body: { athlete_id: id },
-    });
-    // Shown once and stored only as a hash, so it is put where it can be copied
-    // rather than announced and lost.
-    const row = btn.closest('td');
+    // The same invite the Families card makes: a fresh one for this player,
+    // addressed to the parent email the roster has, with the player's code and
+    // the sign-up link in the message. The program sends nothing unless email
+    // is set up; otherwise the coach sends it from their own mail.
+    const res = await api('/api/coach/families/nudge', { method: 'POST', body: { athlete_id: id } });
     const out = document.createElement('div');
     out.className = 'small';
     out.style.marginTop = '4px';
-    out.innerHTML = `Code <code>${esc(res.code)}</code> for a parent of `
-      + `${esc(res.athlete_name)}. It works once.`;
+    if (res.emailed) {
+      out.textContent = `Emailed to ${res.email}.`;
+    } else {
+      const href = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
+      out.innerHTML = `Email to <b>${esc(res.email)}</b> is ready, with the player code <code>${esc(res.code)}</code> in it. `
+        + `<a class="btn-link" href="${esc(href)}">Open in my email</a> `
+        + `<button type="button" class="secondary inline" data-copy-invite="${esc(res.link)}">Copy link</button>`;
+      out.querySelector('[data-copy-invite]').addEventListener('click', async (e) => {
+        try { await navigator.clipboard.writeText(res.link); e.target.textContent = 'Copied'; }
+        catch { e.target.textContent = res.link; }
+      });
+    }
     btn.replaceWith(out);
-    return row;
+    loadFamilies();
   } catch (err) {
     btn.disabled = false;
     btn.textContent = before;
-    alert(err.message || 'Could not issue an invite.');
+    alert(err.message || 'Could not prepare the email.');
   }
 }
 
 document.getElementById('roster').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-invite]');
   if (btn) inviteGuardian(btn);
-  const shots = e.target.closest('button[data-shots]');
-  if (shots) showShotSpeed(shots);
 });
-
-// One athlete at a time, opened in a full-width row under theirs. There is
-// deliberately no column of speeds across the roster: a sortable list of shot
-// speeds is a leaderboard by another name, and shooting is the heaviest throw
-// counted.
-async function showShotSpeed(btn) {
-  const row = btn.closest('tr');
-  const next = row.nextElementSibling;
-  if (next && next.classList.contains('shot-history-row')) { next.remove(); return; }
-  const tr = document.createElement('tr');
-  tr.className = 'shot-history-row';
-  const td = document.createElement('td');
-  td.colSpan = row.children.length;
-  td.className = 'shot-history small';
-  td.textContent = 'Loading\u2026';
-  tr.appendChild(td);
-  row.after(tr);
-  try {
-    td.innerHTML = renderShotHistory(
-      await api(`/api/coach/athletes/${btn.dataset.shots}/shot-speed`), { viewer: 'coach' });
-  } catch (err) { td.textContent = err.message; }
-}
 
 function renderStandings(teams) {
   $('standings').innerHTML = teams.length ? teams.map((t) => `
