@@ -3255,7 +3255,7 @@ function selectSource(key) {
   $('src-teamsnap').classList.toggle('hidden', key !== 'teamsnap');
   $('src-sync').classList.toggle('hidden', !(key in SOURCE_PROVIDER));
   $('src-file').classList.toggle('hidden', key !== 'file');
-  if (key === 'teamsnap') $('src-teamsnap-off').style.display = $('teamsnap-block').classList.contains('hidden') ? '' : 'none';
+  if (key === 'teamsnap') loadTeamSnap().then(() => { $('src-teamsnap-off').style.display = $('teamsnap-block').classList.contains('hidden') ? '' : 'none'; });
   if (key in SOURCE_PROVIDER) {
     const sel = $('sync-provider');
     if ([...sel.options].some((o) => o.value === SOURCE_PROVIDER[key])) sel.value = SOURCE_PROVIDER[key];
@@ -3808,6 +3808,10 @@ $('signout').addEventListener('click', logout);
     await loadUploads();
     await loadTeams();
     await loadProviders();
+    // Whether TeamSnap is on, connected, and which of its teams to pull. It
+    // was only asked after an import, so the button said "not switched on"
+    // on a server where it was.
+    await loadTeamSnap();
     // Before loadAll, because the skill-work table names drills from it.
     await loadDrillOptions();
     defaultAssignmentDates();

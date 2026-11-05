@@ -14,7 +14,7 @@ const browser = await chromium.launch();
 for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } }], ['phone', { ...devices['iPhone 13'] }]]) {
   const ctx = await browser.newContext(opts);
   const page = await ctx.newPage();
-  await page.route('**/api/teamsnap/status', (r) => r.fulfill({ json: { offered: true, connected: false } }));
+
   await page.goto(`${base}/`);
   await page.locator('.role-btn', { hasText: /director/i }).first().click();
   await page.fill('#org-name', 'Sources FC'); await page.fill('#org-director', 'Joel');
