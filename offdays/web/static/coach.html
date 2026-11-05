@@ -335,8 +335,10 @@
     <p class="small muted">
       Every athlete on the roster, and where their family is between the
       upload and a kid who trains. Each row says whose move it is. Where the
-      next move is a parent who has not opened their invite, <b>Nudge</b>
-      sends them a fresh one at the address the roster gave.
+      next move is a parent who has not opened their invite, <b>Resend invite
+      to parent</b> makes them a fresh one at the address the roster gave.
+      The program sends nothing unless email is set up: you get the message
+      to send yourself.
     </p>
     <div id="families-counts" class="small" style="margin:8px 0 10px"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
@@ -2800,6 +2802,17 @@ async function loadFamilies() {
   renderFamilies();
 }
 
+const resent = new Map();   // athlete_id -> the invite just made, until the page reloads
+function resentHtml(r) {
+  const href = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent(r.subject)}&body=${encodeURIComponent(r.text)}`;
+  return r.emailed
+    ? `<span class="small muted">Sent to ${esc(r.email)}</span>`
+    : `<span class="small">New invite ready &middot;
+         <a class="btn-link" href="${esc(href)}" title="Opens the invite in your mail app, ready for you to press send. The program sends nothing.">Open in my email</a>
+         <button type="button" class="secondary inline" data-copy-invite="${esc(r.link)}" style="margin-left:6px">Copy link</button>
+       </span>`;
+}
+
 function renderFamilies() {
   const d = familiesData;
   if (!d) return;
@@ -2821,8 +2834,9 @@ function renderFamilies() {
     const parent = a.parent_name || a.parent_email
       ? `${esc(a.parent_name)}${a.parent_name && a.parent_email ? ' &middot; ' : ''}${esc(a.parent_email)}`
       : 'No parent on file';
-    const action = a.can_nudge
-      ? `<button class="secondary inline" data-nudge="${a.athlete_id}">Nudge</button>`
+    const action = resent.has(a.athlete_id) ? resentHtml(resent.get(a.athlete_id))
+      : a.can_nudge
+      ? `<button class="secondary inline" data-nudge="${a.athlete_id}" title="Makes a fresh invite for this athlete's parent. Nothing is sent until you send it.">Resend invite to parent</button>`
       : '';
     return `<div class="family-row">
       <div class="family-main">
@@ -2838,6 +2852,12 @@ function renderFamilies() {
 $('families-filter').addEventListener('change', renderFamilies);
 
 $('families').addEventListener('click', async (e) => {
+  const copy = e.target.closest('button[data-copy-invite]');
+  if (copy) {
+    try { await navigator.clipboard.writeText(copy.dataset.copyInvite); copy.textContent = 'Copied'; }
+    catch { copy.textContent = copy.dataset.copyInvite; }
+    return;
+  }
   const btn = e.target.closest('button[data-nudge]');
   if (!btn) return;
   btn.disabled = true;
@@ -2847,18 +2867,11 @@ $('families').addEventListener('click', async (e) => {
     const res = await api('/api/coach/families/nudge', {
       method: 'POST', body: { athlete_id: Number(btn.dataset.nudge) },
     });
-    if (res.emailed) {
-      btn.replaceWith(Object.assign(document.createElement('span'), {
-        className: 'small muted', textContent: `Sent to ${res.email}`,
-      }));
-    } else {
-      const a = document.createElement('a');
-      a.className = 'btn-link';
-      a.href = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
-      a.textContent = 'Open in my email';
-      a.title = 'The program is not sending email; this opens the invite in your mail app, ready to send.';
-      btn.replaceWith(a);
-    }
+    // The program is not sending email, and this sends nothing: it hands the
+    // director the invite to send himself. Kept, because the redraw below
+    // would otherwise put the plain button straight back.
+    resent.set(Number(btn.dataset.nudge), res);
+    renderFamilies();
     // The stage moved; pull the fresh picture rather than guessing at it.
     loadFamilies();
   } catch (err) {
