@@ -908,10 +908,14 @@
 
     <button id="sync-connect" style="margin-top:10px">Connect and preview</button>
 
+    </div>
+
+    <!-- Shared by every source that connects: the preview of what a pull
+         found, the teams already connected, and any error. Outside the
+         panels so it shows whichever button started the pull. -->
     <div id="sync-result" class="hidden" style="margin-top:16px"></div>
     <div id="sync-links" style="margin-top:16px"></div>
     <div id="sync-err" class="err hidden"></div>
-    </div>
 
     <div class="src-panel" id="src-file">
     <label for="import-team">Import into</label>
@@ -3066,7 +3070,7 @@ function renderProviderFields() {
        ${esc(spec.note || '')} Read the preview before you let it write.${help}`;
 }
 
-function renderSyncResult(result) {
+function renderSyncResult(result, teamId) {
   const box = $('sync-result');
   box.classList.remove('hidden');
   if (result.error) {
@@ -3095,7 +3099,23 @@ function renderSyncResult(result) {
     <p class="small muted" style="margin-top:8px">
       ${result.dry_run ? 'Nothing has been written yet.' : 'Applied.'}
     </p>
-    ${departed}${warnings}`;
+    ${departed}${warnings}
+    ${result.dry_run && teamId && (result.created + result.updated) > 0 ? `
+      <button class="inline" id="sync-apply" style="margin-top:12px">
+        Add ${result.created} player${result.created === 1 ? '' : 's'}${result.updated ? ` and update ${result.updated}` : ''} and invite their parents
+      </button>` : ''}`;
+  const apply = $('sync-apply');
+  if (apply) apply.addEventListener('click', async () => {
+    apply.disabled = true; apply.textContent = 'Adding\u2026';
+    try {
+      renderSyncResult(await api('/api/coach/roster/sync', {
+        method: 'POST', body: { team_id: Number(teamId), provider: result.provider, apply: true },
+      }));
+      await Promise.all([renderSyncLinks(), loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadUploads()]);
+      if (IS_DIRECTOR) loadBilling();
+      await wizardRefresh();
+    } catch (e) { apply.disabled = false; showError(e.message); }
+  });
 }
 
 async function renderSyncLinks() {
@@ -3142,7 +3162,8 @@ $('sync-connect').addEventListener('click', async () => {
       },
     });
     $('sync-token').value = '';
-    renderSyncResult(preview);
+    renderSyncResult(preview, $('sync-team').value);
+    $('sync-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
     await renderSyncLinks();
   } catch (e) {
     $('sync-err').textContent = e.message;
@@ -3248,7 +3269,8 @@ $('teamsnap-link').addEventListener('click', async () => {
     const res = await api('/api/teamsnap/link', {
       method: 'POST', body: { team_id: Number($('teamsnap-local').value), teamsnap_team_id: remote },
     });
-    renderSyncResult(res.preview);
+    renderSyncResult(res.preview, $('teamsnap-local').value);
+    $('sync-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
     await renderSyncLinks();
   } catch (e) {
     $('teamsnap-err').textContent = e.message; $('teamsnap-err').classList.remove('hidden');
