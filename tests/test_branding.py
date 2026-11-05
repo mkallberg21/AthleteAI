@@ -172,7 +172,7 @@ def test_the_braces_balance():
 #: panel unfolded while a fresh browser showed four buttons. When this
 #: fails, bump ?v= on EVERY page and paste the new hash here.
 STYLESHEET_PIN = "v=11"
-STYLESHEET_HASH = "82b6bee9d016"
+STYLESHEET_HASH = "d7360a014faa"
 
 
 def test_every_page_pins_the_stylesheet_and_the_pin_matches_the_content():
@@ -185,7 +185,11 @@ def test_every_page_pins_the_stylesheet_and_the_pin_matches_the_content():
             continue
         assert f'styles.css?{STYLESHEET_PIN}"' in html, (
             f"{page.name} asks for a different styles.css pin than {STYLESHEET_PIN}")
-    digest = hashlib.sha256((STATIC / "styles.css").read_bytes()).hexdigest()[:12]
+    # Line endings differ between a Windows checkout and the CI runner; the
+    # stylesheet is the same stylesheet, so hash it with them normalised.
+    digest = hashlib.sha256(
+        (STATIC / "styles.css").read_bytes().replace(b"\r\n", b"\n")
+    ).hexdigest()[:12]
     assert digest == STYLESHEET_HASH, (
         f"styles.css changed (now {digest}) but the pin is still {STYLESHEET_PIN}: "
         "bump ?v= on every page and set STYLESHEET_HASH here")
