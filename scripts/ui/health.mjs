@@ -121,7 +121,7 @@ else {
       ok(`dashboard ${tag}: walkthrough shown first, skipped for the card checks`);
     }
     if (failures.length) bad(`dashboard ${tag}: ${failures.join('; ')}`);
-    for (const [sel, name] of [['#badge-card', 'badge card'], ['#billing-card', 'cost card'], ['#setup-card', 'setup checklist'], ['#sync-card', 'roster sync card']]) {
+    for (const [sel, name] of [['#badge-card', 'badge card'], ['#billing-card', 'cost card'], ['#setup-card', 'setup checklist'], ['#import-card', 'roster source card']]) {
       const b = await box(page, sel);
       if (!b || !b.visible) bad(`dashboard ${tag}: ${name} missing`);
     }

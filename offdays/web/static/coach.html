@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 <div class="topbar">
@@ -833,51 +833,25 @@
   <div class="card card--wide" id="import-card">
     <h2>Import a roster</h2>
     <p class="small muted">
-      Drop in a CSV from TeamSnap, SportsEngine, a school export, or a
-      spreadsheet you typed yourself. Column names are matched loosely:
-      <code>Jersey #</code>, <code>No.</code>, and <code>Number</code> all work.
-      Only a name column is required.
+      Pull the roster straight from the program your club uses, or add a
+      file. Either way you see a preview before anything is saved. Files
+      are matched loosely (<code>Jersey #</code>, <code>No.</code> and
+      <code>Number</code> all work); only a name column is required.
     </p>
 
-    <label for="import-team">Import into</label>
-    <select id="import-team"></select>
-
-    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop a roster file here, or press Enter to browse">
-      <div class="dropzone-icon" aria-hidden="true">&#8682;</div>
-      <b id="dropzone-title">Drag and drop your roster file here</b>
-      <span>CSV, TSV or TXT, up to 2 MB</span>
-      <span class="dropzone-or">or</span>
-      <button type="button" class="inline" id="browse-btn">Browse files</button>
-      <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden>
-    </div>
-    <div class="small muted" id="chosen-file" style="margin-top:8px"></div>
-    <button class="secondary inline" id="template-btn" style="margin-top:10px">
-      Show a template
-    </button>
-
-    <!-- Files already uploaded. Delete takes one back: the athletes it
-         created are removed, except anyone who has trained or whose parent
-         has signed up, who are kept and named. -->
-    <div id="uploads" class="hidden" style="margin-top:18px">
-      <b>Uploaded rosters</b>
-      <div id="uploads-list" style="margin-top:6px"></div>
+    <!-- Where does the roster live? One tap, then only that source's steps. -->
+    <div class="source-pick" role="group" aria-label="Where does your roster live?">
+      <button type="button" class="source-btn" data-source="teamsnap"><b>TeamSnap</b><span>Sign in once, pick the team</span></button>
+      <button type="button" class="source-btn" data-source="sportsengine"><b>SportsEngine</b><span>Connect with your account</span></button>
+      <button type="button" class="source-btn" data-source="link"><b>Another program</b><span>LeagueApps, Stack Sports, a shared sheet&hellip;</span></button>
+      <button type="button" class="source-btn active" data-source="file"><b>A file</b><span>CSV from anywhere, or a spreadsheet</span></button>
     </div>
 
-    <div id="preview" class="hidden" style="margin-top:16px"></div>
-    <div id="import-err" class="err hidden"></div>
-  </div>
-
-  <div class="card card--wide" id="sync-card">
-    <h2>Keep a roster in step</h2>
-    <p class="small muted">
-      A CSV is a snapshot. Connect a team to wherever its roster actually
-      lives and it stays current on its own, so nobody has to remember to
-      re-export in week three when two players join.
-    </p>
-
+    <div class="src-panel hidden" id="src-teamsnap">
+      <p class="small muted" id="src-teamsnap-off" style="display:none">TeamSnap is not switched on for this program yet. Use a file for now.</p>
     <!-- TeamSnap: sign in once, pick a team, done. Hidden when the server
          has no TeamSnap app credentials. -->
-    <div id="teamsnap-block" class="hidden" style="padding:12px 14px;margin:8px 0 14px;background:var(--surface-2);border-radius:var(--radius-sm)">
+    <div id="teamsnap-block" class="hidden" style="padding:12px 14px;margin:4px 0 0;background:var(--surface-2);border-radius:var(--radius-sm)">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between">
         <div>
           <b>TeamSnap</b>
@@ -905,8 +879,12 @@
       <div id="teamsnap-err" class="err hidden"></div>
     </div>
 
+    </div>
+
+    <div class="src-panel hidden" id="src-sync">
+      <p class="small muted" style="margin-top:0">Connect once and this team stays current on its own: when a player joins in week three, they appear here without anyone re-exporting.</p>
     <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="flex:1 1 200px">
+      <div style="flex:1 1 200px" id="sync-provider-wrap" class="hidden">
         <label for="sync-provider">Where the roster lives</label>
         <select id="sync-provider"></select>
       </div>
@@ -933,7 +911,38 @@
     <div id="sync-result" class="hidden" style="margin-top:16px"></div>
     <div id="sync-links" style="margin-top:16px"></div>
     <div id="sync-err" class="err hidden"></div>
+    </div>
+
+    <div class="src-panel" id="src-file">
+    <label for="import-team">Import into</label>
+    <select id="import-team"></select>
+
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drop a roster file here, or press Enter to browse">
+      <div class="dropzone-icon" aria-hidden="true">&#8682;</div>
+      <b id="dropzone-title">Drag and drop your roster file here</b>
+      <span>CSV, TSV or TXT, up to 2 MB</span>
+      <span class="dropzone-or">or</span>
+      <button type="button" class="inline" id="browse-btn">Browse files</button>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden>
+    </div>
+    <div class="small muted" id="chosen-file" style="margin-top:8px"></div>
+    <button class="secondary inline" id="template-btn" style="margin-top:10px">
+      Show a template
+    </button>
+    </div>
+
+    <!-- Files already uploaded. Delete takes one back: the athletes it
+         created are removed, except anyone who has trained or whose parent
+         has signed up, who are kept and named. -->
+    <div id="uploads" class="hidden" style="margin-top:18px">
+      <b>Uploaded rosters</b>
+      <div id="uploads-list" style="margin-top:6px"></div>
+    </div>
+
+    <div id="preview" class="hidden" style="margin-top:16px"></div>
+    <div id="import-err" class="err hidden"></div>
   </div>
+
 
   <div class="card card--wide hidden" id="parents-card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
@@ -1686,7 +1695,7 @@ const WIZARD_STEPS = [
     lede: 'Name each team the way your club does (\u201c2031 Red\u201d), name its coach, and the day\u2019s wall-ball and shooting numbers fill in from the team\u2019s age. One team is enough to continue; add the rest now or later.',
     done: (st) => st.teams > 0 },
   { key: 'roster', card: 'import-card', title: 'The roster, with parents\u2019 emails',
-    lede: 'Drop in the roster file (TeamSnap or SportsEngine export, or any spreadsheet) with a parent email and mobile per player. Every parent gets an invite; from here the system takes over.',
+    lede: 'Where does your roster live? Tap TeamSnap or SportsEngine to pull it straight in, or add a file from anywhere. Every parent gets an invite; from here the system takes over.',
     done: (st) => st.athletes > 0 },
   { key: 'send', card: 'slips-card', title: 'Send the invites',
     lede: 'If the program is not sending email, send each invite from your own email with one click. Then you are done: parents sign up, say yes, send their kid the link, and your Families card shows who is where.',
@@ -3239,6 +3248,22 @@ $('teamsnap-link').addEventListener('click', async () => {
   } finally { btn.disabled = false; btn.textContent = 'Pull this roster and preview'; }
 });
 
+// ---- which program does the roster live in? One tap picks the steps.
+const SOURCE_PROVIDER = { sportsengine: 'sportsengine', link: 'csv_url' };
+function selectSource(key) {
+  document.querySelectorAll('.source-btn').forEach((b) => b.classList.toggle('active', b.dataset.source === key));
+  $('src-teamsnap').classList.toggle('hidden', key !== 'teamsnap');
+  $('src-sync').classList.toggle('hidden', !(key in SOURCE_PROVIDER));
+  $('src-file').classList.toggle('hidden', key !== 'file');
+  if (key === 'teamsnap') $('src-teamsnap-off').style.display = $('teamsnap-block').classList.contains('hidden') ? '' : 'none';
+  if (key in SOURCE_PROVIDER) {
+    const sel = $('sync-provider');
+    if ([...sel.options].some((o) => o.value === SOURCE_PROVIDER[key])) sel.value = SOURCE_PROVIDER[key];
+    renderProviderFields();
+  }
+}
+document.querySelectorAll('.source-btn').forEach((b) => b.addEventListener('click', () => selectSource(b.dataset.source)));
+
 // Back from TeamSnap's consent screen: say how it went, and open the card.
 {
   const q = new URLSearchParams(window.location.search);
@@ -3246,7 +3271,8 @@ $('teamsnap-link').addEventListener('click', async () => {
   if (ts) {
     history.replaceState(null, '', window.location.pathname);
     setTimeout(() => {
-      $('sync-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      selectSource('teamsnap');
+      $('import-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
       if (ts === 'denied') { $('teamsnap-err').textContent = 'TeamSnap connection was cancelled.'; $('teamsnap-err').classList.remove('hidden'); }
       if (ts === 'error') { $('teamsnap-err').textContent = 'TeamSnap: ' + (q.get('why') || 'something went wrong'); $('teamsnap-err').classList.remove('hidden'); }
     }, 800);

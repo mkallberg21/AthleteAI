@@ -1441,6 +1441,20 @@ tbody tr:hover { background: var(--surface-2); }
 .form-grid label { display: block; margin-bottom: 4px; }
 @media (max-width: 640px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
 
+/* Where does the roster live: four big buttons, one active. */
+.source-pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0 16px; }
+.source-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  padding: 14px; min-height: 76px; background: var(--surface-2); color: var(--text);
+  border: 2px solid var(--border); border-radius: var(--radius); cursor: pointer;
+}
+.source-btn b { font-size: 1rem; }
+.source-btn span { font-size: .78rem; color: var(--text-muted); line-height: 1.3; }
+.source-btn:hover { border-color: var(--accent); }
+.source-btn.active { border-color: var(--accent); background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent); }
+@media (max-width: 760px) { .source-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.src-panel { margin-top: 4px; }
+
 /* The roster drop box. A real target: dashed, big, obviously a place to
    put a file, with a Browse button for anyone who would rather click. */
 .dropzone {
