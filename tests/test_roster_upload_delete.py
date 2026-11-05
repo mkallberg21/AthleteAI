@@ -201,7 +201,7 @@ class TestAddingOnePlayerMidSeason:
         mason = api_module._store.conn.execute(
             "SELECT m.created_at FROM memberships m JOIN users u ON u.id = m.user_id "
             "WHERE u.display_name = 'Mason Reed'").fetchone()
-        assert mason["created_at"][:10] == __import__("datetime").date.today().isoformat()
+        assert mason["created_at"][:10] == __import__("datetime").datetime.now(__import__("datetime").timezone.utc).date().isoformat()
 
     def test_adding_the_same_player_twice_does_not_duplicate_them(self, client):
         p = _program(client)

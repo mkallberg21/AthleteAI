@@ -4147,7 +4147,7 @@ class Store:
             cur = c.execute(
                 "INSERT INTO roster_imports(org_id, team_id, filename, created_by, created_at, "
                 "created_ids, updated_n) VALUES (?,?,?,?,?,?,?)",
-                (org_id, team_id, (filename or "").strip()[:200], created_by, now,
+                (org_id, team_id, (filename or "").strip()[:200], created_by or None, now,
                  _json.dumps([a["athlete_id"] for a in created]), len(updated)),
             )
         return {
