@@ -1,0 +1,19 @@
+{
+  "appId": "com.offdays.app",
+  "appName": "0FFDAYS",
+  "webDir": "www",
+  "server": {
+    "url": "https://app.0ffdays.com/app/index.html",
+    "cleartext": false,
+    "allowNavigation": ["app.0ffdays.com"]
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0A0A0B",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "android": {
+    "backgroundColor": "#0A0A0B",
+    "allowMixedContent": false
+  }
+}

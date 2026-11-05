@@ -2741,10 +2741,10 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 35 modules across 498 call sites.
+SQL lives in 35 modules across 504 call sites.
 store.py holds 36% of them.
 
-1121 occurrences are mechanical (search-and-replace with tests behind it).
+1131 occurrences are mechanical (search-and-replace with tests behind it).
 79 need judgement.
 ```
 

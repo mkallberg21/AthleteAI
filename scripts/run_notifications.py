@@ -90,6 +90,15 @@ def main() -> int:
     if purged:
         print(f"purged {purged} wellness rows past the retention window")
 
+    # Per-rep timings are only needed to review a session's integrity, and
+    # the privacy policy says they go after 45 days. The method existed and
+    # nothing ever called it, so the promise was not being kept.
+    from offdays.store import Store
+
+    pruned = Store(conn).prune_rep_events()
+    if pruned:
+        print(f"pruned {pruned} per-rep timings past the retention window")
+
     # A child's video is kept for as long as it is useful for feedback and not
     # a day longer.
     clips = notify.purge_expired_clips(conn)

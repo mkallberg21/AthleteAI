@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A0A0B">
+<title>0FFDAYS</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #0A0A0B; color: #E8EEF5;
+    font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+  main { min-height: 100%; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px; padding: 24px; text-align: center; }
+  h1 { font-size: 1.5rem; margin: 0; letter-spacing: .02em; }
+  p { margin: 0; color: #9AA7B8; max-width: 28ch; line-height: 1.45; }
+  button { margin-top: 8px; padding: 14px 28px; font-size: 1rem; font-weight: 600; color: #fff;
+    background: #008BFD; border: 0; border-radius: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>0FFDAYS</h1>
+  <p id="msg">Opening your training&hellip;</p>
+  <button id="retry" hidden>Try again</button>
+</main>
+<script>
+  // The app is the live site. This page exists because the native shell must
+  // have something to show, and it is what a person sees if they open the app
+  // with no connection: a plain "try again", never a blank screen.
+  const live = 'https://app.0ffdays.com/app/index.html';
+  const msg = document.getElementById('msg'), retry = document.getElementById('retry');
+  function go() {
+    msg.textContent = 'Opening your training\u2026'; retry.hidden = true;
+    fetch(live, { method: 'HEAD', cache: 'no-store' })
+      .then(() => { window.location.replace(live); })
+      .catch(() => { msg.textContent = 'No connection. Connect to the internet and try again.'; retry.hidden = false; });
+  }
+  retry.addEventListener('click', go);
+  go();
+</script>
+</body>
+</html>

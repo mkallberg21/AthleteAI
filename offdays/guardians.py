@@ -316,6 +316,84 @@ def redeem_invite(
     }
 
 
+def erase_guardian(
+    conn: sqlite3.Connection,
+    guardian_id: int,
+    *,
+    also_children: bool = False,
+) -> dict[str, Any]:
+    """Delete a parent's own account (the app stores require this to exist).
+
+    What goes: the account, their sign-in, their name, email and mobile as the
+    program holds them, their notifications and push subscriptions.
+
+    What happens to their children is the parent's choice:
+
+    * `also_children=True`: each child's data and login are erased too (the
+      same erasure as the parent portal's "Delete their data", scope 'all'),
+      except a child who has ANOTHER parent still linked: that child stays,
+      because the other parent has not asked for anything to be deleted.
+    * `also_children=False`: the children and their training history stay,
+      but a child whose only parent this was is PAUSED. Participation is
+      withdrawn, because a child cannot train without a parent's yes and
+      there is no longer a parent to give it. The program can invite a
+      parent again.
+
+    Returns what was done, in words the page can show.
+    """
+    user = conn.execute(
+        "SELECT id, role FROM users WHERE id = ?", (guardian_id,)
+    ).fetchone()
+    if user is None or user["role"] != "guardian":
+        raise GuardianError("that is not a parent account")
+
+    kids = [int(r["athlete_id"]) for r in conn.execute(
+        "SELECT athlete_id FROM guardians WHERE guardian_id = ?", (guardian_id,)
+    ).fetchall()]
+
+    erased, paused, kept = [], [], []
+    for kid in kids:
+        others = conn.execute(
+            "SELECT COUNT(*) AS n FROM guardians WHERE athlete_id = ? AND guardian_id <> ?",
+            (kid, guardian_id),
+        ).fetchone()["n"]
+        name = conn.execute(
+            "SELECT display_name FROM users WHERE id = ?", (kid,)
+        ).fetchone()["display_name"]
+        if others:
+            kept.append(name)               # another parent is still here
+        elif also_children:
+            erase_athlete(conn, kid, "all", requested_by="guardian_account_deletion")
+            erased.append(name)
+        else:
+            if current_consents(conn, kid).get(Scope.PARTICIPATION, False):
+                set_consent(conn, kid, guardian_id, Scope.PARTICIPATION, False)
+            paused.append(name)
+
+    removed = 0
+    with transaction(conn) as c:
+        for sql in (
+            "DELETE FROM guardian_contacts WHERE guardian_id = ?",
+            "DELETE FROM notifications WHERE user_id = ?",
+            "DELETE FROM push_subscriptions WHERE user_id = ?",
+            "DELETE FROM guardians WHERE guardian_id = ?",
+            "DELETE FROM users WHERE id = ?",
+        ):
+            removed += c.execute(sql, (guardian_id,)).rowcount
+        c.execute(
+            "INSERT INTO erasure_log(athlete_ref, requested_by, scope, rows_removed, created_at) "
+            "VALUES (?,?,?,?,?)",
+            (
+                hashlib.sha256(f"guardian:{guardian_id}".encode()).hexdigest()[:16],
+                "guardian", "guardian_account", removed, _iso(_now()),
+            ),
+        )
+    return {
+        "deleted": True, "rows_removed": removed,
+        "children_erased": erased, "children_paused": paused, "children_kept": kept,
+    }
+
+
 def link_existing(
     conn: sqlite3.Connection, code: str, guardian_id: int, relationship: str = "parent"
 ) -> int:

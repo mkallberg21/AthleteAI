@@ -2077,3 +2077,7 @@ tr.mine td { border-color: var(--accent-dim); }
            background: linear-gradient(90deg, var(--surface-2), var(--accent-dim)); }
 .pct-bar i { position: absolute; top: -4px; width: 4px; height: 16px; margin-left: -2px;
              border-radius: 2px; background: var(--text); }
+
+/* Small links to the policy, on the pages a stranger can reach. */
+.legal-links { text-align: center; margin: 1.5rem 0 1rem; font-size: .8rem; }
+.legal-links a { color: var(--text-muted); text-decoration: underline; }

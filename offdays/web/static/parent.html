@@ -6,7 +6,7 @@
 <title>0FFDAYS · Parent</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0A0A0B">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 <div class="topbar">
@@ -115,6 +115,24 @@
     <input id="link-code" placeholder="ABCD-EFGH-JKLM" autocomplete="off">
     <button class="secondary" id="link-btn" data-i18n="parent.link">Link athlete</button>
     <div id="link-note" class="small hidden" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card" id="account-card">
+    <h2>Delete my account</h2>
+    <p class="small muted">
+      This deletes <b>your</b> account: your sign-in, and the name, email and
+      mobile number the program holds for you. You choose what happens to
+      your athlete below. It cannot be undone.
+    </p>
+    <label style="display:flex;gap:8px;align-items:flex-start;margin:10px 0;font-size:.9rem;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">
+      <input type="checkbox" id="account-kids" style="width:auto;min-height:auto;margin-top:3px">
+      <span>Also delete my athlete&rsquo;s data and login. Leave this off to
+      keep their training history; they will be paused until a parent signs
+      up again. An athlete who has another parent on the account is never
+      deleted by this.</span>
+    </label>
+    <button class="danger inline" id="account-delete">Delete my account</button>
+    <div id="account-err" class="err hidden"></div>
   </div>
 
   <div id="err" class="err hidden"></div>
@@ -876,6 +894,36 @@ $('link-btn').addEventListener('click', async () => {
 
 $('signout').addEventListener('click', logout);
 
+// A parent deletes their own account. Both app stores require this to be
+// possible from inside the app, not by emailing someone.
+$('account-delete').addEventListener('click', async () => {
+  const alsoKids = $('account-kids').checked;
+  const typed = window.prompt(
+    (alsoKids
+      ? 'This deletes your account AND your athlete\u2019s data and login.'
+      : 'This deletes your account. Your athlete\u2019s history is kept, and they are paused.')
+    + '\n\nIt cannot be undone. Type DELETE to confirm.');
+  if (!typed) return;
+  const btn = $('account-delete');
+  btn.disabled = true;
+  $('account-err').classList.add('hidden');
+  try {
+    const res = await api('/api/guardians/erase-account', {
+      method: 'POST', body: { confirm: typed, also_children: alsoKids },
+    });
+    const bits = [];
+    if (res.children_erased.length) bits.push(`Deleted: ${res.children_erased.join(', ')}.`);
+    if (res.children_paused.length) bits.push(`Paused: ${res.children_paused.join(', ')}.`);
+    if (res.children_kept.length) bits.push(`Kept, because another parent is on the account: ${res.children_kept.join(', ')}.`);
+    window.alert(`Your account is deleted. ${bits.join(' ')}`);
+    logout();
+  } catch (e) {
+    $('account-err').textContent = e.message;
+    $('account-err').classList.remove('hidden');
+    btn.disabled = false;
+  }
+});
+
 // ------------------------------------------------------------ first visit
 //
 // Three steps per child, in order: say yes (participation), send them the
@@ -1005,5 +1053,6 @@ loadLanguage()
 // The club's badge first, before anything else loads.
 renderBranding("masthead", "Parent");
 </script>
+<p class="legal-links"><a href="privacy.html">Privacy policy</a></p>
 </body>
 </html>

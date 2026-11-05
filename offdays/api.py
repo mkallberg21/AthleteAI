@@ -2972,6 +2972,34 @@ def erase_athlete_data(
     )
 
 
+class EraseAccountRequest(BaseModel):
+    confirm: str
+    also_children: bool = False
+
+
+@app.post("/api/guardians/erase-account")
+def erase_guardian_account(
+    body: EraseAccountRequest,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A parent deletes their own account (required by both app stores).
+
+    Whether their children's data goes too is their choice; see
+    `guardians.erase_guardian`.
+    """
+    if body.confirm.strip().upper() != "DELETE":
+        raise HTTPException(
+            status_code=400, detail="type DELETE to confirm this cannot be undone"
+        )
+    try:
+        return guardians_mod.erase_guardian(
+            store.conn, principal.id, also_children=body.also_children
+        )
+    except guardians_mod.GuardianError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/benchmarks")
 def my_benchmarks(
     principal: Principal = Depends(_athlete),

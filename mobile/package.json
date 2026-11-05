@@ -1,0 +1,20 @@
+{
+  "name": "offdays-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Native iOS and Android shell for 0FFDAYS. A Capacitor wrapper that loads the live web app; no product code lives here.",
+  "scripts": {
+    "sync": "cap sync",
+    "doctor": "cap doctor",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}
