@@ -1773,6 +1773,9 @@ function wizardRestore() {
 async function wizardShow(i) {
   wizardStep = Math.max(0, Math.min(WIZARD.length - 1, i));
   const s = WIZARD[wizardStep];
+  // Where you are survives a reload: TeamSnap's sign-in leaves the page and
+  // comes back, and a refresh or an app switch on a phone does the same.
+  try { sessionStorage.setItem('offdays.wizardStep', s.key); } catch { /* fine */ }
   const st = await wizardStatus();
   wizardRestore();
   wizardPlace(s.card);
@@ -1813,7 +1816,7 @@ async function wizardRefresh() {
 
 function wizardFinish() {
   wizardOn = false;
-  try { sessionStorage.removeItem('offdays.newDirectorCode'); } catch { /* fine */ }
+  try { sessionStorage.removeItem('offdays.newDirectorCode'); sessionStorage.removeItem('offdays.wizardStep'); } catch { /* fine */ }
   wizardRestore();
   $('wizard').classList.add('hidden');
   document.body.classList.remove('wizard-on');
@@ -1837,7 +1840,11 @@ async function startWizardIfNew(isDirector) {
   // resumes where they left off.
   // The sign-in code step, when present, is always first: it exists only
   // on the visit right after Create program and must be seen once.
-  const first = WIZARD[0].key === 'code' ? 0 : WIZARD.findIndex((s) => !s.done(st));
+  let saved = '';
+  try { saved = sessionStorage.getItem('offdays.wizardStep') || ''; } catch { /* fine */ }
+  const savedAt = WIZARD.findIndex((s) => s.key === saved);
+  const first = savedAt !== -1 ? savedAt
+    : WIZARD[0].key === 'code' ? 0 : WIZARD.findIndex((s) => !s.done(st));
   await wizardShow(first === -1 ? WIZARD.length - 1 : first);
 }
 
