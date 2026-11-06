@@ -2124,4 +2124,9 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .fold:not(.open):not(.wizard-embedded) > .fold-item { display: none !important; }
 .fold.wizard-embedded > h2.fold-head::after,
 .fold.wizard-embedded > .fold-head h2::after { display: none; }
+/* Inside the walkthrough the step title already names the card; the fold rule
+   above would otherwise bring the card's own heading back. The season card's
+   "set the dates on the Season card" note is said while on that card. */
+.fold.wizard-embedded > h2.fold-head:first-child,
+.wizard-embedded .season-bill-note { display: none; }
 .fold > .fold-head:not(h2) h2 { flex: 1 1 auto; }

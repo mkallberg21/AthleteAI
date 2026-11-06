@@ -27,6 +27,18 @@ const inWizard = await phaseShown();
 console.log('wizard step:', title, '| phase selector visible:', inWizard);
 if (!/season/i.test(title)) { console.log('FAIL: not on the season step'); bad++; }
 if (inWizard) { console.log('FAIL: phase selector shows in the walkthrough'); bad++; }
+// The step has its own title; the card's heading would say it twice, and a
+// line sending the director "to the Season card" while on it is noise.
+const extra = await page.evaluate(() => {
+  const vis = (el) => !!el && el.getClientRects().length > 0;
+  const card = document.getElementById('season-card');
+  const h2 = card.querySelector(':scope > h2');
+  const said = [...card.querySelectorAll('*')].filter((e) => vis(e) && !e.children.length && /on the Season card/i.test(e.textContent));
+  return { heading: vis(h2), seasonCardLine: said.length };
+});
+console.log('card heading visible:', extra.heading, '| "on the Season card" lines:', extra.seasonCardLine);
+if (extra.heading) { console.log('FAIL: card heading repeats the step title'); bad++; }
+if (extra.seasonCardLine) { console.log('FAIL: step tells the director to go to the Season card'); bad++; }
 await page.screenshot({ path: `${out}/1-wizard-season.png`, fullPage: true });
 // Dates still work from the step.
 await page.fill('#season-starts', '2027-02-01'); await page.dispatchEvent('#season-starts', 'change'); await page.waitForTimeout(500);

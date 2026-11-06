@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-05 — Season step: no repeated heading, no "go to the Season card" line
+- CHANGED: On the walkthrough's "When the season runs" step, the card's own heading ("Where the season is") and the line telling the director to "set the dates on the Season card" no longer show; the dashboard card keeps both.
+- WHY: Directors setting up a program. The step showed two titles, and it told them to go to a card they were already on.
+- PROOF: scripts/ui/walk-season-step.mjs (iPhone 13, fresh program) now also checks both; it failed before the change ("card heading repeats the step title", "step tells the director to go to the Season card") and passes after. walk-wizard.mjs still walks every step. Screenshots of the step and the dashboard card looked at. Full test suite green apart from the known date-dependent tests.
+- NOTE: The fold styling had been bringing every embedded card's heading back inside the walkthrough; the CSS fix hides it for all of them, not just Season. Stylesheet pin bumped to v=20 on all pages, hash updated in tests/test_branding.py.
+- NEXT: Find out why the three UI walks broke after the cards began folding (backlog).
+
 ## 2026-11-05 — Director walkthrough's season step asks for the dates only
 - CHANGED: A new director setting up their program is now asked only for the season's start and end dates on the "When the season runs" step; the "This program is currently Pre-season / In-season" choice no longer appears there and stays on the dashboard's "Where the season is" card.
 - WHY: Directors. The step said "set the start and end dates" but opened with an unexplained phase drop-down, a question a brand-new director cannot answer yet and does not need to.
