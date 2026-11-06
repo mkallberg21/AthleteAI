@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=29">
+<link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
 <div class="topbar">
@@ -1880,7 +1880,38 @@ $('wizard-next').addEventListener('click', async () => {
 $('wizard-back').addEventListener('click', () => wizardShow(wizardStep - 1));
 $('wizard-skip').addEventListener('click', wizardFinish);
 
+
+// A red star on every card that still needs the director or coach to choose
+// something. Read from the same sources the walkthrough uses, so the two agree.
+async function markTodo() {
+  let st;
+  try { st = await wizardStatus(); } catch { return; }
+  const need = [];
+  if (!st.contact) need.push('contact-card');
+  if (IS_DIRECTOR) {
+    if (!st.season) need.push('season-card');
+    if (!st.teams) need.push('teams-card');
+    else if (!st.athletes) need.push('import-card');
+  }
+  document.querySelectorAll('.todo-star').forEach((n) => n.remove());
+  need.forEach((id) => {
+    const card = $(id);
+    if (!card) return;
+    const h = card.querySelector(':scope > h2, :scope > .fold-head h2, :scope > .fold-head b, :scope > h2.fold-head');
+    if (!h) return;
+    const tag = document.createElement('span');
+    tag.className = 'todo-star';
+    tag.setAttribute('role', 'img');
+    tag.setAttribute('aria-label', 'Needs your input');
+    tag.title = 'Needs your input';
+    tag.textContent = 'Needs you';
+    h.insertBefore(tag, h.querySelector('::after') || null);
+    // keep the chevron the last thing on the row
+  });
+}
+
 async function loadSetup() {
+  markTodo();
   let data;
   try { data = await api('/api/coach/onboarding'); } catch { return; }
 
@@ -4206,7 +4237,7 @@ async function initTeamDrills() {
 // Folding cards. Static markup, so this runs once at the end of the page.
 (function () {
   var KEY = 'offdays.fold.v1';
-  var KEEP_OPEN = { 'families-card': 1 };            // open the first time someone visits
+  var KEEP_OPEN = {};                                  // everything starts folded
   var NEVER = { 'wizard': 1, 'setup-card': 1, 'code-card': 1, 'blockers-card': 1, 'scope-card': 1 };
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}

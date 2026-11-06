@@ -2285,3 +2285,11 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .fold.wizard-embedded > h2.fold-head:first-child,
 .wizard-embedded .season-bill-note { display: none; }
 .fold > .fold-head:not(h2) h2 { flex: 1 1 auto; }
+
+/* A red star on a card that still needs the director or coach to choose something. */
+.todo-star {
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  margin-left: 8px; font-size: 0.72rem; font-weight: 700; letter-spacing: .02em;
+  color: var(--danger); white-space: nowrap;
+}
+.todo-star::before { content: "\2605"; font-size: 1rem; line-height: 1; }
