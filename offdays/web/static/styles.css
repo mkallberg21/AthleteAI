@@ -463,6 +463,27 @@ button.tiny:hover, a.tiny:hover { border-color: var(--accent); text-decoration: 
   }
 }
 
+/* Team standings on a phone: five columns ran 346px wide in a 302px box, so
+   Total XP sat off to the right. Rank and team on one line, the three
+   numbers under the team name, each with its label. */
+@media (max-width: 559px) {
+  .standings-table thead { display: none; }
+  .standings-table tr {
+    display: grid; grid-template-columns: 2.2em minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 6px 10px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .standings-table tr:last-child { border-bottom: none; }
+  .standings-table td, .standings-table td.num { border: none; padding: 0; text-align: left; }
+  .standings-table td:nth-child(2) { grid-column: 2 / -1; }
+  .standings-table td.num[data-label] { white-space: nowrap; }
+  .standings-table td[colspan] { grid-column: 1 / -1; }
+  .standings-table td:nth-child(3) { grid-column-start: 2; }
+  .standings-table td[data-label]::before {
+    content: attr(data-label); display: block; font-size: .68rem; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;
+  }
+}
+
 /* Coaches card rows and team chips (lost in the v3 re-skin). */
 .staff-row {
   display: flex; justify-content: space-between; gap: 10px; align-items: center;

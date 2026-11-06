@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=23">
+<link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
 <div class="topbar">
@@ -807,7 +807,7 @@
   <div class="card">
     <h2>Team standings <span class="small muted">by XP per athlete</span></h2>
     <div style="overflow-x:auto">
-      <table>
+      <table class="standings-table">
         <thead><tr>
           <th class="num">#</th><th>Team</th><th class="num">XP / athlete</th>
           <th class="num">Participation</th><th class="num">Total XP</th>
@@ -2470,10 +2470,10 @@ function renderStandings(teams) {
   $('standings').innerHTML = teams.length ? teams.map((t) => `
     <tr>
       <td class="num rank ${t.rank === 1 ? 'top' : ''}">${t.rank}</td>
-      <td><b>${esc(t.team_name)}</b> <span class="small muted">${t.roster} athletes</span></td>
-      <td class="num">${t.xp_per_athlete.toLocaleString()}</td>
-      <td class="num">${Math.round(t.participation * 100)}%</td>
-      <td class="num">${t.total_xp.toLocaleString()}</td>
+      <td><b>${esc(t.team_name)}</b> <span class="small muted">${t.roster} ${t.roster === 1 ? 'athlete' : 'athletes'}</span></td>
+      <td class="num" data-label="XP each">${t.xp_per_athlete.toLocaleString()}</td>
+      <td class="num" data-label="Participation">${Math.round(t.participation * 100)}%</td>
+      <td class="num" data-label="Total XP">${t.total_xp.toLocaleString()}</td>
     </tr>`).join('') : '<tr><td colspan="5" class="muted small">No teams yet.</td></tr>';
 }
 

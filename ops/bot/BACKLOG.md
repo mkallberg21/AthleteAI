@@ -5,7 +5,7 @@ Newest ideas at the bottom of each section. Remove an item when it ships.
 
 ## Known and open
 - The three UI walks (`walk-create-team`, `walk-add-player`, `walk-resend`) all complete again on a fresh local server (checked 2026-11-06). Still to do: make them part of a check that runs. `walk-add-player` prints an empty "cost card" line because it reads `#billing`, which no longer exists (the card is `#billing-card`).
-- Teams and Roster tables now stack on a phone (walk-teams-phone.mjs, walk-roster-phone.mjs). Still to check at 360px: Team standings and any other dashboard table.
+- Teams, Roster and Team standings tables now stack on a phone (walk-teams-phone.mjs, walk-roster-phone.mjs, walk-standings-phone.mjs). Still to check at 360px: the coach-side tables (evaluation, practice card, ball framing, sync links, import preview).
 - Dashboard cards fold, but a program with real players has not been looked at by eye.
 - Splash screen for the phone app is still Capacitor's default.
 - Push notifications are not built.

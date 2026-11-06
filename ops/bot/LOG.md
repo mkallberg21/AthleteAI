@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Team standings fit a phone: Total XP on screen
+- CHANGED: On a phone, each team in the Team standings card now shows its rank and name on one line, with "XP each", "Participation" and "Total XP" labelled underneath, instead of a five-column table where "Total XP" was cut off the right edge. A team with one player now says "1 athlete", not "1 athletes".
+- WHY: Directors and coaches checking how their teams compare on a phone; the total was the column they could not see.
+- PROOF: new scripts/ui/walk-standings-phone.mjs (fresh program, two teams) failed before the change at 360px and 390px (table 346px wide in a 302px box, Total XP off screen) and passes after; it also checks no label runs into the next one and the laptop table keeps its headers at 1280px. Screenshots at 360px and 1280px looked at. Full test suite green apart from the known date-dependent tests.
+- NOTE: Stylesheet pin bumped to v=24 on all pages, hash updated in tests/test_branding.py. On a phone the first label reads "XP each" because "XP / athlete" wrapped onto two lines and pushed its number below the others; the laptop header is unchanged.
+- NEXT: The coach-side tables (evaluation, practice card, ball framing) at 360px (backlog).
+
 ## 2026-11-06 — Roster fits a phone: Last active and Status on screen
 - CHANGED: On a phone, each player in the Roster card now shows as its own small block (name, team, Email parent, then Sessions, Strong / Off-hand, Last active and Status, each with its label) instead of a five-column table where "Last active" was cut off and "Status" (e.g. "never trained") was hidden off the right edge.
 - WHY: Coaches and directors checking their roster on a phone; the column that says who has not trained yet was the one they could not see.
