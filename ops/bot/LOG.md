@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Dashboard numbers sit two by two on a phone
+- CHANGED: On a phone, the four numbers at the top of the director and coach dashboard (Athletes, Participation, Sessions, Total XP) now show as a neat two-by-two block with space under it, instead of three in a row and "Total XP" alone on a second line pressed against the card below.
+- WHY: Directors and coaches checking the dashboard on their phone; the strip looked broken and the last number ran into the setup card.
+- PROOF: new scripts/ui/walk-stat-strip.mjs (fresh program, 360px, 390px and 1280px) failed before the change ("a tile sits alone on the last line", "the strip touches the card below it", gap 0px) and passes after (2 + 2, 16px gap; laptop still 4 across). 360px screenshot looked at. Full test suite green apart from the known date-dependent tests.
+- NOTE: Stylesheet pin bumped to v=21 on all pages, hash updated in tests/test_branding.py. The same rule also tidies any other four-number strip (e.g. the cost card) on a phone. Also checked the backlog's "three walks broke" item: all three complete now; backlog updated.
+- NEXT: The Teams table is wider than a 360px phone; check the Remove button and join code are reachable (backlog).
+
 ## 2026-11-05 — Season step: no repeated heading, no "go to the Season card" line
 - CHANGED: On the walkthrough's "When the season runs" step, the card's own heading ("Where the season is") and the line telling the director to "set the dates on the Season card" no longer show; the dashboard card keeps both.
 - WHY: Directors setting up a program. The step showed two titles, and it told them to go to a card they were already on.

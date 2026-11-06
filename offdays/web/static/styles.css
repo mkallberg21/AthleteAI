@@ -1966,6 +1966,13 @@ tr.mine td { border-color: var(--accent-dim); }
   grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   gap: 12px;
 }
+/* Four numbers do not fit across a phone; auto-fit left the fourth alone
+   on its own line. Two by two reads as one block. */
+@media (max-width: 559px) {
+  .stat-row:has(> .stat:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* The dashboard strip sits between two cards; give it the cards' gap. */
+#summary.stat-row { margin-bottom: 1rem; }
 .stat b {
   display: block;
   font-family: var(--font-condensed);

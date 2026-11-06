@@ -4,7 +4,8 @@ Things worth doing, not yet done. The bot picks from here and adds to it.
 Newest ideas at the bottom of each section. Remove an item when it ships.
 
 ## Known and open
-- Three UI walks (`walk-create-team`, `walk-add-player`, `walk-resend`) did not complete after the cards began folding. Find out whether the page or the script is at fault, and make them part of a check that runs.
+- The three UI walks (`walk-create-team`, `walk-add-player`, `walk-resend`) all complete again on a fresh local server (checked 2026-11-06). Still to do: make them part of a check that runs. `walk-add-player` prints an empty "cost card" line because it reads `#billing`, which no longer exists (the card is `#billing-card`).
+- At 360px the Teams table (424px) and the roster table (374px) are wider than the screen; they scroll sideways inside their box. Look at whether a phone director can still find the Remove button and the join code.
 - Dashboard cards fold, but a program with real players has not been looked at by eye.
 - Splash screen for the phone app is still Capacitor's default.
 - Push notifications are not built.
