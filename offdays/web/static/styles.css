@@ -482,6 +482,24 @@ button.tiny:hover, a.tiny:hover { border-color: var(--accent); text-decoration: 
   }
 }
 
+/* Evaluation export on a phone: five columns ran 410px wide in a 302px box,
+   so Form and Trend sat off to the right. Name on its own line, the four
+   values two by two under it, each with its label. */
+@media (max-width: 559px) {
+  .ev-table thead { display: none; }
+  .ev-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 10px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .ev-table tr:last-child { border-bottom: none; }
+  .ev-table td, .ev-table td.num { border: none; padding: 0; text-align: left; }
+  .ev-table td:first-child { grid-column: 1 / -1; font-weight: 600; }
+  .ev-table td[data-label]::before {
+    content: attr(data-label); display: block; font-size: .68rem; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;
+  }
+}
+
 /* Team standings on a phone: five columns ran 346px wide in a 302px box, so
    Total XP sat off to the right. Rank and team on one line, the three
    numbers under the team name, each with its label. */

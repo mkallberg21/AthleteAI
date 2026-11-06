@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Evaluation export fits a phone: Form and Trend on screen
+- CHANGED: On a phone, the Evaluation export list (after pressing "Show") now shows each player's name on its own line with Weeks trained, Participation, Form and Trend labelled two by two underneath, instead of a five-column table where Form and Trend were cut off the right edge.
+- WHY: Directors and coaches preparing tryouts or season reviews on a phone; Form and Trend are the improvement half of the report and they could not see them.
+- PROOF: new scripts/ui/walk-evaluation-phone.mjs (fresh program, two players) failed before the change at 360px and 390px (table 410px wide in a 302px box, 4 of 10 values off screen, no labels) and passes after (10/10 on screen, every value labelled); laptop table unchanged at 1280px. walk-evaluation.mjs and walk-standings-phone.mjs still pass. Screenshots at 360px and 1280px looked at. Full test suite green: 4813 passed, no failures (the known date-dependent tests passed too).
+- NOTE: Stylesheet pin bumped to v=26 on all pages, hash updated in tests/test_branding.py. The CSV download is unchanged.
+- NEXT: The remaining coach-side tables at 360px: practice card, ball framing, sync links (backlog).
+
 ## 2026-11-06 — Evaluation export works again with "All teams"
 - CHANGED: Pressing "Show" or "Download CSV" on the dashboard's Evaluation export card now lists the players. Before, with "All teams" picked (what the card opens on), it showed "Request failed (500)" and the download failed, for every director and coach. A coach assigned to one team who picks "All teams" sees only their own team's players.
 - WHY: Directors and coaches preparing tryouts and end-of-season reviews; the card did nothing unless they first picked a single team.
