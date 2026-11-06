@@ -256,7 +256,7 @@ def brief(
     team_id: int | None = None,
     *,
     today: date | None = None,
-    scope: list[int] | None = None,
+    scope: tuple[str, list[Any]] | None = None,
 ) -> Briefing:
     """Build the card for one team.
 

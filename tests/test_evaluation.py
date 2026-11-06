@@ -437,6 +437,33 @@ class TestOverTheWire:
         assert client.get("/api/coach/evaluation",
                           headers=headers).status_code == 403
 
+    def test_all_teams_is_the_page_default_and_it_answers(self, client, wired):
+        # The dashboard's Show button asks for "All teams" (no team_id). It
+        # used to fail with a 500 for every director and coach.
+        for path in ("/api/coach/evaluation", "/api/coach/evaluation.csv"):
+            res = client.get(path, headers=wired["director"])
+            assert res.status_code == 200, (path, res.text[:200])
+        names = [a["display_name"] for a in client.get(
+            "/api/coach/evaluation", headers=wired["director"]).json()["athletes"]]
+        assert names == ["Jordan P."]
+
+    def test_a_team_coach_asking_for_all_teams_sees_only_their_own(
+            self, client, wired):
+        d = wired["director"]
+        other = client.post("/api/teams", json={
+            "name": "U13", "coach_name": "Sam Hill",
+            "coach_email": "sam@example.com"}, headers=d).json()
+        client.post("/api/athletes", json={
+            "display_name": "Casey Q.", "birth_year": 2013,
+            "guardian_consent": True, "join_code": other["join_code"]},
+            headers=d)
+        coach = {"Authorization": f"Bearer {other['coach']['code']}"}
+        res = client.get("/api/coach/evaluation", headers=coach)
+        assert res.status_code == 200, res.text[:200]
+        assert [a["display_name"] for a in res.json()["athletes"]] == ["Casey Q."]
+        csv = client.get("/api/coach/evaluation.csv", headers=coach).text
+        assert "Casey Q." in csv and "Jordan P." not in csv
+
     def test_another_program_gets_nobody(self, client, wired):
         other = client.post(
             "/api/orgs", json={"name": "Southside", "director_name": "Other"}

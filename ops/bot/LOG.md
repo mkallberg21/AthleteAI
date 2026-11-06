@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Evaluation export works again with "All teams"
+- CHANGED: Pressing "Show" or "Download CSV" on the dashboard's Evaluation export card now lists the players. Before, with "All teams" picked (what the card opens on), it showed "Request failed (500)" and the download failed, for every director and coach. A coach assigned to one team who picks "All teams" sees only their own team's players.
+- WHY: Directors and coaches preparing tryouts and end-of-season reviews; the card did nothing unless they first picked a single team.
+- PROOF: two new tests in tests/test_evaluation.py (All teams answers for the page and the CSV; a one-team coach sees only their team) failed before the fix with the server error and pass after. New scripts/ui/walk-evaluation.mjs (fresh program, 390px and 1280px) failed on the old code (HTTP 500, error on the card) and passes on the new; phone screenshot looked at. Full test suite green: 4813 passed, no failures (the known date-dependent tests passed too).
+- NOTE: The report was handed the coach's team filter in one shape and expected another. Only the server changed; no page or CSS change. Found while checking the evaluation table at phone width, which is still cut off on the right (added to backlog).
+- NEXT: Stack the Evaluation table on a phone so Form and Trend are on screen.
+
 ## 2026-11-06 — Roster upload preview says what each column became, in plain words
 - CHANGED: After a director picks a roster file, the list at the top of the preview now reads "Parent Email → parent's email", "Hand → strong hand", "Parent 2 Phone → second parent's phone" and so on, instead of the computer's names ("guardian_email", "dominant_hand", "guardian2_phone"). Each pair is its own small tag, so on a phone a pair no longer breaks in half across two lines or runs into the next one.
 - WHY: Directors uploading their roster. That line is how they check the parent columns were read as parents before they press Import; "guardian2_phone" did not tell them that.

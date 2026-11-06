@@ -302,9 +302,15 @@ def build(
     *,
     weeks: int = 12,
     today: date | None = None,
-    scope: list[int] | None = None,
+    scope: tuple[str, list[Any]] | None = None,
 ) -> Export:
-    """The export for a squad over a window."""
+    """The export for a squad over a window.
+
+    ``scope`` is ``Principal.scope_filter()``: an SQL fragment on ``u`` plus
+    its parameters, the same shape ``leaderboard.coach_roster`` takes. It was
+    once typed as a list of team ids while every caller passed the tuple, so
+    "All teams" -- the page's default -- failed with a 500 for everyone.
+    """
     today = today or datetime.now(timezone.utc).date()
     start = today - timedelta(weeks=weeks) + timedelta(days=1)
 
@@ -317,9 +323,12 @@ def build(
     if team_id is not None:
         sql += " AND tm.team_id = ?"
         params.append(team_id)
-    elif scope:
-        sql += f" AND tm.team_id IN ({','.join('?' for _ in scope)})"
-        params.extend(scope)
+    if scope is not None:
+        # Applied with or without a team: a scoped coach naming a team they
+        # are not on is refused upstream, and this keeps it so here too.
+        fragment, scope_params = scope
+        sql += fragment
+        params.extend(scope_params)
 
     name = ""
     if team_id is not None:
