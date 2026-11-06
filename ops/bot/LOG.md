@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Skill work card fits a phone: Drills on screen
+- CHANGED: On a phone, each player in the coach's "Skill work" card (drills where the app watches the ball) now shows their name on its own line, then Touches, Sessions and Sees the ball labelled side by side, then which drills across the full width. Before, it was a five-column table where the Drills column was cut off the right edge and "Sees the ball" was squeezed.
+- WHY: Coaches on their phone checking whose phone is propped where it cannot see the ball, and what each player has been working on.
+- PROOF: new scripts/ui/walk-ball-phone.mjs (fresh program, three players with two juggling sessions each, one badly framed) failed before the change at 360px and 390px (table 382px wide in a 302px box, 6 of 15 values off screen at 360px) and passes after (15/15 on screen, every value labelled); laptop table unchanged at 1280px. Screenshots at 360px and 1280px looked at. walk-assignments-phone.mjs still passes. Full test suite green: 4813 passed, no failures (the known date-dependent tests passed too).
+- NOTE: Stylesheet pin bumped to v=29 on all pages, hash updated in tests/test_branding.py. Layout only; the numbers and who sees them are unchanged.
+- NEXT: The last coach-side table at 360px: the roster sync links (Team / Source / Last run / buttons).
+
 ## 2026-11-06 — Assignments card fits a phone: Targets met on screen
 - CHANGED: On a phone, each player under an assignment (e.g. "Week 1 Wall Ball") now shows their name on its own line, then Sessions, Reps and Off-hand labelled side by side, then the Targets met marks across the full width. Before, it was a five-column table where Targets met (which targets each player has hit) was cut off the right edge.
 - WHY: Coaches checking on their phone who still needs a nudge this week; Targets met is the column that answers that.

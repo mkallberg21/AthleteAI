@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=28">
+<link rel="stylesheet" href="styles.css?v=29">
 </head>
 <body>
 <div class="topbar">
@@ -2155,7 +2155,7 @@ function renderBallDrills(data) {
     </div>`;
 
   $('ball-athletes').innerHTML = `
-    <table style="margin-top:10px"><thead><tr>
+    <table class="ball-table" style="margin-top:10px"><thead><tr>
       <th>Athlete</th><th class="num">Touches</th><th class="num">Sessions</th>
       <th>Sees the ball</th><th>Drills</th>
     </tr></thead><tbody>
@@ -2165,10 +2165,10 @@ function renderBallDrills(data) {
       return `<tr>
         <td><b>${esc(a.display_name)}</b>${a.held
           ? ` <span class="small muted">&middot; ${a.held} held for review</span>` : ''}</td>
-        <td class="num">${a.touches}</td>
-        <td class="num">${a.sessions}</td>
-        <td><span class="framing ${level}">${pct}%</span></td>
-        <td class="small muted">${a.drills.map((d) => esc(drillName(d))).join(', ')}</td>
+        <td class="num" data-label="Touches">${a.touches}</td>
+        <td class="num" data-label="Sessions">${a.sessions}</td>
+        <td data-label="Sees the ball"><span class="framing ${level}">${pct}%</span></td>
+        <td class="small muted" data-label="Drills">${a.drills.map((d) => esc(drillName(d))).join(', ')}</td>
       </tr>`;
     }).join('')}
     </tbody></table>`;
