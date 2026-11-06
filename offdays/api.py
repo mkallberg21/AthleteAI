@@ -1517,6 +1517,54 @@ def coach_broadcast(
     return {"sent": sent}
 
 
+class NudgeMessageRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(default="", max_length=500)
+    team_id: int | None = None
+
+
+#: A kid flagged for these is being asked to do less, so a "get back to
+#: training" message would be exactly wrong. They are left out, and counted.
+_REST_FLAGS = {"load_spike", "needs_rest"}
+
+
+@app.post("/api/coach/nudge-everyone")
+def coach_nudge_message(
+    body: NudgeMessageRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """One message to everyone on the "Needs a nudge" list.
+
+    The caller supplies words and, optionally, a team to narrow to. They never
+    supply recipients: the list is rebuilt here from the same roster the card is
+    drawn from, inside the caller's own team scope, so a coach cannot reach a kid
+    on a team they do not run. Delivered in the app only; nothing is emailed.
+    """
+    if body.team_id is not None and not principal.can_see_team(body.team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    athletes = coach_roster(
+        store.conn, principal.org_id, body.team_id, "week", scope=principal.scope_filter()
+    )
+    states = {a["athlete_id"]: store.load_state(a["athlete_id"]).to_dict() for a in athletes}
+    athletes = attach_load(athletes, states)
+    flagged = [a for a in athletes if a["flags"]]
+    resting = [a for a in flagged if _REST_FLAGS & set(a["flags"])]
+    targets = [a for a in flagged if not (_REST_FLAGS & set(a["flags"]))]
+    from datetime import datetime as _dt, timezone as _tz
+    stamp = _dt.now(_tz.utc).isoformat()
+    sent = 0
+    for a in targets:
+        if notify.enqueue(
+            store.conn, a["athlete_id"], notify.Kind.COACH_MESSAGE, body.title, body.body,
+            dedupe_key=f"{notify.Kind.COACH_MESSAGE}:nudge:{principal.id}:{stamp}",
+            from_name=principal.display_name,
+        ):
+            sent += 1
+    store.conn.commit()
+    return {"sent": sent, "skipped_rest": len(resting), "on_list": len(flagged)}
+
+
 # ----------------------------------------------------------------------
 # Leaderboards
 # ----------------------------------------------------------------------

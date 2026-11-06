@@ -384,6 +384,21 @@
   <div class="card" id="attention-card">
     <h2>Needs a nudge</h2>
     <div id="attention"></div>
+    <div id="nudge-all" class="hidden" style="margin-top:12px">
+      <button type="button" class="secondary" id="nudge-open"></button>
+      <div id="nudge-form" class="hidden" style="margin-top:10px">
+        <label for="nudge-title">Title</label>
+        <input id="nudge-title" maxlength="120" value="Ten minutes today?">
+        <label for="nudge-body" style="margin-top:8px">Message</label>
+        <textarea id="nudge-body" maxlength="500" rows="3">We have not seen you train in a while. Even one short drill keeps you moving.</textarea>
+        <p class="small muted" id="nudge-who" style="margin:8px 0 0"></p>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button type="button" id="nudge-send">Send to everyone on this list</button>
+          <button type="button" class="secondary" id="nudge-cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="nudge-note" class="small hidden" style="margin-top:8px"></div>
+    </div>
   </div>
 
   <div class="card hidden" id="specialisation-card">
@@ -2421,6 +2436,17 @@ function renderAttention(athletes) {
     .slice(0, 8);
 
   $('attention-card').classList.toggle('hidden', flagged.length === 0);
+  // The list below shows the worst eight; the message goes to every flagged
+  // athlete in the current team filter, so the button says the real number.
+  const everyone = athletes.filter((a) => a.flags.length);
+  const resting = everyone.filter((a) => a.flags.includes('load_spike') || a.flags.includes('needs_rest')).length;
+  const askable = everyone.length - resting;
+  nudgeState = { askable, resting, total: everyone.length };
+  $('nudge-all').classList.toggle('hidden', askable === 0);
+  $('nudge-open').textContent = `Message ${askable === 1 ? 'this athlete' : `all ${askable} of them`}`;
+  $('nudge-who').textContent = resting
+    ? `Goes to ${askable} athlete${askable === 1 ? '' : 's'} in the app, and to their parents. ${resting} more ${resting === 1 ? 'is' : 'are'} on the list but resting, so ${resting === 1 ? 'they are' : 'they are'} left out.`
+    : `Goes to ${askable} athlete${askable === 1 ? '' : 's'} in the app, and to their parents. Nothing is emailed.`;
   $('attention').innerHTML = flagged.map((a) => {
     const chips = a.flags.map((f) => {
       const [cls, label] = flagLabel(f);
@@ -2433,6 +2459,36 @@ function renderAttention(athletes) {
     </div>`;
   }).join('');
 }
+
+let nudgeState = { askable: 0, resting: 0, total: 0 };
+$('nudge-open').addEventListener('click', () => {
+  $('nudge-form').classList.toggle('hidden');
+  $('nudge-note').classList.add('hidden');
+});
+$('nudge-cancel').addEventListener('click', () => $('nudge-form').classList.add('hidden'));
+$('nudge-send').addEventListener('click', async () => {
+  const title = $('nudge-title').value.trim();
+  const note = $('nudge-note');
+  note.classList.remove('hidden'); note.style.color = '';
+  if (!title) { note.textContent = 'Write a title first.'; note.style.color = 'var(--danger)'; return; }
+  const n = nudgeState.askable;
+  if (!window.confirm(`Send this to ${n} athlete${n === 1 ? '' : 's'} and their parents?`)) return;
+  const btn = $('nudge-send'); btn.disabled = true;
+  try {
+    const teamId = $('team').value ? Number($('team').value) : null;
+    const res = await api('/api/coach/nudge-everyone', {
+      method: 'POST',
+      body: { title, body: $('nudge-body').value.trim(), team_id: teamId },
+    });
+    note.textContent = res.sent
+      ? `Sent to ${res.sent} athlete${res.sent === 1 ? '' : 's'}.`
+        + (res.skipped_rest ? ` ${res.skipped_rest} resting, left out.` : '')
+      : 'Nobody on the list right now, so nothing was sent.';
+    $('nudge-form').classList.add('hidden');
+  } catch (e) {
+    note.textContent = e.message || 'Could not send.'; note.style.color = 'var(--danger)';
+  } finally { btn.disabled = false; }
+});
 
 function renderRoster(athletes) {
   // One column rather than two: the split is the point, and a second column
