@@ -34,10 +34,13 @@ await page.goto(`${base}/app/coach.html?teamsnap=connected`);
 await page.waitForSelector('#wizard:not(.hidden)'); await page.waitForTimeout(1500);
 console.log('after TeamSnap round trip:', await title());
 await page.reload(); await page.waitForSelector('#wizard:not(.hidden)'); await page.waitForTimeout(1500);
+await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 console.log('after a plain refresh:    ', await title());
 
 // finishing forgets it, so a later visit does not reopen the walkthrough
 await page.click('#wizard-skip'); await page.waitForTimeout(500);
+await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 await page.reload(); await page.waitForTimeout(1500);
+await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 console.log('after Skip + reload, walkthrough hidden:', await page.locator('#wizard').evaluate((e) => e.classList.contains('hidden')));
 await browser.close();

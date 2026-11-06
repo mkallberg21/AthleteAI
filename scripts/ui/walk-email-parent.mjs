@@ -16,6 +16,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.evaluate((t) => localStorage.setItem('offdays.token', t), org.director.token);
   await page.goto(`${base}/app/coach.html`); await page.waitForTimeout(1500);
   await page.locator('#wizard-skip').click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(1500);
+  await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 
   const btn = page.locator('#roster button[data-invite]').first();
   console.log(tag, 'button says:', (await btn.textContent()).trim());

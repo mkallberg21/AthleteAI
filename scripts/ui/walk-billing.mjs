@@ -17,6 +17,7 @@ const page = await (await browser.newContext({ viewport: { width: 1280, height: 
 await page.goto(`${base}/app/index.html?code=${made.director.token}`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(2000);
 await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
+await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 const card = page.locator('#billing-card');
 console.log('BEFORE DATES:', (await card.innerText()).replace(/\s*\n\s*/g, ' | '));
 await card.screenshot({ path: `${out}/1-no-dates.png` });

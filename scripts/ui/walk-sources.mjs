@@ -21,11 +21,14 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.click('#create-org');
   await page.waitForURL(/coach\.html/);
   await page.waitForSelector('#wizard-skip');
+  await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
   await page.click('#wizard-skip');
+  await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
   await page.fill('#new-team', '2031 Red'); await page.waitForTimeout(400);
   await page.fill('#new-team-coach', 'Sam Hill'); await page.fill('#new-team-coach-email', 'sam@example.com');
   await page.click('#add-team'); await page.waitForTimeout(1000);
   await page.reload(); await page.waitForTimeout(1500);
+  await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 
   const vis = async () => ({
     teamsnap: await page.locator('#src-teamsnap').isVisible(),

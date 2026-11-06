@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="styles.css?v=19">
 </head>
 <body>
 <div class="topbar">
@@ -4174,6 +4174,64 @@ async function initTeamDrills() {
   await loadTeamDrills(teams[0].id);
 }
 
+</script>
+<script id="fold-script">
+// Folding cards. Static markup, so this runs once at the end of the page.
+(function () {
+  var KEY = 'offdays.fold.v1';
+  var KEEP_OPEN = { 'families-card': 1 };            // open the first time someone visits
+  var NEVER = { 'wizard': 1, 'setup-card': 1, 'code-card': 1, 'blockers-card': 1, 'scope-card': 1 };
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  function store() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} }
+  var n = 0;
+  document.querySelectorAll('.wrap--grid > .card, .wrap--grid > * > .card').forEach(function (card) {
+    n += 1;
+    var id = card.id || '';
+    if (NEVER[id]) return;
+    var head = card.firstElementChild;
+    if (!head) return;
+    var h2 = head.matches('h2') ? head : head.querySelector('h2');
+    if (!h2) return;
+    // The heading must be the very first thing, or this is a different kind of card.
+    if (!head.matches('h2') && head.firstElementChild && !head.firstElementChild.contains(h2) && head.firstElementChild !== h2) return;
+    if (!id) { id = 'card-' + n; }
+    card.classList.add('fold');
+    head.classList.add('fold-head');
+    head.setAttribute('role', 'button');
+    head.setAttribute('tabindex', '0');
+    for (var el = head.nextElementSibling; el; el = el.nextElementSibling) el.classList.add('fold-item');
+    function paint(open) { card.classList.toggle('open', open); head.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    var want = (id in saved) ? saved[id] : !!KEEP_OPEN[id];
+    paint(want);
+    function flip(ev) {
+      // A button, link or field inside the heading row keeps doing its own job.
+      if (ev.target.closest && ev.target.closest('button, a, input, select, textarea, label') && ev.target !== head) return;
+      if (card.classList.contains('wizard-embedded')) return;
+      var next = !card.classList.contains('open');
+      paint(next); saved[id] = next; store();
+    }
+    head.addEventListener('click', flip);
+    head.addEventListener('keydown', function (ev) {
+      if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === head) { ev.preventDefault(); flip(ev); }
+    });
+    card._foldOpen = function () { paint(true); };
+  });
+  // Anything that scrolls to a card, or to something inside one (the checklist's
+  // Go buttons, "Import a roster", a result box), must land on an open card.
+  var realScroll = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function () {
+    var c = this.closest && this.closest('.fold');
+    if (c && !c.classList.contains('open') && c._foldOpen) c._foldOpen();
+    return realScroll.apply(this, arguments);
+  };
+  // A link such as #families-card should land on an open card.
+  function fromHash() {
+    var t = location.hash && document.getElementById(location.hash.slice(1));
+    if (t && t._foldOpen) { t._foldOpen(); t.scrollIntoView(); }
+  }
+  window.addEventListener('hashchange', fromHash); fromHash();
+})();
 </script>
 </body>
 </html>

@@ -8,6 +8,7 @@ await p.goto(`${base}/`);
 await p.locator('.role-btn', { hasText: /director/i }).first().click();
 await p.fill('#org-name', 'Resend FC'); await p.fill('#org-director', 'Joel'); await p.click('#create-org');
 await p.waitForURL(/coach\.html/); await p.waitForSelector('#wizard-skip'); await p.click('#wizard-skip');
+await p.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 await p.fill('#new-team', '2031 Red'); await p.waitForTimeout(400);
 await p.fill('#new-team-coach', 'Sam Hill'); await p.fill('#new-team-coach-email', 'sam@example.com');
 await p.click('#add-team'); await p.waitForTimeout(1000);

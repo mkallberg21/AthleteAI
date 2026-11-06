@@ -24,6 +24,7 @@ await page.goto(`${base}/app/coach.html`);
 await page.evaluate((t) => localStorage.setItem('offdays.token', t), org.director.token);
 await page.goto(`${base}/app/coach.html`); await page.waitForTimeout(1500);
 await page.locator('#wizard-skip').click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(1500);
+await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 
 const card = page.locator('#mailhold-card');
 await card.scrollIntoViewIfNeeded();

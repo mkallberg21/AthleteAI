@@ -2103,3 +2103,25 @@ tr.mine td { border-color: var(--accent-dim); }
 
 /* App shell: keep content clear of the home indicator and the notch. */
 body { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Folding cards: the director and coach pages are long, so every card shows only
+   its heading until it is clicked. A card the walkthrough has pulled into itself
+   (.wizard-embedded) is never folded: that step needs it open. */
+.fold > .fold-head { cursor: pointer; user-select: none; }
+/* The heading is either the h2 itself or a row that holds one. */
+.fold > h2.fold-head,
+.fold > .fold-head h2 { display: flex; align-items: center; gap: 8px; }
+.fold > h2.fold-head::after,
+.fold > .fold-head h2::after {
+  content: ""; margin-left: auto; flex: 0 0 auto;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted);
+  transform: rotate(45deg); transition: transform .15s ease;
+}
+.fold.open > h2.fold-head::after,
+.fold.open > .fold-head h2::after { transform: rotate(-135deg); }
+.fold > .fold-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.fold:not(.open):not(.wizard-embedded) > .fold-item { display: none !important; }
+.fold.wizard-embedded > h2.fold-head::after,
+.fold.wizard-embedded > .fold-head h2::after { display: none; }
+.fold > .fold-head:not(h2) h2 { flex: 1 1 auto; }
