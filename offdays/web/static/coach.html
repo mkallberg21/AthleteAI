@@ -403,9 +403,13 @@
       season and a wrong guess would quietly change what every child here is
       told to do.
     </p>
-    <label for="season-phase">This program is currently</label>
-    <select id="season-phase"></select>
-    <div id="season-note" class="small muted" style="margin-top:8px"></div>
+    <!-- The phase is a dashboard decision; the walkthrough's season step
+         hides this row and asks for the dates only. -->
+    <div id="season-phase-row">
+      <label for="season-phase">This program is currently</label>
+      <select id="season-phase"></select>
+      <div id="season-note" class="small muted" style="margin-top:8px"></div>
+    </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
       <div style="flex:1 1 180px">
         <label for="season-starts">Season starts on</label>
@@ -1779,11 +1783,14 @@ function wizardPlace(cardId) {
   $('wizard-slot').appendChild(card);
   card.classList.remove('hidden');
   card.classList.add('wizard-embedded');
+  // The season step is about dates; the phase stays on the dashboard card.
+  if (cardId === 'season-card') $('season-phase-row').classList.add('hidden');
 }
 function wizardRestore() {
   for (const [id, home] of Object.entries(WIZARD_HOME)) {
     const card = $(id);
     card.classList.remove('wizard-embedded');
+    if (id === 'season-card') $('season-phase-row').classList.remove('hidden');
     home.parent.insertBefore(card, home.next && home.next.parentNode === home.parent ? home.next : null);
   }
 }

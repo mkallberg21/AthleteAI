@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-05 — Director walkthrough's season step asks for the dates only
+- CHANGED: A new director setting up their program is now asked only for the season's start and end dates on the "When the season runs" step; the "This program is currently Pre-season / In-season" choice no longer appears there and stays on the dashboard's "Where the season is" card.
+- WHY: Directors. The step said "set the start and end dates" but opened with an unexplained phase drop-down, a question a brand-new director cannot answer yet and does not need to.
+- PROOF: scripts/ui/walk-season-step.mjs (iPhone 13, fresh program) failed before the change ("phase selector shows in the walkthrough") and passes after; it also checks the selector is still on the dashboard card. Screenshots of both looked at. Full test suite green apart from the known date-dependent tests.
+- NOTE: Page-only change (coach.html); no CSS, so no stylesheet pin bump.
+- NEXT: Hide the card's own heading and the stray "on the Season card" line inside that same step (backlog).
+
 ## 2026-11-05 — Families list no longer says "Invite sent" while email is on hold
 - CHANGED: While a program's email is on hold (the default) or there is no mail service, the Families list now says "Invite ready (email is on hold), parent has not signed up" instead of "Invite sent". Once the director releases email it says "Invite sent" as before.
 - WHY: Directors were told parents had been emailed when nobody had been, so they waited for sign-ups that could never come.
