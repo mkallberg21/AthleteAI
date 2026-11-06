@@ -171,8 +171,8 @@ def test_the_braces_balance():
 #: who has visited before: that is how a phone showed every landing-page
 #: panel unfolded while a fresh browser showed four buttons. When this
 #: fails, bump ?v= on EVERY page and paste the new hash here.
-STYLESHEET_PIN = "v=21"
-STYLESHEET_HASH = "a4a612bdc043"
+STYLESHEET_PIN = "v=22"
+STYLESHEET_HASH = "c5d7e15cdb27"
 
 
 def test_every_page_pins_the_stylesheet_and_the_pin_matches_the_content():

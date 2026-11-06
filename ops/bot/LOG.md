@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Teams list fits a phone: join code and Remove on screen
+- CHANGED: On a phone, each team in the Teams list now shows as its own small block (name, coach, roster, wall ball, shots, join code with its Remove button) instead of a six-column table where the join code and Remove button were hidden off the right edge.
+- WHY: Directors setting up on a phone; they could not see the code to give a coach or the button to remove a team made by mistake without discovering a sideways scroll.
+- PROOF: new scripts/ui/walk-teams-phone.mjs (fresh program, two teams) failed before the change at 360px and 390px (table 506px wide in a 302px box, join codes and Remove off screen) and passes after; it also checks the stacked numbers sit under their labels and the laptop table is unchanged at 1280px. Screenshots at 360px and 1280px looked at. walk-create-team.mjs still creates and removes teams. Full test suite green apart from the known date-dependent tests.
+- NOTE: Stylesheet pin bumped to v=22 on all pages, hash updated in tests/test_branding.py. On a phone the labels read "Wall ball" and "Shots" (the laptop headers still say "/day").
+- NEXT: Give the roster table the same phone layout (backlog).
+
 ## 2026-11-06 — Dashboard numbers sit two by two on a phone
 - CHANGED: On a phone, the four numbers at the top of the director and coach dashboard (Athletes, Participation, Sessions, Total XP) now show as a neat two-by-two block with space under it, instead of three in a row and "Total XP" alone on a second line pressed against the card below.
 - WHY: Directors and coaches checking the dashboard on their phone; the strip looked broken and the last number ran into the setup card.

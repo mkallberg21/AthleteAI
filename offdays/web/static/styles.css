@@ -427,6 +427,24 @@ button.tiny:hover, a.tiny:hover { border-color: var(--accent); text-decoration: 
 .family-row .family-parent { font-size: .85rem; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
 .family-row button { width: auto; }
 
+/* Teams table on a phone: six columns ran 500px wide in a 300px box, so the
+   join code and Remove sat off to the right. Each team stacks into a block. */
+@media (max-width: 559px) {
+  .teams-table thead { display: none; }
+  .teams-table tr {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .teams-table tr:last-child { border-bottom: none; }
+  .teams-table td, .teams-table td.num { border: none; padding: 0; text-align: left; }
+  .teams-table td:nth-child(1), .teams-table td:nth-child(2), .teams-table td:nth-child(6),
+  .teams-table td[colspan] { grid-column: 1 / -1; }
+  .teams-table td[data-label]:not(:first-child)::before {
+    content: attr(data-label); display: block; font-size: .68rem; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;
+  }
+}
+
 /* Coaches card rows and team chips (lost in the v3 re-skin). */
 .staff-row {
   display: flex; justify-content: space-between; gap: 10px; align-items: center;

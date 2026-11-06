@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 <div class="topbar">
@@ -142,7 +142,7 @@
     </div>
 
     <div style="overflow-x:auto">
-      <table>
+      <table class="teams-table">
         <thead><tr><th>Team</th><th>Coach</th><th class="num">Roster</th><th class="num">Wall ball/day</th><th class="num">Shots/day</th><th>Join code</th></tr></thead>
         <tbody id="teams"></tbody>
       </table>
@@ -2508,13 +2508,15 @@ function renderReview(sessions) {
 
 async function loadTeams() {
   const { teams } = await api('/api/coach/teams');
+  // data-label: on a phone each row stacks into a labelled block (styles.css
+  // .teams-table) so the join code and Remove are on screen, not off to the right.
   $('teams').innerHTML = teams.length ? teams.map((t) => `
-    <tr><td><b>${esc(t.name)}</b>${t.season ? ` <span class="muted small">${esc(t.season)}</span>` : ''}</td>
-        <td>${esc(t.coaches || '') || '<span class="muted">none yet</span>'}</td>
-        <td class="num">${t.roster}</td>
-        <td class="num">${t.daily_wall_ball || '<span class="muted">age</span>'}</td>
-        <td class="num">${t.daily_shots || '<span class="muted">age</span>'}</td>
-        <td style="white-space:nowrap"><code>${esc(t.join_code)}</code>${IS_DIRECTOR && !t.roster
+    <tr><td data-label="Team"><b>${esc(t.name)}</b>${t.season ? ` <span class="muted small">${esc(t.season)}</span>` : ''}</td>
+        <td data-label="Coach">${esc(t.coaches || '') || '<span class="muted">none yet</span>'}</td>
+        <td class="num" data-label="Roster">${t.roster}</td>
+        <td class="num" data-label="Wall ball">${t.daily_wall_ball || '<span class="muted">age</span>'}</td>
+        <td class="num" data-label="Shots">${t.daily_shots || '<span class="muted">age</span>'}</td>
+        <td data-label="Join code" style="white-space:nowrap"><code>${esc(t.join_code)}</code>${IS_DIRECTOR && !t.roster
           ? ` <button class="secondary inline" data-del-team="${t.id}" data-team-name="${esc(t.name)}" title="Remove this team" style="margin-left:8px;padding:4px 10px;min-height:30px">Remove</button>`
           : ''}</td></tr>`).join('')
     : '<tr><td colspan="6" class="muted small">No teams yet.</td></tr>';
