@@ -463,6 +463,25 @@ button.tiny:hover, a.tiny:hover { border-color: var(--accent); text-decoration: 
   }
 }
 
+/* Roster import preview on a phone: seven columns ran 434px wide in a 302px
+   box, so each row's new / update / skip sat off to the right. Name and
+   action on the first line, the file's values labelled underneath. */
+@media (max-width: 559px) {
+  .preview-table thead { display: none; }
+  .preview-table tr {
+    display: grid; grid-template-columns: 2.2em 2.2em minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .preview-table tr:last-child { border-bottom: none; }
+  .preview-table td, .preview-table td.num { border: none; padding: 0; text-align: left; overflow-wrap: break-word; }
+  .preview-table td:nth-child(2) { grid-column: 1 / 5; grid-row: 1; }
+  .preview-table td:nth-child(7) { grid-column: 5; grid-row: 1; justify-self: end; }
+  .preview-table td[data-label]::before {
+    content: attr(data-label); display: block; font-size: .68rem; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;
+  }
+}
+
 /* Team standings on a phone: five columns ran 346px wide in a 302px box, so
    Total XP sat off to the right. Rank and team on one line, the three
    numbers under the team name, each with its label. */

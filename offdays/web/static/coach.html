@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=24">
+<link rel="stylesheet" href="styles.css?v=25">
 </head>
 <body>
 <div class="topbar">
@@ -3421,12 +3421,12 @@ function renderPreview(plan) {
     const label = a.problems.length ? 'skip'
       : a.action === 'update' ? 'update' : 'new';
     return `<tr class="preview-row ${cls}">
-      <td>${a.row}</td>
+      <td data-label="Row">${a.row}</td>
       <td><b>${esc(a.display_name || '(no name)')}</b>${messages}</td>
-      <td class="num">${esc(a.jersey || '–')}</td>
-      <td>${esc(a.position || '–')}</td>
-      <td class="num">${a.birth_year || '–'}${a.birth_year_estimated ? '<span class="muted">~</span>' : ''}</td>
-      <td>${esc(a.dominant_hand || '–')}</td>
+      <td class="num" data-label="#">${esc(a.jersey || '–')}</td>
+      <td data-label="Pos">${esc(a.position || '–')}</td>
+      <td class="num" data-label="Born">${a.birth_year || '–'}${a.birth_year_estimated ? '<span class="muted">~</span>' : ''}</td>
+      <td data-label="Hand">${esc(a.dominant_hand || '–')}</td>
       <td><span class="pill ${a.problems.length ? 'bad' : a.action === 'update' ? 'warn' : 'ok'}">${label}</span></td>
     </tr>`;
   }).join('');
@@ -3444,14 +3444,15 @@ function renderPreview(plan) {
     </div>
     ${(s.create + s.update) > s.with_guardian_email ? `
       <div class="advisory caution" style="margin-bottom:12px">
-        <b>${(s.create + s.update) - s.with_guardian_email} of these players ${((s.create + s.update) - s.with_guardian_email) === 1 ? 'has' : 'have'} no parent email.</b>
+        <span class="dotmark"></span>
+        <div><b>${(s.create + s.update) - s.with_guardian_email} of these players ${((s.create + s.update) - s.with_guardian_email) === 1 ? 'has' : 'have'} no parent email.</b>
         A player gets in through a link their parent sends them, so without a
         parent email there is nobody to invite and they cannot start. Add a
         <code>Parent Email</code> column and import again, or use
-        <b>Add a player</b> for each one.
+        <b>Add a player</b> for each one.</div>
       </div>` : ''}
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
-      <table>
+      <table class="preview-table">
         <thead><tr><th>Row</th><th>Athlete</th><th class="num">#</th><th>Pos</th>
           <th class="num">Born</th><th>Hand</th><th>Action</th></tr></thead>
         <tbody>${rows}</tbody>

@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Roster upload preview fits a phone: new / update / skip on screen
+- CHANGED: On a phone, the preview shown after a roster file is picked (before "Import N new") now lists each player as a small block: name and its new / update / skip label on the first line, then row, number, position, birth year and hand, each labelled. Before, it was a seven-column table where the new / update / skip label was off the right edge. The "players with no parent email" warning now reads as one paragraph with its warning dot, instead of being chopped into narrow columns (it was broken that way on a laptop too).
+- WHY: Directors uploading their roster from a phone, in the walkthrough or on the dashboard. Whether a row will be added, updated or skipped is what they check before they press Import.
+- PROOF: new scripts/ui/walk-import-preview-phone.mjs (fresh program, five-row file) failed before the change at 360px and 390px (table 434px wide in a 302px box, every new / update / skip off screen) and passes after; it also fails if a value such as "Midfield" breaks mid-word, which the first version of the fix did. Screenshots at 360px and 1280px looked at. walk-dropbox (the walkthrough's roster step), walk-roster-phone, walk-teams-phone, walk-standings-phone and walk-stat-strip still pass. Full test suite green apart from the known date-dependent tests.
+- NOTE: Stylesheet pin bumped to v=25 on all pages, hash updated in tests/test_branding.py. The laptop table is unchanged.
+- NEXT: The other coach-side tables at 360px: evaluation, practice card, ball framing, sync links (backlog).
+
 ## 2026-11-06 — Team standings fit a phone: Total XP on screen
 - CHANGED: On a phone, each team in the Team standings card now shows its rank and name on one line, with "XP each", "Participation" and "Total XP" labelled underneath, instead of a five-column table where "Total XP" was cut off the right edge. A team with one player now says "1 athlete", not "1 athletes".
 - WHY: Directors and coaches checking how their teams compare on a phone; the total was the column they could not see.
