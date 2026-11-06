@@ -1829,6 +1829,11 @@ async function wizardShow(i) {
 // Anything that changes the program re-reads the step. Cheap, and it is
 // what makes Next light up the moment the team is created.
 async function wizardRefresh() {
+  // Every place that changes setup state (a team, a roster, a coach) ends by
+  // calling this, so it also redraws the checklist and the red stars. Before,
+  // both were stale until the next page load, and Import the roster stayed
+  // unticked right after a roster had been imported.
+  loadSetup();
   if (!wizardOn) return;
   const s = WIZARD[wizardStep];
   const st = await wizardStatus();
@@ -2737,6 +2742,7 @@ $('new-coach-add').addEventListener('click', async () => {
     $('new-coach-name').value = '';
     $('new-coach-email').value = '';
     await loadStaff(IS_DIRECTOR);
+    await wizardRefresh();
   } catch (e) {
     $('new-coach-err').textContent = e.message || 'Could not add the coach.';
     $('new-coach-err').classList.remove('hidden');
@@ -3590,6 +3596,7 @@ $('ap-add').addEventListener('click', async () => {
     renderSlips(res);
     await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadUploads()]);
     if (IS_DIRECTOR) loadBilling();
+    await wizardRefresh();
   } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
   finally { btn.disabled = false; }
 });
