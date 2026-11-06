@@ -2293,3 +2293,26 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
   color: var(--danger); white-space: nowrap;
 }
 .todo-star::before { content: "\2605"; font-size: 1rem; line-height: 1; }
+
+/* Getting-set-up checklist (director, coach and parent pages). These rules were
+   lost in an earlier restyle, which left every tick on its own line above the
+   title and made finished steps look undone. */
+.setup-bar { height: 5px; border-radius: 99px; background: var(--surface-2);
+             overflow: hidden; margin-top: 8px; }
+.setup-bar i { display: block; height: 100%; background: var(--accent);
+               transition: width .4s ease; }
+.setup-step { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0;
+              border-bottom: 1px solid var(--border); }
+.setup-step:last-child { border-bottom: none; }
+.setup-step > div { flex: 1; min-width: 0; }
+/* One fixed slot at the left holds the tick or the Go button, so every title
+   starts at the same place and the control sits right beside its words. */
+.setup-lead { flex: 0 0 44px; display: flex; justify-content: center; }
+.setup-lead .tiny { margin: 0; }
+.setup-lead .setup-tick { margin-top: 1px; }
+.setup-step.done > div { opacity: .7; }
+.setup-tick { flex: none; width: 20px; height: 20px; border-radius: 99px;
+              border: 1px solid var(--border-light); display: flex; align-items: center;
+              justify-content: center; font-size: 12px; margin-top: 1px; }
+.setup-step.done .setup-tick { background: var(--accent); border-color: var(--accent);
+                               color: #fff; }

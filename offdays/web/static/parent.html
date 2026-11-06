@@ -6,7 +6,7 @@
 <title>0FFDAYS · Parent</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0A0A0B">
-<link rel="stylesheet" href="styles.css?v=30">
+<link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
 <div class="topbar">
@@ -633,7 +633,7 @@ async function loadDecisions() {
 
   $('decide-steps').innerHTML = data.athletes.map((a) => a.steps.map((step) => `
     <div class="setup-step ${step.done ? 'done' : ''}">
-      <span class="setup-tick">${step.done ? '&check;' : ''}</span>
+      <span class="setup-lead"><span class="setup-tick">${step.done ? '&check;' : ''}</span></span>
       <div>
         <b>${esc(step.title)}</b>${step.required ? '' : ' <span class="small muted">optional</span>'}
         ${step.done ? '' : `<div class="small muted">${esc(step.detail)}</div>`}

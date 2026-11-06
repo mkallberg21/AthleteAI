@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=30">
+<link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
 <div class="topbar">
@@ -1948,14 +1948,14 @@ async function loadSetup() {
 
   $('setup-steps').innerHTML = data.steps.map((step) => `
     <div class="setup-step ${step.done ? 'done' : ''}">
-      <span class="setup-tick">${step.done ? '&check;' : ''}</span>
+      <span class="setup-lead">${step.done ? '<span class="setup-tick">&check;</span>'
+        : step.anchor ? `<button class="tiny" data-goto="${esc(step.anchor)}">Go</button>`
+        : '<span class="setup-tick"></span>'}</span>
       <div>
         <b>${esc(step.title)}</b>${step.required ? '' : ' <span class="small muted">optional</span>'}
         ${step.done ? '' : `<div class="small muted">${esc(step.detail)}</div>`}
         ${step.done || !step.why ? '' : `<div class="small muted"><em>${esc(step.why)}</em></div>`}
       </div>
-      ${step.done || !step.anchor ? ''
-        : `<button class="secondary inline" data-goto="${esc(step.anchor)}">Go</button>`}
     </div>`).join('');
 
   $('setup-done-note').textContent = data.complete
