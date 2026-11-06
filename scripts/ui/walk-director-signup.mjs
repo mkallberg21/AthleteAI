@@ -32,6 +32,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 860 } 
   await page.screenshot({ path: `${out}/${tag}-3-code-step.png` });
   await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
   await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
+  await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
   await page.screenshot({ path: `${out}/${tag}-4-dashboard-first.png`, fullPage: false });
 
   // Upload the shipped Nashville Dogs crest as the badge, through the real control.

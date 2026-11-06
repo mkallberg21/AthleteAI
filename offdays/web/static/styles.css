@@ -2316,3 +2316,29 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
               justify-content: center; font-size: 12px; margin-top: 1px; }
 .setup-step.done .setup-tick { background: var(--accent); border-color: var(--accent);
                                color: #fff; }
+
+/* Director/coach dashboard tabs: Today, Families, Teams, Settings. */
+.tabbar { grid-column: 1 / -1; display: flex; gap: 6px; overflow-x: auto;
+          padding: 2px 0 4px; margin: 0 0 4px; -webkit-overflow-scrolling: touch; }
+.tabbar button:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) {
+  flex: 1 1 0; min-width: 0; width: auto; min-height: 44px; margin: 0;
+  padding: 0.5rem 0.6rem; font-size: 0.9rem; font-weight: 700; letter-spacing: 0;
+  white-space: nowrap; background: var(--surface); color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: none; position: relative;
+}
+.tabbar button[aria-selected="true"]:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tabbar button .tab-dot { position: absolute; top: 5px; right: 6px; width: 9px; height: 9px;
+                          border-radius: 99px; background: var(--danger); }
+.tab-off:not(.wizard-embedded) { display: none !important; }
+
+/* Needs attention: one list instead of four boxes. */
+.needs-row { display: flex; align-items: center; gap: 10px; padding: 10px 0;
+             border-bottom: 1px solid var(--border); }
+.needs-row:last-child { border-bottom: none; }
+.needs-row .needs-n { flex: 0 0 34px; height: 34px; border-radius: 99px; display: flex;
+                      align-items: center; justify-content: center; font-weight: 800;
+                      background: color-mix(in srgb, var(--danger) 20%, transparent);
+                      color: var(--danger); }
+.needs-row > span:nth-child(2) { flex: 1; min-width: 0; }
+.needs-clear { color: var(--text-muted); }

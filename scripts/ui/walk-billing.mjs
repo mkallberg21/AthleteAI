@@ -18,6 +18,7 @@ await page.goto(`${base}/app/index.html?code=${made.director.token}`, { waitUnti
 await page.waitForTimeout(2000);
 await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
 await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
+await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
 const card = page.locator('#billing-card');
 console.log('BEFORE DATES:', (await card.innerText()).replace(/\s*\n\s*/g, ' | '));
 await card.screenshot({ path: `${out}/1-no-dates.png` });

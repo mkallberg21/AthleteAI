@@ -28,6 +28,7 @@ await page.goto(`${base}/app/index.html?code=${code}`, { waitUntil: 'networkidle
 await page.waitForTimeout(2500);
 await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
 await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
+await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
 console.log('2 landed on:', page.url().split('/').pop());
 const next = await page.locator('#setup-card').first().innerText().catch(() => '');
 console.log('   checklist head:', next.split('\n').slice(0, 4).join(' | '));

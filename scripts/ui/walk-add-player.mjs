@@ -20,8 +20,10 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.waitForURL(/coach\.html/);
   await page.waitForSelector('#wizard-skip');
   await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
+  await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
   await page.click('#wizard-skip');
   await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
+  await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
   await page.fill('#new-team', '2031 Red'); await page.waitForTimeout(500);
   await page.fill('#new-team-coach', 'Sam Hill'); await page.fill('#new-team-coach-email', 'sam@example.com');
   await page.click('#add-team'); await page.waitForTimeout(1200);

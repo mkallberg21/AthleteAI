@@ -25,6 +25,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.waitForSelector('#wizard-skip');
   await page.click('#wizard-skip');
   await page.waitForTimeout(1500);
+  await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown: this walk is about folding
 
   const info = await page.evaluate(() => {
     const cards = [...document.querySelectorAll('.card.fold')].filter((c) => c.offsetParent !== null);
@@ -49,6 +50,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   check(await page.locator('#roster-card .fold-item').first().isVisible(), `${tag}: Roster body is visible`);
   await page.screenshot({ path: `${out}/${tag}-2-roster-open.png` });
   await page.reload(); await page.waitForTimeout(1500);
+  await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
   check(await page.locator('#roster-card.open').count() === 1, `${tag}: Roster stays open after a reload`);
   await page.locator('#roster-card > .fold-head').click();
   check(await page.locator('#roster-card.open').count() === 0, `${tag}: second click shuts it`);

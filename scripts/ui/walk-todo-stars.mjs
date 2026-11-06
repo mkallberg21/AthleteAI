@@ -19,6 +19,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.fill('#org-name', `Star FC ${tag}`); await page.fill('#org-director', 'Joel');
   await page.click('#create-org'); await page.waitForURL(/coach\.html/);
   await page.waitForSelector('#wizard-skip'); await page.click('#wizard-skip'); await page.waitForTimeout(1800);
+  await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
 
   let s = await starred(page);
   console.log(tag, 'starred:', JSON.stringify(s));
@@ -35,6 +36,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.fill('#new-team-coach', 'Sam Hill'); await page.fill('#new-team-coach-email', 'sam@example.com');
   await page.click('#add-team'); await page.waitForTimeout(1200);
   await page.reload(); await page.waitForTimeout(1800);
+  await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
   s = await starred(page);
   console.log(tag, 'after a team:', JSON.stringify(s));
   check(!s.includes('teams-card') && s.includes('import-card'), `${tag}: team done, roster now starred`);

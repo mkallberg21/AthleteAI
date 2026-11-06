@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=32">
+<link rel="stylesheet" href="styles.css?v=35">
 </head>
 <body>
 <div class="topbar">
@@ -29,6 +29,12 @@
 </div>
 
 <div class="wrap wrap--grid">
+  <div class="tabbar" id="tabbar" role="tablist" aria-label="Dashboard sections">
+    <button type="button" role="tab" data-tab="today">Today</button>
+    <button type="button" role="tab" data-tab="families">Families</button>
+    <button type="button" role="tab" data-tab="teams">Teams</button>
+    <button type="button" role="tab" data-tab="settings">Settings</button>
+  </div>
   <div class="card card--wide">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div style="flex:1;min-width:180px">
@@ -45,11 +51,14 @@
         </select>
       </div>
     </div>
-    <p class="privacy-note" style="margin-top:12px">
-      This dashboard contains no video. Athletes' footage is processed on their
-      own phones and never uploaded, so what you see here are counts,
-      timings, and consistency.
-    </p>
+    <details class="privacy-fold" style="margin-top:10px">
+      <summary class="small muted" style="cursor:pointer">No video on this page</summary>
+      <p class="privacy-note" style="margin-top:8px">
+        This dashboard contains no video. Athletes' footage is processed on their
+        own phones and never uploaded, so what you see here are counts,
+        timings, and consistency.
+      </p>
+    </details>
   </div>
 
   <div class="card" id="practice-card">
@@ -63,6 +72,11 @@
   </div>
 
   <div class="stat-row" id="summary"></div>
+
+  <div class="card" id="needs-card">
+    <h2>Needs your attention</h2>
+    <div id="needs"></div>
+  </div>
 
   <!-- Setup walkthrough: a new director's whole screen until setup is
        done. One step at a time; the real card for that step is moved into
@@ -4244,7 +4258,7 @@ async function initTeamDrills() {
 // Folding cards. Static markup, so this runs once at the end of the page.
 (function () {
   var KEY = 'offdays.fold.v1';
-  var KEEP_OPEN = {};                                  // everything starts folded
+  var KEEP_OPEN = { 'needs-card': 1 };                  // the front door starts open
   var NEVER = { 'wizard': 1, 'setup-card': 1, 'code-card': 1, 'blockers-card': 1, 'scope-card': 1 };
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
@@ -4296,6 +4310,133 @@ async function initTeamDrills() {
     if (t && t._foldOpen) { t._foldOpen(); t.scrollIntoView(); }
   }
   window.addEventListener('hashchange', fromHash); fromHash();
+})();
+</script>
+<script id="tabs-script">
+// Four tabs over the same cards. Nothing is removed: every card still exists and
+// still loads, a tab only chooses which are on screen. Runs after the fold script.
+(function () {
+  var TAB_OF = {
+    'practice-card': 'today', 'needs-card': 'today', 'attention-card': 'today',
+    'review-card': 'today', 'load-card': 'today', 'wellness-card': 'today',
+    'shared-clips-card': 'today', 'blockers-card': 'today', 'setup-card': 'today',
+    'scope-card': 'today', 'budget-card': 'today',
+    'mailhold-card': 'families', 'families-card': 'families', 'parents-card': 'families',
+    'slips-card': 'families', 'add-player-card': 'families', 'import-card': 'families',
+    'family-card': 'families',
+    'teams-card': 'teams', 'roster-card': 'teams', 'staff-card': 'teams',
+    'team-drills-card': 'teams', 'goals-card': 'teams', 'film-card': 'teams',
+    'iq-card': 'teams', 'ball-card': 'teams', 'evaluation-card': 'teams',
+    'contact-card': 'settings', 'badge-card': 'settings', 'season-card': 'settings',
+    'billing-card': 'settings', 'specialisation-card': 'settings', 'recognition-card': 'settings',
+    'library-card': 'settings', 'digest-card': 'settings', 'code-card': 'settings'
+  };
+  // Boxes with no id are found by their heading.
+  var TAB_OF_HEADING = { 'assignments': 'today', 'message the team': 'today',
+                         'team standings': 'teams' };
+  var KEY = 'offdays.tab.v1';
+  var grid = document.querySelector('.wrap--grid');
+  var bar = document.getElementById('tabbar');
+  var tab = 'today';
+  try { tab = localStorage.getItem(KEY) || 'today'; } catch (e) {}
+  if (!TAB_OF['practice-card'] || !/^(today|families|teams|settings)$/.test(tab)) tab = 'today';
+
+  function tabFor(card) {
+    if (card.id && TAB_OF[card.id]) return TAB_OF[card.id];
+    var h = card.querySelector(':scope > h2, :scope > .fold-head h2, :scope > h2.fold-head');
+    var t = h ? h.textContent.trim().toLowerCase() : '';
+    for (var k in TAB_OF_HEADING) if (t.indexOf(k) === 0) return TAB_OF_HEADING[k];
+    return null;           // the team/window filter and anything unknown: always on screen
+  }
+  // The four lists the summary counts stay out of the way until someone presses
+  // Open on their row; the summary is the front door to all of them.
+  var DETAIL = { 'attention-card': 1, 'review-card': 1, 'load-card': 1, 'wellness-card': 1 };
+  var opened = {};
+  function paint() {
+    grid.querySelectorAll(':scope > .card, :scope > .stat-row').forEach(function (c) {
+      var t = c.id === 'summary' || c.classList.contains('stat-row') ? 'today' : tabFor(c);
+      var away = (!!t && t !== tab) || (DETAIL[c.id] && !opened[c.id]);
+      c.classList.toggle('tab-off', !!away);
+    });
+    bar.querySelectorAll('button').forEach(function (b) {
+      b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false');
+    });
+    dots();
+  }
+  // A red dot on a tab that holds a card still needing the director's input.
+  function dots() {
+    bar.querySelectorAll('.tab-dot').forEach(function (n) { n.remove(); });
+    var seen = {};
+    document.querySelectorAll('.todo-star').forEach(function (n) {
+      var c = n.closest('.card'); var t = c && tabFor(c);
+      if (t) seen[t] = 1;
+    });
+    bar.querySelectorAll('button').forEach(function (b) {
+      if (seen[b.dataset.tab]) {
+        var d = document.createElement('span'); d.className = 'tab-dot';
+        d.setAttribute('aria-label', 'needs your input'); b.appendChild(d);
+      }
+    });
+  }
+  function go(t) {
+    tab = t; try { localStorage.setItem(KEY, t); } catch (e) {}
+    paint(); window.scrollTo({ top: 0 });
+  }
+  bar.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-tab]'); if (b) go(b.dataset.tab);
+  });
+
+  // Anything that scrolls to a card on another tab (a checklist Go button, an
+  // import result) switches to that tab first, so it never scrolls to nothing.
+  var prev = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function () {
+    var c = this.closest && this.closest('.wrap--grid > .card, .wrap--grid > .stat-row');
+    var t = c && (c.id === 'summary' ? 'today' : tabFor(c));
+    if (c && DETAIL[c.id]) opened[c.id] = true;
+    if (t && t !== tab) { tab = t; try { localStorage.setItem(KEY, t); } catch (e) {} }
+    if (c && (DETAIL[c.id] || (t && t !== tab))) paint();
+    return prev.apply(this, arguments);
+  };
+
+  // ---- Needs your attention: one list in place of four boxes -------------
+  var SOURCES = [
+    { box: 'attention', card: 'attention-card', one: 'athlete has gone quiet', many: 'athletes have gone quiet' },
+    { box: 'review', card: 'review-card', one: 'session to review', many: 'sessions to review' },
+    { box: 'load-watch', card: 'load-card', one: 'athlete is training too hard', many: 'athletes are training too hard' },
+    { box: 'wellness-watch', card: 'wellness-card', one: 'athlete is carrying something', many: 'athletes are carrying something' }
+  ];
+  var timer = null;
+  function needs() {
+    var host = document.getElementById('needs'); if (!host) return;
+    var rows = [];
+    SOURCES.forEach(function (s) {
+      var el = document.getElementById(s.box);
+      var n = el ? el.children.length : 0;
+      if (n) rows.push('<div class="needs-row"><span class="needs-n">' + n + '</span><span>' +
+        (n === 1 ? s.one : s.many) + '</span><button type="button" class="tiny" data-open="' + s.card + '">Open</button></div>');
+    });
+    host.innerHTML = rows.length ? rows.join('')
+      : '<p class="needs-clear small" style="margin:0">Nothing needs you right now.</p>';
+  }
+  function soon() { clearTimeout(timer); timer = setTimeout(needs, 150); }
+  SOURCES.forEach(function (s) {
+    var el = document.getElementById(s.box);
+    if (el) new MutationObserver(soon).observe(el, { childList: true });
+  });
+  document.getElementById('needs').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-open]'); if (!b) return;
+    var c = document.getElementById(b.dataset.open);
+    if (c) { opened[c.id] = true; paint(); c._foldOpen && c._foldOpen(); c.classList.remove('hidden'); c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
+  // The red-star script runs later and redraws; keep the dots in step with it.
+  // Ignore changes inside the tab bar itself: drawing a dot is a change, and
+  // reacting to it would loop forever.
+  var dotTimer = null;
+  new MutationObserver(function (muts) {
+    if (muts.every(function (m) { return bar.contains(m.target); })) return;
+    clearTimeout(dotTimer); dotTimer = setTimeout(dots, 120);
+  }).observe(grid, { childList: true, subtree: true });
+  paint(); needs();
 })();
 </script>
 </body>

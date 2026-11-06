@@ -13,6 +13,7 @@ await page.goto(`${base}/app/index.html?code=${made.director.token}`, { waitUnti
 await page.waitForTimeout(2000);
 await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
 await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
+await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
 await page.locator('#teams-card').scrollIntoViewIfNeeded();
 await page.fill('#new-team', '2031 Red');
 await page.waitForTimeout(700);
