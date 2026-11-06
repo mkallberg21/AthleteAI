@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Assignments card fits a phone: Targets met on screen
+- CHANGED: On a phone, each player under an assignment (e.g. "Week 1 Wall Ball") now shows their name on its own line, then Sessions, Reps and Off-hand labelled side by side, then the Targets met marks across the full width. Before, it was a five-column table where Targets met (which targets each player has hit) was cut off the right edge.
+- WHY: Coaches checking on their phone who still needs a nudge this week; Targets met is the column that answers that.
+- PROOF: new scripts/ui/walk-assignments-phone.mjs (fresh program, three players, one assignment) failed before the change at 360px and 390px (table 357px wide in a 302px box, 3 of 15 values off screen) and passes after (15/15 on screen, every value labelled); laptop table unchanged at 1280px. Screenshots at 360px and 1280px looked at. Full test suite green: 4813 passed, no failures (the known date-dependent tests passed too).
+- NOTE: Stylesheet pin bumped to v=28 on all pages, hash updated in tests/test_branding.py. Layout only; the numbers and who sees them are unchanged.
+- NEXT: The remaining coach-side tables at 360px: ball framing and sync links (backlog).
+
 ## 2026-11-06 — Before-practice card reads properly on a phone
 - CHANGED: On a phone, each player on the coach's "Before practice" card now shows their name with the Not training / Modified / Keep an eye label on one line, and what to do ("Keep them off hard conditioning, throwing, upper-body work.") across the full width underneath. Before, that instruction was squeezed into a third of the card, two or three words a line, and at 360px it ran past the right edge.
 - WHY: Coaches checking on their phone, minutes before practice, who is not training and what to hold an injured player back from.

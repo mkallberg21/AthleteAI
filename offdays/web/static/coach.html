@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=27">
+<link rel="stylesheet" href="styles.css?v=28">
 </head>
 <body>
 <div class="topbar">
@@ -1409,10 +1409,10 @@ async function loadAssignments() {
         ? '–' : `${Math.floor(p.offhand_share * 100)}%`;
       return `<tr>
         <td>${esc(p.display_name)}</td>
-        <td class="num">${p.sessions_done}/${a.target_sessions || '–'}</td>
-        <td class="num">${p.reps_done}/${a.target_reps || '–'}</td>
-        <td class="num">${share}</td>
-        <td>${targetMarks(p, a)} ${p.complete ? '<span class="pill ok">done</span>' : ''}</td>
+        <td class="num" data-label="Sessions">${p.sessions_done}/${a.target_sessions || '–'}</td>
+        <td class="num" data-label="Reps">${p.reps_done}/${a.target_reps || '–'}</td>
+        <td class="num" data-label="Off-hand">${share}</td>
+        <td data-label="Targets met">${targetMarks(p, a)} ${p.complete ? '<span class="pill ok">done</span>' : ''}</td>
       </tr>`;
     }).join('');
 

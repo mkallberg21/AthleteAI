@@ -496,6 +496,26 @@ button.tiny:hover, a.tiny:hover { border-color: var(--accent); text-decoration: 
   .practice-table td:nth-child(3) { grid-column: 1 / -1; }
 }
 
+/* Assignment compliance on a phone: five columns ran 357px wide in a 302px
+   box, so Targets met sat off to the right. Name on its own line, sessions,
+   reps and off-hand three across under it, targets met full width, each
+   with its label. */
+@media (max-width: 559px) {
+  .compliance thead { display: none; }
+  .compliance tr {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .compliance tr:last-child { border-bottom: none; }
+  .compliance td, .compliance td.num { border: none; padding: 0; text-align: left; }
+  .compliance td:first-child { grid-column: 1 / -1; font-weight: 600; }
+  .compliance td:nth-child(5) { grid-column: 1 / -1; }
+  .compliance td[data-label]::before {
+    content: attr(data-label); display: block; font-size: .68rem; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;
+  }
+}
+
 /* Evaluation export on a phone: five columns ran 410px wide in a 302px box,
    so Form and Trend sat off to the right. Name on its own line, the four
    values two by two under it, each with its label. */
