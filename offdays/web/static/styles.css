@@ -482,6 +482,20 @@ button.tiny:hover, a.tiny:hover { border-color: var(--accent); text-decoration: 
   }
 }
 
+/* Before-practice card on a phone: three columns squeezed "what to do" into
+   a third of the card, a few words a line, and ran past the edge at 360px.
+   Name and Not training / Modified / Keep an eye on one line, what to do
+   across the full width under them. */
+@media (max-width: 559px) {
+  .practice-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px;
+    align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .practice-table tr:last-child { border-bottom: none; }
+  .practice-table td { border: none; padding: 0; }
+  .practice-table td:nth-child(3) { grid-column: 1 / -1; }
+}
+
 /* Evaluation export on a phone: five columns ran 410px wide in a 302px box,
    so Form and Trend sat off to the right. Name on its own line, the four
    values two by two under it, each with its label. */

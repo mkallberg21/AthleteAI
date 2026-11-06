@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Before-practice card reads properly on a phone
+- CHANGED: On a phone, each player on the coach's "Before practice" card now shows their name with the Not training / Modified / Keep an eye label on one line, and what to do ("Keep them off hard conditioning, throwing, upper-body work.") across the full width underneath. Before, that instruction was squeezed into a third of the card, two or three words a line, and at 360px it ran past the right edge.
+- WHY: Coaches checking on their phone, minutes before practice, who is not training and what to hold an injured player back from.
+- PROOF: new scripts/ui/walk-practice-phone.mjs (fresh program, three players reporting a head knock, a sore shoulder and a sore wrist) failed before the change (360px: table 310px in a 302px box, 3 of 9 values off screen, instruction in 31% of the card; 390px: 33%) and passes after (9/9 on screen, instruction full width, laptop three columns unchanged at 1280px). Screenshots at 360px and 1280px looked at. Full test suite green: 4813 passed, no failures (the known date-dependent tests passed too).
+- NOTE: Stylesheet pin bumped to v=27 on all pages, hash updated in tests/test_branding.py. Layout only; what the card says, and who sees it, is unchanged.
+- NEXT: The remaining coach-side tables at 360px: ball framing and sync links (backlog).
+
 ## 2026-11-06 — Evaluation export fits a phone: Form and Trend on screen
 - CHANGED: On a phone, the Evaluation export list (after pressing "Show") now shows each player's name on its own line with Weeks trained, Participation, Form and Trend labelled two by two underneath, instead of a five-column table where Form and Trend were cut off the right edge.
 - WHY: Directors and coaches preparing tryouts or season reviews on a phone; Form and Trend are the improvement half of the report and they could not see them.

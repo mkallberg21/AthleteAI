@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=26">
+<link rel="stylesheet" href="styles.css?v=27">
 </head>
 <body>
 <div class="topbar">
@@ -3100,7 +3100,7 @@ function renderPractice(card) {
   // A quiet day is stated, not left blank -- an empty card reads as a
   // loading bug, and "nothing to flag" is a thing a coach can act on.
   $('practice-people').innerHTML = card.people.length ? `
-    <table>
+    <table class="practice-table">
       <tbody>${card.people.map((p) => `
         <tr>
           <td><b>${esc(p.display_name)}</b></td>
