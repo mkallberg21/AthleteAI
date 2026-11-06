@@ -3401,10 +3401,24 @@ async function loadProviders() {
 
 let pendingCsv = null;
 
+// What each roster field means, in the director's words, for the
+// "this column became that" line. Field names are the server's own.
+const FIELD_WORDS = {
+  external_id: 'player ID', first_name: 'first name', last_name: 'last name',
+  full_name: 'player name', jersey: 'jersey number', position: 'position',
+  sports: 'other sports', birth_year: 'birth year', birth_date: 'birth date',
+  grade: 'grade', dominant_hand: 'strong hand', email: "player's email",
+  guardian_name: "parent's name", guardian_email: "parent's email",
+  guardian_phone: "parent's phone", guardian2_name: "second parent's name",
+  guardian2_email: "second parent's email", guardian2_phone: "second parent's phone",
+  team: 'team',
+};
+const fieldWords = (f) => FIELD_WORDS[f] || f.replace(/_/g, ' ');
+
 function renderPreview(plan) {
   const s = plan.summary;
   const mapping = Object.entries(plan.columns)
-    .map(([field, header]) => `<code>${esc(header)} &rarr; ${esc(field)}</code>`).join('');
+    .map(([field, header]) => `<code style="display:inline-block;max-width:100%">${esc(header)} &rarr; ${esc(fieldWords(field))}</code>`).join('');
   const ignored = plan.unmapped_headers.length
     ? `<p class="small muted">Ignored columns: ${plan.unmapped_headers.map(esc).join(', ')}</p>`
     : '';
@@ -3434,7 +3448,7 @@ function renderPreview(plan) {
   const canImport = s.create + s.update > 0;
 
   return `${problems}
-    <div class="mapping">${mapping}</div>
+    <div class="mapping" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${mapping}</div>
     ${ignored}
     <div class="stat-row" style="margin-bottom:12px">
       <div class="stat"><b>${s.create}</b><span>New athletes</span></div>

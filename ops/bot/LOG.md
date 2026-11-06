@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Roster upload preview says what each column became, in plain words
+- CHANGED: After a director picks a roster file, the list at the top of the preview now reads "Parent Email → parent's email", "Hand → strong hand", "Parent 2 Phone → second parent's phone" and so on, instead of the computer's names ("guardian_email", "dominant_hand", "guardian2_phone"). Each pair is its own small tag, so on a phone a pair no longer breaks in half across two lines or runs into the next one.
+- WHY: Directors uploading their roster. That line is how they check the parent columns were read as parents before they press Import; "guardian2_phone" did not tell them that.
+- PROOF: new scripts/ui/walk-import-mapping.mjs (fresh program, 17-column file, 390px phone) failed before the change (11 internal names shown, "Parent Email" not read as "parent's email") and passes after; it also fails if two tags overlap, run off the box, or a short pair breaks across lines. Phone screenshot looked at. Full test suite green: 4811 passed, no failures (the known date-dependent tests passed this time too).
+- NOTE: Page-only change (coach.html, inline styles); styles.css untouched, so no stylesheet pin bump. The server's field names are unchanged; only the words shown changed.
+- NEXT: The coach-side tables at 360px (evaluation, practice card, ball framing, sync links), per backlog.
+
 ## 2026-11-06 — Roster upload preview fits a phone: new / update / skip on screen
 - CHANGED: On a phone, the preview shown after a roster file is picked (before "Import N new") now lists each player as a small block: name and its new / update / skip label on the first line, then row, number, position, birth year and hand, each labelled. Before, it was a seven-column table where the new / update / skip label was off the right edge. The "players with no parent email" warning now reads as one paragraph with its warning dot, instead of being chopped into narrow columns (it was broken that way on a laptop too).
 - WHY: Directors uploading their roster from a phone, in the walkthrough or on the dashboard. Whether a row will be added, updated or skipped is what they check before they press Import.
