@@ -3541,6 +3541,15 @@ def create_clip(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    # Watching is scored as the share of the clip seen, so a clip with no end has
+    # no length and can never be finished: it would sit on the shelf scoring
+    # "partial" for every athlete who watched it properly.
+    if body.end_s is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Give the clip an end time (in seconds). Without one nobody can "
+                   "finish it, so nobody can be counted as having watched it.",
+        )
     try:
         return store.create_clip(
             principal.org_id, body.video, body.title,

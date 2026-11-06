@@ -1,0 +1,32 @@
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const base = 'http://127.0.0.1:8008';
+const T = path.join(process.env.LOCALAPPDATA, 'Temp');
+const code = (fs.readFileSync(path.join(T, 'busy_seed.txt'), 'utf8').match(/Joel White \(director\)\s+(\S+)/) || [])[1];
+let bad = 0;
+const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (!ok) bad += 1; };
+const b = await chromium.launch();
+const page = await (await b.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+await page.goto(base + '/app/coach.html', { waitUntil: 'domcontentloaded' });
+await page.evaluate((t) => localStorage.setItem('offdays.token', t), code);
+await page.goto(base + '/app/coach.html', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(3000);
+if (await page.locator('#wizard-skip').isVisible().catch(() => false)) await page.click('#wizard-skip');
+await page.evaluate(() => {
+  document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off'));
+  document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen());
+  document.querySelector('#film-card details').open = true;
+});
+await page.fill('#clip-url', 'https://youtu.be/dQw4w9WgXcQ?t=95');
+await page.dispatchEvent('#clip-url', 'change');
+check((await page.inputValue('#clip-start')) === '95', 'the start time is read out of a pasted ?t= link');
+await page.fill('#clip-title', 'Sliding early off the crease');
+await page.click('#clip-save'); await page.waitForTimeout(600);
+const err = await page.locator('#err').innerText();
+check(/end time/i.test(err), `no end time is refused on the page: "${err.slice(0, 70)}"`);
+await page.fill('#clip-end', '150'); await page.click('#clip-save'); await page.waitForTimeout(1500);
+const list = await page.locator('#clip-list').innerText();
+check(list.includes('Sliding early off the crease'), 'with an end time it joins the shelf');
+await b.close();
+console.log(bad ? `${bad} FAILED` : 'all good'); process.exit(bad ? 1 : 0);

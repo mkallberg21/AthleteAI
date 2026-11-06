@@ -567,8 +567,8 @@
       <div style="display:flex;gap:8px">
         <div style="flex:1"><label for="clip-start">Start (s)</label>
           <input id="clip-start" type="number" min="0" value="0"></div>
-        <div style="flex:1"><label for="clip-end">End (s)</label>
-          <input id="clip-end" type="number" min="1" placeholder="60"></div>
+        <div style="flex:1"><label for="clip-end">End (s) <span class="small muted">needed</span></label>
+          <input id="clip-end" type="number" min="1" placeholder="e.g. 60" required></div>
       </div>
       <label for="clip-question">Question after the clip (optional)</label>
       <input id="clip-question" placeholder="When did the slide start?">
@@ -2363,7 +2363,16 @@ $('clip-list').addEventListener('click', async (event) => {
   } catch (e) { showError(e.message); }
 });
 
+// A pasted link often carries the moment it starts at (youtu.be/x?t=95).
+$('clip-url').addEventListener('change', () => {
+  const m = /[?&#](?:t|start)=(\d+)/.exec($('clip-url').value);
+  if (m && !Number($('clip-start').value)) $('clip-start').value = m[1];
+});
 $('clip-save').addEventListener('click', async () => {
+  if (!Number($('clip-end').value)) {
+    showError('Give the clip an end time in seconds. Without one nobody can finish it.');
+    return;
+  }
   const options = $('clip-opts').value.split(',').map((o) => o.trim()).filter(Boolean);
   const body = {
     video: $('clip-url').value.trim(),
