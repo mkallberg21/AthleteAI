@@ -4,7 +4,6 @@ Things worth doing, not yet done. The bot picks from here and adds to it.
 Newest ideas at the bottom of each section. Remove an item when it ships.
 
 ## Known and open
-- Families stage label: "Invite sent" should read "Invite ready, not sent yet" while email is off.
 - Season-phase selector sits in the director walkthrough; it belongs on the dashboard only.
 - Three UI walks (`walk-create-team`, `walk-add-player`, `walk-resend`) did not complete after the cards began folding. Find out whether the page or the script is at fault, and make them part of a check that runs.
 - Dashboard cards fold, but a program with real players has not been looked at by eye.

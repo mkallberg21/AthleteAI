@@ -144,6 +144,40 @@ class TestEachStep:
         assert F.funnel(store.conn, program["org"])["through"] == 1
 
 
+class TestInviteWordingFollowsTheEmailHold:
+    """While email is held the program never sent the invite, so the
+    dashboard must not tell the director it did."""
+
+    def invited(self, store, program):
+        C.upsert(store.conn, org_id=program["org"], athlete_id=program["kid"]["id"],
+                 email="dana@example.com")
+        G.create_invite(store.conn, program["kid"]["id"], program["director"]["id"], "dana@example.com")
+        return F.funnel(store.conn, program["org"])
+
+    def test_held_email_says_ready_not_sent(self, store, program, monkeypatch):
+        from offdays import mailer
+        monkeypatch.setattr(mailer, "mail_held", lambda conn, org_id: True)
+        out = self.invited(store, program)
+        a = out["athletes"][0]
+        assert a["stage"] == "invited"
+        assert a["label"] == "Invite ready (email is on hold), parent has not signed up"
+        assert out["mail_sending"] is False
+        listed = {s["key"]: s["label"] for s in out["stages"]}
+        assert listed["invited"] == a["label"]
+
+    def test_no_mail_provider_also_says_ready(self, store, program, monkeypatch):
+        from dataclasses import replace
+        from offdays import mailer
+        monkeypatch.setattr(mailer, "CONFIG", replace(CONFIG, smtp_host=""))
+        a = self.invited(store, program)["athletes"][0]
+        assert a["label"].startswith("Invite ready")
+
+    def test_sending_email_says_sent(self, store, program):
+        out = self.invited(store, program)
+        assert out["athletes"][0]["label"] == "Invite sent, parent has not signed up"
+        assert out["mail_sending"] is True
+
+
 class TestCounts:
 
     def test_counts_add_up_and_every_stage_is_listed(self, store, program):

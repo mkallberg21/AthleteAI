@@ -12,8 +12,9 @@ Stages, in order, derived from the tables each step already writes:
                      the program has nothing to send; a printed slip or a
                      corrected roster is the fix
     invite_unsent    a parent address is known but no invite was ever issued
-    invited          invite issued and emailed, not yet redeemed (the parent
-                     has not opened it, or it expired)
+    invited          invite issued, not yet redeemed (the parent has not
+                     opened it, or it expired). Labelled "sent" only while
+                     the program can actually email; otherwise "ready"
     consent_pending  a parent signed up but has not said yes to participation
     link_unsent      the parent said yes and has not sent the child the link
     link_sent        the link went out and the child has not signed in yet
@@ -32,6 +33,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from . import mailer
 from .guardians import Scope
 
 STAGES: tuple[tuple[str, str, str], ...] = (
@@ -48,6 +50,20 @@ STAGES: tuple[tuple[str, str, str], ...] = (
 ORDER = {k: i for i, (k, _, _) in enumerate(STAGES)}
 WHO = {k: who for k, who, _ in STAGES}
 LABEL = {k: label for k, _, label in STAGES}
+
+
+# While the program cannot email (no mail service, or the director's hold is
+# on -- the default), an "invite" is a message prepared for the director to
+# send themselves. Saying "sent" there tells them a parent was emailed when
+# nobody was.
+INVITED_HELD = "Invite ready (email is on hold), parent has not signed up"
+
+
+def _labels(sending: bool) -> dict[str, str]:
+    labels = dict(LABEL)
+    if not sending:
+        labels["invited"] = INVITED_HELD
+    return labels
 
 
 def stage_for(row: sqlite3.Row) -> str:
@@ -77,11 +93,14 @@ def funnel(
 
     `team_ids` narrows to a coach's teams; None (a director) sees everyone.
     """
+    sending = mailer.can_send(conn, org_id)
+    labels = _labels(sending)
     scope = ""
     params: list[Any] = [org_id]
     if team_ids is not None:
         if not team_ids:
-            return {"athletes": [], "counts": {k: 0 for k, _, _ in STAGES}, "total": 0, "stages": _stages()}
+            return {"athletes": [], "counts": {k: 0 for k, _, _ in STAGES}, "total": 0,
+                    "mail_sending": sending, "stages": _stages(labels)}
         marks = ",".join("?" * len(team_ids))
         scope = f"AND u.id IN (SELECT user_id FROM team_members WHERE team_id IN ({marks})) "
         params += team_ids
@@ -121,7 +140,7 @@ def funnel(
             "display_name": r["display_name"],
             "team_name": r["team_name"] or "",
             "stage": stage,
-            "label": LABEL[stage],
+            "label": labels[stage],
             "who": WHO[stage],
             "parent_name": r["parent_name"] or "",
             "parent_email": r["parent_email"] or "",
@@ -138,9 +157,11 @@ def funnel(
         "counts": counts,
         "total": len(athletes),
         "through": counts["training"],
-        "stages": _stages(),
+        "mail_sending": sending,
+        "stages": _stages(labels),
     }
 
 
-def _stages() -> list[dict[str, str]]:
-    return [{"key": k, "who": who, "label": label} for k, who, label in STAGES]
+def _stages(labels: dict[str, str] | None = None) -> list[dict[str, str]]:
+    labels = labels or LABEL
+    return [{"key": k, "who": who, "label": labels[k]} for k, who, _ in STAGES]
