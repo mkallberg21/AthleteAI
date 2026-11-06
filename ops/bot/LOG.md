@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — Roster fits a phone: Last active and Status on screen
+- CHANGED: On a phone, each player in the Roster card now shows as its own small block (name, team, Email parent, then Sessions, Strong / Off-hand, Last active and Status, each with its label) instead of a five-column table where "Last active" was cut off and "Status" (e.g. "never trained") was hidden off the right edge.
+- WHY: Coaches and directors checking their roster on a phone; the column that says who has not trained yet was the one they could not see.
+- PROOF: new scripts/ui/walk-roster-phone.mjs (fresh program, three players) failed before the change at 360px and 390px (table 435px wide in a 302px box, every Status off screen) and passes after; laptop table unchanged at 1280px. Screenshots at 360px and 1280px looked at. Full test suite green apart from the known date-dependent tests.
+- NOTE: Stylesheet pin bumped to v=23 on all pages, hash updated in tests/test_branding.py. Same pattern as the Teams table change.
+- NEXT: Team standings and the other dashboard tables at 360px (backlog).
+
 ## 2026-11-06 — Teams list fits a phone: join code and Remove on screen
 - CHANGED: On a phone, each team in the Teams list now shows as its own small block (name, coach, roster, wall ball, shots, join code with its Remove button) instead of a six-column table where the join code and Remove button were hidden off the right edge.
 - WHY: Directors setting up on a phone; they could not see the code to give a coach or the button to remove a team made by mistake without discovering a sideways scroll.

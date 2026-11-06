@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=22">
+<link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
 <div class="topbar">
@@ -793,7 +793,7 @@
   <div class="card card--wide" id="roster-card">
     <h2>Roster</h2>
     <div style="overflow-x:auto">
-      <table>
+      <table class="roster-table">
         <thead><tr>
           <th>Athlete</th><th class="num">Sessions</th>
           <th class="num" id="roster-side-th">Strong / Off-hand</th>
@@ -2391,6 +2391,9 @@ function renderRoster(athletes) {
   const sideTh = $('roster-side-th');
   if (sideTh) sideTh.textContent = `${ROSTER_STRONG.split(' ')[0]} / ${ROSTER_SIDE}`;
 
+  // data-label: on a phone each row stacks into a labelled block (styles.css
+  // .roster-table) so Last active and Status are on screen, not off to the right.
+  const sideLabel = sideTh ? sideTh.textContent : 'Strong / Off-hand';
   $('roster').innerHTML = athletes.length ? athletes.map((a) => {
     const share = a.offhand_share === null ? '–' : `${Math.round(a.offhand_share * 100)}%`;
     // Shown as a pair so the split reads at a glance. 83/17 says what a bare
@@ -2410,10 +2413,10 @@ function renderRoster(athletes) {
           <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span>
           <button class="tiny" data-invite="${a.athlete_id}"
                 title="Prepare the invite email to this player's parent, with the player code in it. Nothing is sent until you send it.">Email parent</button></td>
-      <td class="num">${a.window_sessions}</td>
-      <td class="num" ${shareCls}><span class="muted">${strong}</span> / ${share}</td>
-      <td>${fmtDate(a.last_session)}</td>
-      <td>${status}${review}</td>
+      <td class="num" data-label="Sessions">${a.window_sessions}</td>
+      <td class="num" data-label="${esc(sideLabel)}" ${shareCls}><span class="muted">${strong}</span> / ${share}</td>
+      <td data-label="Last active">${fmtDate(a.last_session)}</td>
+      <td data-label="Status">${status}${review}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="5" class="muted small">No athletes yet. Add one below.</td></tr>';
 }
