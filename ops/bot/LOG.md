@@ -3,6 +3,13 @@
 One entry per run, newest first. Written by the bot; read by a person.
 Nothing here has reached `main` until someone merges `bot/improve`.
 
+## 2026-11-06 — "Another program" roster link works without a token
+- CHANGED: A director connecting a team to an export link (LeagueApps, Stack Sports, a shared sheet) can now leave the token box empty, as the page says they may ("Token, if the link needs one (optional)"), and gets the roster preview. Before, pressing "Connect and preview" with it empty showed "String should have at least 1 character" and nothing connected. TeamSnap and SportsEngine still need their token, and now say so in words ("API token is required").
+- WHY: Directors whose club runs on anything other than TeamSnap or SportsEngine; most export links and shared sheets have no token, so that whole route was closed to them.
+- PROOF: two new tests in tests/test_roster_sync.py (blank token connects an export link and previews 1 player; blank token for SportsEngine is refused with a sentence) failed before the fix (422) and pass after. New scripts/ui/walk-export-link.mjs (fresh program, 390px phone, real page, only the outside fetch faked by new scripts/dev_fake_export.py) failed on the old code with the error on screen and passes on the new: "2 to add", "Add 2 players and invite their parents", link listed. Screenshot looked at. Full test suite green: 4815 passed, no failures (the known date-dependent tests passed too).
+- NOTE: The store already accepted a blank token (the cron test uses one); only the request check in front of it refused. No page or CSS change. Found while setting up a walk for the sync links table at phone width, which still needs stacking (backlog).
+- NEXT: Stack the sync links table on a phone.
+
 ## 2026-11-06 — Skill work card fits a phone: Drills on screen
 - CHANGED: On a phone, each player in the coach's "Skill work" card (drills where the app watches the ball) now shows their name on its own line, then Touches, Sessions and Sees the ball labelled side by side, then which drills across the full width. Before, it was a five-column table where the Drills column was cut off the right edge and "Sees the ball" was squeezed.
 - WHY: Coaches on their phone checking whose phone is propped where it cannot see the ball, and what each player has been working on.

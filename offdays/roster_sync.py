@@ -68,6 +68,8 @@ class Provider:
     #: of the hosted ones have been, and saying so is not optional.
     verified: bool = False
     note: str = ""
+    #: A public export link needs no credential; a hosted API always does.
+    token_optional: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -292,6 +294,7 @@ PROVIDERS: tuple[Provider, ...] = (
         help_url="",
         fetch=_csv_url,
         verified=True,
+        token_optional=True,
         note=(
             "Works with anything that can produce a CSV link: Stack Sports, "
             "LeagueApps, Sports Connect, a school export, a shared sheet. "

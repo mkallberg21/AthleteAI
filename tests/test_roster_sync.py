@@ -445,6 +445,33 @@ class TestOverTheWire:
             "/api/coach/roster", headers=wired["director"]
         ).json()["athletes"]) == 3
 
+    def test_an_export_link_connects_without_a_token(
+        self, client, wired, monkeypatch
+    ):
+        """The page labels the export link's token "optional", and most shared
+        sheets and club exports have none. Leaving it blank was refused with
+        "String should have at least 1 character"."""
+        monkeypatch.setattr(roster_sync, "_get", lambda url, headers=None: (
+            b"First Name,Last Name,Birth Year\nBo,Short,2013\n"))
+        res = client.post(
+            "/api/coach/roster/link",
+            json={"team_id": wired["team"]["id"], "provider": "csv_url",
+                  "token": "", "remote_ref": "https://club.example/roster.csv"},
+            headers=wired["director"],
+        )
+        assert res.status_code == 201, res.text
+        assert res.json()["preview"]["created"] == 1
+
+    def test_a_hosted_source_still_needs_its_token(self, client, wired):
+        res = client.post(
+            "/api/coach/roster/link",
+            json={"team_id": wired["team"]["id"], "provider": "sportsengine",
+                  "token": "  ", "remote_ref": "team-99"},
+            headers=wired["director"],
+        )
+        assert res.status_code == 400
+        assert res.json()["detail"] == "API token is required"
+
     def test_the_provider_list_is_honest_about_what_is_untested(self, client, wired):
         providers = client.get(
             "/api/coach/roster/providers", headers=wired["director"]

@@ -2452,6 +2452,9 @@ class Store:
             raise StoreError(
                 f"{roster_sync.BY_KEY[provider].team_field} is required"
             )
+        spec = roster_sync.BY_KEY[provider]
+        if not token.strip() and not spec.token_optional:
+            raise StoreError(f"{spec.credential_label} is required")
         team = self.conn.execute(
             "SELECT id FROM teams WHERE id = ? AND org_id = ?", (team_id, org_id)
         ).fetchone()

@@ -2330,7 +2330,9 @@ class RosterLink(BaseModel):
     provider: str = Field(min_length=1, max_length=40)
     # Reaches back into a system holding children's contact details. It is
     # stored, used by the sync, and never read back out.
-    token: str = Field(min_length=1, max_length=4_000)
+    # May be blank: an export link often needs none. The store decides, per
+    # provider, whether one is required.
+    token: str = Field(default="", max_length=4_000)
     remote_ref: str = Field(min_length=1, max_length=200)
 
 
