@@ -468,7 +468,10 @@ def coach_roster(
         GROUP BY u.id
         ORDER BY window_xp DESC, u.display_name
         """,
-        (start, start, start, start, start, org_id, *scope_params, *staff_scope_params),
+        # Order is the order of the ?s in the SQL: the five date subqueries, then the
+        # team JOIN, then the org WHERE. They were swapped, so the team filter only
+        # worked when the team id happened to equal the org id.
+        (start, start, start, start, start, *scope_params, org_id, *staff_scope_params),
     ).fetchall()
 
     today = datetime.now(timezone.utc).date()

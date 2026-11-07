@@ -738,6 +738,9 @@ class CreateTeamRequest(BaseModel):
     daily_shots: int = Field(default=0, ge=0, le=1_000)
     coach_name: str = Field(default="", max_length=120)
     coach_email: str = Field(default="", max_length=200)
+    #: Put a coach who is already in the program on this team, instead of
+    #: typing them in again. Director only; must be a coach in this program.
+    coach_user_id: int | None = None
 
 
 @app.delete("/api/teams/{team_id}")
@@ -775,15 +778,34 @@ def create_team(
     from .drills import DRILLS_BY_KEY
     wall_max = DRILLS_BY_KEY["lax_wall_ball_strong"].scoring.daily_rep_cap
     shot_max = DRILLS_BY_KEY["lax_shooting"].scoring.daily_rep_cap
+    coach_name = body.coach_name.strip()
+    # Decide who may attach a coach, and that the coach is real, BEFORE the team
+    # exists: refusing afterwards used to leave a half-made team behind.
+    if (coach_name or body.coach_user_id is not None) and not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can add coaches")
+    picked = None
+    if body.coach_user_id is not None:
+        picked = store.conn.execute(
+            "SELECT u.id, u.display_name, u.email FROM users u "
+            "JOIN memberships m ON m.user_id = u.id AND m.org_id = ? "
+            "WHERE u.id = ? AND u.active = 1 AND m.role = 'coach' AND m.active = 1",
+            (principal.org_id, body.coach_user_id),
+        ).fetchone()
+        if picked is None:
+            raise HTTPException(status_code=404, detail="no such coach in this program")
     team = store.create_team(
         principal.org_id, body.name, body.season,
         daily_wall_ball=min(body.daily_wall_ball, wall_max),
         daily_shots=min(body.daily_shots, shot_max),
     )
-    coach_name = body.coach_name.strip()
-    if coach_name:
-        if not principal.is_director:
-            raise HTTPException(status_code=403, detail="only a director can add coaches")
+    if picked is not None:
+        store.assign_staff_to_team(int(picked["id"]), team["id"])
+        team["coach"] = {
+            "user_id": int(picked["id"]), "display_name": picked["display_name"],
+            "email": picked["email"], "reused": True, "emailed": False,
+            "team_ids": [team["id"]],
+        }
+    elif coach_name:
         team["coach"] = create_staff(
             CreateStaffRequest(display_name=coach_name, email=body.coach_email.strip() or None,
                                team_ids=[team["id"]]),
@@ -1829,6 +1851,29 @@ def create_staff(
         ).fetchone()
         if team is None or team["org_id"] != principal.org_id:
             raise HTTPException(status_code=404, detail=f"unknown team {team_id}")
+    # One person runs several teams from one login. The same email in the same
+    # program is the same person: give them the extra teams, and do not make a
+    # second account, a second code or a second welcome. Matched on email only;
+    # two different people can share a name, and one wrong merge would hand a
+    # stranger another coach's teams.
+    existing = None
+    if email:
+        existing = store.conn.execute(
+            "SELECT u.id, u.display_name FROM users u "
+            "JOIN memberships m ON m.user_id = u.id AND m.org_id = ? "
+            "WHERE u.active = 1 AND m.role = 'coach' AND m.active = 1 "
+            "AND lower(trim(u.email)) = ? ORDER BY u.id LIMIT 1",
+            (principal.org_id, email.lower()),
+        ).fetchone()
+    if existing is not None:
+        for team_id in body.team_ids:
+            store.assign_staff_to_team(int(existing["id"]), team_id)
+        return {
+            "user_id": int(existing["id"]), "display_name": existing["display_name"],
+            "email": email, "code": None, "link": None, "subject": "", "text": "",
+            "team_ids": body.team_ids, "emailed": False, "reused": True,
+            "smtp_configured": mailer.can_send(store.conn, principal.org_id),
+        }
     coach = store.create_user(principal.org_id, "coach", body.display_name, email=email)
     for team_id in body.team_ids:
         store.assign_staff_to_team(coach["id"], team_id)
@@ -2691,8 +2736,26 @@ def create_guardian_invite(
     }
 
 
+def _one_team_scope(principal: Principal, store: Store, team_id: int | None) -> list[int] | None:
+    """The team ids a read should cover: the caller's own, or one team they may see.
+
+    A director (team_ids None) sees every team in the program, and may narrow to
+    one. A coach sees their teams, and may narrow to one of them. A team from
+    another program is refused for everyone, so a guessed id leaks nothing.
+    """
+    if team_id is None:
+        return principal.team_ids
+    row = store.conn.execute("SELECT org_id FROM teams WHERE id = ?", (team_id,)).fetchone()
+    if row is None or row["org_id"] != principal.org_id:
+        raise HTTPException(status_code=404, detail="unknown team")
+    if not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    return [team_id]
+
+
 @app.get("/api/coach/families")
 def coach_families(
+    team_id: int | None = None,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -2702,7 +2765,8 @@ def coach_families(
     the parent the program holds for them. A coach sees their teams; a
     director sees the program. Read fresh every call.
     """
-    return funnel_mod.funnel(store.conn, principal.org_id, team_ids=principal.team_ids)
+    return funnel_mod.funnel(store.conn, principal.org_id,
+                             team_ids=_one_team_scope(principal, store, team_id))
 
 
 class NudgeRequest(BaseModel):
@@ -5285,20 +5349,34 @@ def get_teams(
 
 @app.get("/api/coach/review-queue")
 def review_queue(
+    team_id: int | None = None,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """Sessions held for a human decision, with the reason attached."""
+    """Sessions held for a human decision, with the reason attached.
+
+    A coach sees held sessions from their own teams only; a director sees the
+    whole program. Either can narrow to one team.
+    """
     import json as _json
 
+    scope_ids = _one_team_scope(principal, store, team_id)
+    scope = ""
+    params: list[Any] = [principal.org_id]
+    if scope_ids is not None:
+        if not scope_ids:
+            return {"sessions": []}
+        marks = ",".join("?" * len(scope_ids))
+        scope = f"AND u.id IN (SELECT user_id FROM team_members WHERE team_id IN ({marks})) "
+        params += scope_ids
     rows = store.conn.execute(
         "SELECT s.id, s.drill_key, s.submitted_at, s.duration_ms, s.reps_total, "
         "       s.integrity_score, s.integrity_notes, s.mean_confidence, "
         "       u.display_name, u.id AS athlete_id "
         "FROM sessions s JOIN users u ON u.id = s.athlete_id "
-        "WHERE s.status = 'review' AND u.org_id = ? "
+        f"WHERE s.status = 'review' AND u.org_id = ? {scope}"
         "ORDER BY s.submitted_at DESC LIMIT 100",
-        (principal.org_id,),
+        params,
     ).fetchall()
 
     out = []
@@ -5327,13 +5405,21 @@ def decide_review(
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     owner = store.conn.execute(
-        "SELECT u.org_id FROM sessions s JOIN users u ON u.id = s.athlete_id WHERE s.id = ?",
+        "SELECT u.org_id, u.id AS athlete_id FROM sessions s JOIN users u ON u.id = s.athlete_id WHERE s.id = ?",
         (session_id,),
     ).fetchone()
     if owner is None:
         raise HTTPException(status_code=404, detail="unknown session")
     if owner["org_id"] != principal.org_id:
         raise HTTPException(status_code=403, detail="session belongs to another program")
+    if principal.team_ids is not None:
+        mine = store.conn.execute(
+            "SELECT 1 FROM team_members WHERE user_id = ? AND team_id IN (%s)"
+            % ",".join("?" * len(principal.team_ids)) if principal.team_ids else "SELECT NULL WHERE 0",
+            [owner["athlete_id"], *principal.team_ids] if principal.team_ids else [],
+        ).fetchone()
+        if mine is None:
+            raise HTTPException(status_code=403, detail="that athlete is not on your teams")
     try:
         return store.review_session(session_id, body.approve, principal.id)
     except StoreError as exc:

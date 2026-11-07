@@ -38,7 +38,7 @@
   <div class="card card--wide">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div style="flex:1;min-width:180px">
-        <label for="team">Team</label>
+        <label for="team">Showing</label>
         <select id="team"><option value="">All teams</option></select>
       </div>
       <div style="flex:1;min-width:150px">
@@ -125,15 +125,25 @@
           <input id="new-team" placeholder="2031 Red" autocomplete="off">
           <div class="small muted" id="new-team-age" style="margin-top:4px;min-height:1.2em"></div>
         </div>
-        <div style="flex:1 1 160px">
+        <div style="flex:1 1 160px" id="new-team-pick-wrap" class="hidden">
+          <label for="new-team-pick">Coach</label>
+          <select id="new-team-pick" class="org-switch" style="width:100%">
+            <option value="">A new coach&hellip;</option>
+          </select>
+        </div>
+        <div style="flex:1 1 160px" class="new-coach-field">
           <label for="new-team-coach">Coach</label>
           <input id="new-team-coach" placeholder="Sam Hill" autocomplete="off">
         </div>
-        <div style="flex:1 1 200px">
+        <div style="flex:1 1 200px" class="new-coach-field">
           <label for="new-team-coach-email">Coach's email</label>
           <input id="new-team-coach-email" type="email" placeholder="sam@example.com" autocomplete="off">
         </div>
       </div>
+      <p class="small muted new-coach-field" style="margin:6px 0 0">
+        Already entered this coach on another team? Type the same email and they get this team too,
+        on the same sign-in.
+      </p>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
         <div style="flex:0 1 150px">
           <label for="new-team-wall">Wall ball a day</label>
@@ -1179,6 +1189,22 @@ async function loadBilling() {
 
 // ----------------------------------------------------------------- staff
 
+function fillCoachPick(staff) {
+  const wrap = $('new-team-pick-wrap'), pick = $('new-team-pick');
+  if (!wrap || !pick) return;
+  const coaches = staff.filter((p) => p.role === 'coach');
+  const keep = pick.value;
+  pick.innerHTML = '<option value="">A new coach\u2026</option>' + coaches.map((c) =>
+    `<option value="${c.id}">${esc(c.display_name)}${c.teams.length ? ' \u2014 ' + c.teams.length + (c.teams.length === 1 ? ' team' : ' teams') : ''}</option>`).join('');
+  if (keep && coaches.some((c) => String(c.id) === keep)) pick.value = keep;
+  wrap.classList.toggle('hidden', coaches.length === 0);
+  syncCoachFields();
+}
+function syncCoachFields() {
+  const picked = !!($('new-team-pick') && $('new-team-pick').value);
+  document.querySelectorAll('.new-coach-field').forEach((el) => el.classList.toggle('hidden', picked));
+}
+
 async function loadStaff(isDirector) {
   $('staff-card').classList.toggle('hidden', !isDirector);
   if (!isDirector) return;
@@ -1186,6 +1212,7 @@ async function loadStaff(isDirector) {
   const [{ staff }, { teams }] = await Promise.all([
     api('/api/coach/staff'), api('/api/coach/teams'),
   ]);
+  fillCoachPick(staff);
 
   $('staff-list').innerHTML = staff.map((person) => {
     const chips = person.teams.map((t) => `
@@ -1488,7 +1515,7 @@ async function loadAll() {
   const [rosterData, standingsData, reviewData, practiceCard] = await Promise.all([
     api(`/api/coach/roster?window=${window_}${teamId ? `&team_id=${teamId}` : ''}`),
     api(`/api/standings?window=${window_}`),
-    api('/api/coach/review-queue'),
+    api(`/api/coach/review-queue${teamId ? `?team_id=${teamId}` : ''}`),
     // Always today, whatever window the rest of the dashboard is showing --
     // the question this card answers is about the next hour.
     api(`/api/coach/practice${teamId ? `?team_id=${teamId}` : ''}`),
@@ -2653,7 +2680,9 @@ async function loadTeams() {
   const current = select.value;
   select.innerHTML = '<option value="">All teams</option>'
     + teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
-  select.value = current;
+  let want = current;
+  if (!want) { try { want = localStorage.getItem('offdays.team') || ''; } catch (_) { want = ''; } }
+  select.value = teams.some((t) => String(t.id) === String(want)) ? want : '';
 
   const options = teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
   $('a-team').innerHTML = options;
@@ -2811,7 +2840,9 @@ $('new-coach-add').addEventListener('click', async () => {
     const mail = res.email
       ? `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`
       : '';
-    $('new-coach-out').innerHTML = res.emailed
+    $('new-coach-out').innerHTML = res.reused
+      ? `<b>${esc(res.display_name)}</b> already coaches here, so they now have ${res.team_ids.length === 1 ? 'that team' : 'those teams'} too, on the same sign-in. Nothing new to send.`
+      : res.emailed
       ? `<b>${esc(res.display_name)}</b> added. Their sign-in link went to ${esc(res.email)}.`
       : res.email
         ? `<b>${esc(res.display_name)}</b> added. The program is not sending email, so send it yourself:
@@ -2907,7 +2938,8 @@ let familiesData = null;
 
 async function loadFamilies() {
   try {
-    familiesData = await api('/api/coach/families');
+    const fTeam = $('team').value;
+    familiesData = await api(`/api/coach/families${fTeam ? `?team_id=${fTeam}` : ''}`);
   } catch (err) {
     $('families-err').textContent = err.message || 'Could not load families.';
     $('families-err').classList.remove('hidden');
@@ -3895,19 +3927,22 @@ $('add-team').addEventListener('click', async () => {
   const name = $('new-team').value.trim();
   const coach_name = $('new-team-coach').value.trim();
   const coach_email = $('new-team-coach-email').value.trim();
+  const coach_user_id = Number($('new-team-pick') && $('new-team-pick').value) || null;
   $('new-team-err').classList.add('hidden');
   $('new-team-out').classList.add('hidden');
   if (!name) { $('new-team-err').textContent = 'Name the team.'; $('new-team-err').classList.remove('hidden'); return; }
-  if (coach_name && !coach_email) { $('new-team-err').textContent = "The coach's email, so their sign-in link can go to them."; $('new-team-err').classList.remove('hidden'); return; }
+  if (!coach_user_id && coach_name && !coach_email) { $('new-team-err').textContent = "The coach's email, so their sign-in link can go to them."; $('new-team-err').classList.remove('hidden'); return; }
   const btn = $('add-team'); btn.disabled = true; $('new-team-status').textContent = 'Creating\u2026';
   try {
     const res = await api('/api/teams', { method: 'POST', body: {
-      name, coach_name, coach_email,
+      name, coach_name: coach_user_id ? '' : coach_name, coach_email: coach_user_id ? '' : coach_email, coach_user_id,
       daily_wall_ball: Number($('new-team-wall').value) || 0,
       daily_shots: Number($('new-team-shots').value) || 0,
     } });
     let out = `<b>${esc(res.name)}</b> created`;
-    if (res.coach) {
+    if (res.coach && res.coach.reused) {
+      out += `; <b>${esc(res.coach.display_name)}</b> now coaches it too, on the same sign-in. Nothing new to send.`;
+    } else if (res.coach) {
       const c = res.coach;
       const mail = c.email ? `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(c.subject)}&body=${encodeURIComponent(c.text)}` : '';
       out += c.emailed
@@ -3916,6 +3951,7 @@ $('add-team').addEventListener('click', async () => {
     } else out += '.';
     $('new-team-out').innerHTML = out; $('new-team-out').classList.remove('hidden');
     for (const id of ['new-team', 'new-team-coach', 'new-team-coach-email', 'new-team-wall', 'new-team-shots']) $(id).value = '';
+    if ($('new-team-pick')) { $('new-team-pick').value = ''; syncCoachFields(); }
     $('new-team-age').textContent = ''; suggested = { wall_ball: null, shots: null };
     await Promise.all([loadTeams(), loadStaff(IS_DIRECTOR)]);
     await wizardRefresh();
@@ -3923,6 +3959,8 @@ $('add-team').addEventListener('click', async () => {
     $('new-team-err').textContent = e.message || 'Could not create the team.'; $('new-team-err').classList.remove('hidden');
   } finally { btn.disabled = false; $('new-team-status').textContent = ''; }
 });
+
+if ($('new-team-pick')) $('new-team-pick').addEventListener('change', syncCoachFields);
 
 $('add-athlete').addEventListener('click', async () => {
   const name = $('new-athlete').value.trim();
@@ -4003,7 +4041,11 @@ $('b-send').addEventListener('click', async () => {
   } catch (e) { note.textContent = e.message; note.classList.remove('hidden'); }
 });
 
-$('team').addEventListener('change', () => loadAll().catch((e) => showError(e.message)));
+$('team').addEventListener('change', () => {
+  try { localStorage.setItem('offdays.team', $('team').value); } catch (_) { /* private mode */ }
+  loadAll().catch((e) => showError(e.message));
+  loadFamilies();
+});
 $('window').addEventListener('change', () => loadAll().catch((e) => showError(e.message)));
 $('signout').addEventListener('click', logout);
 
