@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=35">
+<link rel="stylesheet" href="styles.css?v=36">
 </head>
 <body>
 <div class="topbar">
@@ -49,11 +49,11 @@
       <div class="drill-list" id="drill-list"></div>
     </div>
 
+    <!-- Only ever holds a warning: something is stopping this athlete training
+         (a parent has not said yes yet). The "First time here" checklist that
+         used to sit above it is gone; the athlete walkthrough covers that. -->
     <div class="card hidden" id="start-card">
-      <b id="start-title">First time here</b>
-      <p class="small muted" id="start-promise"></p>
       <div id="start-blockers"></div>
-      <div id="start-steps"></div>
     </div>
 
     <div class="conn" id="conn"><i></i><span id="conn-text">Online</span></div>
@@ -272,10 +272,6 @@
            Expanded by default and above the hint on purpose: the athlete who
            needs this most is the one who has never heard of the drill, and
            they will not go looking for it behind a summary. -->
-      <div id="demo" class="demo hidden">
-        <div class="demo-fig" id="demo-fig"></div>
-        <div class="demo-cap" id="demo-cap"></div>
-      </div>
 
       <div class="small muted" id="hint" style="margin-top:10px"></div>
 
@@ -900,42 +896,14 @@ async function loadStart() {
   let data;
   try { data = await api('/api/me/onboarding'); } catch { return; }
 
-  // Only the browser knows whether it was installed, so the client answers
-  // that one rather than the server guessing.
-  const installed = window.matchMedia('(display-mode: standalone)').matches
-    || window.navigator.standalone === true;
-  const steps = data.steps.map(
-    (s) => (s.key === 'install' ? { ...s, done: installed } : s),
-  );
-
+  // Only a blocker is worth interrupting the drill list for. The rest of the old
+  // checklist (install the app, first session) is not shown any more.
   const blockers = data.blockers || [];
-  const left = steps.filter((s) => !s.done).length;
-  if (!blockers.length && left === 0) {
-    $('start-card').classList.add('hidden');
-    return;
-  }
-  $('start-card').classList.remove('hidden');
-
-  // The promise is worth saying once, before anybody points a camera at a
-  // child, and never again after they have actually recorded something.
-  const fresh = !steps.find((s) => s.key === 'first_session').done;
-  $('start-title').textContent = fresh ? 'First time here' : 'A couple more things';
-  $('start-promise').textContent = fresh ? data.promise : '';
-
+  $('start-card').classList.toggle('hidden', blockers.length === 0);
   $('start-blockers').innerHTML = blockers.map((b) => `
     <div class="advisory warning">
       <span class="dotmark"></span>
       <div><b>${esc(b.title)}</b><em>${esc(b.detail)}</em></div>
-    </div>`).join('');
-
-  $('start-steps').innerHTML = steps.map((step) => `
-    <div class="setup-step ${step.done ? 'done' : ''}">
-      <span class="setup-tick">${step.done ? '&check;' : ''}</span>
-      <div>
-        <b>${esc(step.title)}</b>${step.required ? '' : ' <span class="small muted">optional</span>'}
-        ${step.done ? '' : `<div class="small muted">${esc(step.detail)}</div>`}
-        ${step.done || !step.why ? '' : `<div class="small muted"><em>${esc(step.why)}</em></div>`}
-      </div>
     </div>`).join('');
 }
 
@@ -2593,18 +2561,6 @@ async function loadTechnique(drillKey) {
     } else {
       $('technique-trace').classList.add('hidden');
       $('technique-scale').textContent = '';
-    }
-
-    const demo = $('demo');
-    if (ref.demo) {
-      // Inlined rather than an <img src>, so it paints with the rest of the
-      // page and needs no second request on a phone in a garden. The SVG
-      // carries no script -- there is a test asserting that.
-      $('demo-fig').innerHTML = ref.demo.svg;
-      $('demo-cap').textContent = ref.demo.caption;
-      demo.classList.remove('hidden');
-    } else {
-      demo.classList.add('hidden');
     }
 
     $('technique-cues').innerHTML = ref.cues

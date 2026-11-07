@@ -2342,3 +2342,19 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
                       color: var(--danger); }
 .needs-row > span:nth-child(2) { flex: 1; min-width: 0; }
 .needs-clear { color: var(--text-muted); }
+
+/* Leaderboard pickers (scope, board, window). The .tabs rules were lost in an
+   earlier restyle, so each button fell back to the general full-width blue
+   button and ten of them stacked edge to edge. Small pills that wrap; only the
+   selected one is blue. */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.tabs button:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) {
+  width: auto; min-height: 34px; margin: 0; padding: 0.3rem 0.8rem;
+  font-size: 0.82rem; font-weight: 600; letter-spacing: 0; white-space: nowrap;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: 99px; box-shadow: none;
+}
+.tabs button:not([class*="btn"]):hover { border-color: var(--accent); color: var(--text); }
+.tabs button[aria-selected="true"]:not([class*="btn"]):not(.bell):not(.feel):not(.cue-btn) {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}

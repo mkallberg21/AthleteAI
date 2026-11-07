@@ -4978,15 +4978,8 @@ def technique_reference(drill_key: str) -> dict[str, Any]:
     reference = technique_mod.reference(drill_key)
     if not reference:
         raise HTTPException(status_code=404, detail=f"unknown drill: {drill_key}")
-    # The demonstration ships in the same payload rather than behind a second
-    # request. It is a couple of kilobytes of inert SVG, and the thing it
-    # answers -- "what even is this exercise" -- is needed before the athlete
-    # can act on anything else here, so it must not arrive second.
-    if demo_mod.has_demo(drill_key):
-        reference["demo"] = {
-            "svg": demo_mod.svg(drill_key),
-            "caption": demo_mod.DEMOS[drill_key].caption,
-        }
+    # No animated stick figure is sent. It used to ride along here as an inline
+    # SVG; it was taken off every drill. offdays/demo.py is left in place, unused.
     return reference
 
 

@@ -250,9 +250,11 @@ TRANSFERS: dict[str, tuple[Transfer, ...]] = {
         Transfer("Baseball", "hands soft enough to catch something coming in hard"),
         Transfer("Hockey", "the same two-handed stick control"),
     ),
+    # The same drill on the other hand, so it says the same thing. It used to name
+    # Basketball and a different Hockey line, which read as different work.
     "lax_wall_ball_offhand": (
-        Transfer("Basketball", "a weak hand you can actually finish with"),
-        Transfer("Hockey", "backhand control, which is the same problem"),
+        Transfer("Baseball", "hands soft enough to catch something coming in hard"),
+        Transfer("Hockey", "the same two-handed stick control"),
     ),
     "lax_wall_ball_one_hand": (
         Transfer("Baseball", "the top-hand grip strength a one-handed grab needs"),
