@@ -18,6 +18,8 @@ dependencies = [
     # staple.py, webhooks.py. Without it, a real bounce webhook 500s instead
     # of being verified.
     "cryptography>=42",
+    # Operator invoicing (offdays/admin.py); imported lazily.
+    "stripe>=12",
 ]
 
 [project.optional-dependencies]

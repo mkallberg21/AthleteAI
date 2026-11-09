@@ -975,6 +975,47 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 -- Append-only billing history: plan changes, seat changes, invoices raised.
 -- Append-only because a billing dispute is settled by what happened and when,
 -- not by the current state of a row.
+-- The operator's invoices to programs, one row per Stripe invoice. Never shown
+-- to a director, coach, parent or athlete. A season invoice charges the whole
+-- roster for the whole season; a catch-up charges only athletes added since.
+CREATE TABLE IF NOT EXISTS stripe_customers (
+    org_id             INTEGER PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+    stripe_customer_id TEXT NOT NULL,
+    email              TEXT NOT NULL DEFAULT '',
+    created_at         TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS org_invoices (
+    id                INTEGER PRIMARY KEY,
+    org_id            INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    kind              TEXT NOT NULL CHECK (kind IN ('season','catch_up')),
+    stripe_invoice_id TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'draft'
+                      CHECK (status IN ('draft','sent','paid','overdue','void')),
+    athletes          INTEGER NOT NULL DEFAULT 0,
+    days              INTEGER NOT NULL DEFAULT 0,
+    amount_cents      INTEGER NOT NULL DEFAULT 0,
+    hosted_url        TEXT NOT NULL DEFAULT '',
+    email             TEXT NOT NULL DEFAULT '',
+    note              TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL,
+    sent_at           TEXT,
+    paid_at           TEXT,
+    updated_at        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_org_invoices_org ON org_invoices(org_id, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_org_invoices_stripe ON org_invoices(stripe_invoice_id);
+CREATE TABLE IF NOT EXISTS invoiced_athletes (
+    invoice_id INTEGER NOT NULL REFERENCES org_invoices(id) ON DELETE CASCADE,
+    athlete_id INTEGER NOT NULL,
+    days       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (invoice_id, athlete_id)
+);
+-- Stripe events already applied, so a retried delivery changes nothing.
+CREATE TABLE IF NOT EXISTS stripe_events (
+    id          TEXT PRIMARY KEY,
+    received_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS billing_events (
     id          INTEGER PRIMARY KEY,
     org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

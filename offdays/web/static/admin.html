@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>0FFDAYS · Operator</title>
+<link rel="stylesheet" href="styles.css?v=36">
+<style>
+  .big-numbers{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 4px}
+  .big{padding:14px 16px;background:var(--surface-2);border-radius:var(--radius-sm)}
+  .big b{display:block;font-size:1.7rem;line-height:1.1}
+  .big span{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .big.bad b{color:var(--danger)}
+  .big.good b{color:var(--ok, #2fbf71)}
+  .prog{padding:14px 0;border-top:1px solid var(--border)}
+  .prog:first-child{border-top:0}
+  .prog-head{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;justify-content:space-between}
+  .prog-head h3{margin:0}
+  .money{font-weight:700}
+  .bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-2);margin:8px 0 4px}
+  .bar i{display:block;height:100%}
+  .pill.status-ready{background:rgba(0,139,253,.18);color:var(--accent)}
+  .pill.status-draft{background:rgba(255,184,0,.16);color:#ffb800}
+  .pill.status-sent{background:rgba(0,139,253,.18);color:var(--accent)}
+  .pill.status-paid{background:rgba(47,191,113,.18);color:#2fbf71}
+  .pill.status-overdue{background:rgba(255,92,92,.18);color:var(--danger)}
+  .pill.status-needs_roster,.pill.status-needs_season{background:var(--surface-2);color:var(--muted)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .actions input{flex:1 1 220px;max-width:340px}
+  .note{padding:12px 14px;border-radius:var(--radius-sm);background:var(--surface-2);margin-top:10px}
+  .tabs button.on{background:var(--accent);color:#fff}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div id="masthead"><b style="font-family:var(--font-display,inherit);font-size:1.3rem">0FFDAYS <span class="muted" style="font-weight:400">Operator</span></b></div>
+  <button class="secondary inline hidden" id="signout" type="button">Lock</button>
+</div>
+
+<div class="wrap">
+  <!-- The door. The key stays in this tab's memory only: never in the URL, never in storage. -->
+  <div class="card" id="door" style="max-width:420px;margin:40px auto">
+    <h2>Operator</h2>
+    <p class="small muted">Enter the operator key. It is kept only while this tab is open.</p>
+    <label for="key">Key</label>
+    <input id="key" type="password" autocomplete="current-password" autofocus>
+    <div class="actions"><button id="enter" type="button">Open</button></div>
+    <div id="door-err" class="err hidden"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div id="setup" class="note hidden"></div>
+
+    <div class="card card--wide">
+      <h2>Money</h2>
+      <div class="big-numbers" id="money"></div>
+      <p class="small muted" style="margin:10px 0 0" id="money-note"></p>
+    </div>
+
+    <div class="card card--wide">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+        <h2 style="margin:0">Programs</h2>
+        <div class="tabs" id="filter"></div>
+      </div>
+      <div id="programs" style="margin-top:6px"></div>
+      <div id="err" class="err hidden"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const usd = (c) => '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+let KEY = '';
+let DATA = null;
+let FILTER = 'all';
+
+async function call(path, opts = {}) {
+  const res = await fetch(path, {
+    method: opts.method || 'GET',
+    headers: { Authorization: `Bearer ${KEY}`, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  let body = null;
+  try { body = await res.json(); } catch { /* not json */ }
+  if (!res.ok) {
+    const d = body && body.detail;
+    const e = new Error(typeof d === 'string' ? d : res.status === 404 ? 'The operator dashboard is not switched on on this server.' : `Error ${res.status}`);
+    e.status = res.status;
+    throw e;
+  }
+  return body;
+}
+
+const STATUS = {
+  ready: ['Ready to invoice', 'status-ready'], draft: ['Draft, not sent', 'status-draft'],
+  sent: ['Sent, waiting', 'status-sent'], paid: ['Paid', 'status-paid'], overdue: ['Overdue', 'status-overdue'],
+  needs_roster: ['Waiting on roster', 'status-needs_roster'], needs_season: ['Waiting on season dates', 'status-needs_season'],
+};
+const FILTERS = [['all', 'All'], ['todo', 'Needs me'], ['waiting', 'Waiting on a club'], ['paid', 'Paid']];
+const needsMe = (p) => p.status === 'ready' || p.status === 'draft' || p.catch_up_athletes > 0 || p.status === 'overdue';
+const inFilter = (p) => FILTER === 'all' || (FILTER === 'todo' && needsMe(p))
+  || (FILTER === 'waiting' && ['needs_roster', 'needs_season', 'sent'].includes(p.status)) || (FILTER === 'paid' && p.status === 'paid');
+
+function render() {
+  const t = DATA.totals;
+  $('setup').classList.toggle('hidden', DATA.stripe_connected && DATA.webhook_connected);
+  if (!(DATA.stripe_connected && DATA.webhook_connected)) {
+    $('setup').innerHTML = '<b>Stripe is not fully connected yet.</b> ' + (DATA.stripe_connected ? '' : 'The secret key is missing. ')
+      + (DATA.webhook_connected ? '' : 'The webhook secret is missing, so paid invoices would not show here. ')
+      + 'You can look around, but raising an invoice will not work until both are set (see ops/STRIPE_SETUP.md).';
+  }
+  $('money').innerHTML = [
+    ['Ready to invoice', usd(t.ready_cents), t.waiting_ready ? `${t.waiting_ready} program${t.waiting_ready === 1 ? '' : 's'}` : '', ''],
+    ['Invoiced', usd(t.invoiced_cents), '', ''],
+    ['Paid', usd(t.paid_cents), '', 'good'],
+    ['Overdue', usd(t.overdue_cents), '', t.overdue_cents ? 'bad' : ''],
+  ].map(([l, v, s, c]) => `<div class="big ${c}"><b>${v}</b><span>${l}${s ? ' \u00b7 ' + s : ''}</span></div>`).join('');
+  $('money-note').textContent = `${t.programs} program${t.programs === 1 ? '' : 's'}, ${t.athletes} athletes on rosters`
+    + (t.to_send ? `. ${t.to_send} draft${t.to_send === 1 ? '' : 's'} waiting for you to send.` : '.');
+
+  $('filter').innerHTML = FILTERS.map(([k, l]) => `<button type="button" data-f="${k}" class="${FILTER === k ? 'on' : ''}">${l}</button>`).join('');
+  $('filter').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { FILTER = b.dataset.f; render(); }));
+
+  const rows = DATA.programs.filter(inFilter);
+  $('programs').innerHTML = rows.length ? rows.map(programHtml).join('') : '<p class="muted">Nothing here.</p>';
+  $('programs').querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => act(b)));
+}
+
+function funnelBar(f) {
+  const c = f.counts || {}; const tot = f.total || 0;
+  if (!tot) return '<div class="small muted">No families yet.</div>';
+  const seg = [['training', '#2fbf71'], ['signed_in', '#008BFD'], ['link_sent', '#4a9eff'], ['link_unsent', '#6c7a96'],
+    ['consent_pending', '#8a6d00'], ['invited', '#a8841a'], ['invite_unsent', '#7a4b4b'], ['no_parent', '#5a3a3a']];
+  return `<div class="bar" title="Green is training">${seg.map(([k, col]) => c[k] ? `<i style="width:${(c[k] / tot) * 100}%;background:${col}"></i>` : '').join('')}</div>`
+    + `<div class="small muted">${f.training} of ${tot} families are training</div>`;
+}
+
+function programHtml(p) {
+  const [label, cls] = STATUS[p.status] || [p.status, ''];
+  const season = p.season_days ? `${esc(p.season_starts_on)} to ${esc(p.season_ends_on)} (${p.season_days} days)` : 'season not set';
+  const to = esc(p.director_email || '');
+  let actions = '';
+  if (p.status === 'ready') {
+    actions = `<input type="email" id="em-${p.org_id}" value="${to}" placeholder="Who gets the invoice (treasurer email)">`
+      + `<button type="button" data-act="invoice" data-org="${p.org_id}">Create invoice (${usd(p.amount_cents)})</button>`;
+  } else if (p.status === 'draft') {
+    actions = `<button type="button" data-act="send" data-org="${p.org_id}">Send invoice</button>`
+      + `<button type="button" class="secondary" data-act="void" data-org="${p.org_id}">Discard draft</button>`;
+  } else if (p.status === 'sent' || p.status === 'overdue') {
+    actions = `<button type="button" class="secondary" data-act="send" data-org="${p.org_id}">Send reminder</button>`
+      + `<button type="button" class="secondary" data-act="paid" data-org="${p.org_id}">Mark paid (check or transfer)</button>`;
+  }
+  if (p.catch_up_athletes > 0) {
+    actions += `<button type="button" data-act="catchup" data-org="${p.org_id}">Catch-up invoice (${p.catch_up_athletes} added)</button>`;
+  }
+  return `<div class="prog" id="prog-${p.org_id}">
+    <div class="prog-head"><h3>${esc(p.name)}</h3>
+      <span><span class="pill ${cls}">${esc(label)}</span> <span class="money">${p.status === 'paid' ? usd(p.paid_cents) : usd(p.amount_cents || p.invoiced_cents)}</span></span></div>
+    <div class="small muted">${esc(p.director)}${p.director_email ? ' \u00b7 ' + esc(p.director_email) : ''} \u00b7 ${p.athletes} athletes \u00b7 ${season}</div>
+    ${funnelBar(p.families)}
+    ${actions ? `<div class="actions">${actions}</div>` : ''}
+    <div class="small" id="msg-${p.org_id}" style="margin-top:6px"></div>
+  </div>`;
+}
+
+async function invoicesOf(org) {
+  return (await call(`/api/admin/programs/${org}`)).invoices;
+}
+
+async function act(btn) {
+  const org = btn.dataset.org, kind = btn.dataset.act, msg = $(`msg-${org}`);
+  msg.style.color = ''; msg.textContent = '';
+  btn.disabled = true;
+  try {
+    if (kind === 'invoice') {
+      const email = $(`em-${org}`).value.trim();
+      if (!email) throw new Error('Who should the invoice go to? Type their email.');
+      await call(`/api/admin/programs/${org}/invoice`, { method: 'POST', body: { email } });
+      msg.textContent = 'Draft created in Stripe. Nothing has been sent. Press "Send invoice" when you are happy.';
+    } else if (kind === 'catchup') {
+      await call(`/api/admin/programs/${org}/catch-up`, { method: 'POST', body: {} });
+      msg.textContent = 'Catch-up draft created. Nothing has been sent.';
+    } else {
+      const open = (await invoicesOf(org)).find((i) => !['void', 'paid'].includes(i.status) && (kind !== 'send' || ['draft', 'sent', 'overdue'].includes(i.status)));
+      if (!open) throw new Error('No open invoice found.');
+      if (kind === 'send') {
+        if (!confirm(`Send this invoice for ${usd(open.amount_cents)} to ${open.email}?`)) { btn.disabled = false; return; }
+        await call(`/api/admin/invoices/${open.id}/send`, { method: 'POST' });
+        msg.textContent = `Sent to ${open.email}.`;
+      } else if (kind === 'paid') {
+        const note = prompt('Note for your records (e.g. "Check 4471")', '') ?? null;
+        if (note === null) { btn.disabled = false; return; }
+        await call(`/api/admin/invoices/${open.id}/mark-paid`, { method: 'POST', body: { note } });
+      } else if (kind === 'void') {
+        if (!confirm('Discard this draft?')) { btn.disabled = false; return; }
+        await call(`/api/admin/invoices/${open.id}/void`, { method: 'POST' });
+      }
+    }
+    await load(true);
+    const again = $(`msg-${org}`); if (again && msg.textContent) { again.textContent = msg.textContent; }
+  } catch (e) {
+    msg.style.color = 'var(--danger)'; msg.textContent = e.message; btn.disabled = false;
+  }
+}
+
+async function load(quiet) {
+  try {
+    DATA = await call('/api/admin/overview');
+    $('door').classList.add('hidden'); $('app').classList.remove('hidden'); $('signout').classList.remove('hidden');
+    render();
+  } catch (e) {
+    if (quiet) { $('err').textContent = e.message; $('err').classList.remove('hidden'); return; }
+    throw e;
+  }
+}
+
+async function enter() {
+  $('door-err').classList.add('hidden');
+  KEY = $('key').value.trim();
+  if (!KEY) return;
+  $('enter').disabled = true;
+  try { await load(false); $('key').value = ''; }
+  catch (e) {
+    KEY = '';
+    $('door-err').textContent = e.status === 401 ? 'That is not the key.' : e.status === 429 ? 'Too many wrong tries. Wait fifteen minutes.' : e.message;
+    $('door-err').classList.remove('hidden');
+  } finally { $('enter').disabled = false; }
+}
+$('enter').addEventListener('click', enter);
+$('key').addEventListener('keydown', (e) => { if (e.key === 'Enter') enter(); });
+$('signout').addEventListener('click', () => { KEY = ''; DATA = null; $('app').classList.add('hidden'); $('door').classList.remove('hidden'); $('signout').classList.add('hidden'); });
+</script>
+</body>
+</html>

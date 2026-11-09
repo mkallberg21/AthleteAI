@@ -33,6 +33,7 @@ from . import badge as badge_mod
 from . import teamsnap as teamsnap_mod
 from . import team_age as team_age_mod
 from . import benchmarks as benchmarks_mod
+from . import admin as admin_mod
 from . import billing as billing_mod
 from . import funnel as funnel_mod
 from . import digest as digest_mod
@@ -204,6 +205,18 @@ def get_store() -> Store:
     if _store is None:
         _store = Store()
     return _store
+
+
+# The operator's own dashboard and the Stripe webhook. Closed (404) until the
+# operator key is set on the server; see offdays/admin.py.
+admin_mod.make_router(get_store, app)
+
+
+@app.get("/admin", include_in_schema=False)
+def admin_link() -> Response:
+    """A short link to the operator dashboard. The page asks for the key."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/app/admin.html", status_code=307)
 
 
 def _client_host(request: Request) -> str | None:
