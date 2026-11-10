@@ -243,6 +243,60 @@
     <div id="contact-err" class="err hidden"></div>
   </div>
 
+  <div class="card hidden" id="password-card">
+    <h2>Sign in with a password</h2>
+    <p class="small muted" style="margin-top:4px" id="pw-lede">
+      Choose an email and password, and from then on you sign in with those
+      instead of your code. Your code keeps working as a backup.
+    </p>
+    <div id="pw-set">
+      <div class="inline-form" style="margin-top:8px">
+        <div style="flex:1 1 220px"><label for="pw-email">Email</label>
+          <input id="pw-email" type="email" autocomplete="username" placeholder="you@example.com"></div>
+        <div style="flex:1 1 220px"><label for="pw-new">Password</label>
+          <input id="pw-new" type="password" autocomplete="new-password"></div>
+        <div><button class="inline" id="pw-save">Save</button></div>
+      </div>
+      <p class="small muted" style="margin:6px 0 0">At least 10 characters. A few unrelated words works well.</p>
+    </div>
+    <div id="pw-change" class="hidden">
+      <p class="small" style="margin:8px 0 0">Signed in with <b id="pw-who"></b>.
+        <span id="pw-verified" class="pill ok hidden">confirmed</span>
+        <span id="pw-unverified" class="pill warn hidden">not confirmed yet</span></p>
+      <div id="pw-confirm-row" class="hidden" style="margin:6px 0 0">
+        <p class="small muted" style="margin:0 0 6px">We emailed you a link. Open it so you can reset your password
+          yourself if you ever forget it. Nothing else changes until you do.</p>
+        <button type="button" class="tiny" id="pw-resend">Send the link again</button>
+      </div>
+      <div class="inline-form" style="margin-top:8px">
+        <div style="flex:1 1 200px"><label for="pw-current">Current password</label>
+          <input id="pw-current" type="password" autocomplete="current-password"></div>
+        <div style="flex:1 1 200px"><label for="pw-next">New password</label>
+          <input id="pw-next" type="password" autocomplete="new-password"></div>
+        <div><button class="inline" id="pw-change-save">Change</button></div>
+      </div>
+    </div>
+    <details id="pw-email-change" class="hidden" style="margin-top:12px">
+      <summary class="small muted" style="cursor:pointer">Use a different email</summary>
+      <div class="inline-form" style="margin-top:8px">
+        <div style="flex:1 1 200px"><label for="pw-new-email">New email</label>
+          <input id="pw-new-email" type="email" autocomplete="off" placeholder="you@example.com"></div>
+        <div style="flex:1 1 200px"><label for="pw-email-pass">Current password</label>
+          <input id="pw-email-pass" type="password" autocomplete="current-password"></div>
+        <div><button class="inline" id="pw-email-save">Change</button></div>
+      </div>
+      <p class="small muted" style="margin:6px 0 0">We will email the new address a link to confirm it.</p>
+    </details>
+    <div id="pw-recovery" class="hidden" style="margin-top:12px;padding:12px 14px;background:var(--surface-2);border-radius:var(--radius-sm)">
+      <b>Your recovery code</b>
+      <div id="pw-recovery-code" style="margin:6px 0;font-size:1.3rem;font-weight:700;letter-spacing:.08em"></div>
+      <p class="small muted" style="margin:0">Write it down now. It is shown once. If you forget your password,
+        this code lets you choose a new one without anyone's help. If you lose both, your director can reset it.</p>
+      <button type="button" class="tiny" id="pw-recovery-done" style="margin-top:10px">I have written it down</button>
+    </div>
+    <div id="pw-note" class="small hidden" style="margin-top:8px"></div>
+  </div>
+
   <div class="card hidden" id="badge-card">
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
       <div id="badge-preview" style="flex:0 0 auto;min-width:72px;min-height:72px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--radius-sm);padding:6px"></div>
@@ -1239,9 +1293,29 @@ async function loadStaff(isDirector) {
         <label class="small" style="display:flex;gap:6px;align-items:center;margin-top:6px">
           <input type="checkbox" data-pick="${person.id}"${person.can_choose_drills ? ' checked' : ''}>
           Can choose this coach's team drills
-        </label>` : ''}
+        </label>
+        <div style="margin-top:6px">
+          <button class="tiny" data-reset-code="${person.id}" data-name="${esc(person.display_name)}">Forgot password? Give a reset code</button>
+          <div class="small" data-reset-out="${person.id}" style="margin-top:6px"></div>
+        </div>` : ''}
     </div>`;
   }).join('');
+
+  // A coach who forgot their password: the director reads them a one-time code.
+  // It works once, for a day, and is not emailed.
+  $('staff-list').querySelectorAll('[data-reset-code]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const out = $('staff-list').querySelector(`[data-reset-out="${btn.dataset.resetCode}"]`);
+      btn.disabled = true; out.style.color = '';
+      try {
+        const res = await api(`/api/coach/staff/${btn.dataset.resetCode}/reset-code`, { method: 'POST' });
+        out.innerHTML = `Read this to ${esc(btn.dataset.name)}: <b style="font-size:1.1rem;letter-spacing:.08em">${esc(res.reset_code)}</b>`
+          + `<br><span class="muted">They enter it with their email under "Forgot your password?". Works once, for ${res.expires_in_hours} hours.</span>`;
+      } catch (e) {
+        out.style.color = 'var(--danger)'; out.textContent = e.message || 'Could not make a code.';
+      } finally { btn.disabled = false; }
+    });
+  });
 
   $('new-coach-teams').innerHTML = teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
 
@@ -2861,6 +2935,81 @@ $('new-coach-add').addEventListener('click', async () => {
   }
 });
 
+// ---- Sign in with a password (coach and director) --------------------------
+async function loadPassword() {
+  let st;
+  try { st = await api('/api/me/password'); } catch { return; }
+  $('password-card').classList.remove('hidden');
+  // While the recovery code is on screen it is the only thing on the card: a
+  // second pair of password boxes right under it reads as being asked again.
+  const showingCode = !$('pw-recovery').classList.contains('hidden');
+  $('pw-set').classList.toggle('hidden', st.set);
+  $('pw-change').classList.toggle('hidden', !st.set || showingCode);
+  if (st.set) {
+    $('pw-who').textContent = st.email;
+    // Without working email there is nothing to confirm, so no status is shown at all.
+    $('pw-verified').classList.toggle('hidden', !(st.mail && st.verified));
+    $('pw-unverified').classList.toggle('hidden', !(st.mail && !st.verified));
+    $('pw-confirm-row').classList.toggle('hidden', !(st.mail && !st.verified));
+    $('pw-email-change').classList.toggle('hidden', !st.mail || showingCode);
+  } else if (!$('pw-email').value) $('pw-email').value = ($('contact-email') && $('contact-email').value) || '';
+  $('pw-lede').classList.toggle('hidden', st.set);
+}
+function pwNote(msg, bad) {
+  const n = $('pw-note'); n.textContent = msg; n.classList.remove('hidden');
+  n.style.color = bad ? 'var(--danger)' : '';
+}
+$('pw-save').addEventListener('click', async () => {
+  const btn = $('pw-save'); btn.disabled = true; $('pw-note').classList.add('hidden');
+  try {
+    const res = await api('/api/me/password', { method: 'PUT',
+      body: { email: $('pw-email').value.trim(), password: $('pw-new').value } });
+    $('pw-new').value = '';
+    if (res.recovery_code) {
+      $('pw-recovery-code').textContent = res.recovery_code;
+      $('pw-recovery').classList.remove('hidden');
+      pwNote('Saved. Next time, sign in with your email and password.');
+    } else {
+      pwNote('Saved. We emailed you a link to confirm your address. Open it, and if you ever forget your password you can reset it yourself.');
+    }
+    await loadPassword();
+    if (res.recovery_code) $('pw-recovery').scrollIntoView({ block: 'nearest' });
+  } catch (e) { pwNote(e.message || 'Could not save.', true); } finally { btn.disabled = false; }
+});
+$('pw-resend').addEventListener('click', async () => {
+  const btn = $('pw-resend'); btn.disabled = true;
+  try {
+    const res = await api('/api/me/password/confirm-link', { method: 'POST' });
+    pwNote(res.sent ? 'Sent. Check your inbox and your spam folder.'
+      : 'Not sent just now. You can ask for only a few an hour, so try again later.', !res.sent);
+  } catch (e) { pwNote(e.message || 'Could not send it.', true); } finally { btn.disabled = false; }
+});
+$('pw-email-save').addEventListener('click', async () => {
+  const btn = $('pw-email-save'); btn.disabled = true;
+  try {
+    await api('/api/me/email', { method: 'POST',
+      body: { email: $('pw-new-email').value.trim(), current_password: $('pw-email-pass').value } });
+    $('pw-new-email').value = ''; $('pw-email-pass').value = '';
+    pwNote('Changed. We emailed the new address a link to confirm it.');
+    await loadPassword();
+  } catch (e) { pwNote(e.message || 'Could not change it.', true); } finally { btn.disabled = false; }
+});
+$('pw-recovery-done').addEventListener('click', () => {
+  $('pw-recovery').classList.add('hidden');
+  $('pw-recovery-code').textContent = '';
+  $('pw-note').classList.add('hidden');
+  loadPassword();
+});
+$('pw-change-save').addEventListener('click', async () => {
+  const btn = $('pw-change-save'); btn.disabled = true; $('pw-note').classList.add('hidden');
+  try {
+    await api('/api/me/password', { method: 'PUT',
+      body: { current_password: $('pw-current').value, password: $('pw-next').value } });
+    $('pw-current').value = ''; $('pw-next').value = '';
+    pwNote('Password changed.');
+  } catch (e) { pwNote(e.message || 'Could not change it.', true); } finally { btn.disabled = false; }
+});
+
 async function loadContact(isDirector) {
   // Staff of either role keep their own contact details here.
   $('contact-card').classList.remove('hidden');
@@ -4086,6 +4235,7 @@ $('signout').addEventListener('click', logout);
     await loadBilling();
     await loadSetup();
     await loadStaff(orgs.role === 'director');
+    await loadPassword();
     await loadPositionSettings(orgs.role === 'director');
     await loadSeason(orgs.role === 'director');
     await loadParents(orgs.role === 'director');
@@ -4434,7 +4584,7 @@ async function initTeamDrills() {
     'teams-card': 'teams', 'roster-card': 'teams', 'staff-card': 'teams',
     'team-drills-card': 'teams', 'goals-card': 'teams', 'film-card': 'teams',
     'iq-card': 'teams', 'ball-card': 'teams', 'evaluation-card': 'teams',
-    'contact-card': 'settings', 'badge-card': 'settings', 'season-card': 'settings',
+    'contact-card': 'settings', 'password-card': 'settings', 'badge-card': 'settings', 'season-card': 'settings',
     'billing-card': 'settings', 'specialisation-card': 'settings', 'recognition-card': 'settings',
     'library-card': 'settings', 'digest-card': 'settings', 'code-card': 'settings'
   };

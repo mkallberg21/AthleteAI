@@ -338,16 +338,29 @@ def flush(
     transport: Transport | None = None,
     limit: int = 100,
     now: datetime | None = None,
+    only_ids: list[int] | None = None,
 ) -> dict[str, int]:
-    """Attempt delivery of everything due. Safe to call repeatedly."""
+    """Attempt delivery of everything due. Safe to call repeatedly.
+
+    `only_ids` narrows it to those messages and nothing else. A request that has
+    just queued one message uses it to send that one at once without also sending
+    whatever else happens to be waiting for the hourly run.
+    """
     transport = transport or default_transport()
     now = now or _now()
     stats = {"sent": 0, "retrying": 0, "failed": 0, "suppressed": 0}
 
+    if only_ids is not None and not only_ids:
+        return stats
+    narrow = ""
+    params: list[Any] = [_iso(now)]
+    if only_ids:
+        narrow = f"AND id IN ({','.join('?' * len(only_ids))}) "
+        params += list(only_ids)
     rows = conn.execute(
         "SELECT * FROM email_outbox WHERE status = 'queued' AND next_attempt_at <= ? "
-        "ORDER BY queued_at LIMIT ?",
-        (_iso(now), limit),
+        + narrow + "ORDER BY queued_at LIMIT ?",
+        (*params, limit),
     ).fetchall()
 
     for row in rows:

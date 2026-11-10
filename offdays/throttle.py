@@ -55,6 +55,19 @@ class Attempt:
     def for_source(cls, source: str | None) -> "Attempt":
         return cls((_addr_key(source),))
 
+    @classmethod
+    def for_link(cls, source: str | None, purpose: str = "link") -> "Attempt":
+        """Guessing an emailed link, or asking for one. Per source address only: the
+        token is the secret, so there is nothing safe to key the guess on."""
+        return cls((f"{purpose}-addr:{source or 'unknown'}",))
+
+    @classmethod
+    def for_login(cls, source: str | None, email: str, purpose: str = "login") -> "Attempt":
+        """Password sign-in and reset. Counted per address and per email, hashed,
+        under a purpose prefix so guessing a reset code does not lock sign-in."""
+        digest = hashlib.sha256((email or "").strip().lower().encode("utf-8")).hexdigest()
+        return cls((f"{purpose}-addr:{source or 'unknown'}", f"{purpose}-email:{digest[:32]}"))
+
 
 def _addr_key(source: str | None) -> str:
     return f"addr:{source or 'unknown'}"

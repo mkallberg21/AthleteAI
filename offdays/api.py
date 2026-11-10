@@ -65,6 +65,8 @@ from . import roster as roster_mod
 from . import season as season_mod
 from . import team_goals as team_goals_mod
 from . import demo as demo_mod
+from . import passwords as passwords_mod
+from . import staff_mail as staff_mail_mod
 from . import technique as technique_mod
 from . import shotspeed as shotspeed_mod
 from . import roster_sync
@@ -1175,6 +1177,262 @@ def set_my_contact(
         c.execute("UPDATE users SET email = ?, phone = ? WHERE id = ?",
                   (body.email, body.phone, principal.id))
     return {"display_name": principal.display_name, "email": body.email, "phone": body.phone, "complete": True}
+
+
+# ----------------------------------------------------------------------
+# Coaches and directors: sign in with an email and a password
+# ----------------------------------------------------------------------
+# The six-character code keeps working. There is no mail service, so a forgotten
+# password is recovered with a recovery code, a code a director reads out, or a
+# reset the operator runs on the server (scripts/reset_password.py). See
+# offdays/passwords.py.
+
+class SetPasswordRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=400)
+    email: str = Field(default="", max_length=200)
+    current_password: str = Field(default="", max_length=400)
+
+
+class PasswordLoginRequest(BaseModel):
+    email: str = Field(max_length=200)
+    password: str = Field(max_length=400)
+
+
+class PasswordResetRequest(BaseModel):
+    email: str = Field(max_length=200)
+    code: str = Field(max_length=60)
+    new_password: str = Field(max_length=400)
+
+
+def _staff_only(principal: Principal = Depends(_principal)) -> Principal:
+    if principal.role not in ("coach", "director"):
+        raise HTTPException(status_code=403, detail="coach or director role required")
+    return principal
+
+
+@app.get("/api/me/password")
+def my_password(
+    principal: Principal = Depends(_staff_only), store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    return {**passwords_mod.summary(store.conn, principal.id),
+            **staff_mail_mod.status(store.conn, principal.id)}
+
+
+@app.put("/api/me/password")
+def set_my_password(
+    body: SetPasswordRequest,
+    principal: Principal = Depends(_staff_only),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Choose a password the first time, or change it (the current one is needed).
+
+    Returns the recovery code on the first set only: it is shown once, and it is
+    the way back in without email.
+    """
+    try:
+        if passwords_mod.get(store.conn, principal.id) is None:
+            recovery = passwords_mod.set_first(store.conn, principal.id, body.email, body.password)
+            # With working email the way back in is a link sent to the address, so no code
+            # to write down. Without it (or if the mail did not go) the code is the way.
+            sent = staff_mail_mod.send_confirmation(store.conn, principal.id)
+            return {"ok": True, "confirm_sent": sent, "recovery_code": None if sent else recovery}
+        passwords_mod.change(store.conn, principal.id, body.current_password, body.password)
+        return {"ok": True}
+    except passwords_mod.PasswordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+_BAD_LOGIN = "That email and password do not match."
+
+
+@app.post("/api/login/password")
+def password_login(
+    request: Request, body: PasswordLoginRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    attempt = throttle.Attempt.for_login(_client_host(request), body.email, "login")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    uid = passwords_mod.verify_login(store.conn, body.email, body.password)
+    row = store.conn.execute(
+        "SELECT id, org_id, role, display_name, active FROM users WHERE id = ?", (uid,)
+    ).fetchone() if uid else None
+    if row is None or not row["active"] or row["role"] not in ("coach", "director"):
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail=_BAD_LOGIN)
+    throttle.record_success(store.conn, attempt)
+    return {
+        "role": row["role"],
+        "athlete_id": row["id"],
+        "display_name": row["display_name"],
+        "org_id": row["org_id"],
+        "token": passwords_mod.start_session(store.conn, int(row["id"])),
+        "side": _side_words(store, row["org_id"]),
+    }
+
+
+@app.post("/api/login/reset")
+def password_reset(
+    request: Request, body: PasswordResetRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Spend a recovery code or a reset code to choose a new password."""
+    attempt = throttle.Attempt.for_login(_client_host(request), body.email, "reset")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        fresh = passwords_mod.reset(store.conn, body.email, body.code, body.new_password)
+    except passwords_mod.PasswordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if fresh is None:
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That code is not right, or it has already been used.")
+    throttle.record_success(store.conn, attempt)
+    return {"ok": True, "recovery_code": fresh}
+
+
+class ForgotRequest(BaseModel):
+    email: str = Field(max_length=200)
+
+
+class TokenRequest(BaseModel):
+    token: str = Field(max_length=200)
+
+
+class ResetLinkRequest(BaseModel):
+    token: str = Field(max_length=200)
+    new_password: str = Field(max_length=400)
+
+
+class ChangeEmailRequest(BaseModel):
+    email: str = Field(max_length=200)
+    current_password: str = Field(max_length=400)
+
+
+@app.post("/api/login/forgot")
+def forgot_password(
+    request: Request, body: ForgotRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Email a reset link to a coach or director who forgot their password.
+
+    The reply is the same for every address, known or not, so this cannot be used to
+    find out who has an account. Every ask counts toward a per-source limit.
+    """
+    attempt = throttle.Attempt.for_link(_client_host(request), "forgot")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    throttle.record_failure(store.conn, attempt)      # every ask counts, answered or not
+    staff_mail_mod.send_reset(store.conn, body.email)
+    return {"ok": True, "message": staff_mail_mod.FORGOT_REPLY, "mail": staff_mail_mod.mail_available()}
+
+
+@app.post("/api/login/confirm")
+def confirm_email(
+    request: Request, body: TokenRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Open the link emailed to confirm an address. Signs nobody in."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "confirm")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    if not staff_mail_mod.confirm(store.conn, body.token):
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That link has expired or was already used.")
+    throttle.record_success(store.conn, attempt)
+    return {"ok": True}
+
+
+@app.post("/api/login/reset-link")
+def reset_with_link(
+    request: Request, body: ResetLinkRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Spend the emailed link to choose a new password, and sign in with it."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "resetlink")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        uid = staff_mail_mod.reset_with_link(store.conn, body.token, body.new_password)
+    except passwords_mod.PasswordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc   # link not spent
+    row = store.conn.execute(
+        "SELECT id, org_id, role, display_name, active FROM users WHERE id = ?", (uid,)
+    ).fetchone() if uid else None
+    if row is None or not row["active"] or row["role"] not in ("coach", "director"):
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That link has expired or was already used. Ask for a new one.")
+    throttle.record_success(store.conn, attempt)
+    return {
+        "role": row["role"],
+        "athlete_id": row["id"],
+        "display_name": row["display_name"],
+        "org_id": row["org_id"],
+        "token": passwords_mod.start_session(store.conn, int(row["id"])),
+        "side": _side_words(store, row["org_id"]),
+    }
+
+
+@app.post("/api/me/password/confirm-link")
+def resend_confirm_link(
+    principal: Principal = Depends(_staff_only), store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Send the confirm link again (a few an hour)."""
+    return {"sent": staff_mail_mod.send_confirmation(store.conn, principal.id)}
+
+
+@app.post("/api/me/email")
+def change_my_email(
+    request: Request,
+    body: ChangeEmailRequest,
+    principal: Principal = Depends(_staff_only),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Move the sign-in address. Needs the current password; the new address starts
+    unconfirmed and every link sent to the old one stops working."""
+    attempt = throttle.Attempt.for_login(_client_host(request), str(principal.id), "chgemail")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        staff_mail_mod.change_email(store.conn, principal.id, body.email, body.current_password)
+    except passwords_mod.PasswordError as exc:
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    throttle.record_success(store.conn, attempt)
+    return {"ok": True, **staff_mail_mod.status(store.conn, principal.id)}
+
+
+@app.post("/api/coach/staff/{user_id}/reset-code")
+def issue_staff_reset(
+    user_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A director gives a coach a one-time code to choose a new password.
+
+    Director only, same program only. Shown once; it is stored as a digest.
+    """
+    if principal.role != "director":
+        raise HTTPException(status_code=403, detail="only a director can do this")
+    target = store.conn.execute(
+        "SELECT u.id FROM users u JOIN memberships m ON m.user_id = u.id "
+        "WHERE u.id = ? AND m.org_id = ? AND m.role = 'coach' AND m.active = 1",
+        (user_id, principal.org_id),
+    ).fetchone()
+    if target is None:
+        raise HTTPException(status_code=404, detail="no such coach in this program")
+    try:
+        code = passwords_mod.issue_reset(store.conn, user_id)
+    except passwords_mod.PasswordError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"reset_code": code, "expires_in_hours": passwords_mod.RESET_HOURS}
 
 
 @app.post("/api/me/login", status_code=200)

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <meta name="supported-color-schemes" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -173,14 +174,30 @@
         <span class="section-title">Coach sign-in</span>
       </div>
       <p class="small muted" style="margin-top:0.25rem;">Your director emailed you a sign-in link; tapping it brings you straight in. No link? Paste the code from that email.</p>
+      <form class="pw-signin" style="margin-top:0.5rem;" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="coach-email">Email</label>
+          <input id="coach-email" class="form-input" type="email" autocomplete="username" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="coach-pw">Password</label>
+          <input id="coach-pw" class="form-input" type="password" autocomplete="current-password">
+          <div id="coach-pwerr" class="form-error hidden"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+        <p class="small" style="margin:0.6rem 0 0"><a href="#" class="pw-forgot">Forgot your password?</a></p>
+      </form>
+      <details class="code-fallback" style="margin-top:0.9rem">
+        <summary class="small muted" style="cursor:pointer">No password yet? Use your code</summary>
       <form class="staff-signin" style="margin-top:0.5rem;" novalidate>
         <div class="form-group">
           <label class="form-label" for="coach-token">Your code</label>
           <input id="coach-token" class="form-input" type="password" autocomplete="off" placeholder="Paste your code">
           <div id="coach-err" class="form-error hidden"></div>
         </div>
-        <button type="submit" class="btn btn-primary">Open my dashboard</button>
+        <button type="submit" class="btn btn-secondary">Open my dashboard</button>
       </form>
+      </details>
     </div>
     </div>
 
@@ -215,15 +232,90 @@
       <div class="section-header">
         <span class="section-title">Already have a program?</span>
       </div>
+      <form class="pw-signin" style="margin-top:0.5rem;" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="director-email">Email</label>
+          <input id="director-email" class="form-input" type="email" autocomplete="username" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="director-pw">Password</label>
+          <input id="director-pw" class="form-input" type="password" autocomplete="current-password">
+          <div id="director-pwerr" class="form-error hidden"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+        <p class="small" style="margin:0.6rem 0 0"><a href="#" class="pw-forgot">Forgot your password?</a></p>
+      </form>
+      <details class="code-fallback" style="margin-top:0.9rem">
+        <summary class="small muted" style="cursor:pointer">No password yet? Use your code</summary>
       <form class="staff-signin" style="margin-top:0.5rem;" novalidate>
         <div class="form-group">
           <label class="form-label" for="director-token">Your director code</label>
           <input id="director-token" class="form-input" type="password" autocomplete="off" placeholder="Paste your code">
           <div id="director-err" class="form-error hidden"></div>
         </div>
-        <button type="submit" class="btn btn-primary">Open my dashboard</button>
+        <button type="submit" class="btn btn-secondary">Open my dashboard</button>
       </form>
+      </details>
     </div>
+    </div>
+    <div class="card hidden" id="pw-reset-card">
+      <div class="section-header"><span class="section-title" id="pw-reset-title">Forgot your password?</span></div>
+
+      <!-- 1. Ask for a link. The reply is the same for every address, so it never says who has an account. -->
+      <div id="forgot-step">
+        <p class="small muted" style="margin-top:0.25rem;">
+          Type the email you signed up with and we will send you a link to choose a new password.
+        </p>
+        <form id="forgot-form" novalidate>
+          <div class="form-group"><label class="form-label" for="forgot-email">Email</label>
+            <input id="forgot-email" class="form-input" type="email" autocomplete="username"></div>
+          <div id="forgot-err" class="form-error hidden"></div>
+          <button type="submit" class="btn btn-primary">Email me a link</button>
+          <button type="button" class="btn btn-secondary" id="reset-cancel" style="margin-top:0.6rem">Cancel</button>
+        </form>
+        <div id="forgot-done" class="hidden" style="margin-top:0.75rem"></div>
+        <p class="small muted" style="margin-top:0.75rem;">
+          <a href="#" id="use-code-instead">I have a recovery code or a code from my director</a>
+        </p>
+      </div>
+
+      <!-- 2. Spend the emailed link. -->
+      <div id="link-step" class="hidden">
+        <p class="small muted" style="margin-top:0.25rem;">Choose a new password. At least 10 characters; a few unrelated words works well.</p>
+        <form id="link-form" novalidate>
+          <div class="form-group"><label class="form-label" for="link-new">New password</label>
+            <input id="link-new" class="form-input" type="password" autocomplete="new-password">
+            <div id="link-err" class="form-error hidden"></div></div>
+          <button type="submit" class="btn btn-primary">Save and sign in</button>
+        </form>
+      </div>
+
+      <!-- 3. The fallback: a recovery code or a code the director reads out. -->
+      <div id="code-step" class="hidden">
+        <p class="small muted" style="margin-top:0.25rem;">
+          Use the <b>recovery code</b> you were shown when you set your password, or a <b>reset code</b>
+          your director reads out to you. If you have neither, ask your program director.
+        </p>
+        <form id="pw-reset-form" novalidate>
+          <div class="form-group"><label class="form-label" for="reset-email">Email</label>
+            <input id="reset-email" class="form-input" type="email" autocomplete="username"></div>
+          <div class="form-group"><label class="form-label" for="reset-code">Recovery or reset code</label>
+            <input id="reset-code" class="form-input" autocomplete="off" placeholder="XXXX-XXXX-XXXX"></div>
+          <div class="form-group"><label class="form-label" for="reset-new">New password</label>
+            <input id="reset-new" class="form-input" type="password" autocomplete="new-password">
+            <p class="form-hint">At least 10 characters. A few unrelated words works well.</p>
+            <div id="reset-err" class="form-error hidden"></div></div>
+          <button type="submit" class="btn btn-primary">Set new password</button>
+          <button type="button" class="btn btn-secondary" id="code-back" style="margin-top:0.6rem">Back</button>
+        </form>
+        <div id="reset-done" class="hidden" style="margin-top:0.75rem"></div>
+      </div>
+
+      <!-- 4. An address was just confirmed. -->
+      <div id="confirmed-step" class="hidden">
+        <p style="margin:0.25rem 0 0"><b>Thanks, your email is confirmed.</b></p>
+        <p class="small muted">If you ever forget your password, you can now reset it yourself from this page.</p>
+      </div>
     </div>
     </div><!-- /landing-right -->
 
@@ -360,6 +452,117 @@ async function signIn(token, { button, error }) {
   }
 }
 
+// Email and password. The server answers with a session token that works exactly
+// like a code, so everything after this is the same sign-in.
+function showFieldError(el, message) { el.textContent = message; el.classList.remove('hidden'); }
+
+document.querySelectorAll('.pw-signin').forEach((form) => {
+  const panel = form.closest('.role-panel');
+  const p = panel.id === 'panel-coach' ? 'coach' : 'director';
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $(`${p}-pwerr`); err.classList.add('hidden');
+    const email = $(`${p}-email`).value.trim(); const password = $(`${p}-pw`).value;
+    if (!email || !password) return showFieldError(err, 'Enter your email and password.');
+    const btn = form.querySelector('button[type="submit"]'); btn.disabled = true;
+    try {
+      const res = await fetch('/api/login/password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(res.status === 429
+        ? 'Too many tries. Wait a minute and try again.' : (body.detail || 'Sign in failed.'));
+      setToken(body.token);
+      window.location.href = 'coach.html';
+    } catch (ex) { btn.disabled = false; showFieldError(err, ex.message); }
+  });
+  form.querySelector('.pw-forgot').addEventListener('click', (e) => {
+    e.preventDefault();
+    $('forgot-email').value = $(`${p}-email`).value.trim();
+    $('reset-email').value = $(`${p}-email`).value.trim();
+    resetStep('forgot');
+    $('pw-reset-card').classList.remove('hidden');
+    $('pw-reset-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+});
+
+// The four steps of the "forgot" card; exactly one shows at a time.
+function resetStep(step) {
+  for (const id of ['forgot', 'link', 'code', 'confirmed']) $(`${id}-step`).classList.toggle('hidden', id !== step);
+  $('pw-reset-title').textContent = step === 'link' ? 'Choose a new password'
+    : step === 'confirmed' ? 'Email confirmed' : 'Forgot your password?';
+  $('forgot-done').classList.add('hidden'); $('forgot-err').classList.add('hidden');
+}
+$('reset-cancel').addEventListener('click', () => $('pw-reset-card').classList.add('hidden'));
+$('use-code-instead').addEventListener('click', (e) => { e.preventDefault(); resetStep('code'); });
+$('code-back').addEventListener('click', () => resetStep('forgot'));
+
+// Ask for a link. The answer is the same whether or not the address has an account.
+$('forgot-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('forgot-email').value.trim();
+  const err = $('forgot-err'); err.classList.add('hidden');
+  if (!email) return showFieldError(err, 'Type your email.');
+  const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/login/forgot', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 429) throw new Error('Too many tries. Wait a few minutes and try again.');
+    if (!res.ok) throw new Error(body.detail || 'That did not work. Try again.');
+    const done = $('forgot-done'); done.classList.remove('hidden');
+    done.innerHTML = body.mail === false
+      ? '<b>Email is not switched on yet.</b> Use the link below with a recovery code, or ask your director for a code.'
+      : `<b>Check your email.</b> ${body.message || ''}`
+        + '<div class="small muted" style="margin-top:0.4rem">No email after a few minutes? Check spam. '
+        + 'Wrong address, or never confirmed it? Your director can give you a one-time code.</div>';
+  } catch (ex) { showFieldError(err, ex.message); } finally { btn.disabled = false; }
+});
+
+// Spend the emailed link: set a password and sign in.
+let resetToken = '';
+$('link-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('link-err'); err.classList.add('hidden');
+  const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/login/reset-link', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken, new_password: $('link-new').value }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 429) throw new Error('Too many tries. Wait a few minutes and try again.');
+    if (res.status === 401) { resetToken = ''; resetStep('forgot'); return showFieldError($('forgot-err'),
+      body.detail || 'That link has expired or was already used. Ask for a new one below.'); }
+    if (!res.ok) throw new Error(body.detail || 'That did not work.');
+    setToken(body.token);
+    window.location.href = 'coach.html';
+  } catch (ex) { showFieldError(err, ex.message); } finally { btn.disabled = false; }
+});
+$('pw-reset-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('reset-err'); err.classList.add('hidden');
+  const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/login/reset', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('reset-email').value.trim(),
+        code: $('reset-code').value.trim(), new_password: $('reset-new').value }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 429
+      ? 'Too many tries. Wait a minute and try again.' : (body.detail || 'That did not work.'));
+    $('pw-reset-form').classList.add('hidden');
+    const done = $('reset-done'); done.classList.remove('hidden');
+    done.innerHTML = '<b>Your password is changed.</b> Sign in with it above.'
+      + '<div class="small muted" style="margin-top:0.5rem">Your <b>new recovery code</b> is below. '
+      + 'The old one no longer works. Write it down; it is shown once.</div>'
+      + `<div style="margin-top:0.5rem;font-size:1.2rem;font-weight:700;letter-spacing:.08em">${body.recovery_code}</div>`;
+  } catch (ex) { showFieldError(err, ex.message); } finally { btn.disabled = false; }
+});
+
 document.getElementById('signin-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const token = tokenInput.value.trim();
@@ -441,7 +644,25 @@ const params = new URLSearchParams(window.location.search);
 const invited = params.get('invite');
 const claimed = params.get('claim');
 const linked = params.get('code');
-if (invited) {
+const resetLink = params.get('reset');
+const confirmLink = params.get('confirm');
+// A link carries a secret: take it out of the address bar and history once read.
+if (resetLink || confirmLink) history.replaceState(null, '', window.location.pathname);
+if (resetLink) {
+  resetToken = resetLink.trim();
+  showRole('coach', { focus: false });
+  resetStep('link');
+  $('pw-reset-card').classList.remove('hidden');
+  $('link-new').focus();
+} else if (confirmLink) {
+  showRole('coach', { focus: false });
+  $('pw-reset-card').classList.remove('hidden');
+  fetch('/api/login/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: confirmLink.trim() }) })
+    .then((r) => { if (r.ok) resetStep('confirmed');
+      else { resetStep('forgot'); showFieldError($('forgot-err'), 'That link has expired or was already used. Sign in and ask for another in Settings.'); } })
+    .catch(() => { resetStep('forgot'); showFieldError($('forgot-err'), 'Could not reach the server. Try the link again.'); });
+} else if (invited) {
   showRole('parent', { focus: false });
   $('invite').value = invited.trim().toUpperCase();
   $('pname').focus();

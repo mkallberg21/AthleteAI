@@ -158,7 +158,7 @@ offdays/
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
-  store.py          The largest SQL surface (~39% of queries; see dialect.py)
+  store.py          The largest SQL surface (~34% of queries; see dialect.py)
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
@@ -2741,11 +2741,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 36 modules across 533 call sites.
-store.py holds 36% of them.
+SQL lives in 38 modules across 563 call sites.
+store.py holds 34% of them.
 
-1136 occurrences are mechanical (search-and-replace with tests behind it).
-79 need judgement.
+1264 occurrences are mechanical (search-and-replace with tests behind it).
+80 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...

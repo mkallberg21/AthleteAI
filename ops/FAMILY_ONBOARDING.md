@@ -196,3 +196,59 @@ Erasing an athlete ("delete the whole account") removes their contact rows.
    first parent's code (`/api/guardians/link`) or a second coach invite.
 4. **Mail flush cadence.** Hourly. A parent who signs up in the car park
    waits up to an hour for the email. Flush more often if that bites.
+
+## Coach and director sign-in with an email and password
+
+A coach or director can choose an email and password (Settings, "Sign in with a
+password") and sign in with those. The six-character code keeps working as a
+backup, and parents and athletes are untouched.
+
+### Forgot your password: it runs by itself
+
+With outbound email connected (`scripts/setup_resend.py`), nobody at 0FFDAYS reads a
+mailbox or sends anything:
+
+1. When someone sets a password, we email **that address** a confirm link. Opening it
+   confirms the address. (No recovery code is handed out when the mail went.)
+2. **Forgot your password?** on the sign-in page asks for their email and sends a
+   one-time link. It works once, for about an hour. They choose a new password and are
+   signed in. Every other open session ends, and a "your password was changed" notice
+   goes to the same address.
+3. The reply to "email me a link" is identical for every address, so it cannot be used
+   to find out who has an account.
+
+The message comes from `no-reply@mail.0ffdays.com`, which nobody logs into; staff keep
+using their own Gmail or club address as the recipient. There is no Reply-To, and every
+message says the mailbox is not monitored.
+
+**A reset link is only ever sent to a confirmed address.** Otherwise a typo when setting
+a password would hand the account to whoever owns the typo. This mail is sent at once and
+only to the person asking, and it does **not** depend on the parents' email hold: the hold
+exists so a mail provider cannot start emailing families, and this mail goes to one staff
+member who asked for it.
+
+Limits: three links of one kind an hour per person; guessing is throttled per source
+address; a changed address kills every link sent to the old one; asking again kills the
+earlier link; a weak password does not spend the link.
+
+### When email cannot help (still built, in this order)
+
+1. **A reset code from the director**: Teams, Coaches, "Forgot password? Give a reset
+   code". One time, 24 hours, read out to the coach. This is also the answer for a coach
+   who typed their address wrong or never confirmed it.
+2. **The recovery code**, shown once only when email is NOT connected (or the mail did
+   not go). "I have a recovery code" on the forgot card takes it.
+3. **The operator**, on the server:
+   `podman exec -it offdays_app_1 python scripts/reset_password.py someone@example.com`
+   prints a one-time reset code. Read it to the person once you are sure it is them.
+   This is the one case left for a human: a director who has lost every door.
+
+### Deliverability
+
+The sender domain is new. If a message lands in spam, mark it "Not spam" and the next ones
+follow. The page tells people to check spam. Watch `GET /api/coach/outbox` for `failed` or
+`suppressed` rows: a hard bounce retires the address.
+
+Passwords are scrypt hashes; recovery codes, reset codes, emailed links and sessions are
+stored as SHA-256 digests; none of it is in a program export. Wrong guesses are slowed per
+address and per email. A reset or a password change ends every open session.

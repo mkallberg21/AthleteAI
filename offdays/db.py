@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -1129,6 +1129,47 @@ CREATE TABLE IF NOT EXISTS auth_attempts (
     locked_until     TEXT
 );
 
+-- Email-and-password sign-in for coaches and directors (offdays/passwords.py).
+-- Nothing secret is stored: the password is a salted scrypt hash, and the
+-- recovery code, reset code and session tokens are SHA-256 digests. Deleted with
+-- the account. Deliberately NOT in the program export allow-list.
+CREATE TABLE IF NOT EXISTS credentials (
+    user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    email         TEXT NOT NULL UNIQUE,
+    pw_hash       TEXT NOT NULL,
+    recovery_hash TEXT,
+    reset_hash    TEXT,
+    reset_expires TEXT,
+    -- When the person opened the link sent to this address. A reset link is only
+    -- ever emailed to an address that has been confirmed, so a typo cannot hand
+    -- a stranger the account.
+    email_verified_at TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+-- Links emailed to a staff member: one to confirm an address, one to choose a new
+-- password. Single use, short lived, stored only as a SHA-256 digest. At most one
+-- live link per person per purpose (asking again replaces it), so an old email
+-- cannot be used after a newer one is sent. Never in a program export.
+CREATE TABLE IF NOT EXISTS email_tokens (
+    id         INTEGER PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose    TEXT NOT NULL CHECK (purpose IN ('confirm','reset')),
+    email      TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id, purpose);
+CREATE TABLE IF NOT EXISTS staff_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_staff_sessions_user ON staff_sessions(user_id);
+
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -1261,6 +1302,11 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     # so a second "organizations" block here would silently drop the first
     # one's columns from every upgraded deployment -- which is exactly what
     # happened once. tests/test_db_upgrade.py guards against it.
+    # The credentials table shipped before email links existed, so a database
+    # that has it needs this column added in place.
+    "credentials": [
+        ("email_verified_at", "TEXT"),
+    ],
     "organizations": [
         ("teamsnap_token", "TEXT NOT NULL DEFAULT ''"),
         ("teamsnap_user", "TEXT NOT NULL DEFAULT ''"),

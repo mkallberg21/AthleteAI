@@ -19,13 +19,16 @@ Steps:
   5. Recreate the app container so it reads the new env.
   6. Optionally send a test message through the app's own mailer.
 
-Tokens are read from the environment only. Nothing here prints them.
+Tokens come from the environment if set; otherwise the script asks for each one at
+a hidden prompt (nothing shows as you type or paste, and nothing reaches your shell
+history). Nothing here prints them.
 Resend key must be a full-access key (a "sending only" key cannot manage
 domains). Cloudflare token needs Zone:DNS:Edit on 0ffdays.com.
 """
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -47,6 +50,11 @@ def _req(url: str, token: str, method: str = "GET", body: dict | None = None) ->
     req = urllib.request.Request(url, data=data, method=method, headers={
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
+        # Resend and Cloudflare both sit behind Cloudflare's bot filter, which
+        # refuses Python's default "Python-urllib" signature with error 1010
+        # before the key is even looked at. A plain identifying agent passes.
+        "User-Agent": "0ffdays-setup/1.0 (+https://app.0ffdays.com)",
+        "Accept": "application/json",
     })
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
@@ -129,19 +137,49 @@ def cf_upsert(token: str, zone: str, existing: list[dict], rec: dict) -> None:
         print(f"cloudflare: created {rec['type']} {name}")
 
 
+def record_fqdn(name: str) -> str:
+    """The full DNS name for a record Resend asked for.
+
+    Resend gives names relative to the ROOT zone, not to the sending domain: for
+    mail.0ffdays.com it returns "send.mail" and "resend._domainkey.mail". Appending
+    the sending domain to those wrote "send.mail.mail.0ffdays.com", which Resend can
+    never find, so verification sat on "pending" forever. Three shapes are handled:
+    already a full name, relative to the sending domain ("send"), and relative to the
+    zone ("send.mail").
+    """
+    name = name.strip().rstrip(".")
+    sub = DOMAIN[: -len(ZONE) - 1]  # "mail"
+    if name == ZONE or name.endswith("." + ZONE):
+        return name                      # already a full name
+    if name == sub or name.endswith("." + sub):
+        return f"{name}.{ZONE}"          # relative to the zone: send.mail
+    return f"{name}.{DOMAIN}"            # relative to the sending domain: send
+
+
+def remove_misnamed(cf_token: str, zone: str, existing: list[dict]) -> list[dict]:
+    """Delete records an earlier version of this script wrote under the doubled name
+    (*.mail.mail.0ffdays.com). Only that exact pattern is touched, and only records
+    that sit under the doubled suffix; nothing else in the zone is."""
+    suffix = f".{DOMAIN[: -len(ZONE) - 1]}.{DOMAIN}"  # ".mail.mail.0ffdays.com"
+    keep = []
+    for e in existing:
+        if e["name"].rstrip(".").endswith(suffix):
+            _req(f"https://api.cloudflare.com/client/v4/zones/{zone}/dns_records/{e['id']}", cf_token, "DELETE")
+            print(f"cloudflare: removed misnamed {e['type']} {e['name']}")
+        else:
+            keep.append(e)
+    return keep
+
+
 def push_dns(cf_token: str, resend_domain: dict) -> None:
     zone = cf_zone_id(cf_token)
-    existing = cf_records(cf_token, zone)
+    existing = remove_misnamed(cf_token, zone, cf_records(cf_token, zone))
     for r in resend_domain.get("records", []):
         # Click-tracking CNAME is optional and rewrites links in mail, which
         # a parent invite should not have. Skip it; the others are required.
         if r.get("record") == "Tracking":
             continue
-        # SPF and DKIM names come back relative to the sending domain
-        # ("send", "resend._domainkey"); make them FQDNs for Cloudflare.
-        name = r["name"]
-        if not name.endswith(ZONE):
-            name = f"{name}.{DOMAIN}"
+        name = record_fqdn(r["name"])
         rec = {"type": r["type"], "name": name, "content": r["value"].strip('"'), "ttl": 1}
         if r["type"] == "MX":
             rec["priority"] = int(r.get("priority", 10))
@@ -219,6 +257,21 @@ def status(resend_key: str | None) -> None:
         print(f"env: OFFDAYS_SMTP_HOST={host or '(blank)'}")
 
 
+def ask(prompt: str, prefix: str) -> str:
+    """Read a secret at a hidden prompt. Re-asks if it is empty or looks wrong, so
+    pressing Enter before pasting costs nothing."""
+    for _ in range(5):
+        value = getpass.getpass(prompt + ": ").strip()
+        if not value:
+            print("  Nothing was pasted. Copy the key first, then paste and press Enter.")
+        elif prefix and not value.startswith(prefix):
+            print(f"  That does not start with {prefix}. Check you copied the right one.")
+        else:
+            print(f"  Got it ({len(value)} characters).")
+            return value
+    raise SystemExit("No key entered. Run it again when the key is copied.")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--status", action="store_true")
@@ -229,6 +282,10 @@ def main() -> int:
 
     resend_key = os.environ.get("RESEND_API_KEY")
     cf_token = os.environ.get("CLOUDFLARE_API_TOKEN")
+
+    if not args.status and not args.test:
+        resend_key = resend_key or ask("Paste the Resend key (starts re_), then Enter", "re_")
+        cf_token = cf_token or ask("Paste the Cloudflare token, then Enter", "")
 
     if args.status:
         status(resend_key)

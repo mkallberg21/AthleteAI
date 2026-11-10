@@ -43,6 +43,7 @@ from .drills.base import Metric, SignalKind
 from . import assignments as assignments_mod
 from . import billing as billing_mod
 from . import guardians as guardians_mod
+from . import passwords as passwords_mod
 from . import invites as invites_mod
 from . import contacts as contacts_mod
 from . import load as load_mod
@@ -2763,6 +2764,16 @@ class Store:
             "WHERE token_hash = ? AND active = 1",
             (hash_token(token),),
         ).fetchone()
+        if row is None:
+            # Not a six-character code: it may be a session minted by an email and
+            # password sign-in (coaches and directors only).
+            uid = passwords_mod.session_user(self.conn, token) if len(token) > 12 else None
+            if uid is not None:
+                row = self.conn.execute(
+                    "SELECT id, org_id, role, display_name, dominant_hand FROM users "
+                    "WHERE id = ? AND active = 1 AND role IN ('coach', 'director')",
+                    (uid,),
+                ).fetchone()
         if row is None:
             raise StoreError("invalid or inactive token")
 
