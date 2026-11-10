@@ -65,6 +65,10 @@
       </div>
       <p class="small muted" id="film-message"></p>
       <div id="film-list"></div>
+      <div id="film-again-wrap" class="hidden" style="margin-top:14px">
+        <p class="small muted" style="margin:0 0 6px" id="film-again-note"></p>
+        <div id="film-again"></div>
+      </div>
     </div>
 
     <div class="card" id="wellness-card">
@@ -388,7 +392,12 @@
     <div class="card">
       <h1 id="film-title">Clip</h1>
       <p class="small" id="film-focus"></p>
+      <p class="small muted" id="film-credit" style="margin:2px 0 8px"></p>
       <div class="film-frame"><div id="film-player"></div></div>
+      <div id="film-broken" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--border);border-radius:10px">
+        <b>That video will not play on this phone.</b>
+        <p class="small muted" style="margin:6px 0 0">It may have been taken down. That does not count against today, and it will not be offered to you again. Pick another one.</p>
+      </div>
       <div class="film-bar"><i id="film-progress" style="width:0%"></i></div>
       <p class="small muted" id="film-state">
         Sound on, screen on. That is the whole trick.
@@ -702,13 +711,26 @@ async function loadFilm() {
     ? 'Done for today'
     : `${data.day.minutes_left} min left today`;
   $('film-message').textContent = data.day.message;
+  const note = (c) => c.days_since == null ? '' : ` &middot; <i>seen ${c.days_since} days ago, one more look</i>`;
+  const credit = (c) => c.credit ? ` &middot; ${esc(c.credit)}` : '';
   $('film-list').innerHTML = data.clips.map((c, i) => `
     <button class="drill-btn" data-clip="${i}">
       <b>${esc(c.title)}</b>
       <span>${esc(c.focus)}</span>
-      <span class="transfer-inline">${Math.round(c.length_s)} seconds</span>
+      <span class="transfer-inline">${Math.round(c.length_s)} seconds${credit(c)}${note(c)}</span>
     </button>`).join('');
   $('film-list').dataset.clips = JSON.stringify(data.clips);
+
+  // Clips already watched today, offered back. The server has always sent these; nothing drew them.
+  const again = data.again || [];
+  $('film-again-wrap').classList.toggle('hidden', !again.length);
+  $('film-again-note').textContent = again.length ? 'Watched today. Go again whenever you like. Going back is the point.' : '';
+  $('film-again').innerHTML = again.map((c, i) => `
+    <button class="drill-btn" data-again="${i}">
+      <b>${esc(c.title)}</b>
+      <span class="transfer-inline">${Math.round(c.length_s)} seconds &middot; watch again</span>
+    </button>`).join('');
+  $('film-again').dataset.clips = JSON.stringify(again);
 }
 
 $('film-list').addEventListener('click', (event) => {
@@ -716,6 +738,12 @@ $('film-list').addEventListener('click', (event) => {
   if (!button) return;
   const clips = JSON.parse($('film-list').dataset.clips || '[]');
   openClip(clips[Number(button.dataset.clip)]);
+});
+$('film-again').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-again]');
+  if (!button) return;
+  const clips = JSON.parse($('film-again').dataset.clips || '[]');
+  openClip(clips[Number(button.dataset.again)]);
 });
 
 // The YouTube IFrame API is what makes it possible to know whether a clip was
@@ -739,6 +767,8 @@ async function openClip(clip) {
   show('film');
   $('film-title').textContent = clip.title;
   $('film-focus').textContent = clip.focus;
+  $('film-credit').textContent = clip.credit ? `From ${clip.credit}. Plays in YouTube's own player.` : '';
+  $('film-broken').classList.add('hidden');
   $('film-question').classList.add('hidden');
   $('film-because').textContent = '';
   $('film-progress').style.width = '0%';
@@ -757,8 +787,29 @@ async function openClip(clip) {
       start: clip.start_s, end: clip.end_s || undefined,
       rel: 0, modestbranding: 1, playsinline: 1,
     },
-    events: { onReady: startBeats },
+    events: { onReady: startBeats, onError: () => videoWontPlay() },
   });
+  // The player can fail without ever raising onError (blocked network, removed video on some
+  // phones). If nothing has started after a while, say so rather than leave a black box.
+  clearTimeout(openClip._wait);
+  openClip._wait = setTimeout(() => {
+    try {
+      if (filmWatch && filmPlayer && !(filmPlayer.getPlayerState && filmPlayer.getPlayerState() === YT.PlayerState.PLAYING)
+          && (!filmPlayer.getCurrentTime || filmPlayer.getCurrentTime() < 1)
+          && !filmPlayer.getVideoData?.().title) videoWontPlay();
+    } catch { videoWontPlay(); }
+  }, 12000);
+}
+
+// The video would not load. Tell the kid plainly, give the slot back, and let the server stop
+// offering it. Reported once per watch.
+async function videoWontPlay() {
+  if (!filmWatch || filmWatch.reported) return;
+  filmWatch.reported = true;
+  clearInterval(filmBeat);
+  $('film-broken').classList.remove('hidden');
+  $('film-state').textContent = '';
+  try { await api(`/api/film/watches/${filmWatch.watch_id}/unavailable`, { method: 'POST' }); } catch { /* nothing more to do */ }
 }
 
 // Beats carry position, not elapsed time: the server measures elapsed itself,
@@ -817,6 +868,7 @@ $('film-options').addEventListener('click', async (event) => {
 
 $('film-done').addEventListener('click', async () => {
   clearInterval(filmBeat);
+  clearTimeout(openClip._wait);
   if (filmPlayer) { filmPlayer.destroy(); filmPlayer = null; }
   filmWatch = null;
   show('home');

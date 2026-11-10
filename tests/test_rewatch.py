@@ -103,8 +103,10 @@ class TestAnAthleteCanAlwaysGoBack:
         watch_fully(store, athlete["id"], clip["id"], today)
 
         feed = store.clips_for_athlete(athlete["id"], program["org_id"], day=today)
-        assert [c["id"] for c in feed["clips"]] == []
-        assert [c["id"] for c in feed["again"]] == [clip["id"]]
+        # The program's own clip is not offered as new, but as another look. (The built-in shelf
+        # adds its own clips to a feed; this test is about the program's.)
+        assert [c["id"] for c in feed["clips"] if not c["shelf"]] == []
+        assert [c["id"] for c in feed["again"] if not c["shelf"]] == [clip["id"]]
 
     def test_starting_it_again_counts_a_second_look(self, store, program):
         athlete = program["athletes"][0]

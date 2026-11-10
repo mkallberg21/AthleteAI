@@ -214,8 +214,9 @@ class TestThroughTheStore:
         assert again["resumed"] is True
 
     def test_clips_too_long_for_a_band_are_not_offered_to_it(self, store, org, athlete):
-        self._clip(store, org, title="Long one", end_s=160)
-        assert store.clips_for_athlete(athlete["id"], org)["clips"] == []
+        long_one = self._clip(store, org, title="Long one", end_s=160)
+        # Not offered to this band. (The built-in shelf may offer other, shorter clips.)
+        assert long_one["id"] not in [c["id"] for c in store.clips_for_athlete(athlete["id"], org)["clips"]]
 
     def test_a_ten_minute_clip_cannot_be_curated_at_all(self, store, org):
         with pytest.raises(StoreError, match="capped at"):

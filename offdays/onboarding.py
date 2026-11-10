@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import guardians
+from . import iq_shelf
 from .config import CONFIG
 
 
@@ -402,7 +403,7 @@ def athlete_progress(conn: sqlite3.Connection, athlete_id: int) -> dict[str, Any
     # a clip that does not exist is a step they cannot take.
     has_film = _count(
         conn, "SELECT COUNT(*) FROM clips WHERE org_id = ? AND active = 1", (org_id,)
-    ) > 0
+    ) > 0 or iq_shelf.is_on(conn, org_id)
     steps = [s for s in ATHLETE_STEPS if s.key != "film" or has_film]
 
     rendered = [s.to_dict(done.get(s.key, False)) for s in steps]

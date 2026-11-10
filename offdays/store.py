@@ -34,6 +34,7 @@ from . import library
 from .drills.catalog import ALL_DRILLS
 from . import family
 from . import film
+from . import iq_shelf
 from . import rtp
 from . import wellness
 from .db import (connect, fresh_token, hash_token, init_db, new_join_code,
@@ -817,6 +818,7 @@ class Store:
                 answer=int(raw["answer"]), because=raw.get("because", ""),
             ) if raw else None,
             active=bool(row["active"]),
+            shelf=row["shelf"] or "", credit=row["credit"] or "",
         )
 
     def clip(self, clip_id: int) -> dict[str, Any]:
@@ -831,6 +833,59 @@ class Store:
                 "UPDATE clips SET active = 0 WHERE id = ? AND org_id = ?",
                 (clip_id, org_id),
             ).rowcount)
+
+    def set_shelf_clip_hidden(self, org_id: int, clip_id: int, hidden: bool) -> bool:
+        """Hide a built-in clip from this program, or bring it back. False if it is not one of theirs.
+
+        Only default-shelf rows: a program's own clips are retired with `retire_clip`. Restoring
+        also forgets the complaints about it, so a link that has been fixed gets a clean start.
+        """
+        with transaction(self.conn) as conn:
+            changed = bool(conn.execute(
+                "UPDATE clips SET active = ? WHERE id = ? AND org_id = ? AND shelf = 'default'",
+                (0 if hidden else 1, clip_id, org_id),
+            ).rowcount)
+            if changed and not hidden:
+                conn.execute("UPDATE clips SET unavailable_n = 0 WHERE id = ?", (clip_id,))
+                conn.execute("UPDATE clip_watches SET unplayable = 0 WHERE clip_id = ?", (clip_id,))
+        return changed
+
+    def set_default_shelf(self, org_id: int, on: bool) -> None:
+        with transaction(self.conn) as conn:
+            conn.execute(
+                "UPDATE organizations SET default_shelf = ? WHERE id = ?", (1 if on else 0, org_id)
+            )
+
+    #: Seconds of real playback after which a "could not play" report is not believed:
+    #: it played, so there is nothing to give back and no reason to blame the video.
+    PLAYED_S = 5.0
+
+    def report_unplayable(self, athlete_id: int, watch_id: int) -> dict[str, Any]:
+        """The player could not load the video (taken down, embedding switched off, blocked).
+
+        Gives the athlete their allowance slot back (a dead link must not cost one of two clips a
+        day), keeps the clip from being offered to them again, and counts the athlete -- once, no
+        matter how many times they retry -- against the clip. Enough different athletes and a
+        built-in clip stops being offered to the whole program.
+        """
+        row = self.conn.execute(
+            "SELECT w.id, w.clip_id, w.watched_s FROM clip_watches w "
+            "WHERE w.id = ? AND w.athlete_id = ?", (watch_id, athlete_id),
+        ).fetchone()
+        if row is None:
+            raise StoreError("no watch with that id")
+        if float(row["watched_s"]) >= self.PLAYED_S:
+            return {"counted": False, "reports": 0}
+        with transaction(self.conn) as conn:
+            conn.execute("UPDATE clip_watches SET unplayable = 1 WHERE id = ?", (watch_id,))
+            reports = int(conn.execute(
+                "SELECT COUNT(DISTINCT athlete_id) FROM clip_watches "
+                "WHERE clip_id = ? AND unplayable = 1", (row["clip_id"],),
+            ).fetchone()[0])
+            conn.execute(
+                "UPDATE clips SET unavailable_n = ? WHERE id = ?", (reports, row["clip_id"])
+            )
+        return {"counted": True, "reports": reports}
 
     def film_day(self, athlete_id: int, day: date | None = None) -> film.DayState:
         """How much film this athlete has had today, against their allowance."""
@@ -847,7 +902,7 @@ class Store:
         )
         row = self.conn.execute(
             "SELECT COALESCE(SUM(watched_s), 0) AS secs, COUNT(*) AS n "
-            "FROM clip_watches WHERE athlete_id = ? AND day = ?",
+            "FROM clip_watches WHERE athlete_id = ? AND day = ? AND unplayable = 0",
             (athlete_id, day.isoformat()),
         ).fetchone()
         return film.DayState(band, float(row["secs"]) / 60.0, int(row["n"]))
@@ -856,6 +911,10 @@ class Store:
         self, athlete_id: int, org_id: int, day: date | None = None, limit: int = 12
     ) -> dict[str, Any]:
         """Today's shortlist, already filtered by age and by what is left.
+
+        The program's own clips come first. The built-in shelf (`iq_shelf`) fills only
+        the room those leave in today's allowance, so a program that added nothing still
+        has something to watch and a program that added plenty never sees filler.
 
         Returns an empty list once the day's allowance is gone rather than a
         list with a disabled flag: a grid of clips an athlete cannot watch is
@@ -868,9 +927,17 @@ class Store:
         ).fetchone()
         age = day.year - int(profile["birth_year"]) if profile and profile["birth_year"] else None
 
+        # A clip this athlete's phone could not play is never offered to them again,
+        # and does not count as having been seen.
+        dead = {
+            int(r["clip_id"]) for r in self.conn.execute(
+                "SELECT DISTINCT clip_id FROM clip_watches WHERE athlete_id = ? AND unplayable = 1",
+                (athlete_id,),
+            )
+        }
         seen = {
             int(r["clip_id"]) for r in self.conn.execute(
-                "SELECT clip_id FROM clip_watches WHERE athlete_id = ? AND day = ?",
+                "SELECT clip_id FROM clip_watches WHERE athlete_id = ? AND day = ? AND unplayable = 0",
                 (athlete_id, day.isoformat()),
             )
         }
@@ -885,11 +952,11 @@ class Store:
         # the screen can say plainly which is which.
         again: list[dict[str, Any]] = []
         for row in self.conn.execute(
-            "SELECT * FROM clips WHERE org_id = ? AND active = 1 ORDER BY id DESC",
+            "SELECT * FROM clips WHERE org_id = ? AND active = 1 AND shelf = '' ORDER BY id DESC",
             (org_id,),
         ):
             clip = self._row_to_clip(row)
-            if not clip.suits(age, state.band):
+            if clip.id in dead or not clip.suits(age, state.band):
                 continue
             if clip.id in seen:
                 again.append({
@@ -900,6 +967,10 @@ class Store:
             if state.spent or len(out) >= limit:
                 continue
             out.append(clip.to_dict())
+
+        if iq_shelf.is_on(self.conn, org_id):
+            self._offer_shelf(athlete_id, org_id, day, age, state, dead, out, again, limit)
+
         return {
             "day": state.to_dict(),
             "clips": out,
@@ -908,6 +979,70 @@ class Store:
             # watches a child quietly and this will not be the first thing.
             "rewatch_notice": rewatch.NOTICE,
         }
+
+    def _offer_shelf(
+        self, athlete_id: int, org_id: int, day: date, age: int | None,
+        state: film.DayState, dead: set[int], out: list[dict[str, Any]],
+        again: list[dict[str, Any]], limit: int,
+    ) -> None:
+        """Add today's built-in clips to `out` (new ones, and old ones that are due again)."""
+        iq_shelf.ensure(self.conn, org_id)
+        # An unknown age is treated as the top of the 11-12 band, the same conservative
+        # default every other age limit uses, so nobody is shown what a 15-year-old would be.
+        effective_age = age if age is not None else film.DEFAULT_BAND.max_age
+
+        sport_row = self.conn.execute(
+            "SELECT sport FROM organizations WHERE id = ?", (org_id,)
+        ).fetchone()
+        sport = (sport_row["sport"] if sport_row else None) or "lacrosse"
+        position_row = self.conn.execute(
+            "SELECT position FROM team_members WHERE user_id = ? AND position != '' "
+            "ORDER BY joined_at DESC LIMIT 1", (athlete_id,),
+        ).fetchone()
+        from . import positions as _positions_mod
+
+        resolved = _positions_mod.normalize(position_row["position"], sport) if position_row else None
+        position_key = resolved.key if resolved else None
+
+        history: dict[int, tuple[str, bool]] = {}
+        for r in self.conn.execute(
+            "SELECT clip_id, day, answered, answer_ok FROM clip_watches "
+            "WHERE athlete_id = ? AND unplayable = 0 ORDER BY day ASC, id ASC", (athlete_id,),
+        ):
+            history[int(r["clip_id"])] = (r["day"], r["answered"] is not None and r["answer_ok"] == 0)
+
+        candidates: list[film.Clip] = []
+        for row in self.conn.execute(
+            "SELECT * FROM clips WHERE org_id = ? AND active = 1 AND shelf = 'default' "
+            "AND unavailable_n < ? ORDER BY id", (org_id, iq_shelf.UNAVAILABLE_LIMIT),
+        ):
+            clip = self._row_to_clip(row)
+            if clip.id in dead or not clip.suits(effective_age, state.band):
+                continue
+            # A goalie clip is for goalies. Unknown position sees none of them.
+            if clip.positions and position_key not in clip.positions:
+                continue
+            candidates.append(clip)
+
+        today_iso = day.isoformat()
+        watched_today = {c.id for c in candidates if history.get(c.id, ("", False))[0] == today_iso}
+        for clip in candidates:
+            if clip.id in watched_today:
+                again.append({
+                    **clip.to_dict(),
+                    "looks": rewatch.for_athlete(self.conn, athlete_id, clip.id),
+                })
+
+        if state.spent:
+            return
+        room = min(limit - len(out), state.clips_left - len(out))
+        picked = iq_shelf.pick(
+            [c for c in candidates if c.id not in watched_today], history,
+            today=day, room=room, young=effective_age <= iq_shelf.FUNDAMENTAL_MAX_AGE,
+            age=effective_age,
+        )
+        for clip, days_since in picked:
+            out.append({**clip.to_dict(), "days_since": days_since})
 
     def start_watch(
         self, athlete_id: int, clip_id: int, day: date | None = None
@@ -1196,7 +1331,7 @@ class Store:
 
         clips = self.conn.execute(
             "SELECT id, title, focus, question FROM clips "
-            "WHERE org_id = ? AND active = 1 ORDER BY id DESC",
+            "WHERE org_id = ? AND active = 1 AND shelf = '' ORDER BY id DESC",
             (org_id,),
         ).fetchall()
         names = {

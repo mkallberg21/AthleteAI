@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- the server to a mail provider must never, by itself, start emailing
     -- parents.
     mail_hold   INTEGER NOT NULL DEFAULT 1,
+    -- Whether the built-in Lacrosse IQ shelf is offered to this program's
+    -- players. On unless the director turns it off; the program's own clips
+    -- always come first either way.
+    default_shelf INTEGER NOT NULL DEFAULT 1,
     -- Age at which position-specific training guidance switches on. Below it,
     -- every athlete gets the general-athlete drill mix regardless of the
     -- position on their jersey.
@@ -293,7 +297,16 @@ CREATE TABLE IF NOT EXISTS clips (
     question    TEXT,
     active      INTEGER NOT NULL DEFAULT 1,
     created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    -- '' = a clip this program's own staff added. 'default' = a clip from the
+    -- built-in shelf (offdays/iq_shelf.py), copied in the first time a player
+    -- opens film so watches, questions and coverage work on it like any other.
+    shelf       TEXT NOT NULL DEFAULT '',
+    -- Whose video it is, shown to the player ("From Lacrosse Film Room").
+    credit      TEXT NOT NULL DEFAULT '',
+    -- How many players' phones could not play it. A video can be taken down or
+    -- stop allowing embedding at any time; three of these and it stops being offered.
+    unavailable_n INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_clips_org ON clips(org_id, active);
 
@@ -322,6 +335,10 @@ CREATE TABLE IF NOT EXISTS clip_watches (
     -- it, so it is counted rather than prevented -- and counted here, on the
     -- watch, so that no separate table has to be kept in step with it.
     looks        INTEGER NOT NULL DEFAULT 1,
+    -- The player's phone could not play the video. Kept on the row (not deleted)
+    -- so the clip is not offered to them again, and ignored when counting the
+    -- day's allowance so a dead link never costs them one of their few clips.
+    unplayable   INTEGER NOT NULL DEFAULT 0,
     answered     INTEGER,
     answer_ok    INTEGER,
     xp_awarded   INTEGER NOT NULL DEFAULT 0,
@@ -1312,6 +1329,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("teamsnap_user", "TEXT NOT NULL DEFAULT ''"),
         ("teamsnap_connected_at", "TEXT NOT NULL DEFAULT ''"),
         ("position_emphasis_min_age", "INTEGER NOT NULL DEFAULT 15"),
+        ("default_shelf", "INTEGER NOT NULL DEFAULT 1"),
         ("voice_name", "TEXT NOT NULL DEFAULT ''"),
         ("voice_title", "TEXT NOT NULL DEFAULT ''"),
         ("kind", "TEXT NOT NULL DEFAULT 'program'"),
@@ -1347,6 +1365,12 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
     "clip_watches": [
         ("looks", "INTEGER NOT NULL DEFAULT 1"),
+        ("unplayable", "INTEGER NOT NULL DEFAULT 0"),
+    ],
+    "clips": [
+        ("shelf", "TEXT NOT NULL DEFAULT ''"),
+        ("credit", "TEXT NOT NULL DEFAULT ''"),
+        ("unavailable_n", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }
 

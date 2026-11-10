@@ -50,6 +50,7 @@ from . import rtp as rtp_mod
 from . import wellness as wellness_mod
 from . import transfer as transfer_mod
 from . import film as film_mod
+from . import iq_shelf as iq_shelf_mod
 from . import guardians as guardians_mod
 from . import library
 from . import portability as portability_mod
@@ -3732,6 +3733,23 @@ def my_film(
     return store.clips_for_athlete(principal.id, principal.org_id)
 
 
+@app.post("/api/film/watches/{watch_id}/unavailable")
+def clip_unavailable(
+    watch_id: int,
+    principal: Principal = Depends(_athlete),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The player could not load this video on this phone.
+
+    Gives back the day's slot and stops the clip being offered to this athlete again. A built-in
+    clip that enough different athletes cannot play stops being offered to the whole program.
+    """
+    try:
+        return store.report_unplayable(principal.id, watch_id)
+    except StoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.get("/api/film/history")
 def my_film_history(
     principal: Principal = Depends(_athlete),
@@ -3802,6 +3820,61 @@ def team_film(
     return store.team_film([a["athlete_id"] for a in athletes])
 
 
+@app.get("/api/coach/shelf")
+def default_shelf(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """The built-in Lacrosse IQ shelf as this program sees it: every clip, with a preview link.
+
+    Counts how many athletes have watched one lately and names none of them: this is about whether
+    the shelf is being used, not a list of who is behind.
+    """
+    athletes = coach_roster(
+        store.conn, principal.org_id, None, "week", scope=principal.scope_filter()
+    )
+    return iq_shelf_mod.summary(
+        store.conn, principal.org_id, [a["athlete_id"] for a in athletes]
+    )
+
+
+class ShelfSwitch(BaseModel):
+    on: bool
+
+
+class ShelfClipHidden(BaseModel):
+    hidden: bool
+
+
+@app.put("/api/org/shelf")
+def set_default_shelf(
+    body: ShelfSwitch,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Turn the built-in shelf on or off for the whole program. Directors only.
+
+    Off leaves only the program's own clips. Nothing is deleted either way.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can turn the default shelf on or off")
+    store.set_default_shelf(principal.org_id, body.on)
+    return default_shelf(principal, store)
+
+
+@app.put("/api/coach/shelf/clips/{clip_id}")
+def hide_shelf_clip(
+    clip_id: int,
+    body: ShelfClipHidden,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Hide a built-in clip from this program's players, or bring it back."""
+    if not store.set_shelf_clip_hidden(principal.org_id, clip_id, body.hidden):
+        raise HTTPException(status_code=404, detail="no built-in clip with that id in this program")
+    return {"id": clip_id, "hidden": body.hidden}
+
+
 @app.get("/api/coach/film/coverage")
 def film_coverage(
     team_id: int | None = None,
@@ -3861,7 +3934,7 @@ def list_clips(
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     rows = store.conn.execute(
-        "SELECT * FROM clips WHERE org_id = ? AND active = 1 ORDER BY id DESC",
+        "SELECT * FROM clips WHERE org_id = ? AND active = 1 AND shelf = '' ORDER BY id DESC",
         (principal.org_id,),
     ).fetchall()
     return {

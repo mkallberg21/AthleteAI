@@ -136,6 +136,7 @@ offdays/
   evaluation.py     The tryout artifact: participation and improvement, no volume
   i18n.py           Spanish on the consent, parent and recognition surfaces
   curriculum.py     The lacrosse IQ film syllabus, minus the videos
+  iq_shelf.py       The default Lacrosse IQ shelf: ~70 vetted clips, and when they repeat
   adaptive.py       Athletes the camera was not built for, and what changes
   portability.py    The whole program as documented CSVs — the lock-in answer
   dialect.py        What a Postgres migration would actually cost, measured
@@ -158,7 +159,7 @@ offdays/
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
-  store.py          The largest SQL surface (~34% of queries; see dialect.py)
+  store.py          The largest SQL surface (~35% of queries; see dialect.py)
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
@@ -793,9 +794,9 @@ required step, and it is **record a drill**.
 | 1 | Record one drill | required |
 | 2 | Put it on your home screen | optional |
 | 3 | Say how you feel | optional |
-| 4 | Watch one clip | optional, *only if the program has curated any* |
+| 4 | Watch one clip | optional, *only if the program has curated any, or the default shelf is on* |
 
-The film step is absent where a program has curated nothing, because telling a
+The film step is absent where a program has nothing to watch, because telling a
 kid to watch a clip that does not exist is a step they cannot take. The install
 step is left for the browser to answer — only it knows, so the server reports it
 undone rather than guessing, and the client fills it in from `display-mode`.
@@ -1998,6 +1999,30 @@ clips with a coach's voice over them are the cheapest way to give it to everyone
 Coaches curate clips by pasting a link. Athletes get a short shortlist, filtered
 by age, and it disappears when the day's allowance is gone.
 
+### The default shelf (`iq_shelf.py`)
+
+A program that has added nothing still has film: about seventy YouTube clips
+chosen for lacrosse IQ (reading the game: spacing, cuts, slides, clears, decisions,
+mostly game film with a voice explaining it), with a few fundamentals for the youngest
+players. Each is placed by its own length against the age caps, so a nine-year-old
+never gets more than 75 seconds, and an athlete of unknown age is treated as 11-12.
+
+- **A program's own clips come first**; the shelf fills only the room they leave in
+  that day's allowance. A director can turn the shelf off (nothing is deleted) and any
+  coach can hide a clip they would not use.
+- **It comes round again.** A watched clip is due after 14 days (7 after a missed
+  question), the one seen longest ago first, so a kid sees it a couple of times a month
+  and not once. New clips are offered before repeats, nearest the player's own age first,
+  and for under-13s they alternate basics and reading the game. A second look earns no
+  XP and is never blocked (`rewatch.py`).
+- **A video that will not play** gives the kid their slot back, is not offered to them
+  again, and after three different athletes it stops being offered to the program.
+- **Honest limit.** Every id was checked by machine (public, embeddable, length, captions
+  show a person speaking, no profanity) but nobody has judged whether the coaching is
+  correct. The coach's *Lacrosse IQ shelf* card lists every clip with a preview link and a
+  Hide button for exactly that. Only lacrosse has a shelf; another sport is a new tuple in
+  `SHELVES`.
+
 ### Nothing is uploaded, and the honest caveat
 
 A clip is a **provider and an id** — nothing is downloaded, re-hosted, or
@@ -2741,11 +2766,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 38 modules across 563 call sites.
-store.py holds 34% of them.
+SQL lives in 39 modules across 584 call sites.
+store.py holds 35% of them.
 
-1264 occurrences are mechanical (search-and-replace with tests behind it).
-80 need judgement.
+1314 occurrences are mechanical (search-and-replace with tests behind it).
+81 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...

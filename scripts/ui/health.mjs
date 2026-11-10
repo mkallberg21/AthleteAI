@@ -121,6 +121,14 @@ else {
       ok(`dashboard ${tag}: walkthrough shown first, skipped for the card checks`);
     }
     if (failures.length) bad(`dashboard ${tag}: ${failures.join('; ')}`);
+    // The dashboard is split into tabs and folded cards: a card on another tab or inside a fold is
+    // present but not visible. Reveal everything first so this checks that the cards EXIST and are
+    // right, and leave the tab/fold behaviour to walk-tabs.mjs and walk-fold.mjs.
+    await page.evaluate(() => {
+      document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off'));
+      document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen());
+    });
+    await page.waitForTimeout(300);
     for (const [sel, name] of [['#badge-card', 'badge card'], ['#billing-card', 'cost card'], ['#setup-card', 'setup checklist'], ['#import-card', 'roster source card']]) {
       const b = await box(page, sel);
       if (!b || !b.visible) bad(`dashboard ${tag}: ${name} missing`);

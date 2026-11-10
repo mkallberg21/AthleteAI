@@ -311,12 +311,21 @@ class TestTheAthleteGetsAShorterOne:
         store.check_in(athlete["id"], "fine")
         assert steps(O.athlete_progress(store.conn, athlete["id"]))["check_in"]["done"]
 
-    def test_film_is_not_offered_when_the_program_has_curated_none(self, program, athlete):
+    def test_film_is_not_offered_when_there_is_nothing_to_watch(self, program, athlete):
         """Telling a kid to watch a clip that does not exist is a step they
-        cannot take."""
+        cannot take. With the default shelf off and no clips of the program's
+        own, there is nothing to watch."""
+        store = program["store"]
+        store.set_default_shelf(program["org"], False)
+        keys = {s["key"] for s in O.athlete_progress(store.conn, athlete["id"])["steps"]}
+        assert "film" not in keys
+
+    def test_film_is_offered_from_day_one_by_the_default_shelf(self, program, athlete):
+        """A program that curated nothing still has the built-in shelf, so the
+        step is real rather than a promise."""
         keys = {s["key"] for s in O.athlete_progress(
             program["store"].conn, athlete["id"])["steps"]}
-        assert "film" not in keys
+        assert "film" in keys
 
     def test_film_appears_once_a_coach_adds_one(self, program, athlete):
         store = program["store"]

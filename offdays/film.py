@@ -236,6 +236,10 @@ class Clip:
     max_age: int = 200
     question: Question | None = None
     active: bool = True
+    #: "" for a clip the program's own staff added, "default" for one from the built-in shelf.
+    shelf: str = ""
+    #: Whose video it is, shown to the player.
+    credit: str = ""
 
     @property
     def length_s(self) -> int:
@@ -265,6 +269,8 @@ class Clip:
             "max_age": self.max_age,
             "embed_url": embed_url(self.provider, self.video_id, self.start_s, self.end_s),
             "question": self.question.to_dict(include_answer) if self.question else None,
+            "shelf": self.shelf,
+            "credit": self.credit,
         }
 
 

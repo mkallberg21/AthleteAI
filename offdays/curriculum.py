@@ -164,6 +164,78 @@ FUNDAMENTALS: tuple[Topic, ...] = (
             ),
         ),
     ),
+
+    # --- Beginners (about 7 to 12). The IQ topics above are about reading the game; these are the few
+    # --- basics a brand-new player needs first, each with a question a seven-year-old can answer.
+    Topic(
+        key="lax_fund_stance",
+        title="Getting low: the defensive stance",
+        focus="Fundamentals: stance",
+        positions=DEFENCE, min_age=0, max_age=12, target_s=70,
+        find=(
+            "A coach or player showing a defensive stance from the front and the side: feet wider than "
+            "the shoulders, knees bent, back straight, stick out in front. Youth footage is best."
+        ),
+        ask=Ask(
+            prompt="Why do defenders stay low with their knees bent?",
+            options=(
+                "So they can push off in any direction quickly",
+                "So they look smaller to the attacker",
+                "Because it saves energy for later in the game",
+            ),
+            answer=0,
+            because=(
+                "Low hips and bent knees let a defender change direction in a step. Standing tall "
+                "means you can only go forward, and a dodger goes around you."
+            ),
+        ),
+    ),
+    Topic(
+        key="lax_fund_soft_hands",
+        title="Soft hands: catching without the bounce",
+        focus="Fundamentals: catching",
+        positions=FIELD, min_age=0, max_age=12, target_s=60,
+        find=(
+            "A short clip of a player catching passes, ideally in slow motion, where the stick and "
+            "the back shoulder move back with the ball as it lands."
+        ),
+        ask=Ask(
+            prompt="What do 'soft hands' mean when a pass comes in?",
+            options=(
+                "The stick gives back with the ball as it lands",
+                "You hold the stick as tight and still as you can",
+                "You reach out as far as you can to grab it early",
+            ),
+            answer=0,
+            because=(
+                "A stick that gives with the ball cushions it so it settles in the pocket. A stiff "
+                "stick makes the ball bounce straight out."
+            ),
+        ),
+    ),
+    Topic(
+        key="lax_fund_triple_threat",
+        title="Triple threat: stick up by your head",
+        focus="Fundamentals: stick position",
+        positions=FIELD, min_age=0, max_age=12, target_s=60,
+        find=(
+            "A coach explaining the triple-threat position: stick up beside the head after a catch, "
+            "ready to pass, shoot or start a dodge."
+        ),
+        ask=Ask(
+            prompt="Why is holding your stick up by your head called a 'triple threat'?",
+            options=(
+                "You can pass, shoot or start a dodge from there",
+                "It protects your stick from three kinds of checks",
+                "Three teammates can see where the ball is",
+            ),
+            answer=0,
+            because=(
+                "From that spot you can throw, shoot or dodge without moving your stick first, so the "
+                "defender has to guess which one is coming."
+            ),
+        ),
+    ),
 )
 
 # ---------------------------------------------------------------------------
