@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=36">
+<link rel="stylesheet" href="styles.css?v=37">
 </head>
 <body>
 <div class="topbar">
@@ -976,8 +976,8 @@
   <div class="card card--wide" id="import-card">
     <h2>Import a roster</h2>
     <p class="small muted">
-      Pull the roster straight from the program your club uses, or add a
-      file. Either way you see a preview before anything is saved. Files
+      Pull the roster straight from the program your club uses, add a
+      file, or type it in. Either way you see a preview before anything is saved. Files
       are matched loosely (<code>Jersey #</code>, <code>No.</code> and
       <code>Number</code> all work); only a name column is required.
     </p>
@@ -988,6 +988,7 @@
       <button type="button" class="source-btn" data-source="sportsengine"><b>SportsEngine</b><span>Connect with your account</span></button>
       <button type="button" class="source-btn" data-source="link"><b>Another program</b><span>LeagueApps, Stack Sports, a shared sheet&hellip;</span></button>
       <button type="button" class="source-btn source-btn--easiest active" data-source="file"><em class="source-flag">Easiest</em><b>A file</b><span>CSV from anywhere, or a spreadsheet</span></button>
+      <button type="button" class="source-btn" data-source="type"><b>Type it in</b><span>Names and parents, one player at a time or pasted</span></button>
     </div>
 
     <div class="src-panel hidden" id="src-teamsnap">
@@ -1078,6 +1079,37 @@
     </button>
     </div>
 
+    <!-- Typed in by hand: becomes the same CSV an uploaded file is, and goes through the same preview and import. -->
+    <div class="src-panel hidden" id="src-type">
+      <label for="type-team">Import into</label>
+      <select id="type-team"></select>
+      <p class="small muted" style="margin:10px 0">
+        One player per block. Only a name is needed, but a player gets in through a link their parent sends, so
+        add the parent&rsquo;s email for each one. Nothing is saved until you have looked at the preview.
+      </p>
+      <details id="rt-paste">
+        <summary class="small muted" style="cursor:pointer">Paste a list from a spreadsheet, an email or notes</summary>
+        <p class="small muted" style="margin:8px 0">
+          Copy rows from a spreadsheet and paste them here. If the first line names the columns
+          (<i>First Name, Last Name, Parent Email&hellip;</i>) they can be in any order. Otherwise use: first name, last name,
+          birth year, parent email, parent phone, jersey, position.
+        </p>
+        <textarea class="rt-box" id="rt-paste-box" rows="5" aria-label="Pasted roster"></textarea>
+        <div class="rt-actions"><button type="button" class="secondary tiny" id="rt-paste-go">Add these players</button></div>
+      </details>
+      <div class="rt-head" id="rt-head" aria-hidden="true">
+        <span>First name</span><span>Last name</span><span>Born</span><span>Parent email</span><span>Parent mobile</span><span>#</span><span>Position</span><span></span>
+      </div>
+      <div id="rt-rows" style="margin-top:12px"></div>
+      <div class="rt-actions">
+        <button type="button" class="secondary tiny" id="rt-add">+ Add a player</button>
+        <button type="button" class="secondary tiny" id="rt-add5">+ Add 5 more</button>
+      </div>
+      <p class="small muted" id="rt-count"></p>
+      <button type="button" class="inline" id="rt-preview">Preview</button>
+      <div class="err hidden" id="rt-err"></div>
+    </div>
+
     <!-- Files already uploaded. Delete takes one back: the athletes it
          created are removed, except anyone who has trained or whose parent
          has signed up, who are kept and named. -->
@@ -1139,6 +1171,9 @@
 
 <script type="module">
 import { api, esc, fmtDate, getToken, logout, renderBranding, setOrg } from './api.js';
+import {
+  MAX_ROWS as RT_MAX, blankRow, rowProblem, filledRows, firstProblem, withoutParent, buildCsv, parsePaste, mergePasted,
+} from './roster_entry.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -1879,7 +1914,7 @@ const WIZARD_STEPS = [
     lede: 'Name each team the way your club does (\u201c2031 Red\u201d), name its coach, and the day\u2019s wall-ball and shooting numbers fill in from the team\u2019s age. One team is enough to continue; add the rest now or later.',
     done: (st) => st.teams > 0 },
   { key: 'roster', card: 'import-card', title: 'The roster, with parents\u2019 emails',
-    lede: 'Where does your roster live? Tap TeamSnap or SportsEngine to pull it straight in, or add a file from anywhere. Every parent gets an invite; from here the system takes over.',
+    lede: 'Where does your roster live? Tap TeamSnap or SportsEngine to pull it straight in, add a file from anywhere, or type it in. Every parent gets an invite; from here the system takes over.',
     done: (st) => st.athletes > 0 },
   { key: 'send', card: 'slips-card', title: 'Send the invites',
     lede: 'If the program is not sending email, send each invite from your own email with one click. Then you are done: parents sign up, say yes, send their kid the link, and your Families card shows who is where.',
@@ -2894,6 +2929,7 @@ async function loadTeams() {
   $('a-team').innerHTML = options;
   $('b-team').innerHTML = options;
   $('import-team').innerHTML = options;
+  $('type-team').innerHTML = options;
   $('ap-team').innerHTML = options;
   $('sync-team').innerHTML = options;
   $('g-team').innerHTML = options;
@@ -3794,6 +3830,8 @@ function selectSource(key) {
   $('src-teamsnap').classList.toggle('hidden', key !== 'teamsnap');
   $('src-sync').classList.toggle('hidden', !(key in SOURCE_PROVIDER));
   $('src-file').classList.toggle('hidden', key !== 'file');
+  $('src-type').classList.toggle('hidden', key !== 'type');
+  if (key === 'type') rtRender();
   if (key === 'teamsnap') loadTeamSnap().then(() => { $('src-teamsnap-off').style.display = $('teamsnap-block').classList.contains('hidden') ? '' : 'none'; });
   if (key in SOURCE_PROVIDER) {
     const sel = $('sync-provider');
@@ -3946,6 +3984,7 @@ async function doImport() {
     $('chosen-file').textContent = '';
     renderSlips(res);
     $('preview').classList.add('hidden');
+    if (pendingName === RT_NAME) rtReset();
     await Promise.all([loadTeams(), loadAll(), loadParents(IS_DIRECTOR), loadFamilies(), loadBadge(IS_DIRECTOR), loadUploads()]);
     await loadTeamSnap();
     await wizardRefresh();
@@ -3960,6 +3999,150 @@ async function doImport() {
 // import as a file, so the invite, the parent's contact, the funnel and the
 // billing start-day all behave exactly as they do for everyone else.
 function csvCell(v) { return `"${String(v).replace(/"/g, '""')}"`; }
+
+// ---- Type it in. State is a list of rows (roster_entry.js); drawing and wiring are here.
+const RT_NAME = 'Typed in by hand';
+let RT = [blankRow(), blankRow(), blankRow()];
+const RT_TOUCHED = new Set();
+const RT_FIELDS = [
+  ['first', 'First name', 'text', 'given-name'], ['last', 'Last name', 'text', 'family-name'],
+  ['year', 'Born', 'text', ''], ['email', 'Parent email', 'email', ''], ['phone', 'Parent mobile', 'tel', ''],
+  ['jersey', '#', 'text', ''], ['position', 'Position', 'text', ''],
+];
+
+function rtMessage(i) {
+  const m = RT_TOUCHED.has(i) ? rowProblem(RT[i]) : '';
+  const row = document.querySelector(`#rt-rows [data-row="${i}"]`);
+  if (!row) return;
+  row.classList.toggle('bad', !!m);
+  row.querySelector('.rt-msg').textContent = m;
+}
+
+function rtCount() {
+  const n = filledRows(RT).length;
+  const nobody = withoutParent(RT);
+  $('rt-count').textContent = n
+    ? `${n} player${n === 1 ? '' : 's'} typed in.${nobody ? ` ${nobody} ${nobody === 1 ? 'has' : 'have'} no parent email, so ${nobody === 1 ? 'they' : 'they'} cannot be invited.` : ''}`
+    : '';
+}
+
+function rtRender(focusRow, focusKey) {
+  $('rt-rows').innerHTML = RT.map((r, i) => `
+    <div class="rt-row" data-row="${i}">
+      ${RT_FIELDS.map(([k, label, type, auto]) => `
+        <label class="rt-f ${k === 'email' || k === 'phone' ? '' : ''}${k === 'email' ? 'rt-wide' : ''}"><span class="rt-l">${label}</span>
+          <input data-i="${i}" data-k="${k}" type="${type}" value="${esc(r[k])}" autocomplete="off" ${auto ? `autocapitalize="words"` : ''}
+                 ${k === 'year' ? 'inputmode="numeric" maxlength="4" placeholder="2013"' : ''} ${k === 'jersey' ? 'inputmode="numeric" maxlength="3"' : ''}
+                 ${k === 'phone' ? 'inputmode="tel"' : ''} ${k === 'email' ? 'inputmode="email" autocapitalize="off" spellcheck="false"' : ''}></label>`).join('')}
+      <div class="rt-x"><button type="button" class="secondary tiny" data-rt-del="${i}" aria-label="Remove player ${i + 1}">&#10005;</button></div>
+      <div class="rt-msg" role="alert"></div>
+    </div>`).join('');
+  RT.forEach((_, i) => rtMessage(i));
+  rtCount();
+  if (focusRow != null) {
+    const el = document.querySelector(`#rt-rows [data-i="${focusRow}"][data-k="${focusKey || 'first'}"]`);
+    if (el) el.focus();
+  }
+}
+
+function rtReset() {
+  RT = [blankRow(), blankRow(), blankRow()]; RT_TOUCHED.clear();
+  $('rt-err').classList.add('hidden'); rtRender();
+}
+
+function rtAdd(n) {
+  for (let k = 0; k < n && RT.length < RT_MAX; k += 1) RT.push(blankRow());
+  rtRender(RT.length - n, 'first');
+}
+
+$('rt-rows').addEventListener('input', (e) => {
+  const el = e.target.closest('[data-k]');
+  if (!el) return;
+  RT[Number(el.dataset.i)][el.dataset.k] = el.value;
+  rtCount();
+  if (RT_TOUCHED.has(Number(el.dataset.i))) rtMessage(Number(el.dataset.i));
+});
+$('rt-rows').addEventListener('focusout', (e) => {
+  const el = e.target.closest('[data-k]');
+  if (!el) return;
+  const i = Number(el.dataset.i);
+  // A row is judged once the coach leaves it, not while they are still typing in it.
+  // Not when they are reaching for a button: an error line appearing would push that button down from under their
+  // finger, and Preview checks every player anyway.
+  const to = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget : null;
+  const next = to ? to.closest('[data-row]') : null;
+  if (to && to.closest('button')) return;
+  if (!next || Number(next.dataset.row) !== i) { RT_TOUCHED.add(i); rtMessage(i); }
+});
+$('rt-rows').addEventListener('click', (e) => {
+  const del = e.target.closest('[data-rt-del]');
+  if (!del) return;
+  const i = Number(del.dataset.rtDel);
+  RT.splice(i, 1);
+  if (!RT.length) RT.push(blankRow());
+  RT_TOUCHED.clear();
+  rtRender();
+});
+// Enter in the last box of the last row starts a new player, the way a spreadsheet does.
+$('rt-rows').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !e.target.matches('[data-k]')) return;
+  e.preventDefault();
+  const i = Number(e.target.dataset.i), k = e.target.dataset.k;
+  const keys = RT_FIELDS.map((f) => f[0]);
+  const at = keys.indexOf(k);
+  if (at < keys.length - 1) { document.querySelector(`#rt-rows [data-i="${i}"][data-k="${keys[at + 1]}"]`).focus(); return; }
+  if (i === RT.length - 1) rtAdd(1); else document.querySelector(`#rt-rows [data-i="${i + 1}"][data-k="first"]`).focus();
+});
+// Copying a block of cells out of a spreadsheet and pasting into any box fills the rows from there.
+$('rt-rows').addEventListener('paste', (e) => {
+  const el = e.target.closest('[data-k]');
+  if (!el) return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!/[\t\n]/.test(text)) return;                 // an ordinary paste into one box
+  e.preventDefault();
+  const rows = parsePaste(text);
+  if (!rows.length) return;
+  RT = mergePasted(RT, rows, Number(el.dataset.i));
+  RT_TOUCHED.clear();
+  rtRender();
+});
+
+$('rt-add').addEventListener('click', () => rtAdd(1));
+$('rt-add5').addEventListener('click', () => rtAdd(5));
+
+$('rt-paste-go').addEventListener('click', () => {
+  const rows = parsePaste($('rt-paste-box').value);
+  const err = $('rt-err');
+  if (!rows.length) { err.textContent = 'Nothing there to add yet. Paste a few lines first.'; err.classList.remove('hidden'); return; }
+  err.classList.add('hidden');
+  RT = mergePasted(RT, rows, 0);
+  RT_TOUCHED.clear();
+  $('rt-paste-box').value = '';
+  $('rt-paste').open = false;
+  rtRender();
+});
+
+$('rt-preview').addEventListener('click', async () => {
+  const err = $('rt-err');
+  err.classList.add('hidden');
+  if (!filledRows(RT).length) { err.textContent = 'Add at least one player first.'; err.classList.remove('hidden'); return; }
+  const bad = firstProblem(RT);
+  if (bad) {
+    RT.forEach((_, i) => RT_TOUCHED.add(i));
+    rtRender();
+    err.textContent = `Player ${bad.index + 1}: ${bad.message}`;
+    err.classList.remove('hidden');
+    const el = document.querySelector(`#rt-rows [data-i="${bad.index}"]`);
+    if (el) el.scrollIntoView({ block: 'center' });
+    return;
+  }
+  // Same road as a file: this CSV goes to the same preview and the same import.
+  $('import-team').value = $('type-team').value;
+  pendingName = RT_NAME;
+  await previewFile(buildCsv(RT));
+  const p = $('preview');
+  if (p && !p.classList.contains('hidden')) p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 $('ap-add').addEventListener('click', async () => {
   const f = (id) => $(id).value.trim();
   const err = $('ap-err'); err.classList.add('hidden'); $('ap-ok').textContent = '';

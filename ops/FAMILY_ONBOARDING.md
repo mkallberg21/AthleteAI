@@ -70,7 +70,14 @@ re-skin; the athlete's claim code was only on the coach's printed slip, and a pa
 
 1. **Roster card → upload CSV.** Include a `Parent Email` column (see
    `ops/ROSTER_SYNC.md` for every header the parser accepts). Preview, then
-   import.
+   import. **No file?** Choose **Type it in** instead: one block per player
+   (a line per player on a laptop), or paste rows copied from a spreadsheet,
+   an email or notes. It builds the same CSV in the browser
+   (`offdays/web/static/roster_entry.js`) and sends it to the same preview and
+   the same import, so everything below is identical: the parent is invited
+   first, no code is made for the child, the program's email hold still
+   applies, and a name typed twice is skipped with the reason. Works the same
+   in every sport.
 2. Read the slips card note: "*N of M parent invites were emailed*". Print
    the slips **only** for families without an address on the roster, and the
    athlete claim codes as the fallback for a parent who never opens the email.

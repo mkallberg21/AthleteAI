@@ -46,6 +46,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from . import csv_safe
+
 #: Bumped when a column changes meaning, so a file that outlives this codebase
 #: can still be read correctly by whatever reads it next.
 SCHEMA_VERSION = 1
@@ -60,7 +62,7 @@ def _csv(rows: list[sqlite3.Row], columns: list[str]) -> str:
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(columns)
     for row in rows:
-        writer.writerow(["" if row[c] is None else row[c] for c in columns])
+        writer.writerow([csv_safe.cell("" if row[c] is None else row[c]) for c in columns])
     return out.getvalue()
 
 

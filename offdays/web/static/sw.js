@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v8';
+const CACHE = 'offdays-shell-v9';
 
 const SHELL = [
   './',
@@ -44,6 +44,8 @@ const SHELL = [
   // The estimate itself is made on the server; distance.js is the bench copy.
   'scene.js',
   'review.js',
+  // Typing a roster in by hand: imported by the coach page.
+  'roster_entry.js',
   'offline.js',
   'manifest.webmanifest',
 ];

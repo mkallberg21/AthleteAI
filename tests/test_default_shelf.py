@@ -49,7 +49,9 @@ def kid(store, org, name="Sam", age=12, position=None, **kw):
 
 
 def offered(store, athlete, org, day=None):
-    return store.clips_for_athlete(athlete["id"], org, day=day)
+    # The watches below are stamped with TODAY (this machine's date). Ask for the same day, not the UTC
+    # date the store would default to, or these tests fail every evening once UTC has rolled over.
+    return store.clips_for_athlete(athlete["id"], org, day=day or TODAY)
 
 
 def watch_through(store, athlete, clip, day=None, answer=None):

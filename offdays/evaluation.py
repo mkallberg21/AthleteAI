@@ -40,6 +40,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import absence as absence_mod
+from . import csv_safe
 from . import wellness as wellness_mod
 
 #: Below this many scored sessions a form trend is noise, and printing one
@@ -284,7 +285,7 @@ class Export:
         ])
         for row in self.rows:
             writer.writerow([
-                row.display_name,
+                csv_safe.cell(row.display_name),
                 row.weeks_active,
                 row.weeks_available,
                 f"{row.participation:.0%}" if row.participation is not None else "",

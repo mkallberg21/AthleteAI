@@ -25,6 +25,8 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+from . import csv_safe
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -167,11 +169,11 @@ def to_csv(rows: list[dict[str, Any]]) -> str:
     for r in rows:
         def tri(v: bool | None) -> str:
             return "not asked" if v is None else ("yes" if v else "no")
-        w.writerow([
+        w.writerow([csv_safe.cell(v) for v in [
             r["name"], r["email"], r["phone"], r["relationship"], r["athlete_name"],
             r["birth_year"] or "", r["teams"], "yes" if r["has_account"] else "no",
             tri(r["marketing"]), tri(r["participation"]), r["source"], r["added_on"],
-        ])
+        ]])
     return buf.getvalue()
 
 
