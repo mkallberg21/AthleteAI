@@ -84,6 +84,14 @@ re-skin; the athlete's claim code was only on the coach's printed slip, and a pa
 3. Nothing else. The dashboard's "N athletes waiting on a parent" blocker
    names who has not yet said yes.
 
+**Many at once.** On the Families card, tick the families (or **Select everyone**) and press the button above the list.
+`POST /api/coach/families/nudge-many` runs the same `_nudge_one` as the single **Resend invite to parent** for each
+athlete, so every rule is identical: a parent already signed up, no address on file, another program's athlete, or a
+team a coach does not have are each skipped *with the reason* and never stop the others; one live invite per athlete; one
+invite per athlete however often the id repeats; at most 200 per tap. While the email hold is on nothing is emailed:
+each family is "ready" and the page offers its own **Send email** link plus **Copy all N messages**. Changing the filter
+clears the ticks, so nothing out of sight is ever sent. With email on, the director confirms first.
+
 A single parent can also be invited from the roster row (**Invite**). With
 an email it is sent; without one the code is shown to read out.
 

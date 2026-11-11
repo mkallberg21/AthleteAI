@@ -3046,6 +3046,66 @@ class NudgeRequest(BaseModel):
     athlete_id: int
 
 
+def _nudge_one(principal: Principal, store: Store, athlete_id: int) -> dict[str, Any]:
+    """Make a fresh parent invite for one athlete and send it if the program is sending.
+
+    The one place this happens, for the single button and for "many at once", so the two cannot drift apart.
+    Raises HTTPException with the reason when this family cannot be invited.
+    """
+    owner = store.conn.execute(
+        "SELECT org_id FROM users WHERE id = ? AND role = 'athlete' AND active = 1",
+        (athlete_id,),
+    ).fetchone()
+    if owner is None:
+        raise HTTPException(status_code=404, detail="unknown athlete")
+    if owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=403, detail="athlete belongs to another program")
+    if not store.staff_can_see_athlete(principal, athlete_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that athlete's team")
+    if store.conn.execute(
+        "SELECT 1 FROM guardians WHERE athlete_id = ?", (athlete_id,)
+    ).fetchone():
+        raise HTTPException(
+            status_code=409,
+            detail="a parent is already signed up for this athlete; the next step is theirs",
+        )
+    contact = store.conn.execute(
+        "SELECT email FROM guardian_contacts WHERE athlete_id = ? AND email <> '' "
+        "ORDER BY id LIMIT 1",
+        (athlete_id,),
+    ).fetchone()
+    if contact is None:
+        raise HTTPException(status_code=409, detail="no parent email on file for this athlete")
+    with transaction(store.conn) as c:
+        c.execute(
+            "UPDATE guardian_invites SET revoked_at = ? WHERE athlete_id = ? "
+            "AND redeemed_at IS NULL AND revoked_at IS NULL",
+            (guardians_mod._iso(guardians_mod._now()), athlete_id),
+        )
+    invite = guardians_mod.create_invite(
+        store.conn, athlete_id, principal.id, contact["email"]
+    )
+    sent = invites_mod.deliver(
+        store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
+    )
+    subject, _html, text = invites_mod.compose(
+        athlete_name=invite["athlete_name"], code=invite["code"],
+        **store._invite_sender(principal.org_id, principal.id),
+    )
+    return {
+        "athlete_id": athlete_id,
+        "invite_id": invite["invite_id"],
+        "display_name": invite["athlete_name"],
+        "email": contact["email"],
+        "code": invite["code"],
+        "link": invites_mod.invite_link(invite["code"]),
+        "subject": subject,
+        "text": text,
+        "emailed": sent,
+        "smtp_configured": mailer.can_send(store.conn, principal.org_id),
+    }
+
+
 @app.post("/api/coach/families/nudge", status_code=201)
 def nudge_family(
     body: NudgeRequest,
@@ -3060,55 +3120,50 @@ def nudge_family(
     Refused once a parent is linked -- from there the next move is the
     parent's, and the dashboard says so instead of sending mail.
     """
-    owner = store.conn.execute(
-        "SELECT org_id FROM users WHERE id = ? AND role = 'athlete' AND active = 1",
-        (body.athlete_id,),
-    ).fetchone()
-    if owner is None:
-        raise HTTPException(status_code=404, detail="unknown athlete")
-    if owner["org_id"] != principal.org_id:
-        raise HTTPException(status_code=403, detail="athlete belongs to another program")
-    if not store.staff_can_see_athlete(principal, body.athlete_id):
-        raise HTTPException(status_code=403, detail="you are not assigned to that athlete's team")
-    if store.conn.execute(
-        "SELECT 1 FROM guardians WHERE athlete_id = ?", (body.athlete_id,)
-    ).fetchone():
-        raise HTTPException(
-            status_code=409,
-            detail="a parent is already signed up for this athlete; the next step is theirs",
-        )
-    contact = store.conn.execute(
-        "SELECT email FROM guardian_contacts WHERE athlete_id = ? AND email <> '' "
-        "ORDER BY id LIMIT 1",
-        (body.athlete_id,),
-    ).fetchone()
-    if contact is None:
-        raise HTTPException(status_code=409, detail="no parent email on file for this athlete")
-    with transaction(store.conn) as c:
-        c.execute(
-            "UPDATE guardian_invites SET revoked_at = ? WHERE athlete_id = ? "
-            "AND redeemed_at IS NULL AND revoked_at IS NULL",
-            (guardians_mod._iso(guardians_mod._now()), body.athlete_id),
-        )
-    invite = guardians_mod.create_invite(
-        store.conn, body.athlete_id, principal.id, contact["email"]
-    )
-    sent = invites_mod.deliver(
-        store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
-    )
-    subject, _html, text = invites_mod.compose(
-        athlete_name=invite["athlete_name"], code=invite["code"],
-        **store._invite_sender(principal.org_id, principal.id),
-    )
+    return _nudge_one(principal, store, body.athlete_id)
+
+
+#: Most families one tap will take. A program of a few hundred is several taps, and a runaway list is refused.
+NUDGE_MANY_MAX = 200
+
+
+class NudgeManyRequest(BaseModel):
+    athlete_ids: list[int] = Field(min_length=1, max_length=NUDGE_MANY_MAX)
+
+
+@app.post("/api/coach/families/nudge-many", status_code=201)
+def nudge_many_families(
+    body: NudgeManyRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Send (or re-send) the parent invite to many families in one go.
+
+    Exactly the single "Resend invite to parent" for each athlete, judged on its own: a family that cannot be
+    invited (a parent already signed up, no address, another program's athlete, a team this coach does not have) is
+    skipped with the reason and never stops or touches the others. Each athlete is handled once however many times
+    their id appears. The program's email hold applies per family exactly as it does for one: while held, each result
+    is `ready` (an invite made for the director to send himself) and nobody is emailed.
+    """
+    results: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for athlete_id in body.athlete_ids:
+        if athlete_id in seen:
+            continue
+        seen.add(athlete_id)
+        try:
+            made = _nudge_one(principal, store, athlete_id)
+        except HTTPException as err:
+            results.append({"athlete_id": athlete_id, "status": "skipped", "reason": str(err.detail)})
+            continue
+        results.append({**made, "status": "sent" if made["emailed"] else "ready"})
+    sent = sum(1 for r in results if r["status"] == "sent")
+    ready = sum(1 for r in results if r["status"] == "ready")
     return {
-        "athlete_id": body.athlete_id,
-        "invite_id": invite["invite_id"],
-        "email": contact["email"],
-        "code": invite["code"],
-        "link": invites_mod.invite_link(invite["code"]),
-        "subject": subject,
-        "text": text,
+        "results": results,
         "emailed": sent,
+        "counts": {"invited": sent + ready, "emailed": sent, "ready": ready,
+                   "skipped": len(results) - sent - ready},
         "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }
 

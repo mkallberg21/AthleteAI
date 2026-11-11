@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=37">
+<link rel="stylesheet" href="styles.css?v=38">
 </head>
 <body>
 <div class="topbar">
@@ -427,8 +427,9 @@
       upload and a kid who trains. Each row says whose move it is. Where the
       next move is a parent who has not opened their invite, <b>Resend invite
       to parent</b> makes them a fresh one at the address the roster gave.
-      The program sends nothing unless email is set up: you get the message
-      to send yourself.
+      To do many at once, tick the families (or <b>Select everyone</b>) and
+      press the button above the list. The program sends nothing unless email
+      is set up: you get each message to send yourself.
     </p>
     <div id="families-counts" class="small" style="margin:8px 0 10px"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
@@ -440,6 +441,11 @@
         <option value="program">Waiting on the program</option>
         <option value="all">Everyone</option>
       </select>
+    </div>
+    <div id="fam-bulk-result" class="fam-result hidden" role="status"></div>
+    <div id="fam-bar" class="fam-bar hidden">
+      <label><input type="checkbox" id="fam-all"><span id="fam-all-label">Select everyone who can be sent an invite</span></label>
+      <button type="button" class="inline" id="fam-bulk-send" disabled>Send invites</button>
     </div>
     <div id="families"></div>
     <div id="families-err" class="err hidden"></div>
@@ -3369,7 +3375,12 @@ function renderFamilies() {
       : a.can_nudge
       ? `<button class="secondary inline" data-nudge="${a.athlete_id}" title="Makes a fresh invite for this athlete's parent. Nothing is sent until you send it.">Resend invite to parent</button>`
       : '';
-    return `<div class="family-row">
+    const pickable = a.can_nudge && !resent.has(a.athlete_id);
+    const pick = pickable
+      ? `<label class="fam-pick"><input type="checkbox" data-fam-pick="${a.athlete_id}" ${famPicked.has(a.athlete_id) ? 'checked' : ''} aria-label="Select ${esc(a.display_name)}"></label>`
+      : '';
+    return `<div class="family-row${pickable ? ' has-pick' : ''}">
+      ${pick}
       <div class="family-main">
         <b>${esc(a.display_name)}</b> <span class="small muted">${esc(a.team_name || 'No team')}</span>
         <div class="family-stage">${whose} ${esc(a.label)}${when}</div>
@@ -3378,9 +3389,102 @@ function renderFamilies() {
       <div>${action}</div>
     </div>`;
   }).join('') : `<p class="muted small">${mode === 'stuck' ? 'Everyone is training.' : 'Nobody here.'}</p>`;
+  famBar(rows);
 }
 
-$('families-filter').addEventListener('change', renderFamilies);
+// ---- Send or resend to many families at once. The server does exactly what the single button does, per family.
+const famPicked = new Set();
+let famShown = [];          // the families in the list right now that a tap could send to
+let famRows = [];           // every family in the list right now
+
+function famBar(rows) {
+  famRows = rows;
+  famShown = rows.filter((a) => a.can_nudge && !resent.has(a.athlete_id));
+  const shownIds = new Set(famShown.map((a) => a.athlete_id));
+  for (const id of [...famPicked]) if (!shownIds.has(id)) famPicked.delete(id);   // never act on a family you cannot see
+  const bar = $('fam-bar');
+  bar.classList.toggle('hidden', famShown.length === 0);
+  if (!famShown.length) return;
+  const n = famPicked.size;
+  $('fam-all').checked = n === famShown.length;
+  $('fam-all').indeterminate = n > 0 && n < famShown.length;
+  $('fam-all-label').textContent = n
+    ? `${n} of ${famShown.length} selected`
+    : `Select everyone (${famShown.length}) who can be sent an invite`;
+  const picked = famShown.filter((a) => famPicked.has(a.athlete_id));
+  const fresh = picked.filter((a) => a.stage === 'invite_unsent').length;
+  const verb = !picked.length ? 'Send invites' : fresh === picked.length ? 'Send invites' : fresh === 0 ? 'Resend invites' : 'Send or resend invites';
+  const btn = $('fam-bulk-send');
+  btn.textContent = n ? `${verb} to ${n} parent${n === 1 ? '' : 's'}` : 'Send invites';
+  btn.disabled = n === 0;
+}
+
+$('families').addEventListener('change', (e) => {
+  const box = e.target.closest('input[data-fam-pick]');
+  if (!box) return;
+  const id = Number(box.dataset.famPick);
+  if (box.checked) famPicked.add(id); else famPicked.delete(id);
+  // the label and the button follow the ticks without redrawing the list (and losing the scroll position)
+  famBar(famRows);
+});
+
+$('fam-all').addEventListener('change', () => {
+  if ($('fam-all').checked) famShown.forEach((a) => famPicked.add(a.athlete_id)); else famPicked.clear();
+  renderFamilies();
+});
+
+$('fam-bulk-send').addEventListener('click', async () => {
+  const ids = famShown.filter((a) => famPicked.has(a.athlete_id)).map((a) => a.athlete_id);
+  if (!ids.length) return;
+  const sending = familiesData && familiesData.mail_sending;
+  if (sending && !window.confirm(`Email ${ids.length} parent${ids.length === 1 ? '' : 's'} now?\n\nEach gets a fresh invite, and any earlier invite to them stops working.`)) return;
+  const btn = $('fam-bulk-send');
+  const result = $('fam-bulk-result');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  result.classList.add('hidden');
+  const done = [];
+  const skipped = [];
+  let failure = '';
+  try {
+    for (let i = 0; i < ids.length; i += 200) {
+      const res = await api('/api/coach/families/nudge-many', { method: 'POST', body: { athlete_ids: ids.slice(i, i + 200) } });
+      for (const r of res.results) {
+        if (r.status === 'skipped') skipped.push(r); else { done.push(r); resent.set(r.athlete_id, r); }
+      }
+    }
+  } catch (err) {
+    failure = err.message || 'Something went wrong part-way.';
+  }
+  const names = new Map(familiesData.athletes.map((a) => [a.athlete_id, a.display_name]));
+  const emailed = done.filter((r) => r.status === 'sent').length;
+  const ready = done.length - emailed;
+  const line = [];
+  if (emailed) line.push(`<b>Emailed ${emailed} parent${emailed === 1 ? '' : 's'}.</b>`);
+  if (ready) line.push(`<b>${ready} invite${ready === 1 ? ' is' : 's are'} ready.</b> Nothing was emailed, because the program is not sending email. `
+    + `Each has its own link, so send each from your own email (the <b>Send email</b> link on its row), or copy them all and paste them where you write email. `
+    + `<button type="button" class="tiny" id="fam-copy-all">Copy all ${ready} messages</button>`);
+  if (!done.length && !failure) line.push('Nothing was sent.');
+  if (failure) line.push(`<span style="color:var(--danger)">${esc(failure)}</span>`);
+  const why = skipped.length
+    ? `<div class="why">${skipped.length} skipped: ${skipped.map((r) => `${esc(names.get(r.athlete_id) || 'Athlete ' + r.athlete_id)} (${esc(r.reason)})`).join('; ')}.</div>`
+    : '';
+  result.innerHTML = `${line.join(' ')}${why}`;
+  result.classList.remove('hidden');
+  const copyAll = $('fam-copy-all');
+  if (copyAll) {
+    const text = done.filter((r) => r.status === 'ready').map((r) => inviteAsText(r)).join('\n\n----------------------------------------\n\n');
+    copyAll.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); copyAll.textContent = 'Copied'; }
+      catch { copyAll.textContent = 'Could not copy'; }
+    });
+  }
+  famPicked.clear();
+  renderFamilies();
+  loadFamilies();
+});
+
+$('families-filter').addEventListener('change', () => { famPicked.clear(); renderFamilies(); });
 
 $('families').addEventListener('click', async (e) => {
   const msg = e.target.closest('button[data-copy-message]');
