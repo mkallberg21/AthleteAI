@@ -128,7 +128,7 @@ for (const [label, device] of [['phone', 'iPhone 13'], ['laptop', 'Desktop Chrom
     document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen());
   });
   await page.waitForTimeout(600);
-  check(await page.locator('#shelf-card').isVisible(), `${label}: the Lacrosse IQ shelf card is on the dashboard`);
+  check(await page.locator('#shelf-card').isVisible(), `${label}: the Lacrosse IQ Library card is on the dashboard`);
   const count = await page.locator('#shelf-count').innerText();
   check(/\d+ of \d+ showing/.test(count), `${label}: it says how many clips are showing (${count})`);
   await page.locator('#shelf-details summary').click();

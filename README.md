@@ -136,7 +136,7 @@ offdays/
   evaluation.py     The tryout artifact: participation and improvement, no volume
   i18n.py           Spanish on the consent, parent and recognition surfaces
   curriculum.py     The lacrosse IQ film syllabus, minus the videos
-  iq_shelf.py       The default Lacrosse IQ shelf: ~70 vetted clips, and when they repeat
+  iq_shelf.py       The default Lacrosse IQ Library: ~70 vetted clips, and when they repeat
   video_scout.py    Weekly YouTube scan: suggested clips a coach can add (nothing automatic)
   adaptive.py       Athletes the camera was not built for, and what changes
   portability.py    The whole program as documented CSVs — the lock-in answer
@@ -2020,7 +2020,7 @@ never gets more than 75 seconds, and an athlete of unknown age is treated as 11-
   again, and after three different athletes it stops being offered to the program.
 - **Honest limit.** Every id was checked by machine (public, embeddable, length, captions
   show a person speaking, no profanity) but nobody has judged whether the coaching is
-  correct. The coach's *Lacrosse IQ shelf* card lists every clip with a preview link and a
+  correct. The coach's *Lacrosse IQ Library* card lists every clip with a preview link and a
   Hide button for exactly that. Only lacrosse has a shelf; another sport is a new tuple in
   `SHELVES`.
 

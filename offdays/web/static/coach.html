@@ -664,7 +664,7 @@
   </div>
 
   <div class="card" id="shelf-card">
-    <h2>Lacrosse IQ shelf <span class="small muted" id="shelf-count"></span></h2>
+    <h2>Lacrosse IQ Library <span class="small muted" id="shelf-count"></span></h2>
     <p class="small muted" id="shelf-intro">
       Until you add your own clips, players watch these: game film and coaching with a voice
       explaining what to look for, picked for each age. Each one comes round again after a couple
@@ -673,7 +673,7 @@
     <p class="small" id="shelf-use"></p>
     <div id="shelf-switch" style="margin:8px 0"></div>
     <details id="shelf-details">
-      <summary class="small muted" style="cursor:pointer">Look through the shelf and hide any you do not want</summary>
+      <summary class="small muted" style="cursor:pointer">Look through the library and hide any you do not want</summary>
       <p class="small muted" style="margin-top:8px">
         These were checked by machine: each plays, fits the age it is shown to, has a person
         speaking, and has no swearing in the captions. Nobody has judged whether the coaching in
@@ -2512,8 +2512,8 @@ function renderShelf() {
       : 'Nobody has watched one yet.';
   $('shelf-switch').innerHTML = IS_DIRECTOR
     ? (SHELF.on
-        ? '<button class="secondary tiny" id="shelf-off">Turn the shelf off</button>'
-        : '<button class="tiny" id="shelf-on">Turn the shelf on</button>')
+        ? '<button class="secondary tiny" id="shelf-off">Turn the library off</button>'
+        : '<button class="tiny" id="shelf-on">Turn the library on</button>')
     : '';
   const kind = { FILM: 'Game film', TEACH: 'Coach explains' };
   $('shelf-list').innerHTML = SHELF.clips.map((c) => `
@@ -2527,7 +2527,7 @@ function renderShelf() {
 $('shelf-switch').addEventListener('click', async (event) => {
   const on = event.target.id === 'shelf-on';
   if (event.target.id !== 'shelf-on' && event.target.id !== 'shelf-off') return;
-  if (!on && !confirm('Turn off the built-in shelf? Players will see only the clips you add. Nothing is deleted.')) return;
+  if (!on && !confirm('Turn off the built-in library? Players will see only the clips you add. Nothing is deleted.')) return;
   try { SHELF = await api('/api/org/shelf', { method: 'PUT', body: { on } }); renderShelf(); } catch (e) { showError(e.message); }
 });
 $('shelf-list').addEventListener('click', async (event) => {
