@@ -519,7 +519,7 @@ def client(tmp_path):
 
 
 def program(client):
-    res = client.post("/api/orgs", json={"name": "Northshore", "director_name": "Dir"}).json()
+    res = client.post("/api/orgs", json={"name": "Northshore", "accept_terms": True, "director_name": "Dir"}).json()
     return res, {"Authorization": f"Bearer {res['director']['token']}"}
 
 

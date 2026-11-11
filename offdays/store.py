@@ -1580,9 +1580,93 @@ class Store:
         if name and not ((TEAM_LOGOS / name).exists() or (CONFIG.uploads_dir / name).exists()):
             raise StoreError(f"no such logo: {name}")
         with transaction(self.conn) as conn:
-            conn.execute("UPDATE organizations SET logo_file = ? WHERE id = ?",
-                         (name or None, org_id))
+            # Any new or removed image drops the website approval: what was
+            # looked at is no longer what is stored, even when the file name
+            # (org-<id>.png) happens to be the same.
+            conn.execute("UPDATE organizations SET logo_file = ?, showcase_approved_logo = NULL "
+                         "WHERE id = ?", (name or None, org_id))
         return self.org_branding(org_id)
+
+    # ------------------------------------------------ terms and the website wall
+    TERMS_VERSION = "2026-11"
+    _NOT_PUBLIC = ("UI health",)
+
+    def showcase_status(self, org_id: int) -> dict[str, Any]:
+        """What the director is told about their place on the website."""
+        row = self.conn.execute(
+            "SELECT showcase_ok, logo_file, showcase_approved_logo FROM organizations WHERE id = ?",
+            (org_id,)).fetchone()
+        if row is None:
+            raise StoreError("unknown program")
+        allowed = bool(row["showcase_ok"])
+        logo = (row["logo_file"] or "").strip()
+        if not allowed:
+            status = "withdrawn"
+        elif not logo:
+            status = "no_logo"
+        elif row["showcase_approved_logo"] == logo:
+            status = "live"
+        elif row["showcase_approved_logo"] == "!" + logo:
+            status = "declined"
+        else:
+            status = "waiting"
+        return {"allowed": allowed, "status": status}
+
+    def set_showcase_allowed(self, org_id: int, allowed: bool) -> dict[str, Any]:
+        with transaction(self.conn) as conn:
+            conn.execute("UPDATE organizations SET showcase_ok = ? WHERE id = ?",
+                         (1 if allowed else 0, org_id))
+        return self.showcase_status(org_id)
+
+    def _showcase_rows(self) -> list[sqlite3.Row]:
+        rows = self.conn.execute(
+            "SELECT id, name, sport, logo_file, showcase_ok, showcase_approved_logo FROM organizations "
+            "WHERE showcase_ok = 1 AND COALESCE(logo_file, '') <> '' ORDER BY name COLLATE NOCASE, id"
+        ).fetchall()
+        return [r for r in rows
+                if not any((r["name"] or "").startswith(p) for p in self._NOT_PUBLIC)
+                and (CONFIG.uploads_dir / r["logo_file"]).exists()]
+
+    def public_showcase(self) -> list[dict[str, str]]:
+        """The wall on the website: only what has been looked at and approved."""
+        out = []
+        for r in self._showcase_rows():
+            if r["showcase_approved_logo"] != r["logo_file"]:
+                continue
+            sport = sports.normalize(r["sport"])
+            out.append({"name": r["name"], "sport": sport.label if sport else "",
+                        "logo": f"/uploads/{r['logo_file']}"})
+        return out
+
+    def showcase_review(self) -> dict[str, list[dict[str, Any]]]:
+        """For the operator: images waiting for a look, and the ones live now."""
+        waiting, live = [], []
+        for r in self._showcase_rows():
+            item = {"org_id": r["id"], "name": r["name"], "logo": f"/uploads/{r['logo_file']}"}
+            if r["showcase_approved_logo"] == "!" + r["logo_file"]:
+                continue  # hidden by the operator: stays down until a different image is uploaded
+            (live if r["showcase_approved_logo"] == r["logo_file"] else waiting).append(item)
+        return {"waiting": waiting, "live": live}
+
+    def approve_showcase(self, org_id: int) -> None:
+        row = self.conn.execute(
+            "SELECT showcase_ok, logo_file FROM organizations WHERE id = ?", (org_id,)).fetchone()
+        if row is None:
+            raise StoreError("unknown program")
+        if not row["showcase_ok"] or not (row["logo_file"] or "").strip():
+            return  # nothing to approve: no permission, or no image
+        with transaction(self.conn) as conn:
+            conn.execute("UPDATE organizations SET showcase_approved_logo = logo_file WHERE id = ?",
+                         (org_id,))
+
+    def hide_showcase(self, org_id: int) -> None:
+        if self.conn.execute("SELECT 1 FROM organizations WHERE id = ?", (org_id,)).fetchone() is None:
+            raise StoreError("unknown program")
+        with transaction(self.conn) as conn:
+            # "!" + file marks this exact image as declined. A new upload resets the
+            # column, so it is looked at again; the same image is not queued again.
+            conn.execute("UPDATE organizations SET showcase_approved_logo = '!' || COALESCE(logo_file, '') "
+                         "WHERE id = ?", (org_id,))
 
     def recognition_templates(self, org_id: int) -> list[dict[str, Any]]:
         """Every milestone, with the writer's own words where they wrote any.
@@ -2756,11 +2840,15 @@ class Store:
     # Org / team / user setup
     # ------------------------------------------------------------------
 
-    def create_org(self, name: str, sport: str = "lacrosse") -> int:
+    def create_org(self, name: str, sport: str = "lacrosse", *, terms_accepted: bool = False) -> int:
         with transaction(self.conn) as c:
             cur = c.execute(
-                "INSERT INTO organizations(name, sport, created_at) VALUES (?,?,?)",
-                (name, sport, _iso(_now())),
+                "INSERT INTO organizations(name, sport, created_at, terms_accepted_at, terms_version, "
+                "showcase_ok) VALUES (?,?,?,?,?,?)",
+                (name, sport, _iso(_now()),
+                 _iso(_now()) if terms_accepted else None,
+                 self.TERMS_VERSION if terms_accepted else None,
+                 1 if terms_accepted else 0),
             )
         org_id = int(cur.lastrowid)
         # New programs go straight on the club plan: fifty cents per rostered

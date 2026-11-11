@@ -10,7 +10,7 @@ const J = { 'Content-Type': 'application/json' };
 const local = (u) => /^https?:/.test(u) ? u.replace(/^https?:\/\/[^/]+/, base) : base + u;
 
 const made = await (await fetch(`${base}/api/orgs`, { method: 'POST', headers: J,
-  body: JSON.stringify({ name: 'Mad Dog Lacrosse', sport: 'lacrosse', director_name: 'Joel White' }) })).json();
+  body: JSON.stringify({ name: 'Mad Dog Lacrosse', sport: 'lacrosse', accept_terms: true, director_name: 'Joel White' }) })).json();
 const H = { Authorization: `Bearer ${made.director.token}`, ...J };
 const team = await (await fetch(`${base}/api/teams`, { method: 'POST', headers: H,
   body: JSON.stringify({ name: '2031 Red', coach_name: 'Sam Hill', coach_email: 'sam@example.com' }) })).json();

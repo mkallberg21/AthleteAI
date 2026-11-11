@@ -106,7 +106,7 @@ class TestFamiliesCanBeNarrowed:
         assert res.status_code == 403
 
     def test_another_programs_team_is_refused_for_a_director(self, client, program):
-        rival = client.post("/api/orgs", json={"name": "Rival", "director_name": "R"}).json()
+        rival = client.post("/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "R"}).json()
         rt = client.post("/api/teams", json={"name": "X"}, headers=_bearer(rival["director"]["token"])).json()
         res = client.get(f"/api/coach/families?team_id={rt['id']}", headers=program["director"])
         assert res.status_code in (403, 404)

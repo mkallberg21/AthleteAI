@@ -428,6 +428,27 @@ def make_router(get_store: Callable[[], Any], app: Any = None) -> Any:
     def admin_overview(_: str = Depends(operator), conn: sqlite3.Connection = Depends(conn_of)) -> dict[str, Any]:
         return overview(conn)
 
+    @router.get("/api/admin/showcase")
+    def admin_showcase(_: str = Depends(operator), store=Depends(get_store)) -> dict[str, Any]:
+        """Badges waiting for a look before they go on the website, and the ones live."""
+        return store.showcase_review()
+
+    @router.post("/api/admin/showcase/{org_id}/approve")
+    def admin_showcase_approve(org_id: int, _: str = Depends(operator), store=Depends(get_store)) -> dict[str, Any]:
+        try:
+            store.approve_showcase(org_id)
+        except Exception as exc:  # StoreError: unknown program
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return store.showcase_status(org_id)
+
+    @router.post("/api/admin/showcase/{org_id}/hide")
+    def admin_showcase_hide(org_id: int, _: str = Depends(operator), store=Depends(get_store)) -> dict[str, Any]:
+        try:
+            store.hide_showcase(org_id)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return store.showcase_status(org_id)
+
     @router.get("/api/admin/programs/{org_id}")
     def admin_program(org_id: int, _: str = Depends(operator),
                       conn: sqlite3.Connection = Depends(conn_of)) -> dict[str, Any]:

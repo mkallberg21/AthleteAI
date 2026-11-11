@@ -211,7 +211,7 @@ def athlete(tmp_path):
     api_module._store = Store(connect(tmp_path / "test.db"))
     client = TestClient(api_module.app)
     org = client.post(
-        "/api/orgs", json={"name": "Northshore LC", "director_name": "Dir Smith"}
+        "/api/orgs", json={"name": "Northshore LC", "accept_terms": True, "director_name": "Dir Smith"}
     ).json()
     director = {"Authorization": f"Bearer {org['director']['token']}"}
     team = client.post(

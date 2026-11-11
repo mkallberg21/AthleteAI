@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -35,6 +35,15 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- the server to a mail provider must never, by itself, start emailing
     -- parents.
     mail_hold   INTEGER NOT NULL DEFAULT 1,
+    -- Terms the director agreed to at sign-up, and the permission inside them
+    -- to show the program's name and badge on the 0FFDAYS website. The wall
+    -- only lists a program whose image 0FFDAYS has approved (showcase_ok_logo
+    -- holds the file that was approved, so a new upload is not public until
+    -- it is looked at again).
+    terms_accepted_at TEXT,
+    terms_version TEXT,
+    showcase_ok INTEGER NOT NULL DEFAULT 0,
+    showcase_approved_logo TEXT,
     -- Whether the built-in Lacrosse IQ shelf is offered to this program's
     -- players. On unless the director turns it off; the program's own clips
     -- always come first either way.
@@ -1379,6 +1388,10 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # outbound mail on for the server must never, by itself, start
         # emailing parents: the director opens that door on purpose.
         ("mail_hold", "INTEGER NOT NULL DEFAULT 1"),
+        ("terms_accepted_at", "TEXT"),
+        ("terms_version", "TEXT"),
+        ("showcase_ok", "INTEGER NOT NULL DEFAULT 0"),
+        ("showcase_approved_logo", "TEXT"),
     ],
     "notifications": [
         # Which wording went out, so the next athlete can be given a

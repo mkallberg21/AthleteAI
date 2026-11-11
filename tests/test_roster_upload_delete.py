@@ -32,7 +32,7 @@ def client(tmp_path):
 
 
 def _program(client, name="Mad Dog"):
-    made = client.post("/api/orgs", json={"name": name, "sport": "lacrosse", "director_name": "Joel"}).json()
+    made = client.post("/api/orgs", json={"name": name, "sport": "lacrosse", "accept_terms": True, "director_name": "Joel"}).json()
     h = {"Authorization": f"Bearer {made['director']['token']}"}
     team = client.post("/api/teams", json={"name": "2031 Red"}, headers=h).json()
     coach = api_module._store.create_user(made["org_id"], "coach", "Coach")

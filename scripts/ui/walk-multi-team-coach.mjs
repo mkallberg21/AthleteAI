@@ -13,7 +13,7 @@ const j = (u, b, h = {}, m = 'POST') => fetch(base + u, { method: m, headers: { 
 
 const b = await chromium.launch();
 for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } }], ['phone', { ...devices['iPhone 13'] }]]) {
-  const org = await (await j('/api/orgs', { name: `Multi ${tag} ${Date.now()}`, director_name: 'Joel' })).json();
+  const org = await (await j('/api/orgs', { name: `Multi ${tag} ${Date.now()}`, accept_terms: true, director_name: 'Joel' })).json();
   const auth = { Authorization: `Bearer ${org.director.token}` };
   const page = await (await b.newContext(opts)).newPage();
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message.slice(0, 150)));

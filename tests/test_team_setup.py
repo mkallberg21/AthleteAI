@@ -63,7 +63,7 @@ def client(tmp_path):
 
 @pytest.fixture
 def org(client):
-    made = client.post("/api/orgs", json={"name": "Mad Dog", "sport": "lacrosse", "director_name": "Joel"}).json()
+    made = client.post("/api/orgs", json={"name": "Mad Dog", "sport": "lacrosse", "accept_terms": True, "director_name": "Joel"}).json()
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     coach = api_module._store.create_user(made["org_id"], "coach", "Existing Coach")
     return {"org_id": made["org_id"], "director": director,
@@ -184,7 +184,7 @@ class TestRemovingAMistake:
     def test_only_a_director_and_only_their_own_program(self, client, org):
         made = client.post("/api/teams", headers=org["director"], json={"name": "2032 Red"}).json()
         assert client.delete(f"/api/teams/{made['id']}", headers=org["coach"]).status_code == 403
-        other = client.post("/api/orgs", json={"name": "Other", "director_name": "X"}).json()
+        other = client.post("/api/orgs", json={"name": "Other", "accept_terms": True, "director_name": "X"}).json()
         oh = {"Authorization": f"Bearer {other['director']['token']}"}
         assert client.delete(f"/api/teams/{made['id']}", headers=oh).status_code == 404
 

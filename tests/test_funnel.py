@@ -197,7 +197,7 @@ class TestRoutes:
     @pytest.fixture
     def org(self, client):
         made = client.post(
-            "/api/orgs", json={"name": "Mad Dog Lacrosse", "director_name": "Dir K"}
+            "/api/orgs", json={"name": "Mad Dog Lacrosse", "accept_terms": True, "director_name": "Dir K"}
         ).json()
         director = {"Authorization": f"Bearer {made['director']['token']}"}
         kid = client.post(

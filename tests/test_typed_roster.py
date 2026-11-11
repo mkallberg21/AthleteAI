@@ -68,7 +68,7 @@ def client(tmp_path, monkeypatch):
 
 
 def program(client, sport="lacrosse"):
-    made = client.post("/api/orgs", json={"name": "Typed Club", "sport": sport, "director_name": "Joel"}).json()
+    made = client.post("/api/orgs", json={"name": "Typed Club", "sport": sport, "accept_terms": True, "director_name": "Joel"}).json()
     h = {"Authorization": f"Bearer {made['director']['token']}"}
     team = client.post("/api/teams", json={"name": "2013 Red"}, headers=h).json()
     return {"org_id": made["org_id"], "h": h, "team": team["id"]}

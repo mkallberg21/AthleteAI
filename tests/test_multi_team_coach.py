@@ -78,7 +78,7 @@ class TestTheSameEmailIsTheSamePerson:
         assert len(_coaches(client, program)) == 2
 
     def test_another_programs_coach_with_that_email_is_not_reused(self, client, program):
-        rival = client.post("/api/orgs", json={"name": "Rival", "director_name": "R"}).json()
+        rival = client.post("/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "R"}).json()
         rh = _bearer(rival["director"]["token"])
         client.post("/api/teams", json={"name": "X", "coach_name": "Sam Hill",
                                         "coach_email": "sam@example.com"}, headers=rh)
@@ -105,7 +105,7 @@ class TestPickingAnExistingCoach:
         assert _team(client, program, "B", coach_user_id=sam).status_code == 201
 
     def test_a_coach_from_another_program_is_refused(self, client, program):
-        rival = client.post("/api/orgs", json={"name": "Rival", "director_name": "R"}).json()
+        rival = client.post("/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "R"}).json()
         rh = _bearer(rival["director"]["token"])
         client.post("/api/teams", json={"name": "X", "coach_name": "Rae", "coach_email": "rae@x.example"}, headers=rh)
         rae = client.get("/api/coach/staff", headers=rh).json()["staff"]

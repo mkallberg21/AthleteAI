@@ -240,7 +240,7 @@ class TestOverTheWire:
 
     def test_a_director_can_load_it(self, client):
         org = client.post(
-            "/api/orgs", json={"name": "Northshore", "director_name": "Dir"}
+            "/api/orgs", json={"name": "Northshore", "accept_terms": True, "director_name": "Dir"}
         ).json()
         headers = {"Authorization": f"Bearer {org['director']['token']}"}
         res = client.post(
@@ -254,7 +254,7 @@ class TestOverTheWire:
 
     def test_loading_nothing_creates_nothing(self, client):
         org = client.post(
-            "/api/orgs", json={"name": "Northshore", "director_name": "Dir"}
+            "/api/orgs", json={"name": "Northshore", "accept_terms": True, "director_name": "Dir"}
         ).json()
         headers = {"Authorization": f"Bearer {org['director']['token']}"}
         body = client.post("/api/coach/curriculum/lacrosse",
@@ -266,7 +266,7 @@ class TestOverTheWire:
         from offdays import api as api_mod
 
         org = client.post(
-            "/api/orgs", json={"name": "Northshore", "director_name": "Dir"}
+            "/api/orgs", json={"name": "Northshore", "accept_terms": True, "director_name": "Dir"}
         ).json()
         store = api_mod.get_store()
         org_id = store.authenticate(org["director"]["token"]).org_id

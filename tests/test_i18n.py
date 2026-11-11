@@ -238,7 +238,7 @@ class TestOverTheWire:
 
     def test_a_user_can_set_and_read_their_own(self, client):
         org = client.post(
-            "/api/orgs", json={"name": "N", "director_name": "Dir"}).json()
+            "/api/orgs", json={"name": "N", "accept_terms": True, "director_name": "Dir"}).json()
         headers = {"Authorization": f"Bearer {org['director']['token']}"}
         assert client.put("/api/me/locale", json={"locale": "es"},
                           headers=headers).json()["locale"] == "es"

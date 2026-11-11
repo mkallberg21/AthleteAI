@@ -38,7 +38,7 @@ def client(tmp_path):
 
 @pytest.fixture
 def org(client):
-    made = client.post("/api/orgs", json={"name": "Mad Dog Lacrosse", "director_name": "Joel White"}).json()
+    made = client.post("/api/orgs", json={"name": "Mad Dog Lacrosse", "accept_terms": True, "director_name": "Joel White"}).json()
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     team = client.post("/api/teams", headers=director, json={"name": "2031 Red"}).json()
     return {"org_id": made["org_id"], "director": director, "team_id": team.get("team_id", team.get("id"))}

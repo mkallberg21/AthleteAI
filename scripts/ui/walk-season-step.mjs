@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 const [base, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
 const made = await (await fetch(`${base}/api/orgs`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ name: 'Season Step Check', sport: 'lacrosse', director_name: 'Pat Lee' }) })).json();
+  body: JSON.stringify({ name: 'Season Step Check', sport: 'lacrosse', accept_terms: true, director_name: 'Pat Lee' }) })).json();
 const browser = await chromium.launch();
 const page = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage();
 page.on('pageerror', (e) => console.log('PAGEERROR', e.message));

@@ -8,7 +8,7 @@ mkdirSync(out, { recursive: true });
 const post = async (path, body, token) => (await fetch(`${base}${path}`, { method: 'POST',
   headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   body: JSON.stringify(body) })).json();
-const made = await post('/api/orgs', { name: 'Teams Phone Check', sport: 'lacrosse', director_name: 'Pat Lee' });
+const made = await post('/api/orgs', { name: 'Teams Phone Check', sport: 'lacrosse', accept_terms: true, director_name: 'Pat Lee' });
 const tok = made.director.token;
 await post('/api/teams', { name: '2031 Red', coach_name: 'Sam Hill', coach_email: 'sam@example.com' }, tok);
 await post('/api/teams', { name: 'U9 Blue' }, tok);

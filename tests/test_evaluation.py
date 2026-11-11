@@ -403,7 +403,7 @@ def client():
 @pytest.fixture
 def wired(client):
     org = client.post(
-        "/api/orgs", json={"name": "Northshore LC", "director_name": "Dir"}
+        "/api/orgs", json={"name": "Northshore LC", "accept_terms": True, "director_name": "Dir"}
     ).json()
     director = {"Authorization": f"Bearer {org['director']['token']}"}
     team = client.post("/api/teams", json={"name": "U15"}, headers=director).json()
@@ -466,7 +466,7 @@ class TestOverTheWire:
 
     def test_another_program_gets_nobody(self, client, wired):
         other = client.post(
-            "/api/orgs", json={"name": "Southside", "director_name": "Other"}
+            "/api/orgs", json={"name": "Southside", "accept_terms": True, "director_name": "Other"}
         ).json()
         headers = {"Authorization": f"Bearer {other['director']['token']}"}
         res = client.get(

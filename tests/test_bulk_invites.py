@@ -41,7 +41,7 @@ def client(tmp_path):
 @pytest.fixture
 def program(client):
     store = api_module._store
-    made = client.post("/api/orgs", json={"name": "Mad Dog", "director_name": "Dir K"}).json()
+    made = client.post("/api/orgs", json={"name": "Mad Dog", "accept_terms": True, "director_name": "Dir K"}).json()
     org = made["org_id"]
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     red = store.create_team(org, "2031 Red", "2026")
@@ -165,7 +165,7 @@ class TestOnlyYourOwn:
         assert [x["to_email"] for x in outbox(program["store"])] == ["p0@example.com"]
 
     def test_another_programs_athlete_is_never_touched(self, client, program, smtp_on):
-        other = client.post("/api/orgs", json={"name": "Rivals", "director_name": "Rival Dir"}).json()
+        other = client.post("/api/orgs", json={"name": "Rivals", "accept_terms": True, "director_name": "Rival Dir"}).json()
         theirs = api_module._store.create_user(other["org_id"], "athlete", "Zed Z", birth_year=2013)
         C.upsert(api_module._store.conn, org_id=other["org_id"], athlete_id=theirs["id"], email="zed@example.com")
         r = client.post(URL, headers=program["h"], json={"athlete_ids": [theirs["id"]] + ids(program, 0)}).json()

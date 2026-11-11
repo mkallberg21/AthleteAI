@@ -19,7 +19,7 @@ const b = await chromium.launch();
 for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } }], ['phone', { ...devices['iPhone 13'] }]]) {
   const stamp = Date.now();
   const A = `${tag}.set.${stamp}@example.com`, B = `${tag}.moved.${stamp}@example.com`, PW = `settings-passphrase-${stamp}`;
-  const org = await (await j('/api/orgs', { name: `Settings ${tag} ${stamp}`, director_name: 'Joel' })).json();
+  const org = await (await j('/api/orgs', { name: `Settings ${tag} ${stamp}`, accept_terms: true, director_name: 'Joel' })).json();
   const ctx = await b.newContext(opts);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message.slice(0, 160)));

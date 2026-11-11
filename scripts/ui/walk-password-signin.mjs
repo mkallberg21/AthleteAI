@@ -16,7 +16,7 @@ const j = async (url, body, headers = {}, method = 'POST') =>
   (await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }));
 
 // a program and its director, the way a real one starts
-const org = await (await j('/api/orgs', { name: 'Password FC', director_name: 'Joel' })).json();
+const org = await (await j('/api/orgs', { name: 'Password FC', accept_terms: true, director_name: 'Joel' })).json();
 const code = org.director.token;
 const auth = { Authorization: `Bearer ${code}` };
 const set = await (await j('/api/me/password', { email: EMAIL, password: PW1 }, auth, 'PUT')).json();

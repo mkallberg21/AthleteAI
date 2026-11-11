@@ -186,7 +186,7 @@ def client():
 @pytest.fixture
 def program(client):
     org = client.post(
-        "/api/orgs", json={"name": "Northshore LC", "director_name": "Dir Smith"}
+        "/api/orgs", json={"name": "Northshore LC", "accept_terms": True, "director_name": "Dir Smith"}
     ).json()
     return {"director": {"Authorization": f"Bearer {org['director']['token']}"},
             "org": org}

@@ -39,7 +39,7 @@ def client(tmp_path):
 @pytest.fixture
 def org(client):
     made = client.post(
-        "/api/orgs", json={"name": "Mad Dog Lacrosse", "director_name": "Joel White"}
+        "/api/orgs", json={"name": "Mad Dog Lacrosse", "accept_terms": True, "director_name": "Joel White"}
     ).json()
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     red = client.post("/api/teams", headers=director, json={"name": "2031 Red"}).json()
@@ -91,7 +91,7 @@ class TestAddingACoach:
         assert r.status_code == 403
 
     def test_a_team_from_another_program_is_refused(self, client, org):
-        other = client.post("/api/orgs", json={"name": "Elsewhere", "director_name": "X"}).json()
+        other = client.post("/api/orgs", json={"name": "Elsewhere", "accept_terms": True, "director_name": "X"}).json()
         other_team = client.post(
             "/api/teams", headers={"Authorization": f"Bearer {other['director']['token']}"},
             json={"name": "Theirs"},

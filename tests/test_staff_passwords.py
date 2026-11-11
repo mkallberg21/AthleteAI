@@ -246,7 +246,7 @@ class TestADirectorHelpsACoach:
         assert res.status_code in (401, 403)
 
     def test_a_director_cannot_reach_another_program(self, client, program):
-        rival = client.post("/api/orgs", json={"name": "Rival", "director_name": "R"}).json()
+        rival = client.post("/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "R"}).json()
         coach = self._coach(client, program)
         res = self._issue(client, program, coach["id"],
                           headers=_bearer(rival["director"]["token"]))

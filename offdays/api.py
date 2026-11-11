@@ -711,6 +711,9 @@ class CreateOrgRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     sport: str = "lacrosse"
     director_name: str = Field(min_length=1, max_length=120)
+    #: The director must agree to the terms (see terms.html), which include
+    #: showing the program's name and badge on the 0FFDAYS website.
+    accept_terms: bool = False
 
 
 @app.post("/api/orgs", status_code=201)
@@ -725,6 +728,11 @@ def create_org(body: CreateOrgRequest, store: Store = Depends(get_store)) -> dic
     otherwise get a program whose sport matches no position list, no drill
     emphasis and no transfer filter -- broken in three places at once, silently.
     """
+    if not body.accept_terms:
+        raise HTTPException(
+            status_code=400,
+            detail="Please agree to the terms to start a program.",
+        )
     resolved = sports_mod.normalize(body.sport)
     if resolved is None:
         known = ", ".join(s.label for s in sports_mod.CATALOG)
@@ -732,7 +740,7 @@ def create_org(body: CreateOrgRequest, store: Store = Depends(get_store)) -> dic
             status_code=400,
             detail=f"{body.sport!r} is not a sport we know. Pick one of: {known}",
         )
-    org_id = store.create_org(body.name, resolved.key)
+    org_id = store.create_org(body.name, resolved.key, terms_accepted=True)
     director = store.create_user(org_id, "director", body.director_name)
     return {"org_id": org_id, "director": director}
 
@@ -1080,6 +1088,43 @@ def remove_org_logo(
         raise HTTPException(status_code=403, detail="only a director can set the program's badge")
     badge_mod.remove(CONFIG.uploads_dir, principal.org_id)
     return store.set_org_logo(principal.org_id, "")
+
+
+class ShowcaseRequest(BaseModel):
+    allowed: bool
+
+
+@app.get("/api/org/showcase")
+def org_showcase(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Where the program stands on the 0FFDAYS website wall. Director only."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can see this")
+    return store.showcase_status(principal.org_id)
+
+
+@app.post("/api/org/showcase")
+def set_org_showcase(
+    body: ShowcaseRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Take back, or give again, the permission to show the badge on the website."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can change this")
+    return store.set_showcase_allowed(principal.org_id, body.allowed)
+
+
+@app.get("/api/programs/showcase")
+def programs_showcase(response: Response, store: Store = Depends(get_store)) -> dict[str, Any]:
+    """The programs on the 0FFDAYS website. Public, read-only, and only a name,
+    a sport and an image: no ids, no counts, no people. Open to any origin so
+    the marketing site can read it."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return {"programs": store.public_showcase()}
 
 
 @app.get("/api/branding")

@@ -16,7 +16,7 @@ const api = async (p, opt = {}, token) => {
   return { status: r.status, body: await r.json().catch(() => ({})) };
 };
 
-const org = (await api('/api/orgs', { method: 'POST', body: { name: 'Type Walk Club', director_name: 'Dir Walk' } })).body;
+const org = (await api('/api/orgs', { method: 'POST', body: { name: 'Type Walk Club', accept_terms: true, director_name: 'Dir Walk' } })).body;
 const director = org.director.token;
 const team = (await api('/api/teams', { method: 'POST', body: { name: '2013 Red' } }, director)).body;
 const team2 = (await api('/api/teams', { method: 'POST', body: { name: '2014 Blue' } }, director)).body;

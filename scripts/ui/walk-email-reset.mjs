@@ -29,7 +29,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   const stamp = Date.now();
   const EMAIL = `${tag}.coach.${stamp}@example.com`;
   const PW1 = `first-passphrase-${stamp}`, PW2 = `second-passphrase-${stamp}`;
-  const org = await (await j('/api/orgs', { name: `Reset ${tag} ${stamp}`, director_name: 'Joel' })).json();
+  const org = await (await j('/api/orgs', { name: `Reset ${tag} ${stamp}`, accept_terms: true, director_name: 'Joel' })).json();
   const dir = { Authorization: `Bearer ${org.director.token}` };
 
   // --- the director sets a password from Settings and is sent a confirm link

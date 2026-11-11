@@ -16,7 +16,7 @@ const call = async (p, opt = {}, token) => {
   return { status: r.status, body: await r.json().catch(() => ({})) };
 };
 
-const org = (await call('/api/orgs', { method: 'POST', body: { name: 'Bulk Walk Club', director_name: 'Dir Walk' } })).body;
+const org = (await call('/api/orgs', { method: 'POST', body: { name: 'Bulk Walk Club', accept_terms: true, director_name: 'Dir Walk' } })).body;
 const director = org.director.token;
 const team = (await call('/api/teams', { method: 'POST', body: { name: '2013 Red' } }, director)).body;
 const players = ['Ana Alvarez', 'Ben Brooks', 'Cy Chen', 'Di Diaz', 'Ed Evans', 'Flo Fox'];

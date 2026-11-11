@@ -14,7 +14,7 @@ const j = (u, b, h = {}) => fetch(base + u, { method: 'POST', headers: { 'Conten
 
 const b = await chromium.launch();
 for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } }], ['phone', { ...devices['iPhone 13'] }]]) {
-  const org = await j('/api/orgs', { name: `Homes ${tag} ${Date.now()}`, director_name: 'Joel' });
+  const org = await j('/api/orgs', { name: `Homes ${tag} ${Date.now()}`, accept_terms: true, director_name: 'Joel' });
   const dir = { Authorization: `Bearer ${org.director.token}` };
   const team = {};
   for (const n of ['2031 Red', '2031 Blue', '2032 Green']) team[n] = await j('/api/teams', { name: n }, dir);

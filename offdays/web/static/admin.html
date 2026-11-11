@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>0FFDAYS · Operator</title>
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 <style>
   .big-numbers{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 4px}
   .big{padding:14px 16px;background:var(--surface-2);border-radius:var(--radius-sm)}
@@ -56,6 +56,13 @@
       <h2>Money</h2>
       <div class="big-numbers" id="money"></div>
       <p class="small muted" style="margin:10px 0 0" id="money-note"></p>
+    </div>
+
+    <div class="card card--wide" id="wall-card">
+      <h2>Website wall</h2>
+      <p class="small muted" style="margin:0 0 8px">Badges directors uploaded and agreed to show. Nothing is public until you approve it. Look at each image first.</p>
+      <div id="wall"></div>
+      <div id="wall-err" class="err hidden"></div>
     </div>
 
     <div class="card card--wide">
@@ -206,9 +213,36 @@ async function act(btn) {
   }
 }
 
+function wallRow(p, live) {
+  return `<div class="prog" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <div style="width:120px;height:80px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:8px">
+      <img src="${esc(p.logo)}" alt="" style="max-width:112px;max-height:72px"></div>
+    <div style="flex:1 1 160px;min-width:0"><b>${esc(p.name)}</b>
+      <div class="small muted">${live ? 'Live on the website' : 'Waiting for you'}</div></div>
+    <div class="actions">${live ? '' : `<button type="button" data-wall="approve" data-org="${p.org_id}">Approve</button>`}
+      <button type="button" class="secondary" data-wall="hide" data-org="${p.org_id}">${live ? 'Take down' : 'Do not use'}</button></div>
+  </div>`;
+}
+
+async function loadWall() {
+  try {
+    const w = await call('/api/admin/showcase');
+    const rows = [...w.waiting.map((p) => wallRow(p, false)), ...w.live.map((p) => wallRow(p, true))];
+    $('wall').innerHTML = rows.length ? rows.join('') : '<p class="muted">No badges yet.</p>';
+    $('wall').querySelectorAll('[data-wall]').forEach((b) => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        await call(`/api/admin/showcase/${b.dataset.org}/${b.dataset.wall}`, { method: 'POST' });
+        await loadWall();
+      } catch (e) { $('wall-err').textContent = e.message; $('wall-err').classList.remove('hidden'); b.disabled = false; }
+    }));
+  } catch (e) { $('wall-err').textContent = e.message; $('wall-err').classList.remove('hidden'); }
+}
+
 async function load(quiet) {
   try {
     DATA = await call('/api/admin/overview');
+    loadWall();
     $('door').classList.add('hidden'); $('app').classList.remove('hidden'); $('signout').classList.remove('hidden');
     render();
   } catch (e) {

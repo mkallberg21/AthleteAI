@@ -16,7 +16,7 @@ const j = (u, b, h = {}) => fetch(base + u, { method: 'POST', headers: { 'Conten
 // three programs in three states
 const stamp = Date.now();
 const mk = async (name, kids, season) => {
-  const org = await j('/api/orgs', { name: `${name} ${stamp}`, director_name: `${name} Director` });
+  const org = await j('/api/orgs', { name: `${name} ${stamp}`, accept_terms: true, director_name: `${name} Director` });
   const dir = { Authorization: `Bearer ${org.director.token}` };
   const team = await j('/api/teams', { name: '2031 Red' }, dir);
   for (let i = 0; i < kids; i++) await j('/api/athletes', { display_name: `Kid ${i}`, join_code: team.join_code }, dir);

@@ -9,7 +9,7 @@ const [base, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
 const J = { 'Content-Type': 'application/json' };
 const made = await (await fetch(`${base}/api/orgs`, { method: 'POST', headers: J,
-  body: JSON.stringify({ name: 'Mad Dog Lacrosse', sport: 'lacrosse', director_name: 'Joel White' }) })).json();
+  body: JSON.stringify({ name: 'Mad Dog Lacrosse', sport: 'lacrosse', accept_terms: true, director_name: 'Joel White' }) })).json();
 const H = { Authorization: `Bearer ${made.director.token}`, ...J };
 const team = await (await fetch(`${base}/api/teams`, { method: 'POST', headers: H, body: JSON.stringify({ name: '2031 Blue' }) })).json();
 const imp = await (await fetch(`${base}/api/coach/roster/import`, { method: 'POST', headers: H,

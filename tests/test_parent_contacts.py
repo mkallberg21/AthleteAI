@@ -153,7 +153,7 @@ class TestOverTheWire:
 
     @pytest.fixture
     def org(self, client):
-        made = client.post("/api/orgs", json={"name": "Nashville Dogs", "director_name": "Dir K"}).json()
+        made = client.post("/api/orgs", json={"name": "Nashville Dogs", "accept_terms": True, "director_name": "Dir K"}).json()
         director = {"Authorization": f"Bearer {made['director']['token']}"}
         team = client.post("/api/teams", json={"name": "2031 Red", "season": "2027"}, headers=director).json()
         client.post("/api/coach/roster/import", json={"content": CSV, "team_id": team["id"]}, headers=director)

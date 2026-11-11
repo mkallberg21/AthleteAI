@@ -46,7 +46,7 @@ def client(tmp_path):
 @pytest.fixture
 def program(client):
     store = api_module._store
-    made = client.post("/api/orgs", json={"name": "Big Club", "director_name": "Dir K"}).json()
+    made = client.post("/api/orgs", json={"name": "Big Club", "accept_terms": True, "director_name": "Dir K"}).json()
     org = made["org_id"]
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     red = store.create_team(org, "2013 Red", "2026", age_group="2013")
@@ -231,7 +231,7 @@ class TestOnlyYourOwn:
         assert r.status_code == 403
 
     def test_another_programs_team_is_not_there_at_all(self, client, program):
-        other = client.post("/api/orgs", json={"name": "Rivals", "director_name": "R"}).json()
+        other = client.post("/api/orgs", json={"name": "Rivals", "accept_terms": True, "director_name": "R"}).json()
         theirs = api_module._store.create_team(other["org_id"], "Their Team", "2026")
         r = client.get(f"/api/coach/team-ranking?team_id={theirs['id']}", headers=program["director"])
         assert r.status_code in (403, 404)

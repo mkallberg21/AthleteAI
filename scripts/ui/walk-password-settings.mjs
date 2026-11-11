@@ -14,7 +14,7 @@ const j = (u, b, h = {}, m = 'POST') => fetch(base + u, { method: m, headers: { 
 const stamp = Date.now();
 const DIR_EMAIL = `dir.${stamp}@example.com`, COACH_EMAIL = `coach.${stamp}@example.com`;
 
-const org = await (await j('/api/orgs', { name: 'Settings FC', director_name: 'Joel' })).json();
+const org = await (await j('/api/orgs', { name: 'Settings FC', accept_terms: true, director_name: 'Joel' })).json();
 const dirAuth = { Authorization: `Bearer ${org.director.token}` };
 await j('/api/teams', { name: '2031 Red' }, dirAuth);
 const staff = await (await j('/api/coach/staff', { display_name: 'Sam Hill', email: COACH_EMAIL, team_ids: [] }, dirAuth)).json();

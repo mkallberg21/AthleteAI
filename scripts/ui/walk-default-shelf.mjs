@@ -20,7 +20,7 @@ const api = async (p, opt = {}, token) => {
 };
 
 // a brand-new program with nothing added to it
-const org = (await api('/api/orgs', { method: 'POST', body: { name: 'Shelf Walk Club', director_name: 'Dir Walk' } })).body;
+const org = (await api('/api/orgs', { method: 'POST', body: { name: 'Shelf Walk Club', accept_terms: true, director_name: 'Dir Walk' } })).body;
 const director = org.director.token;
 const year = new Date().getFullYear();
 const kids = {};

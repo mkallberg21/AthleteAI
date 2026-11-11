@@ -4,7 +4,7 @@ import { chromium, devices } from 'playwright';
 
 const base = process.argv[2] || 'http://127.0.0.1:8000';
 const j = async (url, body, h = {}) => (await fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...h }, body: JSON.stringify(body) })).json();
-const org = await j('/api/orgs', { name: 'Email FC', sport: 'lacrosse', director_name: 'Joel' });
+const org = await j('/api/orgs', { name: 'Email FC', sport: 'lacrosse', accept_terms: true, director_name: 'Joel' });
 const dh = { Authorization: `Bearer ${org.director.token}` };
 const team = await j('/api/teams', { name: '2031 Red' }, dh);
 await j('/api/coach/roster/import', { content: 'First Name,Last Name,Birth Year,Parent Email,Parent Phone\nMason,Reed,2013,dana@example.com,615-555-0100\n', team_id: team.id, invite_guardians: false }, dh);

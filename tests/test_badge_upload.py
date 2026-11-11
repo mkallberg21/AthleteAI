@@ -50,7 +50,7 @@ def client(tmp_path, uploads):
 
 @pytest.fixture
 def org(client):
-    made = client.post("/api/orgs", json={"name": "Mad Dog Lacrosse", "director_name": "Joel"}).json()
+    made = client.post("/api/orgs", json={"name": "Mad Dog Lacrosse", "accept_terms": True, "director_name": "Joel"}).json()
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     coach = api_module._store.create_user(made["org_id"], "coach", "Sam")
     return {"org_id": made["org_id"], "director": director,

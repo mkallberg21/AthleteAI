@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#0A0A0B">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 <title>0FFDAYS</title>
 </head>
 <body>
@@ -222,6 +222,13 @@
           <label class="form-label" for="org-director">Your name</label>
           <input id="org-director" class="form-input" placeholder="Dana Pierce" autocomplete="name">
         </div>
+        <div class="form-group">
+          <label class="terms-check" for="org-terms">
+            <input type="checkbox" id="org-terms">
+            <span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Program Terms</a>,
+            including showing my program's name and badge on the 0FFDAYS website. I can turn that off any time.</span>
+          </label>
+        </div>
         <div id="oerr" class="form-error hidden"></div>
         <button type="button" class="btn btn-secondary" id="create-org">Create program</button>
         <div id="org-token" class="small muted hidden" style="margin-top:0.75rem; padding:0.75rem; background:var(--surface-2); border-radius:var(--radius-sm);"></div>
@@ -411,10 +418,16 @@ $('create-org').addEventListener('click', async () => {
     $('oerr').classList.remove('hidden');
     return;
   }
+  if (!$('org-terms').checked) {
+    $('oerr').textContent = 'Please tick the box to agree to the Program Terms.';
+    $('oerr').classList.remove('hidden');
+    $('org-terms').focus();
+    return;
+  }
   try {
     const res = await api('/api/orgs', {
       method: 'POST',
-      body: { name, sport: $('org-sport').value, director_name: director },
+      body: { name, sport: $('org-sport').value, director_name: director, accept_terms: true },
     });
     // Straight in. The walkthrough shows the code once, as its own step,
     // where it can be copied or emailed; nobody should have to stop here.

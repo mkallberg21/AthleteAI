@@ -17,7 +17,7 @@ const api = async (p, opt = {}, token) => {
   return { status: r.status, body: await r.json().catch(() => ({})) };
 };
 
-const org = (await api('/api/orgs', { method: 'POST', body: { name: 'Suggest Walk Club', director_name: 'Dir Walk' } })).body;
+const org = (await api('/api/orgs', { method: 'POST', body: { name: 'Suggest Walk Club', accept_terms: true, director_name: 'Dir Walk' } })).body;
 const director = org.director.token;
 const year = new Date().getFullYear();
 const kid = (await api('/api/athletes', { method: 'POST', body: { display_name: 'Twelve', birth_year: year - 12, dominant_hand: 'right', guardian_consent: true } }, director)).body.token;
@@ -114,7 +114,7 @@ if (!expectOn) {
 
 // ---- a different program is not affected by this one's choices
 {
-  const other = (await api('/api/orgs', { method: 'POST', body: { name: 'Other Club', director_name: 'Other Dir' } })).body.director.token;
+  const other = (await api('/api/orgs', { method: 'POST', body: { name: 'Other Club', accept_terms: true, director_name: 'Other Dir' } })).body.director.token;
   const theirs = (await api('/api/coach/suggestions', {}, other)).body.suggestions;
   check(theirs.length === 4, 'another program still sees all four');
 }

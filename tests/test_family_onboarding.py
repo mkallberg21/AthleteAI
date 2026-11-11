@@ -238,7 +238,7 @@ class TestThroughTheApi:
     @pytest.fixture
     def director(self, client):
         org = client.post(
-            "/api/orgs", json={"name": "Nashville Dogs", "director_name": "Dir K"}
+            "/api/orgs", json={"name": "Nashville Dogs", "accept_terms": True, "director_name": "Dir K"}
         ).json()
         headers = {"Authorization": f"Bearer {org['director']['token']}"}
         team = client.post(

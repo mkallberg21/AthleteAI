@@ -151,7 +151,7 @@ def client(tmp_path, configured):
 
 @pytest.fixture
 def org(client):
-    made = client.post("/api/orgs", json={"name": "Mad Dog", "sport": "lacrosse", "director_name": "Joel"}).json()
+    made = client.post("/api/orgs", json={"name": "Mad Dog", "sport": "lacrosse", "accept_terms": True, "director_name": "Joel"}).json()
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     team = client.post("/api/teams", json={"name": "2031 Blue"}, headers=director).json()
     coach = api_module._store.create_user(made["org_id"], "coach", "Sam")
@@ -166,7 +166,7 @@ class TestRoutes:
         api_module._store = Store(connect(tmp_path / "x.db"))
         try:
             c = TestClient(api_module.app)
-            made = c.post("/api/orgs", json={"name": "X", "director_name": "D"}).json()
+            made = c.post("/api/orgs", json={"name": "X", "accept_terms": True, "director_name": "D"}).json()
             h = {"Authorization": f"Bearer {made['director']['token']}"}
             assert c.get("/api/teamsnap/status", headers=h).json()["offered"] is False
             assert c.get("/api/teamsnap/connect", headers=h).status_code == 404

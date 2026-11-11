@@ -7,7 +7,7 @@ import { mkdirSync } from 'node:fs';
 const [base, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
 const made = await (await fetch(`${base}/api/orgs`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ name: 'Stat Strip Check', sport: 'lacrosse', director_name: 'Pat Lee' }) })).json();
+  body: JSON.stringify({ name: 'Stat Strip Check', sport: 'lacrosse', accept_terms: true, director_name: 'Pat Lee' }) })).json();
 const browser = await chromium.launch();
 let bad = 0;
 for (const width of [360, 390, 1280]) {

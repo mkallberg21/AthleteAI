@@ -2425,3 +2425,9 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .rank-xp { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .rank-row.idle .rank-n, .rank-row.idle .rank-who b { color: var(--text-muted); font-weight: 600; }
 .rank-who { min-width: 0; overflow-wrap: anywhere; }
+
+.terms-check { display: flex; gap: 12px; align-items: flex-start; font-size: .9rem; line-height: 1.45; cursor: pointer; }
+.terms-check input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; margin: 2px 0 0; flex: none; }
+.terms-check a { text-decoration: underline; }
+.show-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; font-size: .9rem; }
+.show-row input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; margin: 2px 0 0; flex: none; }

@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 </head>
 <body>
 <div class="topbar">
@@ -313,6 +313,11 @@
           <span class="small muted" id="badge-status"></span>
         </div>
         <div id="badge-err" class="err hidden"></div>
+        <label class="show-row" for="show-site">
+          <input type="checkbox" id="show-site">
+          <span>Show my program on the 0FFDAYS website
+            <span class="small muted" id="show-note" style="display:block"></span></span>
+        </label>
       </div>
     </div>
   </div>
@@ -3249,7 +3254,36 @@ async function loadBadge(isDirector) {
     : `<span class="club-name" style="padding:0 6px">${esc(brand.name)}</span>`;
   $('badge-remove').classList.toggle('hidden', !brand.logo);
   $('badge-upload').textContent = brand.logo ? 'Replace the badge' : 'Upload a badge';
+  await loadShowcase();
 }
+
+const SHOW_WORDS = {
+  no_logo: 'Upload a badge and we will look at it before it goes on the list.',
+  waiting: 'We are looking at your badge. It goes on the list once we approve it.',
+  live: 'Your program is on the list on the website.',
+  declined: 'We could not use that image on the website. Upload a different one to try again.',
+  withdrawn: 'Off. Your program is not shown on the website.',
+};
+
+async function loadShowcase() {
+  try {
+    const st = await api('/api/org/showcase');
+    $('show-site').checked = !!st.allowed;
+    $('show-note').textContent = SHOW_WORDS[st.status] || '';
+  } catch { /* the badge card still works without it */ }
+}
+
+$('show-site').addEventListener('change', async (e) => {
+  const box = e.target;
+  box.disabled = true;
+  try {
+    const st = await api('/api/org/showcase', { method: 'POST', body: { allowed: box.checked } });
+    $('show-note').textContent = SHOW_WORDS[st.status] || '';
+  } catch (err) {
+    box.checked = !box.checked;
+    $('show-note').textContent = err.message || 'Could not change that.';
+  } finally { box.disabled = false; }
+});
 
 $('badge-upload').addEventListener('click', () => $('badge-file').click());
 $('badge-file').addEventListener('change', async (e) => {

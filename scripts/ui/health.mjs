@@ -98,7 +98,7 @@ for (const [tag, opts] of [['phone', devices['iPhone 13']], ['laptop', { viewpor
 // ------------------------------------------------------------ director dashboard
 console.log('\n== director dashboard');
 const made = await (await fetch(`${base}/api/orgs`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ name: 'UI health check', sport: 'lacrosse', director_name: 'Health Check' }) })).json();
+  body: JSON.stringify({ name: 'UI health check', sport: 'lacrosse', accept_terms: true, director_name: 'Health Check' }) })).json();
 const token = made?.director?.token;
 if (!token) bad('could not create a throwaway program on prod');
 else {

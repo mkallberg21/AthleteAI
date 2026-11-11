@@ -31,7 +31,7 @@ def client(tmp_path):
 
 
 def _family(client, second_parent=False):
-    made = client.post("/api/orgs", json={"name": "Club", "sport": "lacrosse", "director_name": "Joel"}).json()
+    made = client.post("/api/orgs", json={"name": "Club", "sport": "lacrosse", "accept_terms": True, "director_name": "Joel"}).json()
     director = {"Authorization": f"Bearer {made['director']['token']}"}
     team = client.post("/api/teams", json={"name": "2031 Red"}, headers=director).json()
     res = client.post("/api/coach/roster/import", headers=director,

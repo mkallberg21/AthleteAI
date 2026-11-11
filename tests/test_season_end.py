@@ -90,7 +90,7 @@ class TestThroughTheApi:
     @pytest.fixture
     def org(self, client):
         made = client.post(
-            "/api/orgs", json={"name": "Nashville Dogs", "director_name": "Dir K"}
+            "/api/orgs", json={"name": "Nashville Dogs", "accept_terms": True, "director_name": "Dir K"}
         ).json()
         director = {"Authorization": f"Bearer {made['director']['token']}"}
         team = client.post(
@@ -188,7 +188,7 @@ class TestTheSeasonIsWhatTheClubIsBilledOn:
     @pytest.fixture
     def director(self, client):
         made = client.post(
-            "/api/orgs", json={"name": "Nashville Dogs", "director_name": "Dir K"}
+            "/api/orgs", json={"name": "Nashville Dogs", "accept_terms": True, "director_name": "Dir K"}
         ).json()
         headers = {"Authorization": f"Bearer {made['director']['token']}"}
         team = client.post(

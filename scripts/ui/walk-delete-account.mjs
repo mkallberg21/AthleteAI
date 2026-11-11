@@ -10,7 +10,7 @@ fs.mkdirSync(out, { recursive: true });
 
 // set up a program and a parent through the real API
 const j = async (url, body, headers = {}) => (await fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })).json();
-const org = await j('/api/orgs', { name: 'Delete Me FC', sport: 'lacrosse', director_name: 'Joel' });
+const org = await j('/api/orgs', { name: 'Delete Me FC', sport: 'lacrosse', accept_terms: true, director_name: 'Joel' });
 const dh = { Authorization: `Bearer ${org.director.token}` };
 const team = await j('/api/teams', { name: '2031 Red' }, dh);
 const imp = await j('/api/coach/roster/import', { content: 'First Name,Last Name,Birth Year,Parent Email,Parent Phone\nMason,Reed,2013,dana@example.com,615-555-0100\n', team_id: team.id }, dh);

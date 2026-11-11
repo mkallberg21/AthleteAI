@@ -297,7 +297,7 @@ def wired(client):
     from offdays import api as api_mod
 
     org = client.post(
-        "/api/orgs", json={"name": "Northshore LC", "director_name": "Dir"}
+        "/api/orgs", json={"name": "Northshore LC", "accept_terms": True, "director_name": "Dir"}
     ).json()
     director = {"Authorization": f"Bearer {org['director']['token']}"}
     team = client.post("/api/teams", json={"name": "U15"}, headers=director).json()

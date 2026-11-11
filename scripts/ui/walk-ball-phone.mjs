@@ -14,7 +14,7 @@ const post = async (path, body, token) => {
   if (!r.ok) throw new Error(`${path} ${r.status} ${JSON.stringify(j)}`);
   return j;
 };
-const made = await post('/api/orgs', { name: 'Ball Phone Check', sport: 'soccer', director_name: 'Pat Lee' });
+const made = await post('/api/orgs', { name: 'Ball Phone Check', sport: 'soccer', accept_terms: true, director_name: 'Pat Lee' });
 const tok = made.director.token;
 const team = await post('/api/teams', { name: 'U13 Blue' }, tok);
 const quality = { 'Bo Short': 0.62, 'Alexandra Montgomery-Smith': 0.1, 'Kai Ito': 0.5 };

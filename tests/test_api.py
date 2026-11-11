@@ -29,7 +29,7 @@ def client(tmp_path):
 def program(client):
     """A program with a director, a team, and two athletes."""
     org = client.post(
-        "/api/orgs", json={"name": "Northshore LC", "director_name": "Dir Smith"}
+        "/api/orgs", json={"name": "Northshore LC", "accept_terms": True, "director_name": "Dir Smith"}
     ).json()
     director = {"Authorization": f"Bearer {org['director']['token']}"}
     team = client.post(
@@ -138,7 +138,7 @@ class TestAccessControl:
     def test_programs_are_isolated_from_each_other(self, client, program):
         """An athlete in one program must never appear in another's leaderboard."""
         other = client.post(
-            "/api/orgs", json={"name": "Rival LC", "director_name": "Other Dir"}
+            "/api/orgs", json={"name": "Rival LC", "accept_terms": True, "director_name": "Other Dir"}
         ).json()
         other_dir = {"Authorization": f"Bearer {other['director']['token']}"}
         do_session(client, program["athletes"][0]["headers"])
@@ -468,7 +468,7 @@ class TestCoachDashboard:
         sid = client.get("/api/coach/review-queue", headers=program["director"]).json()["sessions"][0]["id"]
 
         rival = client.post(
-            "/api/orgs", json={"name": "Rival LC", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival LC", "accept_terms": True, "director_name": "Other"}
         ).json()
         rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
         res = client.post(f"/api/coach/review/{sid}", json={"approve": True}, headers=rival_headers)
@@ -852,7 +852,7 @@ class TestAssignmentEndpoints:
     def test_a_coach_cannot_close_another_programs_assignment(self, client, program):
         aid = self._make(client, program).json()["assignment_id"]
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"}
         ).json()
         rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
         assert client.delete(f"/api/coach/assignments/{aid}", headers=rival_headers).status_code == 403
@@ -909,7 +909,7 @@ class TestNotificationEndpoints:
 
     def test_broadcast_to_another_program_is_refused(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"}
         ).json()
         rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
         res = client.post(
@@ -1254,7 +1254,7 @@ class TestGuardianEndpoints:
 
     def test_a_coach_cannot_invite_into_another_program(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"}
         ).json()
         rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
         res = client.post(
@@ -1628,7 +1628,7 @@ class TestDigestEndpoints:
     def test_a_digest_is_scoped_to_one_program(self, client, program):
         do_session(client, program["athletes"][0]["headers"])
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"}
         ).json()
         rival_headers = {"Authorization": f"Bearer {rival['director']['token']}"}
         data = client.get("/api/coach/digest", headers=rival_headers).json()
@@ -1747,7 +1747,7 @@ class TestOrgSwitching:
 
     def test_a_program_header_selects_the_active_org(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Two Hats"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Two Hats"}
         ).json()
         api_module._store.add_membership(
             program["org"]["director"]["id"], rival["org_id"], "coach"
@@ -1759,7 +1759,7 @@ class TestOrgSwitching:
 
     def test_a_program_they_do_not_belong_to_is_403(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"}
         ).json()
         headers = {**program["director"], "X-Org-Id": str(rival["org_id"])}
         assert client.get("/api/orgs/mine", headers=headers).status_code == 403
@@ -2357,7 +2357,7 @@ class TestSpecialisationSetting:
 
     def test_a_coach_cannot(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Two Hats"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Two Hats"}
         ).json()
         api_module._store.add_membership(
             program["org"]["director"]["id"], rival["org_id"], "coach"
@@ -2502,7 +2502,7 @@ class TestMultiSportEndpoints:
         assert ok.status_code == 200
 
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"}
         ).json()
         theirs = {"Authorization": f"Bearer {rival['director']['token']}"}
         assert client.put(
@@ -2743,7 +2743,7 @@ class TestReturnToPlayEndpoints:
         athlete = program["athletes"][0]
         plan_id = self._plan(client, athlete)["plans"][0]["id"]
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"}
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"}
         ).json()
         res = client.post(
             f"/api/wellness/plans/{plan_id}/clearance", json={},
@@ -2826,7 +2826,7 @@ class TestSigningUpAsAnySport:
         """Stored verbatim, "Girls Lacrosse" would match no position list, no
         drill emphasis and no transfer filter -- broken three ways, silently."""
         org = client.post(
-            "/api/orgs", json={"name": "A Club", "sport": sport, "director_name": "Dir"},
+            "/api/orgs", json={"name": "A Club", "sport": sport, "accept_terms": True, "director_name": "Dir"},
         ).json()
         stored = api_module._store.conn.execute(
             "SELECT sport FROM organizations WHERE id = ?", (org["org_id"],)
@@ -2836,7 +2836,7 @@ class TestSigningUpAsAnySport:
     def test_a_sport_we_do_not_know_is_refused_with_the_list(self, client):
         res = client.post(
             "/api/orgs",
-            json={"name": "A Club", "sport": "quidditch", "director_name": "Dir"},
+            json={"name": "A Club", "sport": "quidditch", "accept_terms": True, "director_name": "Dir"},
         )
         assert res.status_code == 400
         assert "Lacrosse" in res.json()["detail"]
@@ -2844,7 +2844,7 @@ class TestSigningUpAsAnySport:
     def _program(self, client, sport, position):
         org = client.post(
             "/api/orgs", json={"name": f"{sport} club", "sport": sport,
-                               "director_name": "Dir"},
+                               "accept_terms": True, "director_name": "Dir"},
         ).json()
         director = {"Authorization": f"Bearer {org['director']['token']}"}
         team = client.post(
@@ -3047,7 +3047,7 @@ class TestCoachBallDrillView:
         athlete = program["athletes"][0]
         self._ball_session(client, athlete)
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"},
         ).json()
         headers = {"Authorization": f"Bearer {rival['director']['token']}"}
 
@@ -3151,7 +3151,7 @@ class TestCoachVideoNeedsAParent:
         ).json()["id"]
 
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"},
         ).json()
         assert client.get(
             f"/api/coach/clips-shared/{clip_id}/video",
@@ -3392,7 +3392,7 @@ class TestFamilyAccounts:
 
     def test_only_a_director_sets_the_program_voice(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Two Hats"},
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Two Hats"},
         ).json()
         api_module._store.add_membership(
             program["org"]["director"]["id"], rival["org_id"], "coach",
@@ -3712,7 +3712,7 @@ class TestCoachOnboardingEndpoint:
 
     def test_a_new_program_is_told_where_to_start(self, client):
         org = client.post(
-            "/api/orgs", json={"name": "Fresh", "director_name": "New Coach"},
+            "/api/orgs", json={"name": "Fresh", "accept_terms": True, "director_name": "New Coach"},
         ).json()
         headers = {"Authorization": f"Bearer {org['director']['token']}"}
         body = client.get("/api/coach/onboarding", headers=headers).json()
@@ -3754,7 +3754,7 @@ class TestCoachOnboardingEndpoint:
 
     def test_another_program_does_not_appear_in_it(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"},
         ).json()
         body = client.get(
             "/api/coach/onboarding",
@@ -3954,7 +3954,7 @@ class TestJoiningCoachOnboarding:
 
     def test_a_coach_from_another_program_sees_none_of_this(self, client, program):
         rival = client.post(
-            "/api/orgs", json={"name": "Rival", "director_name": "Other"},
+            "/api/orgs", json={"name": "Rival", "accept_terms": True, "director_name": "Other"},
         ).json()
         store = api_module._store
         outsider = store.create_user(rival["org_id"], "coach", "Someone Else")
