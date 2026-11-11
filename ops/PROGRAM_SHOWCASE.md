@@ -37,5 +37,6 @@ when the list is empty or the app cannot be reached, so the page never shows an 
 
 ## Before real programs are shown
 
-The terms are a draft for legal review and have placeholders for the company name, address and
-contact email. Fill those in and have a lawyer read them before the first program is approved.
+The terms are a draft for legal review. The contact block now reads K6 Labs LLC, Nashville, Tennessee,
+and mkallberg@k6-labs.com; add a street address if a lawyer wants one. Have a lawyer read them before
+the first program is approved.

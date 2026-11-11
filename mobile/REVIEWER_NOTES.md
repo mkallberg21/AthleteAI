@@ -70,7 +70,7 @@ button (Parent or Athlete) and paste the code.
 
 ## Before the reviewer arrives
 
-- [ ] A privacy policy that a lawyer has read, with the company name, address and email filled in.
+- [ ] A privacy policy that a lawyer has read. Company name, city and email are filled in; add a street address if the lawyer asks.
 - [ ] Support URL and a monitored support email (both stores require one).
 - [ ] Rep counting verified inside the app on a real phone. A reviewer who opens
       the camera and sees nothing happen will reject it.

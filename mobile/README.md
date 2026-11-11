@@ -86,7 +86,7 @@ this talks the debugging protocol directly).
 
 - [x] App icon from the real mark: `python make_icons.py` (needs Pillow) writes the 1024 App Store icon, the 512 Play icon and every Android density into `assets/` and the native projects.
 - [ ] Splash screen: still Capacitor's default.
-- [ ] Privacy policy lawyer-reviewed and its contact block filled in: `/app/privacy.html`.
+- [ ] Privacy policy lawyer-reviewed: `/app/privacy.html`. Its contact block is filled in (K6 Labs LLC, Nashville, TN, mkallberg@k6-labs.com); add a street address if the lawyer asks.
 - [ ] Apple "App Privacy" labels and Google "Data safety" form: answers are in `STORE_LISTING.md`.
 - [ ] Children: both stores have extra rules for apps used by kids (Apple Kids
       Category and guideline 1.3, Google Play Families policy). `STORE_LISTING.md`

@@ -76,8 +76,9 @@ Encryption: standard HTTPS only (`ITSAppUsesNonExemptEncryption` is already `fal
    gone is paused. Apple 5.1.1(v) and Google both want this reachable inside
    the app: a reviewer has to be able to find it, so mention where in the
    review notes (parent portal, bottom of the page).
-2. **The privacy policy is a draft** with a placeholder company name, address and
-   email. It must be reviewed by a lawyer who handles children's privacy.
+2. **The privacy policy is a draft.** The contact block is filled in (K6 Labs LLC,
+   Nashville, TN, an email) but has no street address. It must be reviewed by a lawyer
+   who handles children's privacy.
 3. **No reviewer login.** Apple and Google reviewers need a way in. Create a demo
    program with a parent already signed up and give them the link in the review notes.
 4. **Camera, microphone and motion inside the app shell are untested** (see
@@ -102,7 +103,7 @@ Encryption: standard HTTPS only (`ITSAppUsesNonExemptEncryption` is already `fal
 
 1. Test the shell on a real Android phone: camera, microphone, motion. (Needs a JDK and Android Studio.)
 2. ~~Build in-app deletion of the parent's own account.~~ Done.
-3. Lawyer review of the privacy policy; fill in the contact block.
+3. Lawyer review of the privacy policy; confirm the contact block.
 4. Real app icon (1024x1024) and screenshots in each store's sizes.
 5. Create the store accounts; set up the demo reviewer program.
 6. TestFlight and Google internal testing with a few real families.
