@@ -44,11 +44,17 @@ await page.click('#wizard-next'); await page.waitForTimeout(800);
 // Step 3 teams
 console.log('3', await state());
 await page.screenshot({ path: `${out}/3-teams.png` });
-await page.fill('#new-team', '2031 Red'); await page.waitForTimeout(600);
-await page.fill('#new-team-coach', 'Sam Hill'); await page.fill('#new-team-coach-email', 'sam@example.com');
-await page.click('#add-team');
+await page.fill('#bt-names', '2031 Red\n2031 Blue\n2032 Red'); await page.waitForTimeout(600);
+await page.click('#bt-add');
 await page.waitForFunction(() => !document.getElementById('wizard-next').disabled, null, { timeout: 10000 });
-console.log('3b after team:', (await state()).next);
+console.log('3b after teams:', (await state()).next);
+await page.click('#wizard-next'); await page.waitForTimeout(800);
+
+// Step 3b coaches: optional, one row per team
+console.log('3c', await state());
+await page.fill(`.bc-row:nth-child(1) [data-f=name]`, 'Sam Hill'); await page.fill(`.bc-row:nth-child(1) [data-f=email]`, 'sam@example.com');
+await page.click('#bc-save'); await page.waitForSelector('#bc-out:not(.hidden)', { timeout: 10000 });
+console.log('3d coaches saved:', (await page.locator('#bc-out').innerText()).replace(/\s+/g, ' ').slice(0, 80), '| rows left:', await page.locator('.bc-row').count());
 await page.click('#wizard-next'); await page.waitForTimeout(800);
 
 // Step 4 roster
@@ -62,6 +68,10 @@ await page.waitForSelector('#preview:not(.hidden)', { timeout: 10000 });
 await page.click('#confirm-import');
 await page.waitForFunction(() => !document.getElementById('wizard-next').disabled, null, { timeout: 15000 });
 console.log('4b after import:', (await state()).next);
+await page.click('#wizard-next'); await page.waitForTimeout(800);
+
+// Step 4b release email: optional, one decision
+console.log('4c', await state());
 await page.click('#wizard-next'); await page.waitForTimeout(800);
 
 // Step 5 send

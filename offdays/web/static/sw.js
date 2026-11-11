@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v10';
+const CACHE = 'offdays-shell-v11';
 
 const SHELL = [
   './',
@@ -45,6 +45,8 @@ const SHELL = [
   'review.js',
   // Typing a roster in by hand: imported by the coach page.
   'roster_entry.js',
+  // Setting up many teams at once, imported by the coach page.
+  'setup_flow.js',
   'offline.js',
   'manifest.webmanifest',
 ];

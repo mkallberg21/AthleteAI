@@ -20,6 +20,26 @@ per message, and Copy all. The director sends from his own account. Turning
 on Resend (`scripts/setup_resend.py`) makes the same invites go out on their
 own with no other change.
 
+**How the director meets these steps (the setup flow).** A new director is walked through them one
+question per screen, with a step bar and one big Next, and nothing else on the page. In order: how the
+program reaches them, badge (optional), season dates, **teams**, **coaches**, **rosters**, **email to
+parents** (optional), send the invites. A club with a dozen squads does not make a dozen forms:
+
+- **Teams** takes one name per line (or commas, or a paste from a sheet). Repeats and teams that already
+  exist are left out and listed with the reason; at most 60 per paste.
+- **Coaches** shows one row per team that has no coach: a name and an email. The same email on two
+  teams is one person with one sign-in and no second code; two people who share only a name stay two
+  people. A team left blank can wait, so this step can be skipped.
+- **Rosters** is the same roster card as always (TeamSnap, SportsEngine, a file, or typing), one team at
+  a time, with "n of m teams have players" under it.
+- **Email to parents** only shows the hold (see the next section). The flow never releases it for the
+  director.
+
+The flow adds no server route. Each team goes through `POST /api/teams` and each coach through
+`POST /api/coach/staff`, the routes the one-team form already used, so a team or coach made either way
+is identical. The decisions (which names, which coaches, who is the same person) are in
+`offdays/web/static/setup_flow.js`, tested by `tests/js/setup_flow.test.mjs` and `tests/test_setup_flow.py`.
+
 From here the system runs it: parents sign up and say yes, send the kid the
 link, the kid trains. The Families card shows every family's stage and a
 Nudge for parents who have not opened the invite. `onboarding.PROGRAM_STEPS`

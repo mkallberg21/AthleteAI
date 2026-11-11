@@ -8,7 +8,7 @@ const page = await (await browser.newContext({ viewport: { width: 1280, height: 
 await page.goto(`${base}/`);
 await page.locator('.role-btn', { hasText: /director/i }).first().click();
 await page.fill('#org-name', 'Resume FC'); await page.fill('#org-director', 'Joel');
-await page.click('#create-org');
+await page.check('#org-terms'); await page.click('#create-org');
 await page.waitForURL(/coach\.html/);
 await page.waitForSelector('#wizard:not(.hidden)');
 
@@ -23,9 +23,8 @@ await next.click(); await page.waitForTimeout(500);
 await page.fill('#season-starts', '2027-02-01'); await page.dispatchEvent('#season-starts', 'change'); await page.waitForTimeout(500);
 await page.fill('#season-ends', '2027-06-30'); await page.dispatchEvent('#season-ends', 'change');
 await unlocked(); await next.click(); await page.waitForTimeout(500);
-await page.fill('#new-team', '2031 Red'); await page.waitForTimeout(500);
-await page.fill('#new-team-coach', 'Sam Hill'); await page.fill('#new-team-coach-email', 'sam@example.com');
-await page.click('#add-team'); await unlocked(); await next.click(); await page.waitForTimeout(700);
+await page.fill('#bt-names', '2031 Red'); await page.waitForTimeout(500);
+await page.click('#bt-add'); await unlocked(); await next.click(); await page.waitForTimeout(700);
 const before = await title();
 console.log('before leaving:', before);
 

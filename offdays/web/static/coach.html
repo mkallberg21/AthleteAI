@@ -111,6 +111,35 @@
     <p class="small muted" id="setup-done-note" style="margin-top:10px"></p>
   </div>
 
+  <!-- Setup only: shown inside the walkthrough, never on the dashboard. The one-team form further down stays for
+       adding a team later. Both go through POST /api/teams. -->
+  <div class="card card--wide hidden" id="bulk-teams-card">
+    <h2>Add your teams</h2>
+    <p class="small muted">One team per line. Name them the way your club does. Wall ball and shots fill in from each team's age.</p>
+    <label for="bt-names" class="form-label">Team names</label>
+    <textarea id="bt-names" class="form-textarea" rows="6" autocomplete="off" spellcheck="false" placeholder="2031 Red&#10;2031 Blue&#10;2032 Red&#10;2032 Blue"></textarea>
+    <div class="small muted" id="bt-preview" style="margin-top:6px;min-height:1.3em"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <button class="inline" id="bt-add" disabled>Add these teams</button>
+      <span class="small muted" id="bt-status"></span>
+    </div>
+    <div id="bt-out" class="small hidden" style="margin-top:8px"></div>
+    <div id="bt-err" class="err hidden"></div>
+    <div class="small" id="bt-have" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card card--wide hidden" id="bulk-coaches-card">
+    <h2>Who coaches each team?</h2>
+    <p class="small muted">A name and an email for each team. The same email on two teams is one coach with one sign-in. A team you leave blank can wait.</p>
+    <div id="bc-rows" style="margin-top:8px"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <button class="inline" id="bc-save">Save coaches</button>
+      <span class="small muted" id="bc-status"></span>
+    </div>
+    <div id="bc-out" class="small hidden" style="margin-top:8px"></div>
+    <div id="bc-err" class="err hidden"></div>
+  </div>
+
   <div class="card card--wide" id="teams-card">
     <h2>Teams</h2>
 
@@ -1193,6 +1222,7 @@ import { api, esc, fmtDate, getToken, logout, renderBranding, setOrg } from './a
 import {
   MAX_ROWS as RT_MAX, blankRow, rowProblem, filledRows, firstProblem, withoutParent, buildCsv, parsePaste, mergePasted,
 } from './roster_entry.js';
+import { parseTeamNames, coachCalls, teamsWithoutCoach, rosterProgress } from './setup_flow.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -1930,12 +1960,20 @@ const WIZARD_STEPS = [
   { key: 'season', card: 'season-card', title: 'When the season runs',
     lede: 'Set the start and end dates. Athletes train between them, and the program is billed per rostered athlete per day between them. Nothing is charged until both are set.',
     done: (st) => st.season },
-  { key: 'teams', card: 'teams-card', title: 'Your teams and their coaches',
-    lede: 'Name each team the way your club does (\u201c2031 Red\u201d), name its coach, and the day\u2019s wall-ball and shooting numbers fill in from the team\u2019s age. One team is enough to continue; add the rest now or later.',
+  { key: 'teams', card: 'bulk-teams-card', title: 'Your teams',
+    lede: 'List every team in the program, one per line. You can add more later. One team is enough to continue.',
     done: (st) => st.teams > 0 },
-  { key: 'roster', card: 'import-card', title: 'The roster, with parents\u2019 emails',
-    lede: 'Where does your roster live? Tap TeamSnap or SportsEngine to pull it straight in, add a file from anywhere, or type it in. Every parent gets an invite; from here the system takes over.',
-    done: (st) => st.athletes > 0 },
+  { key: 'coaches', card: 'bulk-coaches-card', title: 'Your coaches',
+    lede: 'Each coach gets their own sign-in link, and sees only their own team. Leave a team blank and add its coach later.',
+    done: (st) => st.teams > 0 && st.uncoached === 0, optional: true,
+    hint: (st) => (st.uncoached ? `${st.uncoached} of ${st.teams} teams still need a coach.` : '') },
+  { key: 'roster', card: 'import-card', title: 'The rosters, with parents\u2019 emails',
+    lede: 'One team at a time: choose where its roster lives, then which team it goes into. TeamSnap and SportsEngine pull it in, a file or typing works too. Every parent gets an invite; from here the system takes over.',
+    done: (st) => st.athletes > 0,
+    hint: (st) => rosterProgress(st.teamList) },
+  { key: 'release', card: 'mailhold-card', title: 'Email to parents',
+    lede: 'Nothing has been emailed to anyone yet. Start sending when you are ready and the program emails each parent on its own. Or leave it on hold and send each invite yourself on the next step.',
+    done: () => true, optional: true },
   { key: 'send', card: 'slips-card', title: 'Send the invites',
     lede: 'If the program is not sending email, send each invite from your own email with one click. Then you are done: parents sign up, say yes, send their kid the link, and your Families card shows who is where.',
     done: (st) => st.athletes > 0, optional: true },
@@ -1988,6 +2026,8 @@ async function wizardStatus() {
     season: !!(season.starts_on && season.ends_on),
     teams: teams.teams.length,
     athletes: teams.teams.reduce((n, t) => n + (t.roster || 0), 0),
+    uncoached: teamsWithoutCoach(teams.teams).length,
+    teamList: teams.teams,
     complete: !!(ob && ob.complete),
     firstSession: !!step('first_session').done,
   };
@@ -2002,12 +2042,17 @@ function wizardPlace(cardId) {
   card.classList.add('wizard-embedded');
   // The season step is about dates; the phase stays on the dashboard card.
   if (cardId === 'season-card') $('season-phase-row').classList.add('hidden');
+  // The step already has this title; the card's own heading is not first-child, so CSS cannot reach it.
+  if (cardId === 'mailhold-card') card.querySelector('h2').classList.add('hidden');
 }
 function wizardRestore() {
   for (const [id, home] of Object.entries(WIZARD_HOME)) {
     const card = $(id);
     card.classList.remove('wizard-embedded');
+    // Cards made only for the walkthrough go back hidden; they are not part of the dashboard.
+    if (id === 'bulk-teams-card' || id === 'bulk-coaches-card') card.classList.add('hidden');
     if (id === 'season-card') $('season-phase-row').classList.remove('hidden');
+    if (id === 'mailhold-card') card.querySelector('h2').classList.remove('hidden');
     home.parent.insertBefore(card, home.next && home.next.parentNode === home.parent ? home.next : null);
   }
 }
@@ -2030,7 +2075,7 @@ async function wizardShow(i) {
   const last = wizardStep === WIZARD.length - 1;
   $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
   $('wizard-next').disabled = !(done || s.optional);
-  $('wizard-hint').textContent = done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.');
+  $('wizard-hint').textContent = (s.hint && s.hint(st)) || (done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.'));
   // Cards in the slot are director-only or already role-gated; make sure the
   // ones we embed are visible even when their own loader hid them.
   if (s.card === 'season-card') $('season-card').classList.remove('hidden');
@@ -2040,6 +2085,9 @@ async function wizardShow(i) {
       $('slips-note').textContent = 'The roster import on the previous step puts every invite here. If the program is sending email, they have already gone and there is nothing to do.';
     }
   }
+  if (s.card === 'bulk-teams-card') { $('bulk-teams-card').classList.remove('hidden'); btPreview(); }
+  if (s.card === 'bulk-coaches-card') { $('bulk-coaches-card').classList.remove('hidden'); bcDraw(); }
+  if (s.card === 'mailhold-card') { loadMailHold(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2058,7 +2106,7 @@ async function wizardRefresh() {
   const last = wizardStep === WIZARD.length - 1;
   $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
   $('wizard-next').disabled = !(done || s.optional);
-  $('wizard-hint').textContent = done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.');
+  $('wizard-hint').textContent = (s.hint && s.hint(st)) || (done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.'));
 }
 
 function wizardFinish() {
@@ -2102,6 +2150,114 @@ $('wizard-next').addEventListener('click', async () => {
 $('wizard-back').addEventListener('click', () => wizardShow(wizardStep - 1));
 $('wizard-skip').addEventListener('click', wizardFinish);
 
+
+// ---------------------------------------------------- setup: many teams, then a coach for each
+// Both steps only call the routes the one-team form uses (POST /api/teams, POST /api/coach/staff), one team or one
+// person at a time, so a team made here is exactly a team made there. What is not drawing is in setup_flow.js.
+async function btHave() {
+  const { teams } = await api('/api/coach/teams');
+  $('bt-have').innerHTML = teams.length
+    ? `<b>${teams.length}</b> so far: ` + teams.map((t) => `<span class="pill">${esc(t.name)}</span>`).join(' ')
+    : '<span class="muted">No teams yet.</span>';
+  return teams.map((t) => t.name);
+}
+async function btPreview() {
+  let have = [];
+  try { have = await btHave(); } catch { /* keep the old list */ }
+  const r = parseTeamNames($('bt-names').value, have);
+  $('bt-add').disabled = !r.names.length;
+  $('bt-add').textContent = r.names.length > 1 ? `Add ${r.names.length} teams` : 'Add this team';
+  let msg = r.names.length ? `${r.names.length} to add.` : '';
+  if (r.left.length) msg += ` Left out: ${r.left.map((l) => `${l.text} (${l.why})`).join('; ')}.`;
+  $('bt-preview').textContent = msg;
+  return r;
+}
+let btTimer = null;
+$('bt-names').addEventListener('input', () => { clearTimeout(btTimer); btTimer = setTimeout(btPreview, 200); });
+$('bt-add').addEventListener('click', async () => {
+  $('bt-err').classList.add('hidden'); $('bt-out').classList.add('hidden');
+  const r = await btPreview();
+  if (!r.names.length) return;
+  const btn = $('bt-add'); btn.disabled = true;
+  const made = []; const failed = [];
+  for (const name of r.names) {
+    $('bt-status').textContent = `Adding ${made.length + failed.length + 1} of ${r.names.length}\u2026`;
+    try { await api('/api/teams', { method: 'POST', body: { name, daily_wall_ball: 0, daily_shots: 0 } }); made.push(name); }
+    catch (e) { failed.push(`${name} (${e.message || 'could not be added'})`); }
+  }
+  $('bt-status').textContent = '';
+  // Whatever did not go through stays in the box, so nothing typed is lost.
+  $('bt-names').value = failed.length ? r.names.filter((n) => !made.includes(n)).join('\n') : '';
+  $('bt-out').innerHTML = `Added <b>${made.length}</b> team${made.length === 1 ? '' : 's'}.`;
+  $('bt-out').classList.remove('hidden');
+  if (failed.length) { $('bt-err').textContent = `Not added: ${failed.join('; ')}`; $('bt-err').classList.remove('hidden'); }
+  await Promise.all([loadTeams(), loadStaff(IS_DIRECTOR)]);
+  await btPreview();
+  await wizardRefresh();
+});
+
+async function bcDraw() {
+  const { teams } = await api('/api/coach/teams');
+  const need = teamsWithoutCoach(teams);
+  // Rows still on screen keep what was typed: a half-filled row must not be wiped by the redraw after a save.
+  const typed = {};
+  document.querySelectorAll('.bc-row').forEach((el) => {
+    typed[el.dataset.team] = { n: el.querySelector('[data-f=name]').value, e: el.querySelector('[data-f=email]').value };
+  });
+  $('bc-save').disabled = !need.length;
+  $('bc-rows').innerHTML = need.length ? need.map((t) => `
+    <div class="bc-row" data-team="${t.id}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px">
+      <div style="flex:1 1 100%"><b>${esc(t.name)}</b></div>
+      <div style="flex:1 1 150px"><label for="bc-n-${t.id}">Coach</label><input id="bc-n-${t.id}" data-f="name" placeholder="Sam Hill" autocomplete="off"></div>
+      <div style="flex:1 1 200px"><label for="bc-e-${t.id}">Email</label><input id="bc-e-${t.id}" data-f="email" type="email" placeholder="sam@example.com" autocomplete="off"></div>
+      <div class="err hidden bc-why" style="flex:1 1 100%;margin:0"></div>
+    </div>`).join('')
+    : (teams.length ? '<p class="small"><span class="pill ok">Done</span> Every team has a coach.</p>' : '<p class="small muted">Add a team first.</p>');
+  document.querySelectorAll('.bc-row').forEach((el) => {
+    const t = typed[el.dataset.team];
+    if (t) { el.querySelector('[data-f=name]').value = t.n; el.querySelector('[data-f=email]').value = t.e; }
+  });
+}
+function bcShowProblems(problems) {
+  for (const p of problems) {
+    const why = document.querySelector(`.bc-row[data-team="${p.team_id}"] .bc-why`);
+    if (why) { why.textContent = p.why; why.classList.remove('hidden'); }
+  }
+}
+$('bc-save').addEventListener('click', async () => {
+  $('bc-err').classList.add('hidden'); $('bc-out').classList.add('hidden');
+  document.querySelectorAll('.bc-why').forEach((n) => n.classList.add('hidden'));
+  const rows = [...document.querySelectorAll('.bc-row')].map((el) => ({
+    team_id: Number(el.dataset.team),
+    name: el.querySelector('[data-f=name]').value,
+    email: el.querySelector('[data-f=email]').value,
+  }));
+  const { calls, problems } = coachCalls(rows);
+  bcShowProblems(problems);
+  if (!calls.length) { if (!problems.length) { $('bc-err').textContent = 'Type a coach on at least one team, or tap Next to add them later.'; $('bc-err').classList.remove('hidden'); } return; }
+  const btn = $('bc-save'); btn.disabled = true;
+  const lines = [];
+  for (const c of calls) {
+    $('bc-status').textContent = `Saving ${lines.length + 1} of ${calls.length}\u2026`;
+    try {
+      const res = await api('/api/coach/staff', { method: 'POST', body: c });
+      if (res.reused) lines.push(`<b>${esc(res.display_name)}</b> already coaches here; this team was added to them.`);
+      else if (res.emailed) lines.push(`<b>${esc(res.display_name)}</b>: sign-in link emailed to ${esc(res.email)}.`);
+      else {
+        const mail = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
+        lines.push(`<b>${esc(res.display_name)}</b>: <a class="btn-link" href="${mail}">Send email</a> with their sign-in link, or read them this code: <code>${esc(res.code)}</code> (shown once).`);
+      }
+    } catch (e) { lines.push(`<b>${esc(c.display_name)}</b>: not saved (${esc(e.message || 'error')}).`); }
+  }
+  $('bc-status').textContent = '';
+  $('bc-out').innerHTML = lines.join('<br>'); $('bc-out').classList.remove('hidden');
+  await Promise.all([loadTeams(), loadStaff(IS_DIRECTOR)]);
+  const keep = $('bc-out').innerHTML;
+  await bcDraw();
+  bcShowProblems(problems);
+  $('bc-out').innerHTML = keep; $('bc-out').classList.remove('hidden');
+  await wizardRefresh();
+});
 
 // A red star on every card that still needs the director or coach to choose
 // something. Read from the same sources the walkthrough uses, so the two agree.
@@ -5064,6 +5220,7 @@ async function initTeamDrills() {
     'teams-card': 'teams', 'roster-card': 'teams', 'staff-card': 'teams',
     'team-drills-card': 'teams', 'goals-card': 'teams', 'film-card': 'teams', 'shelf-card': 'teams', 'suggest-card': 'teams',
     'iq-card': 'teams', 'ball-card': 'teams', 'evaluation-card': 'teams',
+    'bulk-teams-card': 'teams', 'bulk-coaches-card': 'teams',
     'contact-card': 'settings', 'password-card': 'settings', 'badge-card': 'settings', 'season-card': 'settings',
     'billing-card': 'settings', 'specialisation-card': 'settings', 'recognition-card': 'settings',
     'library-card': 'settings', 'digest-card': 'settings', 'code-card': 'settings'

@@ -22,13 +22,13 @@ for (const [tag, ctxOpts] of [['desktop', { viewport: { width: 1280, height: 900
   await page.goto(`${base}/`);
   await page.locator('.role-btn', { hasText: /director/i }).first().click();
   await page.fill('#org-name', 'Drop Box FC'); await page.fill('#org-director', 'Joel');
-  await page.click('#create-org');
+  await page.check('#org-terms'); await page.click('#create-org');
   await page.waitForURL(/coach\.html/);
   await page.waitForSelector('#wizard:not(.hidden)');
 
   const next = page.locator('#wizard-next');
   const title = async () => (await page.locator('#wizard-title').textContent()).trim();
-  // 1 code -> 2 contact -> 3 badge -> 4 season -> 5 teams -> 6 roster
+  // 1 code -> 2 contact -> 3 badge -> 4 season -> 5 teams -> 6 coaches -> 7 roster
   const unlocked = () => page.waitForFunction(() => !document.getElementById('wizard-next').disabled, null, { timeout: 10000 });
   await next.click();                                                    // 1 code
   await page.fill('#contact-email', 'joel@example.com'); await page.fill('#contact-phone', '615 555 0100');
@@ -37,9 +37,9 @@ for (const [tag, ctxOpts] of [['desktop', { viewport: { width: 1280, height: 900
   await page.fill('#season-starts', '2027-02-01'); await page.dispatchEvent('#season-starts', 'change'); await page.waitForTimeout(500);
   await page.fill('#season-ends', '2027-06-30'); await page.dispatchEvent('#season-ends', 'change');
   await unlocked(); await next.click(); await page.waitForTimeout(500);  // 4 season
-  await page.fill('#new-team', '2031 Red'); await page.waitForTimeout(500);
-  await page.fill('#new-team-coach', 'Sam Hill'); await page.fill('#new-team-coach-email', 'sam@example.com');
-  await page.click('#add-team'); await unlocked(); await next.click(); await page.waitForTimeout(600);       // 5 teams
+  await page.fill('#bt-names', '2031 Red'); await page.waitForTimeout(500);
+  await page.click('#bt-add'); await unlocked(); await next.click(); await page.waitForTimeout(600);       // 5 teams
+  await next.click(); await page.waitForTimeout(600);                                                        // 6 coaches (optional)
   console.log(tag, 'on:', await title());
   await page.locator('#dropzone').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${out}/${tag}-1-box.png` });
