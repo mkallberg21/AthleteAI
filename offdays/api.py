@@ -92,6 +92,7 @@ from .leaderboard import (
     leaderboard,
     leaderboard_age_group,
     leaderboard_sport_wide,
+    team_ranking as team_ranking_rows,
     team_standings,
 )
 from .store import Principal, Store, StoreError, transaction
@@ -348,24 +349,19 @@ def _athlete(principal: Principal = Depends(_principal)) -> Principal:
 
 
 def _competitor(principal: Principal = Depends(_principal)) -> Principal:
-    """Who may see a program-wide or team leaderboard.
+    """Who may see any ranking of athletes: coaches and directors, and nobody else.
 
-    Athletes and their coaches. A ranked list of other people's children, for
-    adults to scroll, is the mechanism behind the worst behaviour in youth
-    sports, so a parent's token does not open the program board.
-
-    One board is exempt, and only one: the cohort board on /api/leaderboard,
-    reachable by a guardian with age_group= and only for the cohort their own
-    child is in. That exists because the question a parent actually has --
-    "why is my child on the second squad" -- has an answer made of work done,
-    and refusing to show it does not stop them asking. It sends them to the
-    car park to ask another parent instead. See get_leaderboard.
+    A ranked list of other people's children is the mechanism behind the worst
+    behaviour in youth sports. It used to be open to the athletes themselves,
+    and to a parent for their own child's age group; both are closed now. An
+    athlete earns badges and watches their own numbers move; a parent sees
+    their own child. Staff run the program and see everyone, by name.
     """
-    if principal.role == "guardian":
+    if not principal.is_staff:
         raise HTTPException(
             status_code=403,
-            detail="Leaderboards are for athletes and coaches. Your portal shows "
-                   "your own athlete's progress.",
+            detail="Rankings are for coaches and directors. Athletes earn badges, "
+                   "and your portal shows your own athlete's progress.",
         )
     return principal
 
@@ -1879,32 +1875,21 @@ def get_leaderboard(
                     "whole cohort when this is omitted; every other board "
                     "defaults to 50.",
     ),
-    principal: Principal = Depends(_principal),
+    principal: Principal = Depends(_competitor),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    """Rank a program, one team, one cohort, or a whole sport.
+    """Rank a program, one team, one cohort, or a whole sport. Coaches and directors only.
 
-    A guardian may read exactly one of these: the cohort board for the cohort
-    their own child trains in. Everything else is athletes and staff only.
+    Athletes and parents are refused every board (see `_competitor`). Staff see full
+    names, except on the sport-wide board, which spans other programs and keeps its
+    first-name-and-initial form.
     """
-    if principal.role == "guardian":
-        if not age_group:
-            raise HTTPException(
-                status_code=403,
-                detail="Leaderboards are for athletes and coaches. Your portal "
-                       "shows your own athlete's progress, and the age-group "
-                       "board they are part of.",
-            )
-        mine = {
-            age_group_of(store.conn, a["id"])
-            for a in guardians_mod.athletes_for(store.conn, principal.id)
-        }
-        if age_group not in mine:
-            raise HTTPException(
-                status_code=403,
-                detail="You can only see the age group your own athlete is in.",
-            )
-
+    if team_id is not None and not principal.can_see_team(team_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    # Full names where this person can see the whole of what is listed: a director anywhere, a coach on a team
+    # that is theirs. A coach asking for the program-wide or age-group list would otherwise be shown other
+    # teams' children by name, so for them those stay masked; their own teams' ranking is /api/coach/team-ranking.
+    full = principal.team_ids is None or team_id is not None
     if sport:
         rows = leaderboard_sport_wide(
             store.conn,
@@ -1922,6 +1907,7 @@ def get_leaderboard(
             board=board,
             window=window,
             limit=limit,
+            full_names=full,
         )
         return {
             "board": board,
@@ -1937,6 +1923,7 @@ def get_leaderboard(
         window=window,
         team_id=team_id,
         limit=50 if limit is None else limit,
+        full_names=full,
     )
     return {"board": board, "window": window, "team_id": team_id, "rows": rows}
 
@@ -5754,6 +5741,28 @@ def list_positions(
             "all ages on the all-round training plan."
         ),
     }
+
+
+@app.get("/api/coach/team-ranking")
+def coach_team_ranking(
+    window: Literal["week", "month", "season", "all"] = "week",
+    team_id: int | None = None,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Every athlete in the program (or one team), by full name, ranked, including those with nothing done.
+
+    A director sees the whole program and may narrow to one team; a coach sees their own teams and is
+    refused one that is not theirs. Athletes and parents never reach this (`_staff`).
+    """
+    scope = _one_team_scope(principal, store, team_id)
+    rows = team_ranking_rows(store.conn, principal.org_id, scope, window)
+    team = None
+    if team_id is not None:
+        found = store.conn.execute("SELECT id, name FROM teams WHERE id = ?", (team_id,)).fetchone()
+        team = {"id": found["id"], "name": found["name"]} if found else None
+    return {"window": window, "team": team, "total": len(rows),
+            "trained": sum(1 for r in rows if r["trained"]), "rows": rows}
 
 
 @app.get("/api/standings")

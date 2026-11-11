@@ -234,7 +234,7 @@ class TestThroughTheStore:
         assert body["rep_cap"] == {"seen": 1_800, "credited": 500, "cap": 500, "scope": "drill"}
         assert any("500" in n and "count toward today" in n for n in body["notes"])
 
-        board = c.get("/api/leaderboard?board=reps&window=week", headers=hero["h"]).json()
+        board = c.get("/api/leaderboard?board=reps&window=week", headers=club["coach_h"]).json()
         rows = {r["athlete_id"]: r["value"] for r in board["rows"]}
         assert rows[hero["id"]] == 500
 
@@ -337,7 +337,7 @@ class TestThroughTheStore:
         _submit(c, hero["h"], "lax_wall_ball", 1_800)
         _submit(c, steady["h"], "lax_wall_ball", 220)
         _submit(c, steady["h"], "lax_wall_ball", 220)
-        board = c.get("/api/leaderboard?board=reps&window=week", headers=hero["h"]).json()
+        board = c.get("/api/leaderboard?board=reps&window=week", headers=club["coach_h"]).json()
         rows = {r["athlete_id"]: r["value"] for r in board["rows"]}
         assert rows[hero["id"]] == 500
         assert rows[steady["id"]] == 440

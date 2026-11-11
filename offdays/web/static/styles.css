@@ -2400,3 +2400,28 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .family-row.has-pick { grid-template-columns: auto minmax(0, 1fr); }
   .family-row.has-pick > div:last-child { grid-column: 2; }
 }
+
+/* Badges: earned ones as tiles, the next few as rows with a progress bar. Tier colours are bronze / silver / gold. */
+.badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; margin-top: 8px; }
+.badge { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px 8px;
+  min-height: 92px; text-align: center; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.badge .ico { font-size: 1.9rem; line-height: 1; }
+.badge .nm { font-size: .82rem; font-weight: 700; line-height: 1.2; }
+.badge.bronze { border-color: #8A5A2B; background: rgba(205, 127, 50, 0.13); }
+.badge.silver { border-color: #9AA7B5; background: rgba(160, 175, 190, 0.13); }
+.badge.gold   { border-color: #C77700; background: rgba(199, 119, 0, 0.17); }
+.badge-next-title { margin: 18px 0 4px; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }
+.badge-next { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 12px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.badge-next:last-child { border-bottom: 0; }
+.badge-next .ico { font-size: 1.7rem; line-height: 1; text-align: center; filter: grayscale(1); opacity: .6; }
+.badge-next .bn-body > div { margin-top: 2px; }
+.badge-bar { height: 8px; margin: 8px 0 4px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.badge-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+
+/* Every player, ranked: staff only. A row per player; players who have not started are muted and share the last rank. */
+.rank-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.rank-row:last-child { border-bottom: 0; }
+.rank-n { font-family: var(--font-condensed); font-weight: 700; font-size: 1.15rem; text-align: center; }
+.rank-xp { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.rank-row.idle .rank-n, .rank-row.idle .rank-who b { color: var(--text-muted); font-weight: 600; }
+.rank-who { min-width: 0; overflow-wrap: anywhere; }

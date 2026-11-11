@@ -6,7 +6,7 @@
 <title>0FFDAYS · Parent</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0A0A0B">
-<link rel="stylesheet" href="styles.css?v=38">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 <div class="topbar">
@@ -94,19 +94,6 @@
     <button class="secondary" id="away-add" data-i18n="parent.away.add">Add</button>
     <div id="away-list" style="margin-top:12px"></div>
     <div id="away-err" class="err hidden"></div>
-  </div>
-
-  <div class="card hidden" id="cohort-card">
-    <h2 id="cohort-title">The age group</h2>
-    <p class="small muted" id="cohort-why"></p>
-    <table>
-      <thead><tr>
-        <th colspan="2"></th>
-        <th class="num small muted" style="font-weight:600">XP</th>
-      </tr></thead>
-      <tbody id="cohort-rows"></tbody>
-    </table>
-    <p class="small muted" id="cohort-masked" style="margin-top:10px"></p>
   </div>
 
   <div class="card">
@@ -500,75 +487,6 @@ $('lang').addEventListener('change', async () => {
 // actually calls it: a soccer club reads "Weak foot" on this column.
 let SIDE = { noun: 'hand', label: 'Off-hand', weaker: 'weaker hand', both: 'Both Hands' };
 
-// One board, not four. A parent came here to answer a single question -- where
-// is my child against the year group -- and four tabs turned that into a
-// hunt for the one their child ranks best on. XP is the number that already
-// folds in the others, so it is the one shown.
-let cohortGroup = null;
-let myAthleteIds = new Set();
-
-// Clubs name their squads after colours, and which colours is up to them:
-// Red and Blue here, Navy and White at the next club along. Reading the name
-// keeps the chip legible without the app having to be told, and a squad named
-// something else entirely still gets a readable neutral chip.
-const SQUAD_COLOURS = [
-  [/\b(red|scarlet|crimson|maroon)\b/, 'squad--red'],
-  [/\b(blue|navy|royal)\b/, 'squad--blue'],
-  [/\b(white|silver|grey|gray)\b/, 'squad--white'],
-  [/\b(black|charcoal)\b/, 'squad--black'],
-  [/\b(green|emerald)\b/, 'squad--green'],
-  [/\b(gold|yellow|amber)\b/, 'squad--gold'],
-];
-function squadClass(name) {
-  const n = (name || '').toLowerCase();
-  for (const [re, cls] of SQUAD_COLOURS) if (re.test(n)) return cls;
-  return '';
-}
-
-async function loadCohort() {
-  if (!cohortGroup) return;
-  $('cohort-title').textContent =
-    T('parent.cohort.title', `The ${cohortGroup} age group`).replace('{age_group}', cohortGroup);
-  // The one sentence on this card that names the weaker side, so it takes the
-  // program's own word for it rather than assuming hands.
-  $('cohort-why').textContent = T('parent.cohort.why',
-    "Every squad in your child's birth year, ranked on points earned in the "
-    + 'last month. Points come from work they control: reps recorded, extra '
-    + 'for {weaker} reps, and a daily ceiling so one long Sunday cannot '
-    + "outweigh a steady week. Not ability, and not a prediction of next "
-    + "season's teams.")
-    // The label form rather than the "weaker X" form: "weak foot reps" and
-    // "off-hand reps" both read as things a coach says, where "weaker foot
-    // reps" reads as a translation.
-    .replace('{weaker}', document.documentElement.lang === 'es' && SIDE.weaker_es
-      ? SIDE.weaker_es : SIDE.label.toLowerCase());
-  $('cohort-masked').textContent = T('parent.cohort.masked',
-    'Children whose families have not agreed to their name being shown appear '
-    + 'as an initial. Yours is highlighted.');
-
-  try {
-    // No limit: the whole cohort, including the children who trained least.
-    // Truncating this list would cut exactly the rows a parent asking "why
-    // the other squad" needs to see.
-    const data = await api('/api/leaderboard?board=xp&window=month'
-      + `&age_group=${encodeURIComponent(cohortGroup)}`);
-    $('cohort-rows').innerHTML = data.rows.length ? data.rows.map((r) => {
-      const mine = myAthleteIds.has(r.athlete_id);
-      return `<tr${mine ? ' class="mine"' : ''}>
-        <td class="rank" style="width:40px">${r.rank}</td>
-        <td><b>${esc(r.display_name)}</b>
-            <span class="squad ${squadClass(r.team_name)}">${esc(r.team_name)}</span></td>
-        <td class="num"><b>${r.value.toLocaleString()}</b></td>
-      </tr>`;
-    }).join('') : '<tr><td class="muted small">Nothing on this board yet.</td></tr>';
-    $('cohort-card').classList.remove('hidden');
-  } catch (e) {
-    // A cohort board that will not load must not take the rest of the page
-    // with it -- their own child's week is the part that matters.
-    $('cohort-card').classList.add('hidden');
-  }
-}
-
 async function load() {
   $('err').classList.add('hidden');
   const data = await api('/api/guardians/me');
@@ -580,13 +498,10 @@ async function load() {
     : '<div class="card"><p class="muted">No athletes linked yet. '
       + 'Use an invite code from your coach below.</p></div>';
 
-  myAthleteIds = new Set(data.athletes.map((a) => a.athlete_id));
-  cohortGroup = (data.athletes.find((a) => a.age_group) || {}).age_group || null;
 
   wire();
   await loadDecisions();
   await loadReports(data.athletes);
-  await loadCohort();
 
   $('away-card').classList.toggle('hidden', !data.athletes.length);
   $('away-athlete').innerHTML = data.athletes

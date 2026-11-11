@@ -1154,7 +1154,18 @@ retaining what it deleted.
 **No leaderboard.** Not in the UI and not reachable with a parent's token — the
 API returns 403 and says why. A ranked list of other people's children for
 adults to scroll is the mechanism behind the worst behaviour in youth sports,
-and building one would be a choice, not an accident.
+and building one would be a choice, not an accident. (There used to be one
+exception, an age-group board a parent could open for their own child's year.
+That is gone too: `/api/leaderboard?age_group=` is staff-only like every other
+board.)
+
+**Athletes do not see rankings either.** Every ranking (`/api/leaderboard` in all
+its forms, `/api/standings`, and the director's `/api/coach/team-ranking`) is for
+coaches and directors only (`_competitor`, which now means staff). An athlete's
+reason to come back is their **badges**: the ones earned, and "Next up", the
+nearest few they have not, each with how far along they are
+(`scoring.badge_progress` is the one place the rules live; `earned_badges` is
+derived from it, so a full bar and an awarded badge cannot disagree).
 
 **No integrity or review status.** "Your child's session was held for review"
 reads as an accusation, and it is a coach's conversation to have, not a push
@@ -2778,10 +2789,10 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 40 modules across 600 call sites.
+SQL lives in 40 modules across 602 call sites.
 store.py holds 34% of them.
 
-1348 occurrences are mechanical (search-and-replace with tests behind it).
+1351 occurrences are mechanical (search-and-replace with tests behind it).
 82 need judgement.
 ```
 
@@ -4240,10 +4251,14 @@ just ranks teams by roster size and a small squad can never win.
 
 - **Coach-mediated signup.** An adult in the program creates athlete accounts;
   tokens are handed over in person. No athlete email required.
-- **Name masking on shared leaderboards.** An athlete 17 or under without
-  recorded guardian consent appears as `A. (#14)` or `Athlete A.` — still
-  ranked, still accountable, but not full-named on a screen other families see.
-  Assigning jersey numbers keeps those handles distinct.
+- **Rankings are staff-only; the masking now only guards the sport-wide board.**
+  Athletes and parents are refused every board, so there is no screen "other
+  families see". A director sees every athlete by full name, program-wide or per
+  team (`/api/coach/team-ranking`, which also lists players who have done nothing,
+  tied at the bottom). A coach sees full names for their own teams only; on the
+  program-wide or age-group board a coach is still shown other teams' children as
+  `A. (#14)` / `Athlete A.` unless they ask for one of their own teams. The
+  sport-wide board (other programs) keeps first name and last initial.
 - **Coaches always see real names** on the roster. They are the responsible
   adult; the masking is about broadcast, not supervision.
 - **Per-rep timings are pruned** after 45 days (`prune_rep_events`), and

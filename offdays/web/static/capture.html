@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=38">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 <div class="topbar">
@@ -229,8 +229,14 @@
     </div>
 
     <div class="card" id="badges-card">
-      <h2>Badges</h2>
+      <h2>Badges <span class="small muted" id="badge-count"></span></h2>
       <div class="badge-grid" id="badge-grid"></div>
+      <div class="badge-next-title hidden" id="badge-next-title">Next up</div>
+      <div id="badge-next"></div>
+      <details id="badge-more" class="hidden">
+        <summary class="small muted" style="cursor:pointer;margin-top:8px">See every badge</summary>
+        <div id="badge-rest"></div>
+      </details>
     </div>
 
     <div class="card">
@@ -243,7 +249,6 @@
       <div class="sponsor-text">Sponsored by</div>
     </div>
 
-    <button class="secondary" onclick="location.href='leaderboard.html'">Leaderboards</button>
     <button class="secondary" id="signout" style="margin-top:10px">Sign out</button>
   </section>
 
@@ -583,12 +588,30 @@ async function loadHome(prefetched) {
     warn.classList.add('hidden');
   }
 
+  // Badges, not a ranking: what you have earned, and the next few, nearest first, each with how far along you are.
+  const locked = profile.locked_badges || [];
+  $('badge-count').textContent = `${profile.badges.length} of ${profile.badges.length + locked.length}`;
   $('badge-grid').innerHTML = profile.badges.length
     ? profile.badges.map((b) => `
         <div class="badge ${esc(b.tier)}" title="${esc(b.description)}">
-          <span class="ico">${BADGE_ICONS[b.key] || '\u{1F3C5}'}</span>${esc(b.name)}
+          <span class="ico">${BADGE_ICONS[b.key] || '\u{1F3C5}'}</span><span class="nm">${esc(b.name)}</span>
         </div>`).join('')
     : '<p class="small muted">No badges yet. Your first session earns one.</p>';
+  const nextRow = (b) => `
+    <div class="badge-next ${esc(b.tier)}">
+      <span class="ico" aria-hidden="true">${BADGE_ICONS[b.key] || '\u{1F3C5}'}</span>
+      <div class="bn-body">
+        <b>${esc(b.name)}</b>
+        <div class="small muted">${esc(b.description)}</div>
+        <div class="badge-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${b.need}" aria-valuenow="${b.have}"
+             aria-label="${esc(b.name)}"><i style="width:${Math.round((100 * b.have) / b.need)}%"></i></div>
+        <div class="small muted">${b.have.toLocaleString()} of ${b.need.toLocaleString()}</div>
+      </div>
+    </div>`;
+  $('badge-next-title').classList.toggle('hidden', !locked.length);
+  $('badge-next').innerHTML = locked.slice(0, 3).map(nextRow).join('');
+  $('badge-more').classList.toggle('hidden', locked.length <= 3);
+  $('badge-rest').innerHTML = locked.slice(3).map(nextRow).join('');
 
   $('recent').innerHTML = profile.recent_sessions.length
     ? profile.recent_sessions.map((s) => {

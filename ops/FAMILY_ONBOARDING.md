@@ -59,7 +59,7 @@ parent portal: "Decide whether Jordan can train"  →  tick participation
         │  /app/index.html?code=CODE -- the athlete's standing sign-in code,
         │  reusable on any phone all season, until a parent issues a new one
         ▼
-child taps it on their own phone  →  signed in  →  home screen (drills, film, leaderboard)
+child taps it on their own phone  →  signed in  →  home screen (drills, film, badges)
 ```
 
 Each arrow is a real join and each was previously broken: the invite was
@@ -114,7 +114,7 @@ an email it is sent; without one the code is shown to read out.
 
 Taps the link. The sign-in page sees `?code=` and signs in with no typing,
 landing on their home screen: the drill list to choose from, film the coach
-has curated, the leaderboard button, the wellness check-in. Picks a drill,
+has curated, their badges and the next ones to earn, the wellness check-in. Picks a drill,
 records it. That is the step that proves the whole chain.
 
 The link is not single-use and does not expire. The parent says yes once;

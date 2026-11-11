@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>0FFDAYS · Leaderboards</title>
-<link rel="stylesheet" href="styles.css?v=38">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 <div class="topbar">
   <div id="masthead"></div>
-  <button class="secondary inline" onclick="location.href='capture.html'">Back</button>
+  <button class="secondary inline" onclick="location.href='coach.html'">Back</button>
 </div>
 
 <div class="wrap wrap--narrow">
@@ -130,7 +130,7 @@ async function load() {
             <br><span class="small muted">Lvl ${r.level}${r.detail ? ` &middot; ${esc(r.detail)}` : ''}</span></td>
         <td class="num"><b>${r.value.toLocaleString()}</b></td>
       </tr>`;
-    }).join('') : '<tr><td class="muted small">Nobody on this board yet. Be first.</td></tr>';
+    }).join('') : '<tr><td class="muted small">Nobody on this board yet.</td></tr>';
 
     $('standings').innerHTML = standings.teams.length ? standings.teams.map((t) => `
       <tr>
@@ -149,6 +149,12 @@ async function load() {
 (async () => {
   try {
     const me = await api('/api/me');
+    // Rankings are for coaches and directors. An athlete or a parent who lands here (an old bookmark, a
+    // cached tab) is sent to their own page; the server refuses them anyway.
+    if (me.role !== 'coach' && me.role !== 'director') {
+      location.replace(me.role === 'guardian' ? 'parent.html' : 'capture.html');
+      return;
+    }
     myId = me.athlete_id;
     myAgeGroup = me.age_group || null;
     if (me.side) SIDE = me.side;

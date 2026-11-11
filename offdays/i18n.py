@@ -195,37 +195,11 @@ STRINGS: dict[str, dict[str, str]] = {
     "parent.report.looking_after": {
         EN: "Looking after themselves", ES: "Cuidándose"},
     "parent.report.no_ranking": {
-        EN: ("This report is about your own child only, and nobody is ranked "
-             "on it. The age-group board is the one place comparison happens, "
-             "and it ranks work done, never ability."),
-        ES: ("Este informe trata \u00fanicamente de su propio hijo o hija: aqu\u00ed "
-             "no se clasifica a nadie. La tabla del grupo de edad es el \u00fanico "
-             "lugar donde hay comparaci\u00f3n, y ordena el trabajo realizado, "
-             "nunca la capacidad."),
-    },
-    "parent.cohort.title": {
-        EN: "The {age_group} age group",
-        ES: "El grupo de edad {age_group}",
-    },
-    "parent.cohort.why": {
-        EN: ("Every squad in your child's birth year, ranked on points earned "
-             "in the last month. Points come from work they control: reps "
-             "recorded, extra for {weaker} reps, and a daily ceiling so one "
-             "long Sunday cannot outweigh a steady week. Not ability, and not "
-             "a prediction of next season's teams."),
-        ES: ("Todos los equipos del a\u00f1o de nacimiento de su hijo o hija, "
-             "ordenados por los puntos ganados en el \u00faltimo mes. Los puntos "
-             "vienen del trabajo que controlan: repeticiones registradas, un "
-             "extra por las repeticiones con {weaker} y un tope diario para "
-             "que un domingo largo no pese m\u00e1s que una semana constante. No "
-             "la capacidad, ni una predicci\u00f3n de los equipos de la "
-             "pr\u00f3xima temporada."),
-    },
-    "parent.cohort.masked": {
-        EN: ("Children whose families have not agreed to their name being "
-             "shown appear as an initial. Yours is highlighted."),
-        ES: ("Los ni\u00f1os cuyas familias no han aceptado que se muestre su "
-             "nombre aparecen con una inicial. El suyo est\u00e1 resaltado."),
+        EN: ("This report is about your own child only. Nobody is ranked, and there is "
+             "no leaderboard for families: your child earns badges for the work they do."),
+        ES: ("Este informe trata \u00fanicamente de su propio hijo o hija. No se clasifica "
+             "a nadie y no hay tabla de posiciones para las familias: su hijo o hija gana "
+             "insignias por el trabajo que hace."),
     },
     "parent.days_trained": {EN: "days trained", ES: "días entrenados"},
     "parent.sessions": {EN: "sessions", ES: "sesiones"},

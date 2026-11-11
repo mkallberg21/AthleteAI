@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=38">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 <div class="topbar">
@@ -946,6 +946,14 @@
         <tbody id="standings"></tbody>
       </table>
     </div>
+    <details id="ranking-details" style="margin-top:12px">
+      <summary id="ranking-summary" class="small muted" style="cursor:pointer">Every player, ranked</summary>
+      <p class="small muted" style="margin:8px 0">
+        Everyone in the list above, by full name, including players who have not started: they sit at the bottom
+        with the same rank. Only coaches and directors see this. Athletes and parents never do.
+      </p>
+      <div id="ranking-rows"></div>
+    </details>
   </div>
 
   <div class="card" id="review-card">
@@ -1675,6 +1683,7 @@ async function loadAll() {
   renderAttention(rosterData.athletes);
   renderRoster(rosterData.athletes);
   renderStandings(standingsData.teams);
+  loadRanking(teamId, window_);
   renderReview(reviewData.sessions);
   renderLoadWatch(rosterData.athletes);
   await loadFilm(teamId);
@@ -2854,6 +2863,24 @@ document.getElementById('roster').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-invite]');
   if (btn) inviteGuardian(btn);
 });
+
+// Every player, ranked. The server does the ranking (ties share a rank, nobody is left out for having done nothing);
+// this only draws it. Re-fetched with the page's team and window, so it always matches the standings above it.
+async function loadRanking(teamId, window_) {
+  const box = $('ranking-rows');
+  try {
+    const data = await api(`/api/coach/team-ranking?window=${window_}${teamId ? `&team_id=${teamId}` : ''}`);
+    $('ranking-summary').textContent = `Every player, ranked (${data.total}${data.total - data.trained ? `, ${data.total - data.trained} not started` : ''})`;
+    box.innerHTML = data.rows.length ? data.rows.map((r) => `
+      <div class="rank-row${r.trained ? '' : ' idle'}">
+        <span class="rank-n">${r.rank}</span>
+        <span class="rank-who"><b>${esc(r.display_name)}</b> <span class="small muted">${esc(r.team_name)}</span></span>
+        <span class="rank-xp">${r.trained ? `${r.xp.toLocaleString()} XP` : '<span class="small muted">not started</span>'}</span>
+      </div>`).join('') : '<p class="small muted">No players yet.</p>';
+  } catch (e) {
+    box.innerHTML = `<p class="small muted">${esc(e.message || 'Could not load the ranking.')}</p>`;
+  }
+}
 
 function renderStandings(teams) {
   $('standings').innerHTML = teams.length ? teams.map((t) => `

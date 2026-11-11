@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v9';
+const CACHE = 'offdays-shell-v10';
 
 const SHELL = [
   './',
@@ -15,7 +15,6 @@ const SHELL = [
   'capture.html',
   'coach.html',
   'parent.html',
-  'leaderboard.html',
   'styles.css',
   'offdays-lockup.png',
   'offdays-mark.png',

@@ -325,7 +325,10 @@ class TestLeaderboards:
         assert team["roster"] == 2
         assert team["xp_per_athlete"] == pytest.approx(team["total_xp"] / team["roster"], rel=0.02)
 
-    def test_a_minor_without_consent_is_not_named_on_the_leaderboard(self, client, program):
+    def test_a_minor_without_consent_is_named_in_full_to_staff_and_never_shown_to_anyone_else(self, client, program):
+        """Staff run the program, so a director sees every athlete by full name. The initial-and-jersey masking
+        protects a name from a screen other families can see, and there is no such screen now: athletes and parents
+        are refused every ranking (tests/test_rankings_staff_only.py)."""
         from datetime import datetime, timezone
 
         minor = client.post(
@@ -345,11 +348,9 @@ class TestLeaderboards:
             "/api/leaderboard?window=all", headers=program["director"]
         ).json()["rows"]
         names = [r["display_name"] for r in rows]
-        # Their full name must not appear, but they must still be on the board
-        # under a handle -- being unnamed is not the same as being excluded.
-        assert "Alex Kowalczyk" not in names
-        assert "Kowalczyk" not in " ".join(names)
-        assert "Athlete A." in names
+        assert "Alex Kowalczyk" in names, "a director sees the full name"
+        minor_headers = {"Authorization": f"Bearer {minor['token']}"}
+        assert client.get("/api/leaderboard?window=all", headers=minor_headers).status_code == 403, "the athlete is shown no board at all"
 
     def test_a_coach_still_sees_the_real_name_on_the_roster(self, client, program):
         """Withholding names on shared boards must not blind the responsible adult."""

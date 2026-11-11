@@ -80,6 +80,11 @@ def _display_name(row: Any) -> str:
     return f"{initial}. (#{jersey})" if jersey else f"Athlete {initial}."
 
 
+def _full_name(row: Any) -> str:
+    """Staff see every athlete's full name. The initial-and-jersey masking is for anyone who is not staff."""
+    return row[1]
+
+
 def _sport_display_name(row: Any) -> str:
     """Sport-wide display: first_name + last_initial, no consent gating."""
     name = row[1].strip()
@@ -296,13 +301,18 @@ def leaderboard(
     window: Window = "week",
     team_id: int | None = None,
     limit: int = 50,
+    full_names: bool = False,
 ) -> list[dict[str, Any]]:
-    """Rank athletes in a program (or one team) on the given board."""
+    """Rank athletes in a program (or one team) on the given board.
+
+    `full_names` is for staff, who run the program and see everyone by name; the default keeps the
+    initial-and-jersey masking for any caller that is not staff.
+    """
     sql, params = _build_leaderboard_query(board, window, org_id=org_id, team_id=team_id)
     sql += " GROUP BY u.id ORDER BY value DESC, u.display_name ASC LIMIT ?"
     params.append(limit * 3 if board == "streak" else limit)
     rows = conn.execute(sql, params).fetchall()
-    return _fetch_leader_rows(conn, rows, board, limit, _display_name)
+    return _fetch_leader_rows(conn, rows, board, limit, _full_name if full_names else _display_name)
 
 
 def age_group_of(conn: sqlite3.Connection, athlete_id: int) -> str | None:
@@ -332,6 +342,7 @@ def leaderboard_age_group(
     board: Board = "xp",
     window: Window = "week",
     limit: int | None = None,
+    full_names: bool = False,
 ) -> list[dict[str, Any]]:
     """Rank one birth-year cohort across every team it is split into.
 
@@ -362,7 +373,7 @@ def leaderboard_age_group(
     rows = conn.execute(sql, params).fetchall()
     # The streak board re-sorts in Python and slices to `limit`; None there
     # means the same thing it means here.
-    return _fetch_leader_rows(conn, rows, board, limit, _display_name)
+    return _fetch_leader_rows(conn, rows, board, limit, _full_name if full_names else _display_name)
 
 
 def leaderboard_sport_wide(
@@ -383,6 +394,63 @@ def leaderboard_sport_wide(
     params.append(limit * 3 if board == "streak" else limit)
     rows = conn.execute(sql, params).fetchall()
     return _fetch_leader_rows(conn, rows, board, limit, _sport_display_name)
+
+
+def team_ranking(
+    conn: sqlite3.Connection,
+    org_id: int,
+    team_ids: list[int] | None,
+    window: Window = "week",
+) -> list[dict[str, Any]]:
+    """Every active athlete in the teams given (None = the whole program), by full name, ranked on XP.
+
+    Nobody is left out for having done nothing: those with no XP in the window are listed at the bottom and
+    share one rank, so a director sees who has not started as clearly as who is leading. Ties share a rank
+    (1, 2, 2, 4) and are ordered by name so the list does not jump about. An athlete on two teams is one row.
+    `team_ids` is already checked by the caller against the principal's own teams.
+    """
+    start = window_start(window)
+    scope = ""
+    name_scope = ""
+    scope_params: list[Any] = []
+    if team_ids is not None:
+        if not team_ids:
+            return []
+        marks = ",".join("?" * len(team_ids))
+        scope = f"AND u.id IN (SELECT user_id FROM team_members WHERE team_id IN ({marks})) "
+        name_scope = f"AND tm.team_id IN ({marks}) "
+        scope_params = list(team_ids)
+    # Placeholders appear in this order in the text: the team name's scope, the window, the program, the athlete scope.
+    rows = conn.execute(
+        "SELECT u.id AS athlete_id, u.display_name, "
+        "  (SELECT t.name FROM team_members tm JOIN teams t ON t.id = tm.team_id "
+        "     WHERE tm.user_id = u.id " + name_scope + "ORDER BY tm.team_id LIMIT 1) AS team_name, "
+        "  COALESCE((SELECT SUM(x.amount) FROM xp_ledger x WHERE x.athlete_id = u.id AND x.day >= ?), 0) AS xp, "
+        "  (SELECT MAX(x.day) FROM xp_ledger x WHERE x.athlete_id = u.id AND x.amount > 0) AS last_active "
+        "FROM users u "
+        "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1 " + scope +
+        "ORDER BY xp DESC, u.display_name COLLATE NOCASE ASC",
+        (*scope_params, start, org_id, *scope_params),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    prev_xp: int | None = None
+    prev_rank = 0
+    for i, r in enumerate(rows, start=1):
+        xp = int(r["xp"])
+        if prev_xp is not None and xp == prev_xp:
+            rank = prev_rank
+        else:
+            rank, prev_rank, prev_xp = i, i, xp
+        out.append({
+            "athlete_id": int(r["athlete_id"]),
+            "display_name": r["display_name"],
+            "team_name": r["team_name"] or "",
+            "xp": xp,
+            "rank": rank,
+            "trained": xp > 0,
+            "last_active": r["last_active"],
+        })
+    return out
 
 
 def team_standings(conn: sqlite3.Connection, org_id: int, window: Window = "week") -> list[dict[str, Any]]:

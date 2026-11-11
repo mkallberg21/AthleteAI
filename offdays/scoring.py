@@ -519,26 +519,35 @@ class AthleteStats:
     longest_streak: int = 0
 
 
+def badge_progress(stats: AthleteStats) -> dict[str, tuple[int, int]]:
+    """For every badge: (what the athlete has, what it takes). The single source of the badge rules.
+
+    `earned_badges` is derived from this, so the progress bar an athlete sees and the badge the app
+    awards can never disagree: a bar is full exactly when the badge is theirs.
+    """
+    level = level_for_xp(stats.total_xp)
+    return {
+        "first_session": (stats.session_count, 1),
+        "wall_100": (stats.skill_reps, 100),
+        "wall_1000": (stats.skill_reps, 1_000),
+        "wall_10000": (stats.skill_reps, 10_000),
+        "streak_7": (stats.longest_streak, 7),
+        "streak_30": (stats.longest_streak, 30),
+        "streak_100": (stats.longest_streak, 100),
+        "ambidextrous": (stats.balanced_sessions, 10),
+        "offhand_1000": (stats.offhand_reps, 1_000),
+        "early_bird": (stats.early_sessions, 10),
+        "all_rounder": (stats.distinct_drills, 5),
+        # Everyone starts at level 1, so "levels climbed" is level - 1, out of the 9 (or 24) it takes to reach the badge's level.
+        "level_10": (level - 1, 9),
+        "level_25": (level - 1, 24),
+    }
+
+
 def earned_badges(stats: AthleteStats) -> list[str]:
     """Badge keys the athlete currently qualifies for.
 
     Pure and idempotent: callers diff this against what is already stored and
     award the difference, so re-running it never double-awards.
     """
-    level = level_for_xp(stats.total_xp)
-    checks: list[tuple[str, bool]] = [
-        ("first_session", stats.session_count >= 1),
-        ("wall_100", stats.skill_reps >= 100),
-        ("wall_1000", stats.skill_reps >= 1_000),
-        ("wall_10000", stats.skill_reps >= 10_000),
-        ("streak_7", stats.longest_streak >= 7),
-        ("streak_30", stats.longest_streak >= 30),
-        ("streak_100", stats.longest_streak >= 100),
-        ("ambidextrous", stats.balanced_sessions >= 10),
-        ("offhand_1000", stats.offhand_reps >= 1_000),
-        ("early_bird", stats.early_sessions >= 10),
-        ("all_rounder", stats.distinct_drills >= 5),
-        ("level_10", level >= 10),
-        ("level_25", level >= 25),
-    ]
-    return [key for key, ok in checks if ok]
+    return [key for key, (have, need) in badge_progress(stats).items() if have >= need]

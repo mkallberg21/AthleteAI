@@ -65,6 +65,7 @@ from .scoring import (
     compute_streak,
     credit_reps,
     daily_cap_for,
+    badge_progress as scoring_badge_progress,
     earned_badges,
     level_progress,
     pool_cap,
@@ -3873,6 +3874,26 @@ class Store:
             if r["badge_key"] in BADGES_BY_KEY
         ]
 
+        # What is still to earn, nearest first, so there is always a next one in sight. Progress comes from the same
+        # rules that award the badge, and a badge already held is never listed as locked.
+        held = {b["key"] for b in badges}
+        locked = []
+        for key, (have, need) in scoring_badge_progress(stats).items():
+            if key in held or key not in BADGES_BY_KEY:
+                continue
+            spec = BADGES_BY_KEY[key]
+            locked.append({
+                "key": key,
+                "name": words.both if key == "ambidextrous" else spec.name,
+                "description": _badge_text(spec.description),
+                "tier": spec.tier,
+                "have": min(int(have), int(need) - 1) if have < need else int(need),
+                "need": int(need),
+            })
+        # Nearest to done first; among equals the smallest ask, so a brand-new athlete is shown "First Rep" (one session)
+        # ahead of "Elite" (level 25).
+        locked.sort(key=lambda b: (-(b["have"] / b["need"]), b["need"] - b["have"], b["need"]))
+
         recent = [
             dict(r)
             for r in self.conn.execute(
@@ -3916,6 +3937,7 @@ class Store:
                 "distinct_drills": stats.distinct_drills,
             },
             "badges": badges,
+            "locked_badges": locked,
             "recent_sessions": recent,
         }
 

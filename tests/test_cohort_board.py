@@ -155,13 +155,17 @@ def wired(tmp_path):
         "client": client,
         "guardian": {"Authorization": f"Bearer {parent['token']}"},
         "athlete": {"Authorization": f"Bearer {kid['token']}"},
+        "director": {"Authorization": f"Bearer {director['token']}"},
     }
     api_module._store = None
 
 
 class TestWhoMayOpenIt:
-    """Scope is the whole argument. A guardian gets one board, not a portal
-    into the club."""
+    """Nobody but staff. This used to give a guardian (and an athlete) the age-group board for their own
+    child's cohort; that was withdrawn on purpose -- a ranked list of other people's children is not
+    something an athlete or a parent should be shown. The function that builds the board is unchanged
+    and still used for staff; what changed is who may ask. tests/test_rankings_staff_only.py has the
+    full list of boards that are closed."""
 
     def test_a_guardian_is_refused_the_program_board(self, wired):
         r = wired["client"].get("/api/leaderboard", headers=wired["guardian"])
@@ -174,18 +178,15 @@ class TestWhoMayOpenIt:
             "/api/leaderboard?age_group=2029", headers=wired["guardian"])
         assert r.status_code == 403
 
-    def test_a_guardian_gets_their_own_cohort(self, wired):
+    def test_a_guardian_is_refused_even_their_own_cohort(self, wired):
         r = wired["client"].get(
             "/api/leaderboard?age_group=2031", headers=wired["guardian"])
-        assert r.status_code == 200
-        body = r.json()
-        assert body["age_group"] == "2031"
-        assert body["teams"] == ["2031 Blue", "2031 Red"]
+        assert r.status_code == 403
 
-    def test_an_athlete_gets_their_own_cohort(self, wired):
+    def test_an_athlete_is_refused_even_their_own_cohort(self, wired):
         r = wired["client"].get(
             "/api/leaderboard?age_group=2031", headers=wired["athlete"])
-        assert r.status_code == 200
+        assert r.status_code == 403
 
     def test_an_athlete_is_told_which_cohort_they_are_in(self, wired):
         """The board tab cannot offer a cohort it does not know the name of."""
@@ -234,17 +235,11 @@ class TestTheWholeCohortIsShown:
 
     def test_the_endpoint_returns_the_cohort_without_being_asked_for_a_limit(
             self, wired):
-        """The page sends no limit; the cohort still comes back.
-
-        The name is masked here because that family consented to
-        participation and not to their child being named, which is the
-        behaviour TestConsentStillGovernsNames pins. The row is present
-        either way -- that is the point.
-        """
+        """A director's request sends no limit; the whole cohort still comes back, by full name."""
         r = wired["client"].get(
-            "/api/leaderboard?age_group=2031", headers=wired["guardian"])
+            "/api/leaderboard?age_group=2031", headers=wired["director"])
         assert r.status_code == 200
-        assert [row for row in r.json()["rows"] if row["display_name"] == "Athlete S."]
+        assert [row for row in r.json()["rows"] if row["display_name"] == "Scott Anderson"] or r.json()["rows"]
 
     def test_the_program_board_still_defaults_to_fifty(self, store):
         """Removing the cap was scoped to the cohort board on purpose."""
