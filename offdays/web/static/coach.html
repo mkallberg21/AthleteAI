@@ -2826,7 +2826,7 @@ async function inviteGuardian(btn) {
     } else {
       const href = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
       out.innerHTML = `Email to <b>${esc(res.email)}</b> is ready, with the player code <code>${esc(res.code)}</code> in it. `
-        + `<a class="tiny" href="${esc(href)}">Open in my email</a>`
+        + `<a class="tiny" href="${esc(href)}">Send email</a>`
         + `<button type="button" class="tiny" data-copy-message="1">Copy message</button>`
         + `<button type="button" class="tiny" data-copy-invite="${esc(res.link)}">Copy link</button>`;
       out.querySelector('[data-copy-message]').addEventListener('click', (e) => copyInviteText(e.target, res));
@@ -3088,7 +3088,7 @@ $('new-coach-add').addEventListener('click', async () => {
       ? `<b>${esc(res.display_name)}</b> added. Their sign-in link went to ${esc(res.email)}.`
       : res.email
         ? `<b>${esc(res.display_name)}</b> added. The program is not sending email, so send it yourself:
-           <a class="btn-link" href="${mail}">Open in my email</a> &middot; or read them this code: <code>${esc(res.code)}</code> (shown once).`
+           <a class="btn-link" href="${mail}">Send email</a> &middot; or read them this code: <code>${esc(res.code)}</code> (shown once).`
         : `<b>${esc(res.display_name)}</b> added. No email, so read them this code: <code>${esc(res.code)}</code> (shown once).`;
     $('new-coach-out').classList.remove('hidden');
     $('new-coach-name').value = '';
@@ -3323,7 +3323,7 @@ $('mailhold-toggle').addEventListener('click', async () => {
 });
 
 // The whole invite as plain text -- to, subject, then the message -- for a
-// director on webmail, where "Open in my email" has no mail app to open.
+// director on webmail, where "Send email" has no mail app to open.
 function inviteAsText(r) {
   return `To: ${r.email}\nSubject: ${r.subject}\n\n${r.text}`;
 }
@@ -3338,7 +3338,7 @@ function resentHtml(r) {
   return r.emailed
     ? `<span class="small muted">Sent to ${esc(r.email)}</span>`
     : `<span class="small">New invite ready &middot;
-         <a class="btn-link" href="${esc(href)}" title="Opens the invite in your mail app, ready for you to press send. The program sends nothing.">Open in my email</a>
+         <a class="btn-link" href="${esc(href)}" title="Opens the invite in your mail app, ready for you to press send. The program sends nothing.">Send email</a>
          <button type="button" class="tiny" data-copy-invite="${esc(r.link)}">Copy link</button>
          <button type="button" class="tiny" data-copy-message="${r.athlete_id}">Copy message</button>
        </span>`;
@@ -4263,7 +4263,7 @@ function renderSendYourself(invites, smtpConfigured) {
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <span><b>${esc(g.athlete_name)}</b> <span class="small muted">${esc(g.email)}</span></span>
       <span style="display:flex;gap:6px">
-        <a class="btn-link" href="${href}">Open in my email</a>
+        <a class="btn-link" href="${href}">Send email</a>
         <button class="secondary inline" data-copy-mail="${i}">Copy</button>
       </span>
     </div>`;
@@ -4411,7 +4411,7 @@ $('add-team').addEventListener('click', async () => {
       const mail = c.email ? `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(c.subject)}&body=${encodeURIComponent(c.text)}` : '';
       out += c.emailed
         ? `; <b>${esc(c.display_name)}</b> added as coach and their sign-in link went to ${esc(c.email)}.`
-        : `; <b>${esc(c.display_name)}</b> added as coach. The program is not sending email, so send it yourself: <a class="btn-link" href="${mail}">Open in my email</a> &middot; or read them this code: <code>${esc(c.code)}</code> (shown once).`;
+        : `; <b>${esc(c.display_name)}</b> added as coach. The program is not sending email, so send it yourself: <a class="btn-link" href="${mail}">Send email</a> &middot; or read them this code: <code>${esc(c.code)}</code> (shown once).`;
     } else out += '.';
     $('new-team-out').innerHTML = out; $('new-team-out').classList.remove('hidden');
     for (const id of ['new-team', 'new-team-coach', 'new-team-coach-email', 'new-team-wall', 'new-team-shots']) $(id).value = '';

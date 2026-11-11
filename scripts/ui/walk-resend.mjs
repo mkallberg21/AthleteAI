@@ -1,5 +1,5 @@
 // Families: "Resend invite to parent" on a family that has not moved. With no
-// outbound email, nothing is sent: the director gets Open in my email + Copy link.
+// outbound email, nothing is sent: the director gets Send email + Copy link.
 import { chromium } from 'playwright';
 const base = process.argv[2] || 'http://127.0.0.1:8000';
 const b = await chromium.launch();
