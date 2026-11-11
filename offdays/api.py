@@ -51,6 +51,7 @@ from . import wellness as wellness_mod
 from . import transfer as transfer_mod
 from . import film as film_mod
 from . import iq_shelf as iq_shelf_mod
+from . import video_scout as video_scout_mod
 from . import guardians as guardians_mod
 from . import library
 from . import portability as portability_mod
@@ -3873,6 +3874,68 @@ def hide_shelf_clip(
     if not store.set_shelf_clip_hidden(principal.org_id, clip_id, body.hidden):
         raise HTTPException(status_code=404, detail="no built-in clip with that id in this program")
     return {"id": clip_id, "hidden": body.hidden}
+
+
+class SuggestionAdd(BaseModel):
+    """What a coach may change when adding a suggestion. All optional: tapping Add with nothing
+    filled in uses the suggestion's own title, a what-to-watch-for line, and the youngest age its
+    length allows. The age can be raised, never lowered below what the length allows."""
+    title: str | None = Field(default=None, max_length=160)
+    focus: str | None = Field(default=None, max_length=400)
+    min_age: int | None = Field(default=None, ge=0, le=99)
+
+
+@app.get("/api/coach/suggestions")
+def video_suggestions(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Videos the weekly scan found that this program has not decided on, best first.
+
+    Nothing here is visible to an athlete. A suggestion becomes a clip only when a coach adds it.
+    """
+    sport = _org_sport(store, principal.org_id)
+    return {
+        "enabled": video_scout_mod.enabled(),
+        "sport": sport,
+        "suggestions": video_scout_mod.pending_for(store.conn, principal.org_id, sport)
+        if sport == "lacrosse" else [],
+        "last_scan": video_scout_mod.last_scan(store.conn),
+    }
+
+
+@app.post("/api/coach/suggestions/{suggestion_id}/add", status_code=201)
+def add_suggestion(
+    suggestion_id: int,
+    body: SuggestionAdd,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Add a suggested video to this program's clips. Same rules as pasting a link."""
+    try:
+        return video_scout_mod.add(
+            store, principal.org_id, principal.id, suggestion_id,
+            title=body.title, focus=body.focus, min_age=body.min_age,
+        )
+    except StoreError as exc:
+        message = str(exc)
+        code = 404 if message.startswith("no such") else 409 if ("already" in message or "no longer" in message) else 400
+        raise HTTPException(status_code=code, detail=message) from exc
+
+
+@app.post("/api/coach/suggestions/{suggestion_id}/dismiss")
+def dismiss_suggestion(
+    suggestion_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Say no to a suggestion for good, for this program only."""
+    try:
+        video_scout_mod.dismiss(store.conn, principal.org_id, principal.id, suggestion_id)
+    except StoreError as exc:
+        message = str(exc)
+        raise HTTPException(status_code=404 if message.startswith("no such") else 409, detail=message) from exc
+    return {"id": suggestion_id, "dismissed": True}
 
 
 @app.get("/api/coach/film/coverage")

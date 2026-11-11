@@ -137,6 +137,7 @@ offdays/
   i18n.py           Spanish on the consent, parent and recognition surfaces
   curriculum.py     The lacrosse IQ film syllabus, minus the videos
   iq_shelf.py       The default Lacrosse IQ shelf: ~70 vetted clips, and when they repeat
+  video_scout.py    Weekly YouTube scan: suggested clips a coach can add (nothing automatic)
   adaptive.py       Athletes the camera was not built for, and what changes
   portability.py    The whole program as documented CSVs — the lock-in answer
   dialect.py        What a Postgres migration would actually cost, measured
@@ -159,7 +160,7 @@ offdays/
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
-  store.py          The largest SQL surface (~35% of queries; see dialect.py)
+  store.py          The largest SQL surface (~34% of queries; see dialect.py)
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
@@ -2042,6 +2043,17 @@ Mitigations, not cures:
   film never talks to Google at all
 - the `link` provider exists for programs that host their own clips
 
+### Suggested videos (`video_scout.py`)
+
+Once a week the server searches YouTube (Data API, key in `OFFDAYS_YOUTUBE_API_KEY`) for lacrosse clips about
+reading the game and lists the qualifying ones on the coach dashboard. A coach watches one, edits the
+what-to-watch-for line, and taps **Add** (an ordinary clip, age caps and highlight refusal still bind) or
+**Not for us** (gone for good for that program). **Nothing reaches an athlete unless a coach adds it.** It
+checks public, embeddable, not age-restricted, English, length, lacrosse in the title or tags, no reels, no
+other-game wording, no swearing; it cannot judge whether the coaching is right, which is why a person
+previews it. YouTube only: no other platform gives a search or an embed with playback tracking. Setup, cost and
+limits: `ops/VIDEO_SCOUT.md`.
+
 A program that cannot accept a child's browser reaching YouTube should self-host
 and use `link`. Worth checking your own obligations here — youth programs and
 schools often have rules about third-party embeds that this README cannot know.
@@ -2766,11 +2778,11 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 39 modules across 584 call sites.
-store.py holds 35% of them.
+SQL lives in 40 modules across 600 call sites.
+store.py holds 34% of them.
 
-1314 occurrences are mechanical (search-and-replace with tests behind it).
-81 need judgement.
+1348 occurrences are mechanical (search-and-replace with tests behind it).
+82 need judgement.
 ```
 
 The judgement work is the real cost: `lastrowid` has to become `INSERT ...

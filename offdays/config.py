@@ -259,6 +259,13 @@ class Config:
     smtp_from: str = field(
         default_factory=lambda: os.environ.get("OFFDAYS_SMTP_FROM", "0FFDAYS <no-reply@example.com>")
     )
+
+    # YouTube Data API key for the weekly video scan (offdays/video_scout.py). Absent, the scan does
+    # nothing and the dashboard card says it is not switched on. repr=False keeps it out of any
+    # accidental print of the settings.
+    youtube_api_key: str = field(
+        default_factory=lambda: os.environ.get("OFFDAYS_YOUTUBE_API_KEY", ""), repr=False
+    )
     # Base URL used for the dashboard link inside the email.
     app_base_url: str = field(
         default_factory=lambda: os.environ.get("OFFDAYS_BASE_URL", "")

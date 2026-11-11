@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -347,6 +347,37 @@ CREATE TABLE IF NOT EXISTS clip_watches (
     UNIQUE (athlete_id, clip_id, day)
 );
 CREATE INDEX IF NOT EXISTS idx_clip_watches_day ON clip_watches(athlete_id, day);
+
+-- Videos the weekly scan (offdays/video_scout.py) found on YouTube. A suggestion is only ever a row a
+-- coach reads; it reaches an athlete only if a coach taps Add, which creates an ordinary clip. Global,
+-- not per program: the same find is offered to every program, and each decides for itself.
+CREATE TABLE IF NOT EXISTS video_suggestions (
+    id         INTEGER PRIMARY KEY,
+    video_id   TEXT NOT NULL UNIQUE,
+    title      TEXT NOT NULL,
+    channel    TEXT NOT NULL DEFAULT '',
+    seconds    INTEGER NOT NULL,
+    min_age    INTEGER NOT NULL DEFAULT 0,
+    concept    TEXT NOT NULL DEFAULT '',
+    reason     TEXT NOT NULL DEFAULT '',
+    score      REAL NOT NULL DEFAULT 0,
+    views      INTEGER NOT NULL DEFAULT 0,
+    published  TEXT NOT NULL DEFAULT '',
+    -- Set when a later scan finds the video is no longer public or embeddable.
+    withdrawn  INTEGER NOT NULL DEFAULT 0,
+    found_at   TEXT NOT NULL
+);
+
+-- One program's answer to one suggestion. Kept (not deleted) so a rescan never brings back what a
+-- coach said no to, and so Add cannot be pressed twice.
+CREATE TABLE IF NOT EXISTS video_suggestion_decisions (
+    org_id        INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    suggestion_id INTEGER NOT NULL REFERENCES video_suggestions(id) ON DELETE CASCADE,
+    decision      TEXT NOT NULL CHECK (decision IN ('added', 'dismissed')),
+    decided_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    decided_at    TEXT NOT NULL,
+    PRIMARY KEY (org_id, suggestion_id)
+);
 
 -- A coach's own words for a milestone. Absent means the shipped default is
 -- used, so a program that never opens this screen still sends something.

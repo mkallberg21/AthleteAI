@@ -645,6 +645,18 @@
     <div id="clip-list" style="margin-top:12px"></div>
   </div>
 
+  <div class="card" id="suggest-card">
+    <h2>Suggested videos <span class="small muted" id="suggest-count"></span></h2>
+    <p class="small muted">
+      Once a week we look on YouTube for lacrosse clips about reading the game and list the ones
+      that will play on a player's phone and fit an age. <b>Nothing reaches a player unless you
+      add it.</b> Watch it first: a computer can tell it plays and how long it is, but it cannot
+      tell if the coaching is right.
+    </p>
+    <p class="small" id="suggest-note"></p>
+    <div id="suggest-list"></div>
+  </div>
+
   <div class="card" id="shelf-card">
     <h2>Lacrosse IQ shelf <span class="small muted" id="shelf-count"></span></h2>
     <p class="small muted" id="shelf-intro">
@@ -2385,7 +2397,59 @@ async function loadFilm(teamId) {
     renderCoverage(coverage);
   } catch { /* no clips curated yet */ }
   loadShelf();
+  loadSuggestions();
 }
+
+// Videos the weekly scan found. A coach watches one, then adds it (it becomes one of the program's
+// own clips) or says no for good. Nothing here reaches a player on its own.
+let SUGGEST = null;
+async function loadSuggestions() {
+  try { SUGGEST = await api('/api/coach/suggestions'); } catch { return; }
+  renderSuggestions();
+}
+
+function ageWords(n) { return n <= 0 ? 'all ages' : `ages ${n}+`; }
+
+function renderSuggestions() {
+  const card = $('suggest-card');
+  if (!SUGGEST || SUGGEST.sport !== 'lacrosse') { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  const list = SUGGEST.suggestions || [];
+  $('suggest-count').textContent = list.length ? `${list.length} waiting` : '';
+  const last = SUGGEST.last_scan && SUGGEST.last_scan.at ? new Date(SUGGEST.last_scan.at).toLocaleDateString() : null;
+  $('suggest-note').textContent = !SUGGEST.enabled
+    ? 'The weekly scan is not switched on yet. Whoever runs the server turns it on with one setup step; until then there is nothing here.'
+    : list.length
+      ? `Last looked ${last || 'recently'}.`
+      : `Nothing waiting. ${last ? `Last looked ${last}; ` : ''}it looks again every Monday.`;
+  $('suggest-list').innerHTML = list.map((s) => `
+    <div class="budget-row" style="display:block;padding:10px 0;border-bottom:1px solid var(--border)" data-sid="${s.id}">
+      <a href="${esc(s.watch_url)}" target="_blank" rel="noopener"><b>${esc(s.title)}</b></a>
+      <span class="small muted" style="display:block">${esc(s.channel)} &middot; ${s.seconds}s &middot; ${ageWords(s.min_age)}</span>
+      <span class="small" style="display:block;margin:4px 0">${esc(s.reason)}</span>
+      <label class="small muted" style="display:block;margin-top:6px;text-transform:none;letter-spacing:normal;font-weight:400">What players should watch for. Change it if you like.</label>
+      <textarea class="suggest-focus" rows="3" maxlength="400" aria-label="What should players watch for?" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font:inherit;color:var(--foreground,#fff);background:transparent;border:1px solid var(--border);border-radius:10px;resize:vertical">${esc(s.focus_default)}</textarea>
+      <button class="tiny" style="margin-top:6px" data-add="${s.id}">Add for my players</button>
+      <button class="secondary tiny" style="margin-top:6px" data-no="${s.id}">Not for us</button>
+    </div>`).join('');
+}
+
+$('suggest-list').addEventListener('click', async (event) => {
+  const add = event.target.closest('[data-add]');
+  const no = event.target.closest('[data-no]');
+  if (!add && !no) return;
+  const id = (add || no).dataset.add || (add || no).dataset.no;
+  try {
+    if (add) {
+      const row = event.target.closest('[data-sid]');
+      const focus = row.querySelector('.suggest-focus').value.trim();
+      await api(`/api/coach/suggestions/${id}/add`, { method: 'POST', body: { focus } });
+    } else {
+      await api(`/api/coach/suggestions/${id}/dismiss`, { method: 'POST' });
+    }
+    await loadFilm();
+  } catch (e) { showError(e.message); }
+});
 
 // The built-in shelf: what players watch until the program adds its own clips.
 let SHELF = null;
@@ -4650,7 +4714,7 @@ async function initTeamDrills() {
     'slips-card': 'families', 'add-player-card': 'families', 'import-card': 'families',
     'family-card': 'families',
     'teams-card': 'teams', 'roster-card': 'teams', 'staff-card': 'teams',
-    'team-drills-card': 'teams', 'goals-card': 'teams', 'film-card': 'teams', 'shelf-card': 'teams',
+    'team-drills-card': 'teams', 'goals-card': 'teams', 'film-card': 'teams', 'shelf-card': 'teams', 'suggest-card': 'teams',
     'iq-card': 'teams', 'ball-card': 'teams', 'evaluation-card': 'teams',
     'contact-card': 'settings', 'password-card': 'settings', 'badge-card': 'settings', 'season-card': 'settings',
     'billing-card': 'settings', 'specialisation-card': 'settings', 'recognition-card': 'settings',

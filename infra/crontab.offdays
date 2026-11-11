@@ -13,6 +13,8 @@ PATH=/usr/local/bin:/usr/bin:/bin
 */15 * * * * podman exec offdays_app_1 python scripts/health_reap.py --quiet >> $HOME/offdays-logs/health_reap.log 2>&1
 # Nudges, parent reports, retention purges, Monday digest, mail flush, push.
 5 * * * * podman exec offdays_app_1 python scripts/run_notifications.py --quiet >> $HOME/offdays-logs/notifications.log 2>&1
+# Weekly: look on YouTube for lacrosse IQ clips and offer them to coaches (does nothing without a key).
+17 6 * * 1 podman exec offdays_app_1 python scripts/run_video_scout.py >> $HOME/offdays-logs/video_scout.log 2>&1
 # Roster links that a coach switched to auto-sync.
 30 */6 * * * podman exec offdays_app_1 python scripts/run_roster_sync.py >> $HOME/offdays-logs/roster_sync.log 2>&1
 # Nightly online backup + integrity check, copied off the container (and off the box if OFFSITE is set).
