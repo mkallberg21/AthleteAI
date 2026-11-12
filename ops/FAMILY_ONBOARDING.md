@@ -60,6 +60,15 @@ sees only their own teams and players. Routes: `GET /api/coach/overview`, `/over
 `/overview/player/{id}`, `/overview/coaches` (`offdays/overview.py`). Staff sign-ins are now stamped once a day, like
 athletes', so "has not signed in" is real. Tests: `tests/test_director_home.py`; walk: `walk-director-home.mjs`.
 
+**An athlete lost access.** The parent can send a new link any time, from their own portal, with no one at the club
+involved. It is the first thing under the athlete's name: "Send <first> a new sign-in link" (`POST
+/api/guardians/athlete-link/{id}`). It gives a link to text, email, share or copy. Each new link replaces the last
+everywhere, so a link that went astray or a lost phone is dealt with in one tap, and it is the same athlete with the
+same history. It needs the parent's yes to training first, and only that child's parent can do it (not the athlete, not
+a coach). What the athlete sees on a dead link: "This link does not work any more. Ask your parent to send you a new
+one." A director can see who has not signed in from the Home tab (Player page) and nudge the parent, but cannot mint an
+athlete's link: a child's sign-in is the parent's to hand out.
+
 From here the system runs it: parents sign up and say yes, send the kid the
 link, the kid trains. The Families card shows every family's stage and a
 Nudge for parents who have not opened the invite. `onboarding.PROGRAM_STEPS`

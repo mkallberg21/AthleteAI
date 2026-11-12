@@ -469,7 +469,9 @@ async function signIn(token, { button, error }) {
     window.location.href = home[me.role] || 'coach.html';
   } catch (e) {
     button.disabled = false;
-    error.textContent = e.message || 'Sign in failed. Check your code.';
+    error.textContent = (window.__linkTapped && /sign-in (expired|ended)/i.test(e.message || ''))
+      ? 'This link does not work any more. Ask your parent to send you a new one.'
+      : (e.message || 'Sign in failed. Check your code.');
     error.classList.remove('hidden');
   }
 }
@@ -696,6 +698,8 @@ if (resetLink) {
   // the coach, the leaderboard -- not the camera.
   showRole('athlete', { focus: false });
   tokenInput.value = linked.trim().toUpperCase();
+  // If this link has been replaced or turned off, say what to do about it, in words a child can follow.
+  window.__linkTapped = true;
   $('signin-form').requestSubmit();
 } else if (claimed) {
   // A printed claim slip's code in a URL. Single-use; redeemed here.

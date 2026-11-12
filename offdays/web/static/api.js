@@ -44,7 +44,7 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
 
   if (res.status === 401) {
     setToken(null);
-    throw new Error('Your sign-in expired. Enter your athlete code again.');
+    throw new Error('Your sign-in ended. Sign in again, or ask for a new link.');
   }
   if (res.status === 403 && path === '/api/me') {
     // A real code the server will not seat: the season has ended, or the

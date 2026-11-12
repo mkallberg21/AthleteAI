@@ -153,7 +153,8 @@ function firstName(name) {
  */
 function renderSigninLink(wrap, res) {
   const first = firstName(res.athlete_name);
-  const link = res.link || `${location.origin}/app/index.html?code=${encodeURIComponent(res.code)}`;
+  const whole = (u) => (/^https?:\/\//i.test(u) ? u : `${location.origin}${u.startsWith('/') ? '' : '/'}${u}`);
+  const link = whole(res.link || `/app/index.html?code=${encodeURIComponent(res.code)}`);
   const message = `${first}, tap this to sign in to your training app: ${link}`;
   const subject = `${first}'s training app sign-in`;
   const canShare = typeof navigator.share === 'function';
@@ -165,16 +166,14 @@ function renderSigninLink(wrap, res) {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="secondary inline" data-copy>Copy</button>
       ${canShare ? '<button class="secondary inline" data-share>Share</button>' : ''}
-      <a class="secondary inline" style="text-decoration:none"
-         href="sms:?&body=${encodeURIComponent(message)}">Text</a>
-      <a class="secondary inline" style="text-decoration:none"
-         href="mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}">Email</a>
+      <a class="btn-link" href="sms:?&body=${encodeURIComponent(message)}">Text</a>
+      <a class="btn-link" href="mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}">Email</a>
     </div>
     <div class="small muted" style="margin-top:6px">
       Keeps working all season, on any phone: a new phone or a cleared browser
       just needs the same link again. If it goes astray, come back here for a
       new one and the old one stops working everywhere.
-      Or they can type <b>${esc(res.code)}</b> under "Your athlete code".
+      Or they can type <b>${esc(res.code)}</b> under "The code from your link".
     </div>`;
 
   wrap.querySelector('[data-copy]').addEventListener('click', async (e) => {
@@ -240,6 +239,16 @@ function renderAthlete(a) {
 
     ${advisories ? `<div style="margin-top:10px">${advisories}</div>` : ''}
 
+    <div style="margin-top:12px" data-signin-wrap="${a.athlete_id}">
+      <button class="secondary inline" data-signin="${a.athlete_id}">
+        Send ${esc(firstName(a.display_name))} a new sign-in link
+      </button>
+      <span class="small muted" style="display:block;margin-top:4px">
+        Lost the link, a new phone, or signed out? Get a fresh one to text or
+        email. The old link stops working everywhere.
+      </span>
+    </div>
+
     <div class="stat-row" style="margin-top:14px">
       <div class="stat"><b>${a.week_sessions}</b><span>Sessions this week</span></div>
       <div class="stat"><b>${a.week_reps.toLocaleString()}</b><span>Reps this week</span></div>
@@ -247,16 +256,6 @@ function renderAthlete(a) {
       <div class="stat"><b class="${q.current ? qualityClass(q.current) : ''}">${
         q.current === null || q.current === undefined ? '–' : q.current
       }${trend}</b><span>Form score</span></div>
-    </div>
-
-    <div style="margin-top:12px" data-signin-wrap="${a.athlete_id}">
-      <button class="secondary inline" data-signin="${a.athlete_id}">
-        Send ${esc(firstName(a.display_name))} their sign-in link
-      </button>
-      <span class="small muted" style="display:block;margin-top:4px">
-        A link to text or email to their phone. It keeps working all season,
-        on any phone. Getting a new one turns the old one off.
-      </span>
     </div>
 
     ${assignments ? `<h3 style="margin:18px 0 4px;font-size:.95rem">From their coach</h3>${assignments}` : ''}
