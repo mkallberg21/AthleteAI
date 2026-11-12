@@ -39,6 +39,7 @@ for (const width of [360, 390, 1280]) {
   await page.waitForTimeout(1200);
   await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {});
   await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));
+  await page.click('#tabbar [data-tab="teams"]'); await page.waitForTimeout(400);   // the dashboard opens on Home
   await page.waitForSelector('#ball-athletes table tbody tr', { timeout: 8000 });
   await page.waitForTimeout(400);
   const card = page.locator('#ball-card');

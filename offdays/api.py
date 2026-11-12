@@ -82,6 +82,7 @@ from .team_goals import GoalError
 from .billing import BillingError
 from .guardians import GuardianError
 from .roster import RosterError
+from . import overview as overview_mod
 from .drills import ALL_DRILLS, DRILLS_BY_KEY
 from .drills.base import CUE_CELLS, CUE_UNREADABLE
 from .leaderboard import (
@@ -5786,6 +5787,62 @@ def list_positions(
             "all ages on the all-round training plan."
         ),
     }
+
+
+# ----------------------------------------------------------------------
+# The director's home: all teams, one team, one player
+# ----------------------------------------------------------------------
+
+@app.get("/api/coach/overview")
+def coach_overview(
+    window: Literal["week", "month", "season", "all"] = "week",
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """One row per team and the short list of things that need a person. A coach sees only their own teams."""
+    waiting = 0
+    if _org_sport(store, principal.org_id) == "lacrosse" and video_scout_mod.enabled():
+        waiting = len(video_scout_mod.pending_for(store.conn, principal.org_id, "lacrosse"))
+    return overview_mod.program_overview(store.conn, principal.org_id, principal.team_ids, window,
+                                         suggestions=waiting if principal.is_director else 0)
+
+
+@app.get("/api/coach/overview/team/{team_id}")
+def coach_overview_team(
+    team_id: int,
+    window: Literal["week", "month", "season", "all"] = "week",
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    _one_team_scope(principal, store, team_id)          # 404 for another program, 403 for a team that is not theirs
+    return overview_mod.team_detail(store.conn, principal.org_id, team_id, window)
+
+
+@app.get("/api/coach/overview/player/{athlete_id}")
+def coach_overview_player(
+    athlete_id: int,
+    window: Literal["week", "month", "season", "all"] = "week",
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    owner = store.conn.execute(
+        "SELECT org_id FROM users WHERE id = ? AND role = 'athlete' AND active = 1", (athlete_id,)).fetchone()
+    if owner is None or owner["org_id"] != principal.org_id:
+        raise HTTPException(status_code=404, detail="unknown athlete")
+    if not store.staff_can_see_athlete(principal, athlete_id):
+        raise HTTPException(status_code=403, detail="you are not assigned to that athlete's team")
+    return overview_mod.player_detail(store.conn, principal.org_id, athlete_id, window)
+
+
+@app.get("/api/coach/overview/coaches")
+def coach_overview_coaches(
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Who is coaching, who has opened the app, who is sending videos. Directors only."""
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can see every coach")
+    return overview_mod.coaches_overview(store.conn, principal.org_id)
 
 
 @app.get("/api/coach/team-ranking")

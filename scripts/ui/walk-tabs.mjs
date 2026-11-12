@@ -19,7 +19,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   const shown = () => page.evaluate(() => [...document.querySelectorAll('.wrap--grid > .card, .wrap--grid > .stat-row')]
     .filter((c) => c.offsetParent !== null).map((c) => (c.querySelector('h2,b')?.textContent || c.id || 'stats').trim().replace(/\s+/g, ' ').slice(0, 30)));
   const height = () => page.evaluate(() => document.documentElement.scrollHeight);
-  for (const t of ['today', 'families', 'teams', 'settings']) {
+  for (const t of ['home', 'today', 'families', 'teams', 'settings']) {
     await page.click(`#tabbar [data-tab="${t}"]`); await page.waitForTimeout(400);
     const s = await shown(); const h = await height();
     console.log(`${tag} ${t}: ${s.length} boxes, ${h}px ::`, s.join(' | '));
@@ -34,7 +34,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
     const out = [];
     document.querySelectorAll('.wrap--grid > .card').forEach((c) => {
       if (c.classList.contains('hidden')) return;
-      const tabs = ['today', 'families', 'teams', 'settings'];
+      const tabs = ['home', 'today', 'families', 'teams', 'settings'];
       // a card with a known tab is hidden on the other three; an unknown one is on all four
       if (!c.classList.contains('tab-off') && c.id && !['practice-card', 'needs-card'].includes(c.id) && false) out.push(c.id);
     });

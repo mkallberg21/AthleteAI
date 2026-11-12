@@ -12,6 +12,41 @@
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
 <link rel="stylesheet" href="styles.css?v=41">
+<style id="home-style">
+/* The director's home. Kept here, not in styles.css, so it ships without re-pinning the shared stylesheet. */
+#home-card .home-tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin:0 0 12px; }
+#home-card .home-title { font-size:1.15rem; font-weight:700; margin:0; }
+#home-card .home-seg { display:flex; gap:6px; flex-wrap:wrap; max-width:100%; }
+#home-card .home-seg button { flex:0 0 auto; white-space:nowrap; }
+#home-card button.seg, #home-card button.back { width:auto !important; }
+#home-card button.seg { min-height:34px; padding:4px 10px; font-size:.82rem; font-weight:600; background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); border-radius:999px; box-shadow:none; text-transform:none; letter-spacing:normal; }
+#home-card button.seg[aria-pressed="true"] { color:var(--text); border-color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, transparent); }
+#home-card button.back { display:block; margin:0 0 8px; text-align:left; min-height:36px; padding:6px 12px; font-size:.9rem; background:transparent; color:var(--accent); border:none; box-shadow:none; text-transform:none; letter-spacing:normal; font-weight:600; }
+#home-card .home-attn { margin:0 0 14px; }
+#home-card .attn-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 12px; margin:0 0 6px; background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--warn); border-radius:var(--radius-sm); }
+#home-card .attn-row > span.attn-text { flex:1 1 200px; }
+#home-card .attn-more { margin:0 0 6px; }
+#home-card .attn-more > summary { cursor:pointer; padding:6px 4px; }
+#home-card .attn-row button.tiny { flex:0 0 auto; width:auto; margin-left:auto; }
+#home-card .attn-clear { padding:10px 12px; border-left:3px solid var(--go); background:var(--surface-2); border-radius:var(--radius-sm); }
+#home-card button.home-row { display:flex; gap:10px 14px; align-items:center; flex-wrap:wrap; width:100%; text-align:left; padding:12px 14px; margin:0 0 8px; min-height:56px; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:none; font:inherit; font-weight:400; text-transform:none; letter-spacing:normal; cursor:pointer; }
+#home-card button.home-row:hover { border-color:var(--accent-dim, var(--accent)); background:var(--surface-3, var(--surface-2)); }
+#home-card .home-main { flex:1 1 180px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+#home-card .home-main b { font-size:1rem; overflow-wrap:anywhere; }
+#home-card .home-meter { flex:0 1 110px; min-width:70px; height:6px; border-radius:999px; background:var(--border); overflow:hidden; }
+#home-card .home-meter i { display:block; height:100%; background:var(--go); }
+#home-card .home-num { flex:0 0 auto; font-variant-numeric:tabular-nums; min-width:92px; }
+#home-card .home-rank { flex:0 0 34px; font-variant-numeric:tabular-nums; font-weight:700; color:var(--text); }
+#home-card .home-rank.dim { color:var(--text-muted); font-weight:500; }
+#home-card .home-side { flex:0 0 auto; margin-left:auto; text-align:right; }
+#home-card .pill { white-space:normal; max-width:100%; text-align:left; line-height:1.3; }
+#home-card .home-box { padding:12px 14px; margin:0 0 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); }
+#home-card .home-box h3 { margin:0 0 6px; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+#home-card .home-chips { display:flex; gap:6px; flex-wrap:wrap; }
+#home-card .home-kv { display:flex; gap:8px 14px; flex-wrap:nowrap; }
+#home-card .home-kv > div { flex:1 1 0; min-width:0; }
+#home-card .home-kv b { display:block; font-size:1.25rem; font-variant-numeric:tabular-nums; }
+</style>
 </head>
 <body>
 <div class="topbar">
@@ -30,12 +65,13 @@
 
 <div class="wrap wrap--grid">
   <div class="tabbar" id="tabbar" role="tablist" aria-label="Dashboard sections">
+    <button type="button" role="tab" data-tab="home">Home</button>
     <button type="button" role="tab" data-tab="today">Today</button>
     <button type="button" role="tab" data-tab="families">Families</button>
     <button type="button" role="tab" data-tab="teams">Teams</button>
     <button type="button" role="tab" data-tab="settings">Settings</button>
   </div>
-  <div class="card card--wide">
+  <div class="card card--wide" id="filter-card">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div style="flex:1;min-width:180px">
         <label for="team">Showing</label>
@@ -99,6 +135,17 @@
       <button class="inline" id="wizard-next" disabled>Next</button>
       <span class="small muted" id="wizard-hint"></span>
     </div>
+  </div>
+
+  <!-- The director's home. One row per team; tap a team for its players, tap a player for their family. Everything
+       else on the dashboard is still on its tab. No h2 in here on purpose: the fold script would fold the card. -->
+  <div class="card card--wide" id="home-card">
+    <div class="home-tools">
+      <div class="home-title" id="home-title">Your teams</div>
+      <div class="home-seg" id="home-window" role="group" aria-label="Time window"></div>
+    </div>
+    <div class="home-attn" id="home-attn"></div>
+    <div id="home-body"><p class="small muted">Loading&hellip;</p></div>
   </div>
 
   <div class="card hidden" id="setup-card">
@@ -2115,6 +2162,7 @@ function wizardFinish() {
   wizardRestore();
   $('wizard').classList.add('hidden');
   document.body.classList.remove('wizard-on');
+  homeLoad();
   try { localStorage.setItem(`offdays.wizard.${CURRENT_ORG}.${IS_DIRECTOR ? 'd' : 'c'}`, 'done'); } catch { /* fine */ }
   loadSetup();
 }
@@ -2257,6 +2305,219 @@ $('bc-save').addEventListener('click', async () => {
   bcShowProblems(problems);
   $('bc-out').innerHTML = keep; $('bc-out').classList.remove('hidden');
   await wizardRefresh();
+});
+
+// ------------------------------------------------------------ Home: all teams, one team, one player
+// Everything shown here is read from /api/coach/overview*. The page decides nothing about who is ranked where or
+// where a family is stuck; the server already did, from the same sources the Families card and the rankings use.
+const HOME = { view: 'teams', team: null, player: null, window: 'week' };
+const HOME_WINDOWS = [['week', 'Week'], ['month', 'Month'], ['season', 'Season'], ['all', 'All time']];
+
+function homeAgo(v) {
+  if (!v) return 'not yet';
+  const d = new Date(String(v).length === 10 ? `${v}T12:00:00` : v);
+  if (Number.isNaN(d.getTime())) return 'not yet';
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 14) return `${days} days ago`;
+  if (days < 60) return `${Math.round(days / 7)} weeks ago`;
+  return `${Math.round(days / 30)} months ago`;
+}
+const homeStatePill = (t) => ({
+  training: '<span class="pill ok">All training</span>',
+  stuck: `<span class="pill warn">${t.stuck} not training yet</span>`,
+  no_coach: '<span class="pill warn">No coach</span>',
+  no_players: '<span class="pill warn">No players yet</span>',
+}[t.state] || '');
+const homeStagePill = (p) => (p.stage === 'training'
+  ? '<span class="pill ok">Training</span>' : `<span class="pill warn">${esc(p.stage_label || 'Not started')}</span>`);
+
+function homeGo(tab, cardId) {
+  const b = document.querySelector(`#tabbar button[data-tab="${tab}"]`);
+  if (b) b.click();
+  setTimeout(() => {
+    const c = cardId && $(cardId);
+    if (c) { c.classList.remove('hidden'); if (c._foldOpen) c._foldOpen(); c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  }, 80);
+}
+
+function homeWindowBar() {
+  $('home-window').innerHTML = HOME_WINDOWS.map(([k, label]) =>
+    `<button type="button" class="seg" data-window="${k}" aria-pressed="${HOME.window === k}">${label}</button>`).join('');
+}
+$('home-window').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-window]'); if (!b) return;
+  HOME.window = b.dataset.window; homeWindowBar(); homeLoad();
+});
+
+function homeAttention(a) {
+  const rows = [];
+  const names = (list) => list.slice(0, 3).map(esc).join(', ') + (list.length > 3 ? ` and ${list.length - 3} more` : '');
+  if (a.stuck_families) rows.push([`<b>${a.stuck_families}</b> ${a.stuck_families === 1 ? 'family is' : 'families are'} not training yet`, 'See who', () => homeGo('families', 'families-card')]);
+  if (a.teams_without_coach.length) rows.push([`<b>${a.teams_without_coach.length}</b> ${a.teams_without_coach.length === 1 ? 'team has' : 'teams have'} no coach: ${names(a.teams_without_coach)}`, 'Add a coach', () => homeGo('teams', 'staff-card')]);
+  if (a.teams_without_players.length) rows.push([`<b>${a.teams_without_players.length}</b> ${a.teams_without_players.length === 1 ? 'team has' : 'teams have'} no players yet: ${names(a.teams_without_players)}`, 'Add a roster', () => homeGo('families', 'import-card')]);
+  if (a.coaches_not_signed_in.length) rows.push([`<b>${a.coaches_not_signed_in.length}</b> ${a.coaches_not_signed_in.length === 1 ? 'coach has' : 'coaches have'} not signed in yet: ${names(a.coaches_not_signed_in)}`, 'See coaches', () => homeShow('coaches')]);
+  if (a.coaches_quiet.length) rows.push([`<b>${a.coaches_quiet.length}</b> ${a.coaches_quiet.length === 1 ? 'coach has' : 'coaches have'} not opened the app in two weeks: ${names(a.coaches_quiet)}`, 'See coaches', () => homeShow('coaches')]);
+  if (a.suggested_videos) rows.push([`<b>${a.suggested_videos}</b> suggested ${a.suggested_videos === 1 ? 'video is' : 'videos are'} waiting for a coach to decide`, 'Review', () => homeGo('teams', 'suggest-card')]);
+  if (a.sessions_to_review) rows.push([`<b>${a.sessions_to_review}</b> ${a.sessions_to_review === 1 ? 'session is' : 'sessions are'} held for a look`, 'Review', () => homeGo('today', 'review-card')]);
+  const host = $('home-attn');
+  const SHOW = 2;
+  const line = ([text, label], i) => `<div class="attn-row"><span class="attn-text small">${text}</span><button type="button" class="tiny" data-attn="${i}">${label}</button></div>`;
+  host.innerHTML = rows.length
+    ? rows.slice(0, SHOW).map((r, i) => line(r, i)).join('')
+      + (rows.length > SHOW ? `<details class="attn-more"><summary class="small muted">${rows.length - SHOW} more ${rows.length - SHOW === 1 ? 'thing needs' : 'things need'} you</summary>${rows.slice(SHOW).map((r, i) => line(r, i + SHOW)).join('')}</details>` : '')
+    : '<div class="attn-clear small">Nothing needs you right now.</div>';
+  host.querySelectorAll('[data-attn]').forEach((b) => b.addEventListener('click', () => rows[Number(b.dataset.attn)][2]()));
+}
+
+function homeShow(view, id) {
+  HOME.view = view;
+  if (view === 'team') HOME.team = id;
+  if (view === 'player') HOME.player = id;
+  homeLoad();
+  $('home-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function homeLoad() {
+  homeWindowBar();
+  try {
+    if (HOME.view === 'team') await homeTeam();
+    else if (HOME.view === 'player') await homePlayer();
+    else if (HOME.view === 'coaches') await homeCoaches();
+    else await homeTeams();
+  } catch (e) {
+    $('home-body').innerHTML = `<p class="err">${esc(e.message || 'Could not load this.')}</p>`;
+  }
+}
+
+async function homeTeams() {
+  const o = await api(`/api/coach/overview?window=${HOME.window}`);
+  $('home-title').textContent = IS_DIRECTOR ? 'Your program' : 'Your teams';
+  $('home-attn').classList.remove('hidden');
+  homeAttention(o.attention);
+  const t = o.totals;
+  const tools = `<div class="small muted" style="margin:0 0 10px">${t.training} of ${t.players} players training &middot; ${t.teams} ${t.teams === 1 ? 'team' : 'teams'}`
+    + `${IS_DIRECTOR ? ' &middot; <button type="button" class="tiny" id="home-to-coaches">Coaches</button>' : ''}`
+    + ` &middot; <a class="btn-link" href="leaderboard.html" style="min-height:30px;padding:4px 10px">Program rankings</a></div>`;
+  $('home-body').innerHTML = tools + (o.teams.length ? o.teams.map((r) => `
+    <button type="button" class="home-row" data-team="${r.id}">
+      <span class="home-main"><b>${esc(r.name)}</b>
+        <span class="small muted">${r.coaches.length ? esc(r.coaches.map((c) => c.display_name).join(', ')) : 'No coach yet'}</span></span>
+      <span class="home-meter" aria-hidden="true"><i style="width:${r.players ? Math.round((r.training / r.players) * 100) : 0}%"></i></span>
+      <span class="home-num small"><b>${r.training}</b> of ${r.players} training</span>
+      ${homeStatePill(r)}
+      <span class="home-side small muted">${r.last_active ? `Last trained ${homeAgo(r.last_active)}` : 'Not trained yet'}</span>
+    </button>`).join('')
+    : '<p class="small muted">No teams yet. Add your teams from the Teams tab.</p>');
+  $('home-body').querySelectorAll('[data-team]').forEach((b) => b.addEventListener('click', () => homeShow('team', Number(b.dataset.team))));
+  const c = $('home-to-coaches'); if (c) c.addEventListener('click', () => homeShow('coaches'));
+}
+
+function homeBack(label, to) {
+  return `<button type="button" class="back" data-back="${to}">&larr; ${esc(label)}</button>`;
+}
+function homeWireBack(onBack) {
+  const b = $('home-body').querySelector('[data-back]'); if (b) b.addEventListener('click', onBack);
+}
+
+async function homeTeam() {
+  const d = await api(`/api/coach/overview/team/${HOME.team}?window=${HOME.window}`);
+  $('home-title').textContent = d.team.name;
+  $('home-attn').classList.add('hidden');
+  const c = d.counts;
+  const stageChips = Object.entries(c.stages).map(([k, n]) => {
+    const label = (d.stages.find((s) => s.key === k) || {}).label || k;
+    return `<span class="pill warn">${n} &middot; ${esc(label)}</span>`;
+  }).join(' ');
+  $('home-body').innerHTML = homeBack('All teams', 'teams')
+    + `<div class="home-box"><div class="home-kv">
+         <div><b>${c.players}</b><span class="small muted">players</span></div>
+         <div><b>${c.training}</b><span class="small muted">training</span></div>
+         <div><b>${c.stuck}</b><span class="small muted">not training yet</span></div></div>
+       ${stageChips ? `<div class="home-chips" style="margin-top:10px">${stageChips}</div>` : ''}</div>`
+    + `<div class="home-box"><h3>${d.coaches.length === 1 ? 'Coach' : 'Coaches'}</h3>${d.coaches.length ? d.coaches.map((k) => `
+        <div class="small" style="margin:0 0 4px"><b>${esc(k.display_name)}</b>
+          <span class="muted"> &middot; last opened the app ${homeAgo(k.last_seen_at)}
+          &middot; ${k.videos_30d} ${k.videos_30d === 1 ? 'video' : 'videos'} added in 30 days</span></div>`).join('')
+        : '<span class="small muted">No coach on this team yet.</span>'}</div>`
+    + `<div class="home-box" style="padding-bottom:6px"><h3>Players, ranked</h3>${d.players.length ? d.players.map((p) => `
+        <button type="button" class="home-row" data-player="${p.athlete_id}">
+          <span class="home-rank ${p.trained ? '' : 'dim'}">${p.rank}</span>
+          <span class="home-main"><b>${esc(p.display_name)}</b>
+            <span class="small muted">${p.trained ? `${p.xp} XP` : 'Nothing done in this window'}</span></span>
+          ${homeStagePill(p)}
+          <span class="home-side small muted">${p.stage === 'training' ? (p.last_active ? `Last trained ${homeAgo(p.last_active)}` : '') : esc(p.who ? `Next: ${p.who}` : '')}</span>
+        </button>`).join('') : '<p class="small muted">No players on this team yet.</p>'}</div>`
+    + `<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="tiny" id="home-team-families">Open this team&rsquo;s families</button></div>`;
+  homeWireBack(() => homeShow('teams'));
+  $('home-body').querySelectorAll('[data-player]').forEach((b) => b.addEventListener('click', () => homeShow('player', Number(b.dataset.player))));
+  $('home-team-families').addEventListener('click', () => {
+    $('team').value = String(HOME.team); $('team').dispatchEvent(new Event('change'));
+    homeGo('families', 'families-card');
+  });
+}
+
+async function homePlayer() {
+  const d = await api(`/api/coach/overview/player/${HOME.player}?window=${HOME.window}`);
+  $('home-title').textContent = d.athlete.display_name;
+  $('home-attn').classList.add('hidden');
+  const team = d.teams[0];
+  const parents = d.parents.length ? d.parents.map((p) => `
+      <div class="small" style="margin:0 0 6px"><b>${esc(p.name || 'Parent')}</b>
+        ${p.email ? `<div><a href="mailto:${esc(p.email)}">${esc(p.email)}</a></div>` : ''}
+        ${p.phone ? `<div><a href="tel:${esc(p.phone)}">${esc(p.phone)}</a></div>` : ''}</div>`).join('')
+    : '<span class="small muted">No parent on file. Add one from the roster.</span>';
+  $('home-body').innerHTML = homeBack(team ? team.name : 'All teams', team ? 'team' : 'teams')
+    + `<div class="home-box"><h3>Where this family is</h3>
+        <div style="margin:0 0 6px">${homeStagePill(d)}</div>
+        <div class="small muted">${d.stage === 'training' ? 'Training.' : (d.who ? `Next move is the ${esc(d.who)}'s.` : '')}
+          ${d.last_invited_at ? ` Last invited ${homeAgo(d.last_invited_at)}.` : ''}
+          ${d.last_seen_at ? ` Last opened the app ${homeAgo(d.last_seen_at)}.` : ' The athlete has not opened the app.'}</div>
+        <div id="home-nudge" style="margin-top:10px">${d.can_nudge
+          ? '<button type="button" class="inline" id="home-resend">Send the invite again</button>' : ''}</div></div>`
+    + `<div class="home-box"><h3>This ${HOME.window === 'all' ? 'time' : HOME.window === 'season' ? 'season' : HOME.window}</h3><div class="home-kv">
+        <div><b>${d.rank == null ? '&ndash;' : d.rank}</b><span class="small muted">rank on the team</span></div>
+        <div><b>${d.xp}</b><span class="small muted">XP</span></div>
+        <div><b>${d.sessions}</b><span class="small muted">counted sessions</span></div></div></div>`
+    + `<div class="home-box"><h3>${d.parents.length === 1 ? 'Parent' : 'Parents'}</h3>${parents}</div>`
+    + `<div class="home-box"><h3>Recent sessions</h3>${d.recent_sessions.length ? d.recent_sessions.map((s) => `
+        <div class="small" style="margin:0 0 4px">${esc(drillName(s.drill_key))} &middot; ${s.reps_total} reps
+          <span class="muted"> &middot; ${homeAgo(s.started_at)}</span>${s.status === 'review' ? ' <span class="pill warn">held for a look</span>' : ''}</div>`).join('')
+        : '<span class="small muted">No sessions yet.</span>'}</div>`;
+  homeWireBack(() => (team ? homeShow('team', team.id) : homeShow('teams')));
+  const re = $('home-resend');
+  if (re) re.addEventListener('click', async () => {
+    re.disabled = true; re.textContent = 'Preparing\u2026';
+    try {
+      const res = await api('/api/coach/families/nudge', { method: 'POST', body: { athlete_id: HOME.player } });
+      if (res.emailed) { $('home-nudge').innerHTML = `<span class="small">Emailed to ${esc(res.email)}.</span>`; }
+      else {
+        const href = `mailto:${encodeURIComponent(res.email)}?subject=${encodeURIComponent(res.subject)}&body=${encodeURIComponent(res.text)}`;
+        $('home-nudge').innerHTML = `<span class="small">Email to <b>${esc(res.email)}</b> is ready. </span><a class="btn-link" href="${esc(href)}">Send email</a>`;
+      }
+    } catch (e) { re.disabled = false; re.textContent = 'Send the invite again'; $('home-nudge').insertAdjacentHTML('beforeend', `<div class="err">${esc(e.message || 'Could not prepare the invite.')}</div>`); }
+  });
+}
+
+async function homeCoaches() {
+  const d = await api('/api/coach/overview/coaches');
+  $('home-title').textContent = 'Your coaches';
+  $('home-attn').classList.add('hidden');
+  $('home-body').innerHTML = homeBack('All teams', 'teams')
+    + (d.coaches.length ? d.coaches.map((c) => `
+      <div class="home-box"><div style="display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+        <div><b>${esc(c.display_name)}</b>${c.email ? ` <span class="small muted">${esc(c.email)}</span>` : ''}</div>
+        ${c.last_seen_at ? `<span class="pill ok">Opened the app ${homeAgo(c.last_seen_at)}</span>` : '<span class="pill warn">Has not signed in</span>'}</div>
+        <div class="home-chips" style="margin:8px 0 6px">${c.teams.length ? c.teams.map((t) => `<span class="pill">${esc(t.name)}</span>`).join('') : '<span class="small muted">No team yet</span>'}</div>
+        <div class="small muted">${c.videos_30d} ${c.videos_30d === 1 ? 'video' : 'videos'} added in the last ${d.video_days} days &middot; ${c.videos_total} in all</div></div>`).join('')
+      : '<p class="small muted">No coaches yet. Add them from the Teams tab.</p>');
+  homeWireBack(() => homeShow('teams'));
+}
+
+document.getElementById('tabbar').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-tab]');
+  if (b && b.dataset.tab === 'home') homeLoad();
 });
 
 // A red star on every card that still needs the director or coach to choose
@@ -4880,6 +5141,7 @@ $('signout').addEventListener('click', logout);
     await loadContact(true);
     await loadUploads();
     await loadTeams();
+    homeLoad();
     await loadProviders();
     // Whether TeamSnap is on, connected, and which of its teams to pull. It
     // was only asked after an import, so the button said "not switched on"
@@ -5210,6 +5472,7 @@ async function initTeamDrills() {
 // still loads, a tab only chooses which are on screen. Runs after the fold script.
 (function () {
   var TAB_OF = {
+    'home-card': 'home',
     'practice-card': 'today', 'needs-card': 'today', 'attention-card': 'today',
     'review-card': 'today', 'load-card': 'today', 'wellness-card': 'today',
     'shared-clips-card': 'today', 'blockers-card': 'today', 'setup-card': 'today',
@@ -5228,12 +5491,12 @@ async function initTeamDrills() {
   // Boxes with no id are found by their heading.
   var TAB_OF_HEADING = { 'assignments': 'today', 'message the team': 'today',
                          'team standings': 'teams' };
-  var KEY = 'offdays.tab.v1';
+  var KEY = 'offdays.tab.v2';
   var grid = document.querySelector('.wrap--grid');
   var bar = document.getElementById('tabbar');
-  var tab = 'today';
-  try { tab = localStorage.getItem(KEY) || 'today'; } catch (e) {}
-  if (!TAB_OF['practice-card'] || !/^(today|families|teams|settings)$/.test(tab)) tab = 'today';
+  var tab = 'home';
+  try { tab = localStorage.getItem(KEY) || 'home'; } catch (e) {}
+  if (!TAB_OF['practice-card'] || !/^(home|today|families|teams|settings)$/.test(tab)) tab = 'home';
 
   function tabFor(card) {
     if (card.id && TAB_OF[card.id]) return TAB_OF[card.id];
@@ -5250,6 +5513,8 @@ async function initTeamDrills() {
     grid.querySelectorAll(':scope > .card, :scope > .stat-row').forEach(function (c) {
       var t = c.id === 'summary' || c.classList.contains('stat-row') ? 'today' : tabFor(c);
       var away = (!!t && t !== tab) || (DETAIL[c.id] && !opened[c.id]);
+      // The team and window filter belongs to the other tabs; the home has its own.
+      if (c.id === 'filter-card' && tab === 'home') away = true;
       c.classList.toggle('tab-off', !!away);
     });
     bar.querySelectorAll('button').forEach(function (b) {

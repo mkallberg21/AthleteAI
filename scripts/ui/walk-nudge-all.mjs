@@ -17,6 +17,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.evaluate((t) => localStorage.setItem('offdays.token', t), code);
   await page.goto(base + '/app/coach.html', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(3500);
   if (await page.locator('#wizard-skip').isVisible().catch(() => false)) { await page.click('#wizard-skip'); await page.waitForTimeout(1000); }
+  await page.click('#tabbar [data-tab="today"]'); await page.waitForTimeout(400);   // the dashboard opens on Home
   // the card sits behind the Open button on the attention summary
   await page.click('#needs [data-open="attention-card"]'); await page.waitForTimeout(500);
   const label = await page.locator('#nudge-open').innerText();

@@ -20,7 +20,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.goto(`${base}/`);
   await page.locator('.role-btn', { hasText: /director/i }).first().click();
   await page.fill('#org-name', `Fold FC ${tag}`); await page.fill('#org-director', 'Joel');
-  await page.click('#create-org');
+  await page.check('#org-terms'); await page.click('#create-org');
   await page.waitForURL(/coach\.html/);
   await page.waitForSelector('#wizard-skip');
   await page.click('#wizard-skip');

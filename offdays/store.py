@@ -3012,9 +3012,9 @@ class Store:
                 "opens the next one. Nothing is lost."
             )
 
-        if row["role"] == "athlete":
-            # The funnel reads this; once a day is enough and keeps the sign-in
-            # path from writing on every request.
+        if row["role"] in ("athlete", "coach", "director"):
+            # The funnel reads this for athletes, and the director's home reads it for coaches; once a day is
+            # enough and keeps the sign-in path from writing on every request.
             today = _now().strftime("%Y-%m-%d")
             self.conn.execute(
                 "UPDATE users SET last_seen_at = ? WHERE id = ? "

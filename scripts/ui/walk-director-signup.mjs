@@ -24,7 +24,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 860 } 
   await page.selectOption('#org-sport', 'lacrosse');
   await page.fill('#org-director', 'Joel White');
   await card.screenshot({ path: `${out}/${tag}-2-signup-filled.png` });
-  await page.click('#create-org');
+  await page.check('#org-terms'); await page.click('#create-org');
   await page.waitForURL(/coach\.html/, { timeout: 15000 });
 
   await page.waitForTimeout(2500);

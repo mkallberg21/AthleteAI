@@ -34,6 +34,7 @@ for (const width of [360, 390, 1280]) {
   await page.goto(`${base}/app/index.html?code=${tok}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
   await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {});
+  await page.click('#tabbar [data-tab="today"]'); await page.waitForTimeout(400);   // the dashboard opens on Home
   await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));
   await page.waitForSelector('#assignments table.compliance tbody tr', { timeout: 8000 });
   await page.waitForTimeout(400);

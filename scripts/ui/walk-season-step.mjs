@@ -47,6 +47,7 @@ await page.waitForFunction(() => !document.getElementById('wizard-next').disable
 console.log('dates saved, Next enabled');
 await page.click('#wizard-skip');
 await page.waitForTimeout(800);
+await page.click('#tabbar [data-tab="settings"]'); await page.waitForTimeout(400);   // the season card lives on Settings
 await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));
 await page.waitForTimeout(300);
 const onDash = await phaseShown();

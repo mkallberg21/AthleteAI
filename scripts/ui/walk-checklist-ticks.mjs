@@ -18,7 +18,7 @@ page.on('dialog', (d) => d.accept());
 await page.goto(base + '/');
 await page.locator('.role-btn', { hasText: /director/i }).first().click();
 await page.fill('#org-name', 'Tick FC'); await page.fill('#org-director', 'Joel');
-await page.click('#create-org'); await page.waitForURL(/coach\.html/);
+await page.check('#org-terms'); await page.click('#create-org'); await page.waitForURL(/coach\.html/);
 await page.waitForSelector('#wizard-skip'); await page.click('#wizard-skip'); await page.waitForTimeout(1500);
 await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));
 await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown

@@ -17,6 +17,7 @@ for (const width of [360, 390, 1280]) {
   await page.goto(`${base}/app/index.html?code=${made.director.token}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
   await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {});
+  await page.click('#tabbar [data-tab="today"]'); await page.waitForTimeout(400);   // the dashboard opens on Home
   await page.waitForSelector('#summary .stat', { timeout: 8000 });
   const r = await page.evaluate(() => {
     const s = document.getElementById('summary');

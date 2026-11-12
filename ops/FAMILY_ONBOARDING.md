@@ -40,6 +40,26 @@ The flow adds no server route. Each team goes through `POST /api/teams` and each
 is identical. The decisions (which names, which coaches, who is the same person) are in
 `offdays/web/static/setup_flow.js`, tested by `tests/js/setup_flow.test.mjs` and `tests/test_setup_flow.py`.
 
+**After setup: the Home tab.** The dashboard opens on Home, not on a stack of cards. It is a view over data the program
+already holds, and adds nothing that is stored.
+
+- **All teams:** one row per team: its coach, "n of m training", a status (all training, n not training yet, no coach,
+  no players yet) and when it last trained. Above the rows, a short list of what needs a person: families not training
+  yet, teams with no coach or no players, coaches who have never signed in or have been quiet for two weeks, scanned
+  videos waiting for a decision (director only), sessions held for a look. Each line has a button to the place that fixes it.
+- **One team:** its players ranked by full name, everyone included. Players with nothing done share one rank at the
+  bottom, with the stage their family is at and whose move it is. Its coaches, when each last opened the app, and how
+  many videos each added in 30 days.
+- **One player:** where the family is, the parent's contact, rank and XP for the window, recent sessions, and
+  "Send the invite again" (the same path as the Families card; while the hold is on it hands over a Send email link and
+  never says "sent").
+- **Coaches** (director): who is coaching what, who has signed in, who is adding videos.
+
+Everything else is still on its tab (Today, Families, Teams, Settings). Rankings and names are staff only; a coach
+sees only their own teams and players. Routes: `GET /api/coach/overview`, `/overview/team/{id}`,
+`/overview/player/{id}`, `/overview/coaches` (`offdays/overview.py`). Staff sign-ins are now stamped once a day, like
+athletes', so "has not signed in" is real. Tests: `tests/test_director_home.py`; walk: `walk-director-home.mjs`.
+
 From here the system runs it: parents sign up and say yes, send the kid the
 link, the kid trains. The Families card shows every family's stage and a
 Nudge for parents who have not opened the invite. `onboarding.PROGRAM_STEPS`
