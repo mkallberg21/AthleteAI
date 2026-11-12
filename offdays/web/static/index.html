@@ -434,6 +434,15 @@ $('create-org').addEventListener('click', async () => {
     try { sessionStorage.setItem('offdays.newDirectorCode', res.director.token); } catch { /* fine */ }
     await signIn(res.director.token, { button: $('create-org'), error: $('oerr') });
   } catch (e) {
+    // The server asked for the terms and this page did not offer them: it is an older copy than the server. Load
+    // the current page once (never in a loop) instead of leaving a message the person cannot act on.
+    if (/agree to the terms/i.test(e.message || '') && !sessionStorage.getItem('offdays.reloadedForTerms')) {
+      try { sessionStorage.setItem('offdays.reloadedForTerms', '1'); } catch { /* fine */ }
+      $('oerr').textContent = 'This page was out of date. Loading the current one\u2026';
+      $('oerr').classList.remove('hidden');
+      setTimeout(() => location.reload(), 600);
+      return;
+    }
     $('oerr').textContent = e.message;
     $('oerr').classList.remove('hidden');
   }

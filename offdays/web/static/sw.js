@@ -7,7 +7,15 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v11';
+const CACHE = 'offdays-shell-v12';
+
+// Pages where the server enforces rules the page must match (agree to terms at sign-up, the director's dashboard,
+// the parent's consent screens). A saved copy of one of these from before a release shows the old form while the
+// server asks for the new one, so they are fetched fresh when there is a connection and only fall back to the saved
+// copy when there is none. The athlete's capture screen is deliberately NOT here: it has to open instantly with no
+// signal, in a driveway.
+const NETWORK_FIRST = ['index.html', 'coach.html', 'parent.html'];
+const NETWORK_FIRST_MS = 4000;
 
 const SHELL = [
   './',
@@ -68,6 +76,26 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Fresh when online (within a few seconds), the saved copy when not. A page that answers late or fails never leaves
+// the user with nothing: the saved copy is the fallback for both.
+function networkFirst(request) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), NETWORK_FIRST_MS);
+  return fetch(request, { signal: ctl.signal, cache: 'no-store' })
+    .then((res) => {
+      clearTimeout(timer);
+      if (res && res.ok && res.type === 'basic') {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(request, copy));
+      }
+      return res;
+    })
+    .catch(() => {
+      clearTimeout(timer);
+      return caches.match(request).then((cached) => cached || caches.match('capture.html'));
+    });
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -78,6 +106,12 @@ self.addEventListener('fetch', (event) => {
   // Never cache the API. A cached roster or assignment progress read as
   // current would be actively misleading.
   if (url.pathname.startsWith('/api/')) return;
+
+  const last = url.pathname.split('/').pop() || 'index.html';
+  if (NETWORK_FIRST.includes(last)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {
