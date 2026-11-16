@@ -120,7 +120,19 @@
       <div class="section-header">
         <span class="section-title">Set up your child</span>
       </div>
-      <p class="small muted" style="margin-top:0.25rem;">Your program emailed you an invite code. Enter it with your name; you will confirm your child, say yes to training, and get a sign-in link to send them. Already set up? <a href="#" class="link-signin">Sign in</a>.</p>
+      <p class="small muted" style="margin-top:0.25rem;">Your program emailed you an invite code. Enter it with your name; you will confirm your child, say yes to training, and get a sign-in link to send them. Already set up? <a href="#" id="parent-back-open">Get back in</a>.</p>
+      <div id="parent-back" class="hidden" style="margin-top:0.75rem;">
+        <form id="parent-back-form">
+          <p class="small muted" style="margin:0 0 0.5rem;">New phone, or cleared your browser? Enter the email your program has for you and we will send a link that signs you back in.</p>
+          <div class="form-group">
+            <label class="form-label" for="parent-back-email">Your email</label>
+            <input id="parent-back-email" class="form-input" type="email" placeholder="you@example.com" autocomplete="email" required>
+          </div>
+          <div id="parent-back-err" class="form-error hidden"></div>
+          <button type="submit" class="btn btn-primary" id="parent-back-send">Email me a sign-in link</button>
+        </form>
+        <div id="parent-back-done" class="small hidden" style="margin-top:0.75rem;"></div>
+      </div>
       <form style="margin-top:0.75rem;">
         <div class="form-group">
           <label class="form-label" for="invite">Invite code</label>
@@ -669,10 +681,54 @@ const invited = params.get('invite');
 const claimed = params.get('claim');
 const linked = params.get('code');
 const resetLink = params.get('reset');
+const parentLink = params.get('parent');
 const confirmLink = params.get('confirm');
 // A link carries a secret: take it out of the address bar and history once read.
-if (resetLink || confirmLink) history.replaceState(null, '', window.location.pathname);
-if (resetLink) {
+if (resetLink || confirmLink || parentLink) history.replaceState(null, '', window.location.pathname);
+
+// A parent getting back in: ask for a link by email, and spend the one that arrives.
+function openParentBack() {
+  $('parent-back').classList.remove('hidden');
+  $('parent-back-email').focus();
+}
+$('parent-back-open').addEventListener('click', (e) => { e.preventDefault(); openParentBack(); });
+$('parent-back-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('parent-back-err'); const done = $('parent-back-done'); const btn = $('parent-back-send');
+  err.classList.add('hidden'); done.classList.add('hidden');
+  const email = $('parent-back-email').value.trim();
+  if (!email) { err.textContent = 'Enter your email.'; err.classList.remove('hidden'); return; }
+  btn.disabled = true;
+  try {
+    const r = await api('/api/login/parent-forgot', { method: 'POST', body: { email } });
+    done.textContent = r.message;
+    done.classList.remove('hidden');
+  } catch (x) {
+    err.textContent = x.message || 'Could not send that. Try again in a minute.';
+    err.classList.remove('hidden');
+  } finally { btn.disabled = false; }
+});
+if (parentLink) {
+  showRole('parent', { focus: false });
+  (async () => {
+    try {
+      // Plain fetch, not api(): api() turns every 401 into 'your sign-in ended' and wipes the saved
+      // sign-in, which hides the real reason (this link is spent or expired) from the parent.
+      const res = await fetch('/api/login/parent-link', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: parentLink.trim() }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(res.status === 429 ? 'Too many tries. Wait a minute and try again.'
+        : (typeof data.detail === 'string' && data.detail) || 'That link has expired or was already used. Ask for a new one.');
+      setToken(data.token);
+      window.location.href = 'parent.html';
+    } catch (x) {
+      openParentBack();
+      const err = $('parent-back-err');
+      err.textContent = x.message || 'That link has expired or was already used. Ask for a new one.';
+      err.classList.remove('hidden');
+    }
+  })();
+} else if (resetLink) {
   resetToken = resetLink.trim();
   showRole('coach', { focus: false });
   resetStep('link');

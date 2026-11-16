@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -1219,6 +1219,18 @@ CREATE TABLE IF NOT EXISTS email_tokens (
     used_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id, purpose);
+-- A parent's way back in: a one-time link emailed to an address the program gave us.
+-- Only a hash of the link is kept.
+CREATE TABLE IF NOT EXISTS parent_links (
+    id          INTEGER PRIMARY KEY,
+    guardian_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email       TEXT NOT NULL,
+    token_hash  TEXT NOT NULL UNIQUE,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_parent_links_guardian ON parent_links(guardian_id, created_at);
 CREATE TABLE IF NOT EXISTS staff_sessions (
     token_hash TEXT PRIMARY KEY,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

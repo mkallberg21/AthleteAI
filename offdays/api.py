@@ -53,6 +53,7 @@ from . import film as film_mod
 from . import iq_shelf as iq_shelf_mod
 from . import video_scout as video_scout_mod
 from . import guardians as guardians_mod
+from . import parent_signin as parent_signin_mod
 from . import library
 from . import portability as portability_mod
 from . import practice as practice_mod
@@ -1372,6 +1373,43 @@ def forgot_password(
     throttle.record_failure(store.conn, attempt)      # every ask counts, answered or not
     staff_mail_mod.send_reset(store.conn, body.email)
     return {"ok": True, "message": staff_mail_mod.FORGOT_REPLY, "mail": staff_mail_mod.mail_available()}
+
+
+@app.post("/api/login/parent-forgot")
+def parent_forgot(
+    request: Request, body: ForgotRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Email a sign-in link to a parent who has lost their way back in (new phone, cleared browser).
+
+    The reply is the same for every address, known or not, so this cannot be used to find out
+    who is a parent. Nothing is sent while the program's email hold is on.
+    """
+    attempt = throttle.Attempt.for_link(_client_host(request), "parentforgot")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    throttle.record_failure(store.conn, attempt)      # every ask counts, answered or not
+    parent_signin_mod.send_link(store.conn, body.email)
+    return {"ok": True, "message": parent_signin_mod.REPLY}
+
+
+@app.post("/api/login/parent-link")
+def parent_link_signin(
+    request: Request, body: TokenRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Spend the emailed link: signs the parent in on this phone and signs out the old one."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "parentlink")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    out = parent_signin_mod.spend(store.conn, body.token)
+    if out is None:
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That link has expired or was already used. Ask for a new one.")
+    throttle.record_success(store.conn, attempt)
+    return out
 
 
 @app.post("/api/login/confirm")

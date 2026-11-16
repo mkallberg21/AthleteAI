@@ -316,3 +316,25 @@ follow. The page tells people to check spam. Watch `GET /api/coach/outbox` for `
 Passwords are scrypt hashes; recovery codes, reset codes, emailed links and sessions are
 stored as SHA-256 digests; none of it is in a program export. Wrong guesses are slowed per
 address and per email. A reset or a password change ends every open session.
+
+## A parent on a new phone (getting back in)
+
+A parent signs up once with an invite code and is then signed in by a code their phone keeps. They have no
+password, so a new phone or a cleared browser used to be a dead end: the invite code is spent and the coach's
+resend refuses once a parent has signed up.
+
+Now: on the sign-in page, **Parent > Already set up? Get back in**. The parent types their email and is sent a
+one-time link (`parent_signin.py`, schema 30 `parent_links`). Opening it signs them in on that phone and signs
+out the old one. From there they send their athlete a new link (see above).
+
+Rules:
+
+- **Only an address the program gave us**: the roster email, or the address the invite was emailed to. The address
+  a parent typed while signing up does not count, so a typo cannot hand a stranger a child's details.
+- **The email hold stays in charge.** Nothing is sent while the program's hold is on. The director releases it
+  with "Start sending email", as for every other message to families.
+- **The reply never says who is a parent**: same words for a known, unknown, held, suppressed or malformed address.
+- One link at a time, works once, lasts an hour; three an hour per parent; guessing is throttled; only a hash is kept.
+- It opens a parent account and nothing else (never a coach, director or athlete).
+- If nothing arrives, the reply tells the parent to ask their director to check the address on the roster.
+
