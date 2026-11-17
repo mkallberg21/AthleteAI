@@ -28,7 +28,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.goto(base + '/app/coach.html', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(3000);
   if (await page.locator('#wizard-skip').isVisible().catch(() => false)) { await page.click('#wizard-skip'); await page.waitForTimeout(800); }
   await page.click('#tabbar [data-tab="settings"]'); await page.waitForTimeout(500);
-  await page.evaluate(() => { let e = document.querySelector('#password-card'); while (e) { if (e.classList && e.classList.contains('card')) e.classList.add('open'); e = e.parentElement; } });
+  await page.evaluate(() => { const c = document.getElementById('password-card'); if (c && c._foldOpen) c._foldOpen(); });
 
   await page.fill('#pw-email', A); await page.fill('#pw-new', PW);
   await page.click('#pw-save'); await page.waitForTimeout(1500);
@@ -52,7 +52,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForTimeout(3000);
   if (await page.locator('#wizard-skip').isVisible().catch(() => false)) { await page.click('#wizard-skip'); await page.waitForTimeout(800); }
   await page.click('#tabbar [data-tab="settings"]'); await page.waitForTimeout(500);
-  await page.evaluate(() => { let e = document.querySelector('#password-card'); while (e) { if (e.classList && e.classList.contains('card')) e.classList.add('open'); e = e.parentElement; } });
+  await page.evaluate(() => { const c = document.getElementById('password-card'); if (c && c._foldOpen) c._foldOpen(); });
   check(await page.locator('#pw-verified').isVisible() && await page.locator('#pw-confirm-row').isHidden(), `${tag}: Settings now says "confirmed" and the resend row is gone`);
   await page.locator('#password-card').scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(T, `${tag}-14-settings-confirmed.png`) });

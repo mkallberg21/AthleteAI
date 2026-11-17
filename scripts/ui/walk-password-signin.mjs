@@ -56,6 +56,7 @@ for (const [tag, opts] of [['desktop', { viewport: { width: 1280, height: 900 } 
   await page.fill('#director-email', EMAIL);
   await page.locator('#panel-director .pw-forgot').click();
   check(await page.locator('#pw-reset-card').isVisible(), `${tag}: Forgot your password opens the reset form`);
+  await page.locator('#use-code-instead').click();   // email-me-a-link comes first now; the code form is one step further
   check((await page.inputValue('#reset-email')) === EMAIL, `${tag}: the email is carried over`);
   await page.fill('#reset-code', 'AAAA-BBBB-CCCC'); await page.fill('#reset-new', PW2);
   await page.locator('#pw-reset-form button[type=submit]').click(); await page.waitForTimeout(800);

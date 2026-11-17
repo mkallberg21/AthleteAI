@@ -6,7 +6,7 @@ const b = await chromium.launch();
 const p = await (await b.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
 await p.goto(`${base}/`);
 await p.locator('.role-btn', { hasText: /director/i }).first().click();
-await p.fill('#org-name', 'Resend FC'); await p.fill('#org-director', 'Joel'); await p.click('#create-org');
+await p.fill('#org-name', 'Resend FC'); await p.fill('#org-director', 'Joel'); await p.check('#org-terms'); await p.click('#create-org');
 await p.waitForURL(/coach\.html/); await p.waitForSelector('#wizard-skip'); await p.click('#wizard-skip');
 await p.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
 await p.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown

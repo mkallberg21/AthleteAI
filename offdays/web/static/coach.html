@@ -294,7 +294,8 @@
       <a class="btn-link" id="code-email" href="#">Email it to myself</a>
       <span class="small muted" id="code-status"></span>
     </div>
-    <p class="small muted" style="margin:10px 0 0">A link that signs you in: <span id="code-link" style="word-break:break-all"></span></p>
+    <p class="small muted" style="margin:10px 0 0">A link that signs you in:</p>
+    <input id="code-link" readonly onfocus="this.select()" aria-label="Link that signs you in" style="margin:4px 0 0;font-size:.85rem">
   </div>
 
   <div class="card hidden" id="contact-card">
@@ -1551,6 +1552,7 @@ async function loadDelivery() {
     $('digest-optin').checked = prefs.preferences.coach_digest !== false;
   } catch { /* not fatal */ }
 
+  if (!IS_DIRECTOR) return;     // the outbox and the bounce list are the director's; do not ask and be refused
   try {
     const ob = await api('/api/coach/outbox');
     const counts = ob.counts || {};
@@ -2046,7 +2048,7 @@ try { newDirectorCode = sessionStorage.getItem('offdays.newDirectorCode') || '';
 if (newDirectorCode) {
   $('code-value').textContent = newDirectorCode;
   const link = `${location.origin}/app/index.html?code=${encodeURIComponent(newDirectorCode)}`;
-  $('code-link').textContent = link;
+  $('code-link').value = link;
   $('code-email').href = `mailto:?subject=${encodeURIComponent('My 0FFDAYS director sign-in')}&body=${encodeURIComponent(`Your 0FFDAYS director code: ${newDirectorCode}\n\nOr tap this to sign in: ${link}`)}`;
   $('code-copy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(newDirectorCode); $('code-status').textContent = 'Copied.'; }
@@ -2464,7 +2466,7 @@ async function homePlayer() {
   $('home-attn').classList.add('hidden');
   const team = d.teams[0];
   const parents = d.parents.length ? d.parents.map((p) => `
-      <div class="small" style="margin:0 0 6px"><b>${esc(p.name || 'Parent')}</b>
+      <div class="small" style="margin:0 0 6px">${p.name ? `<b>${esc(p.name)}</b>` : ''}
         ${p.email ? `<div><a href="mailto:${esc(p.email)}">${esc(p.email)}</a></div>` : ''}
         ${p.phone ? `<div><a href="tel:${esc(p.phone)}">${esc(p.phone)}</a></div>` : ''}</div>`).join('')
     : '<span class="small muted">No parent on file. Add one from the roster.</span>';
@@ -5513,8 +5515,8 @@ async function initTeamDrills() {
     grid.querySelectorAll(':scope > .card, :scope > .stat-row').forEach(function (c) {
       var t = c.id === 'summary' || c.classList.contains('stat-row') ? 'today' : tabFor(c);
       var away = (!!t && t !== tab) || (DETAIL[c.id] && !opened[c.id]);
-      // The team and window filter belongs to the other tabs; the home has its own.
-      if (c.id === 'filter-card' && tab === 'home') away = true;
+      // The team and window filter belongs to Today, Families and Teams; Home has its own and Settings has none.
+      if (c.id === 'filter-card' && (tab === 'home' || tab === 'settings')) away = true;
       c.classList.toggle('tab-off', !!away);
     });
     bar.querySelectorAll('button').forEach(function (b) {

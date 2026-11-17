@@ -23,7 +23,7 @@ for (const width of [390, 1280]) {
   await page.goto(`${base}/app/index.html?code=${tok}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
   await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {});
-  await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));
+  await page.evaluate(() => { document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')); document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()); });  // every tab, every card open
   const status = page.waitForResponse((r) => r.url().includes('/api/coach/evaluation'), { timeout: 8000 }).then((r) => r.status());
   await page.click('#ev-build');
   const code = await status;

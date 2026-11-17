@@ -26,6 +26,7 @@ const r = await fetch(`${base}/api/org/season`, { method: 'PUT', headers: H,
   body: JSON.stringify({ starts_on: '2027-02-01', ends_on: '2027-06-30' }) });
 console.log('season', r.status);
 await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(2000);
+await page.evaluate(() => { document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')); document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()); });  // every tab, every card open
 console.log('AFTER DATES:', (await card.innerText()).replace(/\s*\n\s*/g, ' | '));
 await card.screenshot({ path: `${out}/2-dates.png` });
 await browser.close();

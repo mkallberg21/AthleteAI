@@ -453,7 +453,7 @@ class TestThePageIsWired:
 
     def test_the_team_filter_is_hidden_on_home_and_back_on_the_other_tabs(self):
         assert 'id="filter-card"' in self.HTML
-        assert "if (c.id === 'filter-card' && tab === 'home') away = true;" in self.HTML
+        assert "if (c.id === 'filter-card' && (tab === 'home' || tab === 'settings')) away = true;" in self.HTML
 
     def test_the_wizard_hands_over_to_the_home_when_it_finishes(self):
         fin = self.HTML.split("function wizardFinish()", 1)[1].split("async function startWizardIfNew", 1)[0]

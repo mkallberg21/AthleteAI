@@ -17,9 +17,10 @@ await page.click('.role-btn[data-role="director"]');
 await page.fill('#org-name', 'Mad Dog Lacrosse');
 await page.selectOption('#org-sport', 'lacrosse');
 await page.fill('#org-director', 'Joel White');
-await page.click('#create-org');
-await page.waitForSelector('#org-token:not(.hidden)');
-const code = (await page.locator('#org-token code').textContent()).trim();
+await page.check('#org-terms'); await page.click('#create-org');
+await page.waitForURL(/coach\.html/);
+await page.waitForSelector('#code-value', { state: 'visible' });
+const code = (await page.locator('#code-value').textContent()).trim();
 console.log('1 program created, director code shown once:', code.length, 'chars');
 await page.screenshot({ path: `${out}/1-signup.png`, fullPage: false });
 
@@ -28,7 +29,7 @@ await page.goto(`${base}/app/index.html?code=${code}`, { waitUntil: 'networkidle
 await page.waitForTimeout(2500);
 await page.locator('#wizard-skip').click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400);
 await page.evaluate(() => document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()));  // cards start folded
-await page.evaluate(() => document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')));  // all tabs shown
+await page.evaluate(() => { document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')); document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()); });  // every tab, every card open
 console.log('2 landed on:', page.url().split('/').pop());
 const next = await page.locator('#setup-card').first().innerText().catch(() => '');
 console.log('   checklist head:', next.split('\n').slice(0, 4).join(' | '));
@@ -40,9 +41,12 @@ for (const name of ['2031 Red', '2031 Blue']) {
   await page.waitForTimeout(800);
 }
 await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(2000);
+await page.evaluate(() => { document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')); document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()); });  // every tab, every card open
 console.log('3 teams:', await page.locator('#import-team option').allTextContents());
 
 // 4. Add a coach with email on Red.
+await page.waitForSelector('#staff-card:not(.hidden)');
+await page.evaluate(() => { document.querySelectorAll('.tab-off').forEach((c) => c.classList.remove('tab-off')); document.querySelectorAll('.fold').forEach((c) => c._foldOpen && c._foldOpen()); });
 await page.fill('#new-coach-name', 'Sam Hill');
 await page.fill('#new-coach-email', 'sam@example.com');
 await page.selectOption('#new-coach-teams', { label: '2031 Red' });
