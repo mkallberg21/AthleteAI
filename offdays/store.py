@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from .config import CONFIG
+from . import linked as linked_mod
 from . import sports
 from . import ball as ball_mod
 from . import footwork
@@ -2543,6 +2544,7 @@ class Store:
         # XP on the same footing as any other session of that length, because
         # the point of the streak is turning up and they turned up.
         awarded = self._award_self_reported(athlete_id, session_id, drill_key, day)
+        self._count_in_linked(session_id)
         return {
             "session_id": session_id,
             "day": day.isoformat(),
@@ -3213,6 +3215,17 @@ class Store:
                 )
         return issued
 
+    def _count_in_linked(self, session_id: int) -> None:
+        """Count a counted session in every program this athlete is linked to (offdays/linked.py).
+
+        Never lets a problem in a linked program break the athlete's own submit.
+        """
+        try:
+            for sibling in linked_mod.mirror_session(self.conn, session_id):
+                self._sync_badges(sibling)
+        except Exception:  # noqa: BLE001 - the athlete's own session is already safe
+            logging.getLogger(__name__).exception("counting session %s in linked programs failed", session_id)
+
     def _effective_day(self, completed_at: str | None) -> tuple[str, str]:
         """Resolve the day a session should be credited to.
 
@@ -3567,6 +3580,8 @@ class Store:
 
         new_badges = self._sync_badges(athlete_id)
         notify.notify_badges(self.conn, athlete_id, new_badges)
+        if verdict.status == "counted":
+            self._count_in_linked(session_id)
 
         # A counted clocked session's typical speed is kept for standings. A
         # held one is not, until a coach approves it (review_session).
@@ -3699,6 +3714,7 @@ class Store:
                     shots=stored.get("shots", 0), timed=stored.get("timed", 0),
                     distance_yd=stored.get("distance_yd"),
                     median_mph=stored.get("median_mph")))
+        self._count_in_linked(session_id)
         return {"session_id": session_id, "status": "counted", "xp_awarded": awarded}
 
     # ------------------------------------------------------------------

@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -505,7 +505,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     self_reported    INTEGER NOT NULL DEFAULT 0,
     -- What the camera counted; reps_total is what counted toward the day
     -- after the rep cap. NULL means the same as reps_total.
-    reps_seen        INTEGER
+    reps_seen        INTEGER,
+    -- Set on a copy made for a linked program: the session it was copied from. A copy is never
+    -- copied again, and the same source is copied into a program once.
+    mirrored_from    INTEGER REFERENCES sessions(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_athlete ON sessions(athlete_id, submitted_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
@@ -1231,6 +1234,15 @@ CREATE TABLE IF NOT EXISTS parent_links (
     used_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_parent_links_guardian ON parent_links(guardian_id, created_at);
+-- One athlete in several programs: each program keeps its own athlete record; a parent links the
+-- records, and a counted session is then counted in each (see offdays/linked.py).
+CREATE TABLE IF NOT EXISTS athlete_links (
+    athlete_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    group_id   INTEGER NOT NULL,
+    linked_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    linked_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_athlete_links_group ON athlete_links(group_id);
 CREATE TABLE IF NOT EXISTS staff_sessions (
     token_hash TEXT PRIMARY KEY,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1345,6 +1357,8 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         # after the rep cap; this is the number before it. NULL on sessions
         # from before the cap existed, which means "the same as reps_total".
         ("reps_seen", "INTEGER"),
+        # A copy made for a linked program: the session it came from (offdays/linked.py).
+        ("mirrored_from", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"),
     ],
     "rep_events": [
         ("peak", "REAL"),
@@ -1506,6 +1520,9 @@ def migrate(conn: sqlite3.Connection) -> int:
     ).fetchone()
     _widen_user_roles(conn)
     _add_missing_columns(conn)
+    # One copy of a session per linked program. After the column exists (see ADDED_COLUMNS).
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_mirror ON sessions(athlete_id, mirrored_from) "
+                 "WHERE mirrored_from IS NOT NULL")
     _backfill_memberships(conn)
     conn.commit()
 

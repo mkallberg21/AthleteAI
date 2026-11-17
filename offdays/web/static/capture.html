@@ -46,6 +46,7 @@
     <div class="card" id="drill-card">
       <h2>Pick a drill</h2>
       <p class="small muted" style="margin:-4px 0 8px">Tap one. The camera opens and the Start button is at the bottom of the screen.</p>
+      <p class="small muted hidden" id="counts-for" style="margin:-2px 0 8px"></p>
       <div class="drill-list" id="drill-list"></div>
     </div>
 
@@ -549,6 +550,10 @@ async function loadHome(prefetched) {
   const weekPlan = await loadWeekPlan();
   homeSport = profile.sport || null;
   $('whoami').textContent = profile.display_name;
+  // A parent has linked this athlete in more than one program: say so, in plain words.
+  const cf = profile.counts_for || [];
+  $('counts-for').textContent = cf.length > 1 ? `Your work counts for ${cf.join(' and ')}.` : '';
+  $('counts-for').classList.toggle('hidden', cf.length < 2);
   $('greeting').textContent = profile.streak > 0
     ? `${profile.streak}-day streak`
     : 'Ready to work';

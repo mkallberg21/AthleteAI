@@ -2789,7 +2789,7 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 42 modules across 631 call sites.
+SQL lives in 43 modules across 652 call sites.
 store.py holds 34% of them.
 
 1382 occurrences are mechanical (search-and-replace with tests behind it).

@@ -193,6 +193,51 @@ function renderSigninLink(wrap, res) {
   });
 }
 
+// The same athlete on another program's roster. The server only offers a program that has this parent's
+// own address (never one typed at sign-up), and nothing links until the parent presses the button.
+async function loadLinks(box) {
+  const id = box.dataset.links;
+  const first = box.dataset.first || 'Your athlete';
+  let res;
+  try { res = await api(`/api/guardians/links/${id}`); } catch { box.innerHTML = ''; return; }
+  const linked = res.linked || [];
+  const offers = res.candidates || [];
+  let html = '';
+  if (linked.length) {
+    html += `<div style="margin-top:12px" data-linked>
+      <span class="pill ok">Counts in more than one program</span>
+      <div class="small muted" style="margin-top:6px">${esc(first)}'s work also counts for
+        ${linked.map((p) => esc(p.org_name)).join(' and ')}. Each program sees only its own athlete.
+        <button type="button" class="tiny" data-unlink="${id}">Stop</button></div></div>`;
+  }
+  if (offers.length) {
+    html += `<div style="margin-top:12px;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm)" data-offer>
+      <b style="font-size:.9rem">Is ${esc(first)} in another program too?</b>
+      <div class="small muted" style="margin:4px 0 8px">Another program has your email. Count ${esc(first)}'s
+        training there as well, so they only train once. It counts from now on, and you can stop any time.</div>
+      ${offers.map((c) => `<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:6px">
+        <span class="small"><b>${esc(c.display_name)}</b> at ${esc(c.org_name)}</span>
+        <button type="button" class="inline" data-link-to="${c.athlete_id}">Count it there too</button></div>`).join('')}
+    </div>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('[data-link-to]').forEach((btn) => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await api(`/api/guardians/links/${id}`, { method: 'POST', body: { other_id: Number(btn.dataset.linkTo) } });
+      await loadLinks(box);
+    } catch (e) { btn.disabled = false; showError(e.message); }
+  }));
+  box.querySelectorAll('[data-unlink]').forEach((btn) => btn.addEventListener('click', async () => {
+    if (!window.confirm(`Stop counting ${first}'s training in the other program? Work already counted stays.`)) return;
+    btn.disabled = true;
+    try {
+      await api(`/api/guardians/links/${id}`, { method: 'DELETE' });
+      await loadLinks(box);
+    } catch (e) { btn.disabled = false; showError(e.message); }
+  }));
+}
+
 function renderAthlete(a) {
   const q = a.quality || {};
   const trend = q.trend > 2 ? ' <span class="trend-up">&#9650;</span>'
@@ -248,6 +293,8 @@ function renderAthlete(a) {
         email. The old link stops working everywhere.
       </span>
     </div>
+
+    <div data-links="${a.athlete_id}" data-first="${esc(firstName(a.display_name))}"></div>
 
     <div class="stat-row" style="margin-top:14px">
       <div class="stat"><b>${a.week_sessions}</b><span>Sessions this week</span></div>
@@ -723,6 +770,9 @@ function wire() {
   // and the kid has a phone of their own, so the deliverable is a link they
   // can text, email or share -- not a code to read across the room. The
   // server refuses it until training is switched on, in the parent's words.
+  // One athlete in two programs: count their work in both. Shown only when there is something to say.
+  document.querySelectorAll('[data-links]').forEach((box) => loadLinks(box));
+
   document.querySelectorAll('[data-signin]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;

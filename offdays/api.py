@@ -53,6 +53,7 @@ from . import film as film_mod
 from . import iq_shelf as iq_shelf_mod
 from . import video_scout as video_scout_mod
 from . import guardians as guardians_mod
+from . import linked as linked_mod
 from . import parent_signin as parent_signin_mod
 from . import library
 from . import portability as portability_mod
@@ -1160,6 +1161,8 @@ def me(
             # there is a wider board to offer than their own squad.
             "age_group": age_group_of(store.conn, principal.id),
             "side": _side_words(store, principal.org_id),
+            # Empty unless a parent has linked this athlete in more than one program.
+            "counts_for": [p["org_name"] for p in linked_mod.programs(store.conn, principal.id)],
         }
     return {
         "role": principal.role,
@@ -3363,6 +3366,54 @@ def redeem_guardian_invite(
         raise
     throttle.record_success(store.conn, attempt)
     return result
+
+
+class LinkAthleteBody(BaseModel):
+    other_id: int
+
+
+@app.get("/api/guardians/links/{athlete_id}")
+def guardian_links(
+    athlete_id: int,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Where this athlete's work already counts, and other programs they could be linked to.
+
+    A candidate appears only when the same parent (by an address the programs supplied) is a parent
+    there too. Nothing links until the parent chooses.
+    """
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    return {
+        "linked": [p for p in linked_mod.programs(store.conn, athlete_id) if p["athlete_id"] != athlete_id],
+        "candidates": linked_mod.candidates(store.conn, principal.id, athlete_id),
+    }
+
+
+@app.post("/api/guardians/links/{athlete_id}", status_code=201)
+def guardian_link(
+    athlete_id: int,
+    body: LinkAthleteBody,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Count this athlete's work in another program too. From now on; earlier work is not copied."""
+    try:
+        linked_mod.link(store.conn, principal.id, athlete_id, body.other_id)
+    except linked_mod.LinkError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return guardian_links(athlete_id, principal, store)
+
+
+@app.delete("/api/guardians/links/{athlete_id}")
+def guardian_unlink(
+    athlete_id: int,
+    principal: Principal = Depends(_guardian),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Stop counting this athlete's work in the other programs. Work already counted stays."""
+    linked_mod.unlink(store.conn, principal.id, athlete_id)
+    return guardian_links(athlete_id, principal, store)
 
 
 @app.post("/api/guardians/athlete-link/{athlete_id}", status_code=201)

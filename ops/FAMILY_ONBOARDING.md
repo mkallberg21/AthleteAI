@@ -317,6 +317,39 @@ Passwords are scrypt hashes; recovery codes, reset codes, emailed links and sess
 stored as SHA-256 digests; none of it is in a program export. Wrong guesses are slowed per
 address and per email. A reset or a password change ends every open session.
 
+## One athlete in two programs
+
+A club roster creates its own athlete record, so a kid on two clubs' rosters starts as two records, each with
+its own history. A parent can **link** them, and from then on a counted session is counted in each program.
+Each program keeps its own record, so every dashboard, ranking, streak, badge, season rule and bill works as
+before (`offdays/linked.py`, schema 31: `athlete_links`, `sessions.mirrored_from`).
+
+How it goes: the parent is a parent in both programs (same roster email), opens their portal, and under the
+athlete sees "Is Ryder in another program too?" with the other athlete named. One tap: "Count it there too".
+The athlete's home screen then says "Your work counts for A and B." Either parent can stop it from their portal.
+
+Rules:
+
+- **Only a parent who can prove it.** The same address, supplied by the programs (roster email, or the address
+  an invite was emailed to), is on a parent account in both. An address typed at sign-up is never trusted, and a
+  matching name alone never links (two Sam Hills exist). The rule is written once (`linked._TRUSTED`).
+- **The parent confirms.** The app suggests; nothing links by itself.
+- **One athlete per program in a group.** Two brothers on one club never merge.
+- **Only counted work, once, from now on.** Same reps and XP. A session held for review is copied only when a
+  coach approves it. A copy is never copied again. Work done before the link is not copied.
+- **Each program's own rules decide.** No copy where that program's season has ended (its last day still
+  counts), the athlete has left it, or its parent has not said yes or has withdrawn. The source session is never
+  affected, and a failure in a linked program never breaks the athlete's own submit.
+- **Nothing else crosses.** Not check-ins, film watched or messages. A director never sees the other program's
+  name or athlete; they see a normal session on their own athlete.
+- **Stopping keeps what was counted** (that work was done) and ends future copies.
+- **Billing is unchanged**: each program pays for its own roster.
+
+Limits: the two parents must share an address the programs hold. A family where mom is on one roster and dad on
+the other has no shared address, so no offer appears; fix the roster email and it will. Deleting an account in one
+program does not delete the athlete's data in the other; the parent deletes each. The privacy policy should say
+that linked programs each hold their own copy of the athlete's counted sessions (for the lawyer).
+
 ## A parent on a new phone (getting back in)
 
 A parent signs up once with an invite code and is then signed in by a code their phone keeps. They have no
