@@ -42,12 +42,60 @@ await page.waitForFunction(() => document.querySelector('#msg-from').innerText.l
 let from = (await page.locator('#msg-from').innerText()).replace(/\s+/g, ' ');
 check(/Matt Kallberg \(Nashville Dogs\) via 0FFDAYS/.test(from), 'the box says who the email will be from', `(${from.slice(0, 90)}...)`);
 check(/on hold/.test(from), 'and that email is on hold');
-check(/Add yours under Settings/.test(from), 'and tells a director with no email how replies would reach them');
+check(/Confirm your email below/.test(from), 'and tells a director with no confirmed email how replies would reach them');
+check(await page.locator('#msg-email-send').isVisible(), 'and offers to email them a confirmation link');
 await page.locator('#msg-box').scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${out}/1-box-held.png` });
 
+// --- while email is on hold the director sends from their own email: they choose THEIR email service once
+await ctx.route(/mail\.google\.com|outlook\.live\.com|outlook\.office\.com|yahoo\.com/, (r) => r.fulfill({ status: 200, body: 'ok' }));
+const firstNudge = page.locator('button[data-nudge]').first();
+await firstNudge.click();
+await page.waitForSelector('#families a.btn-link', { timeout: 15000 });
+const popup1 = page.waitForEvent('popup');
+await page.locator('#families a.btn-link').first().click();
+await page.waitForSelector('[role=dialog]', { timeout: 10000 });
+const chooser = (await page.locator('[role=dialog]').innerText()).replace(/\s+/g, ' ');
+check(/Which email do you use\?/.test(chooser) && /Gmail/.test(chooser) && /Outlook.com or Hotmail/.test(chooser) && /Microsoft 365/.test(chooser) && /Yahoo/.test(chooser) && /mail app on this computer/.test(chooser), 'a click on Send email asks which email service they use', '');
+await page.screenshot({ path: `${out}/1b-chooser.png` });
+await page.click('[data-mail-pick="gmail"]');
+const pop = await popup1;
+await pop.waitForLoadState().catch(() => {});
+const gurl = decodeURIComponent(pop.url());
+check(gurl.startsWith('https://mail.google.com/mail/?view=cm') && new RegExp(`to=(robert|jess|adam)[.]${stamp}@example[.]com`).test(gurl) && /su=.*set up /.test(gurl) && /invite=[A-Z0-9-]{14}/.test(gurl), 'it opens Gmail in the browser with the parent, the subject and the message filled in', `(${gurl.slice(0, 80)}...)`);
+await pop.close();
+check(/opens in Gmail/.test((await page.locator('#msg-mailapp').innerText())), 'and remembers Gmail');
+const popup2 = page.waitForEvent('popup');
+await page.locator('#families a.btn-link').first().click();
+const pop2 = await popup2;
+check(!(await page.locator('[role=dialog]').count()), 'the next time it goes straight to Gmail without asking');
+await pop2.close();
+await page.click('#msg-mailapp-change');
+check((await page.locator('#msg-mailapp').innerText()).trim() === '', 'and Change forgets the choice');
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForSelector('#families-card:not(.hidden)', { timeout: 20000 });
+await unfold();
+await page.waitForSelector('#msg-from');
+
 // the director gives an email, releases the hold
-await j('/api/me/password', dtoken, { password: 'a-long-password-9', email: DIR_EMAIL }, 'PUT');
+// --- the director confirms their email: a link arrives, they click it
+await page.fill('#msg-email', DIR_EMAIL);
+await page.click('#msg-email-send');
+await page.waitForSelector('#msg-email-check', { timeout: 15000 });
+check(/waiting/.test(await page.locator('#msg-sender').innerText()) && !/Replies come to/.test(await page.locator('#msg-from').innerText()), 'it says it is waiting for the click, and replies are not set up yet');
+await new Promise((r) => setTimeout(r, 1500));
+const confirmMail = mail().split('-----\n').filter((m) => m.includes(`TO: ${DIR_EMAIL}`)).pop() || '';
+check(/confirm your email for 0FFDAYS messages/.test(confirmMail) && /never reads your email/.test(confirmMail), 'a confirmation email arrives at that address');
+const sToken = (confirmMail.match(/[?]sender=([A-Za-z0-9_-]+)/) || [])[1];
+const other = await ctx.newPage();
+await other.goto(`${base}/app/index.html?sender=${sToken}`, { waitUntil: 'networkidle' });
+await other.waitForFunction(() => /confirmed/i.test(document.querySelector('#sender-title').innerText), null, { timeout: 15000 });
+check(/Your email is confirmed/.test(await other.locator('#sender-title').innerText()) && new RegExp(DIR_EMAIL.replace(/\./g, '\\.')).test(await other.locator('#sender-text').innerText()), 'clicking it shows a confirmation page that names the address');
+check(!other.url().includes('sender='), 'and the secret leaves the address bar');
+await other.screenshot({ path: `${out}/1c-confirmed-page.png` });
+await other.close();
+await page.click('#msg-email-check');
+await page.waitForFunction(() => /confirmed/.test(document.querySelector('#msg-sender').innerText), null, { timeout: 15000 });
 await j('/api/org/mail-hold', dtoken, { held: false }, 'PUT');
 await new Promise((r) => setTimeout(r, 1500));
 const base0 = mail().length;                       // setting an email sends the director their own confirm link

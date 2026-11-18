@@ -358,9 +358,19 @@ own mail address as a message for a person, not an anonymous notice:
 - **From line:** `"Matt Kallberg (Nashville Dogs) via 0FFDAYS" <no-reply@mail.0ffdays.com>`. The name is the person who
   pressed send (director or coach); the address stays on the verified mail domain. Stored per message in
   `email_outbox.from_name` / `reply_to` (schema 32) and applied in `mailer._headers`.
-- **Replies** go to that person's address (`invites.staff_reply_to`, the email on their account), so a parent can just
-  reply. A sender with no email on their account gets a footer saying replies are not read, and the screen tells them to
-  add one (Settings, email sign-in box).
+- **Replies** go to that person's own address, so a parent can just reply, in whatever email platform they use. The
+  address is used only once its owner has CONFIRMED it (`offdays/sender_email.py`, table `sender_emails`, schema 33): in
+  the message box they enter it, 0FFDAYS emails that address a link (`?sender=`, one use, 24 hours, stored as a hash, at
+  most 5 an hour), and clicking it confirms it. An address confirmed for email sign-in counts too. An unconfirmed
+  address is never a reply address, so a typo cannot send a parent's reply to a stranger; a changed address starts
+  unconfirmed. Until then the email's footer says replies are not read. 0FFDAYS never reads their inbox or sends from
+  their account (a message "from" a Gmail or Outlook address would be rejected by the receiving server, which is why
+  it is sent from our own domain with their name).
+- **While email is on hold, sending from your own email** no longer assumes the computer's default mail app. A click on
+  any "Send email" link asks once which service the person uses (Gmail, Outlook.com or Hotmail, Outlook for work or
+  school, Yahoo Mail, or the mail app on the computer), opens a ready-written message there, and remembers the choice
+  (`MAIL_PREF` in the browser, changeable under the message box). A true send-from-their-own-account integration (Gmail
+  or Microsoft OAuth) is not built: it needs a registered app with each provider, and Google reviews apps that send mail.
 - **A note of their own** (up to 1500 characters, plain text, escaped) goes at the top of every parent's email, above the
   personal link. The Families screen's "Message to parents" box holds it; it is remembered in the browser.
 - **Preview and test:** `POST /api/coach/families/invite-preview` shows exactly what a parent gets and who it is from;

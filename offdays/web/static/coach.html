@@ -528,6 +528,7 @@
     <div id="msg-box" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin:0 0 12px">
       <b>Message to parents</b>
       <p class="small muted" id="msg-from" style="margin:4px 0 8px"></p>
+      <div id="msg-sender" class="small" style="margin:0 0 12px"></div>
       <label class="small" for="msg-intro">Your note (optional). It goes at the top of every parent&rsquo;s email, above their personal link.</label>
       <textarea id="msg-intro" maxlength="1500" rows="4" style="width:100%;margin-top:4px"
         placeholder="Hi everyone, this is Matt. We are starting a pilot with 0FFDAYS this season. You will get a link to set up your athlete..."></textarea>
@@ -536,6 +537,7 @@
         <button type="button" class="secondary inline" id="msg-test">Send me a test</button>
       </div>
       <div id="msg-out" class="small hidden" role="status" style="margin-top:10px"></div>
+      <p class="small muted" id="msg-mailapp" style="margin:10px 0 0"></p>
     </div>
     <div id="fam-bulk-result" class="fam-result hidden" role="status"></div>
     <div id="fam-bar" class="fam-bar hidden">
@@ -3896,10 +3898,123 @@ async function msgHeader() {
   try {
     const m = await api('/api/coach/families/invite-preview', { method: 'POST', body: { intro: '' } });
     const hold = m.sending ? '' : ' Email is on hold, so nothing is sent yet: you get each message to send yourself.';
-    const reply = m.reply_to ? `Replies come to ${esc(m.reply_to)}.` : 'There is no email on your account, so replies would not be read. Add yours under Settings, in the email sign-in box, and replies will reach you.';
+    const reply = m.reply_to ? `Replies come to ${esc(m.reply_to)}.` : 'Confirm your email below and replies will reach you.';
     $('msg-from').innerHTML = `Sent by 0FFDAYS on your behalf, shown as &ldquo;${esc(m.from_name)}&rdquo;. ${reply}${esc(hold)}`;
   } catch { $('msg-from').textContent = ''; }
+  msgSender();
 }
+
+// The address replies come to. Only one the person has proved is theirs, by clicking a link we email them.
+async function msgSender(editing) {
+  const box = $('msg-sender');
+  let st;
+  try { st = await api('/api/me/sender-email'); } catch { box.innerHTML = ''; return; }
+  const askForm = (lede) => `<div>${lede}</div>
+    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">
+      <input id="msg-email" type="email" autocomplete="email" placeholder="you@example.com" value="${esc(st.email || '')}" style="max-width:280px">
+      <button type="button" class="inline" id="msg-email-send">Email me a confirmation link</button>
+    </div><div id="msg-email-err" class="err hidden"></div>`;
+  if (!st.mail) {
+    box.innerHTML = '<span class="muted">This server cannot send email yet, so replies cannot be set up.</span>';
+  } else if (st.confirmed && !editing) {
+    box.innerHTML = `<span class="pill ok">confirmed</span> Replies come to <b>${esc(st.email)}</b>. <button type="button" class="tiny" id="msg-email-change">Change</button>`;
+  } else if (st.pending && !editing) {
+    box.innerHTML = `<span class="pill warn">waiting</span> We emailed a link to <b>${esc(st.email)}</b>. Click it, then press the button.
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+        <button type="button" class="inline" id="msg-email-check">I clicked it</button>
+        <button type="button" class="tiny" id="msg-email-again">Send it again</button>
+        <button type="button" class="tiny" id="msg-email-change">Use a different address</button>
+      </div>`;
+  } else {
+    box.innerHTML = askForm('Your email lets parents reply to you. We email you a link; click it once and you are set. 0FFDAYS never reads your email or sends from your account.');
+  }
+}
+
+$('msg-sender').addEventListener('click', async (e) => {
+  const id = e.target.id;
+  if (id === 'msg-email-change') { msgSender(true); return; }
+  if (id === 'msg-email-check') { await msgHeader(); return; }
+  if (id === 'msg-email-send' || id === 'msg-email-again') {
+    const err = $('msg-email-err');
+    const input = $('msg-email');
+    let email = input ? input.value.trim() : '';
+    if (id === 'msg-email-again') { try { email = (await api('/api/me/sender-email')).email; } catch { /* fine */ } }
+    if (!email) { if (err) { err.textContent = 'Enter your email.'; err.classList.remove('hidden'); } return; }
+    e.target.disabled = true;
+    try {
+      const r = await api('/api/me/sender-email', { method: 'POST', body: { email } });
+      await msgSender();
+      $('msg-sender').insertAdjacentHTML('beforeend', `<div class="small muted" style="margin-top:6px">${r.sent ? 'Sent. Look in your inbox (and spam).' : 'We could not send it just now. Try again in a minute.'}</div>`);
+    } catch (ex) {
+      e.target.disabled = false;
+      const er = $('msg-email-err') || err;
+      if (er) { er.textContent = ex.message || 'Could not send the link.'; er.classList.remove('hidden'); }
+    }
+  }
+});
+
+// ---- Sending from your own mail: pick YOUR email service once. The old link opened whatever mail app the computer
+// had set up, which for many people is one they never use. Gmail, Outlook and Yahoo open in the browser.
+const MAIL_PREF = 'offdays.mail.app';
+const MAIL_APPS = {
+  gmail: { name: 'Gmail', url: (t, s, b) => `https://mail.google.com/mail/?view=cm&fs=1&to=${t}&su=${s}&body=${b}` },
+  outlook: { name: 'Outlook.com or Hotmail', url: (t, s, b) => `https://outlook.live.com/mail/0/deeplink/compose?to=${t}&subject=${s}&body=${b}` },
+  m365: { name: 'Outlook for work or school (Microsoft 365)', url: (t, s, b) => `https://outlook.office.com/mail/deeplink/compose?to=${t}&subject=${s}&body=${b}` },
+  yahoo: { name: 'Yahoo Mail', url: (t, s, b) => `https://compose.mail.yahoo.com/?to=${t}&subject=${s}&body=${b}` },
+  app: { name: 'The mail app on this computer', url: (t, s, b) => `mailto:${t}?subject=${s}&body=${b}` },
+};
+function mailPref() { try { const v = localStorage.getItem(MAIL_PREF); return MAIL_APPS[v] ? v : ''; } catch { return ''; } }
+function showMailPref() {
+  const p = mailPref();
+  $('msg-mailapp').innerHTML = p ? `When you send from your own email, it opens in <b>${esc(MAIL_APPS[p].name)}</b>. <button type="button" class="tiny" id="msg-mailapp-change">Change</button>` : '';
+}
+$('msg-mailapp').addEventListener('click', (e) => {
+  if (e.target.id === 'msg-mailapp-change') { try { localStorage.removeItem(MAIL_PREF); } catch { /* fine */ } showMailPref(); }
+});
+function openMail(kind, to, subject, body) {
+  const url = MAIL_APPS[kind].url(encodeURIComponent(to), encodeURIComponent(subject), encodeURIComponent(body));
+  if (kind === 'app') window.location.href = url; else window.open(url, '_blank', 'noopener');
+}
+function mailChooser(to, subject, body) {
+  const wrap = document.createElement('div');
+  wrap.setAttribute('role', 'dialog');
+  wrap.setAttribute('aria-label', 'Choose your email');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  wrap.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:380px;width:100%">
+    <b>Which email do you use?</b>
+    <p class="small muted" style="margin:4px 0 10px">It opens a new message with the parent&rsquo;s address and the text filled in. You press send.</p>
+    ${Object.entries(MAIL_APPS).map(([k, a]) => `<button type="button" class="secondary" data-mail-pick="${k}" style="display:block;width:100%;margin:6px 0;text-align:left">${esc(a.name)}</button>`).join('')}
+    <label class="small" style="display:block;margin:10px 0"><input type="checkbox" id="mail-remember" checked> Remember my choice</label>
+    <button type="button" class="tiny" data-mail-copy="1">Copy the message instead</button>
+    <button type="button" class="tiny" data-mail-cancel="1" style="float:right">Cancel</button></div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', async (e) => {
+    const pick = e.target.closest('[data-mail-pick]');
+    if (pick) {
+      if ($('mail-remember').checked) { try { localStorage.setItem(MAIL_PREF, pick.dataset.mailPick); } catch { /* fine */ } showMailPref(); }
+      openMail(pick.dataset.mailPick, to, subject, body);
+      wrap.remove();
+    } else if (e.target.closest('[data-mail-copy]')) {
+      try { await navigator.clipboard.writeText(`To: ${to}\nSubject: ${subject}\n\n${body}`); e.target.textContent = 'Copied'; } catch { e.target.textContent = 'Could not copy'; }
+    } else if (e.target.closest('[data-mail-cancel]') || e.target === wrap) {
+      wrap.remove();
+    }
+  });
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="mailto:"]');
+  if (!a || a.hasAttribute('data-native-mail')) return;
+  e.preventDefault();
+  const raw = a.getAttribute('href').slice('mailto:'.length);
+  const q = raw.indexOf('?');
+  const to = decodeURIComponent(q < 0 ? raw : raw.slice(0, q));
+  const params = new URLSearchParams(q < 0 ? '' : raw.slice(q + 1));
+  const subject = params.get('subject') || '';
+  const body = params.get('body') || '';
+  const p = mailPref();
+  if (p) openMail(p, to, subject, body); else mailChooser(to, subject, body);
+});
+showMailPref();
 
 $('msg-preview').addEventListener('click', async () => {
   const out = $('msg-out');

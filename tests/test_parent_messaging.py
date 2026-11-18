@@ -66,7 +66,10 @@ def program(client, email=DIRECTOR_EMAIL, release=True, name="Nashville Dogs", d
                                           "director_name": director}).json()
     h = {"Authorization": f"Bearer {made['director']['token']}"}
     if email is not None:
-        db().execute("UPDATE users SET email = ? WHERE org_id = ? AND role = 'director'", (email, made["org_id"]))
+        # A reply address counts only once its owner has confirmed it: record that they did.
+        did = db().execute("SELECT id FROM users WHERE org_id = ? AND role = 'director'", (made["org_id"],)).fetchone()[0]
+        db().execute("INSERT INTO sender_emails(user_id, email, confirmed_at) VALUES (?,?,?)",
+                     (did, email, "2026-01-01T00:00:00+00:00"))
         db().commit()
     if release:
         assert client.put("/api/org/mail-hold", headers=h, json={"held": False}).status_code == 200
@@ -160,6 +163,9 @@ class TestAnInviteIsAMessageOnBehalfOfTheSender:
         p = program(client)
         roster(client, p, CSV_BEN)
         coach = api_module._store.create_user(p["org_id"], "coach", "Sam Rivers", email="sam@x.example")
+        db().execute("INSERT INTO sender_emails(user_id, email, confirmed_at) VALUES (?,?,?)",
+                     (coach["id"], "sam@x.example", "2026-01-01T00:00:00+00:00"))
+        db().commit()
         invite = guardians.create_invite(db(), kid(client, p, "Ben Amden"), coach["id"], "jessica@example.com")
         rec.sent.clear()
         assert invites.deliver(db(), invite, org_name="Nashville Dogs", coach_name="Sam Rivers")

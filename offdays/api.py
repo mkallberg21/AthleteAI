@@ -30,6 +30,7 @@ from starlette.types import ASGIApp
 from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
+from . import sender_email as sender_email_mod
 from . import badge as badge_mod
 from . import teamsnap as teamsnap_mod
 from . import team_age as team_age_mod
@@ -1414,6 +1415,45 @@ def parent_link_signin(
         raise HTTPException(status_code=401, detail="That link has expired or was already used. Ask for a new one.")
     throttle.record_success(store.conn, attempt)
     return out
+
+
+class SenderEmailRequest(BaseModel):
+    email: str = Field(max_length=200)
+
+
+@app.get("/api/me/sender-email")
+def my_sender_email(principal: Principal = Depends(_staff_only), store: Store = Depends(get_store)) -> dict[str, Any]:
+    """The address the sender's messages to parents are sent on behalf of, and whether they have confirmed it."""
+    return {**sender_email_mod.status(store.conn, principal.id), "mail": mailer.provider_ready()}
+
+
+@app.post("/api/me/sender-email")
+def start_sender_email(
+    body: SenderEmailRequest, principal: Principal = Depends(_staff_only), store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Email a confirm link to this address. Nothing is used as a reply address until it is clicked."""
+    try:
+        return {**sender_email_mod.request(store.conn, principal.id, body.email), "mail": True}
+    except sender_email_mod.SenderEmailError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/login/sender-confirm")
+def confirm_sender_email(
+    request: Request, body: TokenRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Open the link emailed to confirm a sending address. Signs nobody in."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "sender")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    address = sender_email_mod.confirm(store.conn, body.token)
+    if not address:
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That link has expired or was already used.")
+    throttle.record_success(store.conn, attempt)
+    return {"ok": True, "email": address}
 
 
 @app.post("/api/login/confirm")
@@ -3344,7 +3384,9 @@ def message_test(
         raise HTTPException(status_code=409, detail="This server has no mail provider yet, so nothing can be sent.")
     mine = invites_mod.staff_reply_to(store.conn, principal.id)
     if not mine:
-        raise HTTPException(status_code=409, detail="There is no email address on your account to send the test to.")
+        raise HTTPException(
+            status_code=409,
+            detail="Confirm your email first (the box above): the test goes to your confirmed address.")
     made = _message_sample(principal, store, body, "TEST-ONLY-0000")
     subject = "TEST: " + made["subject"]
     text = "This is a test, sent only to you. The link below is a placeholder.\n\n" + made["text"]

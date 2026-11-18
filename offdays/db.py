@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = 33
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -1226,6 +1226,17 @@ CREATE TABLE IF NOT EXISTS email_tokens (
     used_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id, purpose);
+-- The address a coach or director's messages to parents are sent on behalf of, and where a reply goes. It is used
+-- only once they have clicked the link emailed to it (confirmed_at). Only a hash of the link is kept.
+CREATE TABLE IF NOT EXISTS sender_emails (
+    user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    email        TEXT NOT NULL,
+    confirmed_at TEXT,
+    token_hash   TEXT UNIQUE,
+    expires_at   TEXT,
+    window_start TEXT,
+    sent_count   INTEGER NOT NULL DEFAULT 0
+);
 -- A parent's way back in: a one-time link emailed to an address the program gave us.
 -- Only a hash of the link is kept.
 CREATE TABLE IF NOT EXISTS parent_links (

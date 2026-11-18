@@ -53,12 +53,12 @@ def sender_display(coach_name: str, org_name: str) -> str:
 
 
 def staff_reply_to(conn: sqlite3.Connection, user_id: int | None) -> str:
-    """Where a parent's reply goes: the coach or director who sent it, if the program holds their address."""
-    if not user_id:
-        return ""
-    row = conn.execute("SELECT email FROM users WHERE id = ?", (user_id,)).fetchone()
-    email = ((row["email"] if row else "") or "").strip()
-    return email if mailer.looks_like_email(email) and not any(c in email for c in "\r\n,;<>") else ""
+    """Where a parent's reply goes: the sender's own address, but only once they have confirmed it is theirs.
+
+    An address nobody has proved (a typo, someone else's) is never used: a parent's reply must not go to a stranger.
+    """
+    from . import sender_email
+    return sender_email.confirmed_address(conn, user_id)
 
 
 def compose(

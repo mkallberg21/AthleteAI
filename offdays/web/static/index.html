@@ -277,6 +277,11 @@
       </details>
     </div>
     </div>
+    <div class="card hidden" id="sender-card">
+      <h2 id="sender-title">Confirming your email&hellip;</h2>
+      <p id="sender-text" class="small muted"></p>
+      <p class="hidden" id="sender-back"><a href="coach.html">Back to my dashboard</a></p>
+    </div>
     <div class="card hidden" id="pw-reset-card">
       <div class="section-header"><span class="section-title" id="pw-reset-title">Forgot your password?</span></div>
 
@@ -683,8 +688,9 @@ const linked = params.get('code');
 const resetLink = params.get('reset');
 const parentLink = params.get('parent');
 const confirmLink = params.get('confirm');
+const senderLink = params.get('sender');
 // A link carries a secret: take it out of the address bar and history once read.
-if (resetLink || confirmLink || parentLink) history.replaceState(null, '', window.location.pathname);
+if (resetLink || confirmLink || parentLink || senderLink) history.replaceState(null, '', window.location.pathname);
 
 // A parent getting back in: ask for a link by email, and spend the one that arrives.
 function openParentBack() {
@@ -734,6 +740,24 @@ if (parentLink) {
   resetStep('link');
   $('pw-reset-card').classList.remove('hidden');
   $('link-new').focus();
+} else if (senderLink) {
+  // A coach or director confirming the address their messages to parents are sent on behalf of.
+  const card = $('sender-card');
+  card.classList.remove('hidden');
+  fetch('/api/login/sender-confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: senderLink.trim() }) })
+    .then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('sender-title').textContent = 'Your email is confirmed';
+        $('sender-text').textContent = `Messages you send to parents from 0FFDAYS now say they are sent on your behalf, and a reply goes to ${data.email}.`;
+      } else {
+        $('sender-title').textContent = 'That link did not work';
+        $('sender-text').textContent = 'It has expired or was already used. Sign in, open Families, and ask for a new one.';
+      }
+      $('sender-back').classList.remove('hidden');
+    })
+    .catch(() => { $('sender-title').textContent = 'Could not reach the server'; $('sender-text').textContent = 'Try the link again.'; });
 } else if (confirmLink) {
   showRole('coach', { focus: false });
   $('pw-reset-card').classList.remove('hidden');
