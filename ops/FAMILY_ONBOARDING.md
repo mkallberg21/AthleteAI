@@ -350,6 +350,30 @@ the other has no shared address, so no offer appears; fix the roster email and i
 program does not delete the athlete's data in the other; the parent deletes each. The privacy policy should say
 that linked programs each hold their own copy of the athlete's counted sessions (for the lawyer).
 
+## A parent with several children on the team
+
+One parent, one email, one account, however many children. The roster gives the same parent address for each of a
+family's children, and the program supplying it is what ties them together.
+
+- **One invite per family.** The import issues one invite per parent address once the whole file is in, not one per
+  child. The email names every child ("set up Dillon and Killian on 0FFDAYS") and says one account covers them all.
+  Redeeming it creates a single parent account linked to every child on the roster under that address
+  (`guardians.family_athletes`, `redeem_invite`).
+- **A link for each child.** The first-visit walkthrough has a yes step and a link step per child, and the portal keeps
+  a "Send <name> a new sign-in link" button on each. Each child needs their own yes before a link is issued, and a new
+  link for one child never ends another's.
+- **A child added later joins the parent already signed up** (`guardians.attach_known_parents`), with no second invite.
+  The parent gets a "<name> was added to your account" notice, and the walkthrough opens again for that child only.
+- **The director's resend** (one or many at once) covers the family with one email; the siblings in a batch are
+  reported as "the same parent: one invite covers both".
+- **Only what the program gave counts.** Children are found by the ROSTER address, in this program only. The address
+  typed at sign-up is never used, so a typo cannot hand a parent someone else's child.
+
+Limits: two parents with different addresses on the same children (mom and dad each listed under their own email) are
+two accounts, each invited by the address the import chose, and the other parent can be added from the director's
+Families screen or with the "Add another athlete" code box. Children of one parent who are on different programs are
+separate accounts; use the linked-programs feature for one athlete in two programs.
+
 ## When the camera cannot count a drill ("Tell us what you did")
 
 Any athlete can log work the camera missed: a standing button above the drill list, and a prompt on the "That one

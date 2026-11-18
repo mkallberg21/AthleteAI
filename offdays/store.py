@@ -4309,6 +4309,7 @@ class Store:
         created: list[dict[str, Any]] = []
         updated: list[dict[str, Any]] = []
         invites: list[dict[str, Any]] = []
+        invite_jobs: list[tuple[int, str, str]] = []
         emailed = 0
         now = _iso(_now())
         sender = self._invite_sender(org_id, created_by)
@@ -4404,34 +4405,44 @@ class Store:
                     source="roster",
                 )
 
-            if issue_guardian_invites and athlete.guardian_email:
-                try:
-                    invite = guardians_mod.create_invite(
-                        self.conn, athlete_id, created_by, athlete.guardian_email
-                    )
-                    sent = invites_mod.deliver(self.conn, invite, **sender)
-                    emailed += 1 if sent else 0
-                    # The whole message, not just the code: when the program
-                    # has no outbound email, the director sends this from
-                    # their own account, and a code alone is not a message.
-                    subject, _html, text = invites_mod.compose(
-                        athlete_name=athlete.display_name, code=invite["code"], **sender,
-                    )
-                    invites.append({
-                        "invite_id": invite["invite_id"],
-                        "athlete_id": athlete_id,
-                        "athlete_name": athlete.display_name,
-                        "email": athlete.guardian_email,
-                        "code": invite["code"],
-                        "link": invites_mod.invite_link(invite["code"]),
-                        "subject": subject,
-                        "text": text,
-                        "emailed": sent,
-                    })
-                except guardians_mod.GuardianError:
-                    # A bad invite must not lose the athlete who was just
-                    # imported successfully.
-                    pass
+            # A child added after their parent signed up joins that parent's account: no second invite.
+            already = guardians_mod.attach_known_parents(self.conn, org_id, athlete_id)
+            if issue_guardian_invites and athlete.guardian_email and not already:
+                invite_jobs.append((athlete_id, athlete.display_name, athlete.guardian_email))
+
+        # One invite per parent address, issued once the whole file is in: a parent with three kids on the
+        # roster gets ONE email and ONE account that covers all three (the invite finds the siblings itself).
+        covered: set[int] = set()
+        for athlete_id, display_name, guardian_email in invite_jobs:
+            if athlete_id in covered:
+                continue
+            try:
+                invite = guardians_mod.create_invite(self.conn, athlete_id, created_by, guardian_email)
+            except guardians_mod.GuardianError:
+                # A bad invite must not lose the athlete who was just imported successfully.
+                continue
+            org_of = self.conn.execute("SELECT org_id FROM users WHERE id = ?", (athlete_id,)).fetchone()["org_id"]
+            family = [int(r["id"]) for r in guardians_mod.family_athletes(self.conn, int(org_of), guardian_email)]
+            covered.update(family)
+            sent = invites_mod.deliver(self.conn, invite, **sender)
+            emailed += 1 if sent else 0
+            # The whole message, not just the code: when the program has no outbound email, the director sends
+            # this from their own account, and a code alone is not a message.
+            subject, _html, text = invites_mod.compose(
+                athlete_name=display_name, code=invite["code"], also=invite.get("also_names") or (), **sender,
+            )
+            invites.append({
+                "invite_id": invite["invite_id"],
+                "athlete_id": athlete_id,
+                "athlete_name": display_name,
+                "also_names": invite.get("also_names") or [],
+                "email": guardian_email,
+                "code": invite["code"],
+                "link": invites_mod.invite_link(invite["code"]),
+                "subject": subject,
+                "text": text,
+                "emailed": sent,
+            })
 
         import json as _json
         with transaction(self.conn) as c:

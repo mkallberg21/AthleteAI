@@ -67,6 +67,30 @@ def trusted_emails(conn: sqlite3.Connection, guardian_id: int) -> set[str]:
     return {r[0] for r in conn.execute(f"SELECT email FROM ({_TRUSTED}) WHERE gid = ?", (guardian_id,)).fetchall()}
 
 
+def parents_with_address(conn: sqlite3.Connection, org_id: int, email: str) -> list[int]:
+    """Active parent accounts in this program that the program itself gave this address to."""
+    e = (email or "").strip().lower()
+    if not e:
+        return []
+    rows = conn.execute(
+        f"SELECT DISTINCT t.gid FROM ({_TRUSTED}) t JOIN users g ON g.id = t.gid "
+        "WHERE t.email = ? AND g.org_id = ? AND g.role = 'guardian' AND g.active = 1 ORDER BY t.gid",
+        (e, org_id)).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+def parents_with_address(conn: sqlite3.Connection, org_id: int, email: str) -> list[int]:
+    """Active parent accounts in this program that the program itself gave this address to."""
+    e = (email or "").strip().lower()
+    if not e:
+        return []
+    rows = conn.execute(
+        f"SELECT DISTINCT t.gid FROM ({_TRUSTED}) t JOIN users g ON g.id = t.gid "
+        "WHERE t.email = ? AND g.org_id = ? AND g.role = 'guardian' AND g.active = 1 ORDER BY t.gid",
+        (e, org_id)).fetchall()
+    return [int(r[0]) for r in rows]
+
+
 def _same_person_accounts(conn: sqlite3.Connection, guardian_id: int) -> list[int]:
     """Other active parent accounts that share a program-supplied address with this one."""
     mine = sorted(trusted_emails(conn, guardian_id))

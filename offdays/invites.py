@@ -39,8 +39,9 @@ def compose(
     org_name: str,
     coach_name: str,
     code: str,
+    also: list[str] | tuple[str, ...] = (),
 ) -> tuple[str, str, str]:
-    """Subject, HTML and plain text for one invite.
+    """Subject, HTML and plain text for one invite (`also`: the parent's other children it covers).
 
     Written for someone who has never heard of the app and is being asked to
     let it point a camera at their child. The promise -- the video never
@@ -50,6 +51,9 @@ def compose(
     first = athlete_name.split()[0] if athlete_name.strip() else "your athlete"
     link = invite_link(code)
     days = guardians.INVITE_TTL_DAYS
+    if also:
+        return _compose_family([first] + [n.split()[0] for n in also if n.strip()],
+                               org_name=org_name, coach_name=coach_name, code=code, link=link, days=days)
     subject = f"{org_name}: set up {first}'s training app"
 
     text = (
@@ -88,6 +92,48 @@ def compose(
         f'<p style="color:#555;font-size:90%">You can withdraw any permission at '
         f"any time, download everything held about {escape(first)}, or delete it, "
         f"from the same page.</p>"
+    )
+    return subject, html, text
+
+
+def _join(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _compose_family(firsts: list[str], *, org_name: str, coach_name: str, code: str, link: str,
+                    days: int) -> tuple[str, str, str]:
+    """The same invite for a parent with several children on the roster: one email, one account."""
+    names = _join(firsts)
+    subject = f"{org_name}: set up {names} on 0FFDAYS"
+    text = (
+        f"{coach_name} at {org_name} uses 0FFDAYS so {names} can record drills at home and get credit for the "
+        f"work.\n\n"
+        f"The app counts reps on each athlete's own phone. The video never leaves the phone: it is not uploaded or "
+        f"stored anywhere. Their coach sees the numbers, never the footage.\n\n"
+        f"One parent account covers all of them. Set it up once, decide for each athlete whether they can train, "
+        f"and the app gives you a separate sign-in link for each to text or email to that athlete's phone.\n\n"
+        f"Open this link:\n{link}\n\n"
+        f"Or go to the app and enter the invite code {code}.\n\n"
+        f"The code works once and expires in {days} days. If it has expired, ask {coach_name} for a new one.\n\n"
+        f"You can withdraw any permission at any time, download everything held about any of them, or delete it, "
+        f"from the same page."
+    )
+    html = (
+        f"<p>{escape(coach_name)} at <b>{escape(org_name)}</b> uses 0FFDAYS so {escape(names)} can record drills "
+        f"at home and get credit for the work.</p>"
+        f"<p>The app counts reps on each athlete's own phone. <b>The video never leaves the phone</b>: it is not "
+        f"uploaded or stored anywhere. Their coach sees the numbers, never the footage.</p>"
+        f"<p><b>One parent account covers all of them.</b> Set it up once, decide for each athlete whether they can "
+        f"train, and the app gives you a separate sign-in link for each to text or email to that athlete's "
+        f"phone.</p>"
+        f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;'
+        f'background:#111;color:#fff;text-decoration:none;border-radius:6px">'
+        f"Set up {escape(names)}</a></p>"
+        f'<p style="color:#555">Or go to the app and enter the invite code <code>{escape(code)}</code>.</p>'
+        f'<p style="color:#555">The code works once and expires in {days} days. '
+        f"If it has expired, ask {escape(coach_name)} for a new one.</p>"
+        f'<p style="color:#555;font-size:90%">You can withdraw any permission at any time, download everything '
+        f"held about any of them, or delete it, from the same page.</p>"
     )
     return subject, html, text
 
@@ -197,7 +243,7 @@ def deliver(
         return False
     subject, html, text = compose(
         athlete_name=invite["athlete_name"], org_name=org_name,
-        coach_name=coach_name, code=invite["code"],
+        coach_name=coach_name, code=invite["code"], also=invite.get("also_names") or (),
     )
     queued = mailer.enqueue(
         conn,

@@ -188,6 +188,21 @@ def _hash_code(code: str) -> str:
     return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
 
 
+def family_athletes(conn: sqlite3.Connection, org_id: int, email: str | None) -> list[sqlite3.Row]:
+    """Every active athlete in this program whose ROSTER lists this parent address.
+
+    The program supplied the address, so the program has said these children belong to this parent. An address
+    typed at sign-up is not a roster address and never counts here.
+    """
+    e = (email or "").strip().lower()
+    if not e:
+        return []
+    return conn.execute(
+        "SELECT DISTINCT u.id, u.display_name FROM guardian_contacts c JOIN users u ON u.id = c.athlete_id "
+        "WHERE c.org_id = ? AND lower(c.email) = ? AND c.source = 'roster' AND u.role = 'athlete' "
+        "AND u.active = 1 ORDER BY u.display_name COLLATE NOCASE", (org_id, e)).fetchall()
+
+
 def create_invite(
     conn: sqlite3.Connection,
     athlete_id: int,
@@ -201,13 +216,19 @@ def create_invite(
     credential rather than a convenience string.
     """
     athlete = conn.execute(
-        "SELECT id, display_name, role FROM users WHERE id = ? AND active = 1",
+        "SELECT id, org_id, display_name, role FROM users WHERE id = ? AND active = 1",
         (athlete_id,),
     ).fetchone()
     if athlete is None:
         raise GuardianError("unknown athlete")
     if athlete["role"] != "athlete":
         raise GuardianError("guardians can only be linked to athletes")
+
+    # One invite covers every child this parent has on the roster (same program-supplied address), so a family
+    # with three kids gets one email, makes one account, and sees all three. The message names exactly the
+    # children the account will show.
+    also = [r["display_name"] for r in family_athletes(conn, int(athlete["org_id"]), email)
+            if int(r["id"]) != int(athlete_id)]
 
     code = new_invite_code()
     expires = _now() + timedelta(days=INVITE_TTL_DAYS)
@@ -223,6 +244,7 @@ def create_invite(
         "code": code,
         "athlete_id": athlete_id,
         "athlete_name": athlete["display_name"],
+        "also_names": also,
         "email": email,
         "expires_at": _iso(expires),
     }
@@ -263,7 +285,8 @@ def redeem_invite(
     )
     if invalid:
         raise GuardianError(
-            "That invite code is not valid. Ask the coach to send a new one."
+            "That invite code is not valid. If you already set up your account, use \"Get back in\" on the "
+            "sign-in page; otherwise ask the coach to send a new one."
         )
 
     athlete = conn.execute(
@@ -271,6 +294,11 @@ def redeem_invite(
     ).fetchone()
     if athlete is None:
         raise GuardianError("that athlete is no longer in the program")
+
+    # Every other child of this parent on the roster, by the address the PROGRAM sent the invite to (not the
+    # one typed here): this one account is their parent account too.
+    siblings = [int(r["id"]) for r in family_athletes(conn, int(athlete["org_id"]), row["email"])
+                if int(r["id"]) != int(athlete["id"])]
 
     token = fresh_token(conn)
     with transaction(conn) as c:
@@ -298,6 +326,16 @@ def redeem_invite(
             "UPDATE guardian_invites SET redeemed_at = ?, redeemed_by = ? WHERE id = ?",
             (_iso(now), guardian_id, row["id"]),
         )
+        for sib in siblings:
+            c.execute(
+                "INSERT OR IGNORE INTO guardians(guardian_id, athlete_id, relationship, linked_at) "
+                "VALUES (?,?,?,?)", (guardian_id, sib, relationship, _iso(now)))
+            # a second email for the same family is now redundant: retire it rather than let it make a
+            # second account for the same parent
+            c.execute(
+                "UPDATE guardian_invites SET revoked_at = ? WHERE athlete_id = ? AND lower(COALESCE(email,'')) = ? "
+                "AND redeemed_at IS NULL AND revoked_at IS NULL",
+                (_iso(now), sib, (row["email"] or "").strip().lower()))
 
     # The account joins the program's parent list -- matched to the roster
     # row by email, or added if the roster never named this parent.
@@ -308,12 +346,53 @@ def redeem_invite(
         email=email or row["email"], phone=phone,
     )
 
+    names = {r["id"]: r["display_name"] for r in family_athletes(conn, int(athlete["org_id"]), row["email"])}
+    for sib in siblings:
+        contacts.link_account(
+            conn, guardian_id=guardian_id, athlete_id=sib, org_id=int(athlete["org_id"]),
+            name=display_name, email=row["email"], phone=phone,
+        )
+
     return {
         "guardian_id": guardian_id,
         "token": token,
         "athlete_id": athlete["id"],
         "athlete_name": athlete["display_name"],
+        "athletes": [{"athlete_id": int(athlete["id"]), "athlete_name": athlete["display_name"]}]
+                    + [{"athlete_id": s, "athlete_name": names.get(s, "")} for s in siblings],
     }
+
+
+def attach_known_parents(conn: sqlite3.Connection, org_id: int, athlete_id: int) -> int:
+    """A child added AFTER their parent signed up joins that parent's account.
+
+    The roster gave the same address for this child as for the parent's account, so no second invite and no
+    second account: the parent's portal simply shows one more child, with that child's own yes and sign-in
+    link still to do. The parent is told. Returns how many parent accounts it attached.
+    """
+    from . import contacts, linked, notifications
+    n = 0
+    athlete = conn.execute("SELECT display_name FROM users WHERE id = ?", (athlete_id,)).fetchone()
+    for c in conn.execute(
+            "SELECT email FROM guardian_contacts WHERE athlete_id = ? AND source = 'roster' AND email <> ''",
+            (athlete_id,)).fetchall():
+        for gid in linked.parents_with_address(conn, org_id, c["email"]):
+            if guards(conn, gid, athlete_id):
+                continue
+            conn.execute(
+                "INSERT OR IGNORE INTO guardians(guardian_id, athlete_id, relationship, linked_at) VALUES (?,?,?,?)",
+                (gid, athlete_id, "parent", _iso(_now())))
+            conn.commit()
+            contacts.upsert(conn, org_id=org_id, athlete_id=athlete_id, email=c["email"],
+                            source="roster", guardian_id=gid)
+            first = (athlete["display_name"] if athlete else "Your athlete").split()[0]
+            notifications.enqueue(
+                conn, gid, "kid_added", f"{first} was added to your account",
+                f"{first} is on the roster with your email, so you can now see {first} here. Say yes to training "
+                f"and send {first} their link from your portal.",
+                dedupe_key=f"kid_added:{athlete_id}", about_athlete_id=athlete_id, mirror=False)
+            n += 1
+    return n
 
 
 def erase_guardian(
@@ -408,7 +487,8 @@ def link_existing(
         or datetime.fromisoformat(row["expires_at"]) < _now()
     ):
         raise GuardianError(
-            "That invite code is not valid. Ask the coach to send a new one."
+            "That invite code is not valid. If you already set up your account, use \"Get back in\" on the "
+            "sign-in page; otherwise ask the coach to send a new one."
         )
 
     with transaction(conn) as c:

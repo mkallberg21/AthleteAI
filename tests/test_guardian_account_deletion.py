@@ -38,8 +38,10 @@ def _family(client, second_parent=False):
                       json={"content": CSV, "team_id": team["id"]}).json()
     inv = {i["athlete_name"]: i for i in res["guardian_invites"]}
     conn = api_module._store.conn
+    # One address for both boys on the roster: one invite, and the one account covers both.
+    assert len(res["guardian_invites"]) == 1
     first = G.redeem_invite(conn, inv["Mason Reed"]["code"], "Dana Reed", "dana@example.com", phone="615-555-0100")
-    G.link_existing(conn, inv["Owen Reed"]["code"], first["guardian_id"])
+    assert {a["athlete_name"] for a in first["athletes"]} == {"Mason Reed", "Owen Reed"}
     kids = {a["display_name"]: a["athlete_id"] for a in res["created"]}
     for kid in kids.values():
         G.set_consent(conn, kid, first["guardian_id"], G.Scope.PARTICIPATION, True)

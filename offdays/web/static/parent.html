@@ -982,16 +982,21 @@ function pwFinish() {
   PW.on = false;
   $('pwizard').classList.add('hidden');
   document.body.classList.remove('wizard-on');
-  try { localStorage.setItem('offdays.pwizard', 'done'); } catch { /* fine */ }
+  // Remember WHICH children were walked through, so a child added later (a second kid, a late roster entry)
+  // opens the walkthrough again for that child instead of being missed.
+  const seen = [...new Set(PW.steps.filter((x) => x.athlete).map((x) => x.athlete.athlete_id))].sort((a, b) => a - b);
+  try { localStorage.setItem('offdays.pwizard', `done:${seen.join(',')}`); } catch { /* fine */ }
   load().catch((e) => showError(e.message));
 }
 
 async function pwStartIfNew() {
-  let dismissed = false;
-  try { dismissed = localStorage.getItem('offdays.pwizard') === 'done'; } catch { /* fine */ }
-  if (dismissed) return false;
+  let saved = '';
+  try { saved = localStorage.getItem('offdays.pwizard') || ''; } catch { /* fine */ }
+  if (saved === 'done') return false;               // switched off outright
   const me = await api('/api/guardians/me');
   if (!me.athletes.length) return false;
+  const walked = saved.startsWith('done:') ? saved.slice(5).split(',').filter(Boolean).map(Number) : null;
+  if (walked && me.athletes.every((a) => walked.includes(a.athlete_id))) return false;
   const steps = pwStepsFor(me);
   const first = steps.findIndex((s) => !s.done() && s.kind !== 'done');
   if (first === -1) return false;           // everything already done: no wizard

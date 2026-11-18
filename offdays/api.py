@@ -3073,7 +3073,7 @@ def create_guardian_invite(
         store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
     )
     subject, _html, text = invites_mod.compose(
-        athlete_name=invite["athlete_name"], code=invite["code"],
+        athlete_name=invite["athlete_name"], code=invite["code"], also=invite.get("also_names") or (),
         **store._invite_sender(principal.org_id, principal.id),
     )
     return {
@@ -3150,12 +3150,16 @@ def _nudge_one(principal: Principal, store: Store, athlete_id: int) -> dict[str,
     ).fetchone()
     if contact is None:
         raise HTTPException(status_code=409, detail="no parent email on file for this athlete")
+    # One live invite per family: retire this athlete's and any brother's or sister's under the same address.
+    family = [int(r["id"]) for r in guardians_mod.family_athletes(store.conn, principal.org_id, contact["email"])]
     with transaction(store.conn) as c:
-        c.execute(
-            "UPDATE guardian_invites SET revoked_at = ? WHERE athlete_id = ? "
-            "AND redeemed_at IS NULL AND revoked_at IS NULL",
-            (guardians_mod._iso(guardians_mod._now()), athlete_id),
-        )
+        for aid in {athlete_id, *family}:
+            c.execute(
+                "UPDATE guardian_invites SET revoked_at = ? WHERE athlete_id = ? "
+                "AND redeemed_at IS NULL AND revoked_at IS NULL "
+                "AND (athlete_id = ? OR lower(COALESCE(email,'')) = lower(?))",
+                (guardians_mod._iso(guardians_mod._now()), aid, athlete_id, contact["email"]),
+            )
     invite = guardians_mod.create_invite(
         store.conn, athlete_id, principal.id, contact["email"]
     )
@@ -3163,11 +3167,13 @@ def _nudge_one(principal: Principal, store: Store, athlete_id: int) -> dict[str,
         store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
     )
     subject, _html, text = invites_mod.compose(
-        athlete_name=invite["athlete_name"], code=invite["code"],
+        athlete_name=invite["athlete_name"], code=invite["code"], also=invite.get("also_names") or (),
         **store._invite_sender(principal.org_id, principal.id),
     )
     return {
         "athlete_id": athlete_id,
+        "covers": [invite["athlete_name"], *(invite.get("also_names") or [])],
+        "family_ids": family,
         "invite_id": invite["invite_id"],
         "display_name": invite["athlete_name"],
         "email": contact["email"],
@@ -3221,6 +3227,7 @@ def nudge_many_families(
     """
     results: list[dict[str, Any]] = []
     seen: set[int] = set()
+    asked = set(body.athlete_ids)
     for athlete_id in body.athlete_ids:
         if athlete_id in seen:
             continue
@@ -3231,6 +3238,12 @@ def nudge_many_families(
             results.append({"athlete_id": athlete_id, "status": "skipped", "reason": str(err.detail)})
             continue
         results.append({**made, "status": "sent" if made["emailed"] else "ready"})
+        # one email covers this parent's other children: do not send the same family a second one, and say so
+        for fid in made.get("family_ids") or []:
+            if fid != athlete_id and fid in asked and fid not in seen:
+                seen.add(fid)
+                results.append({"athlete_id": fid, "status": "skipped",
+                                "reason": f"the same parent as {made['display_name']}: one invite covers both"})
     sent = sum(1 for r in results if r["status"] == "sent")
     ready = sum(1 for r in results if r["status"] == "ready")
     return {
