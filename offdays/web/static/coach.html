@@ -2485,7 +2485,7 @@ async function homePlayer() {
     + `<div class="home-box"><h3>${d.parents.length === 1 ? 'Parent' : 'Parents'}</h3>${parents}</div>`
     + `<div class="home-box"><h3>Recent sessions</h3>${d.recent_sessions.length ? d.recent_sessions.map((s) => `
         <div class="small" style="margin:0 0 4px">${esc(drillName(s.drill_key))} &middot; ${s.reps_total} reps
-          <span class="muted"> &middot; ${homeAgo(s.started_at)}</span>${s.status === 'review' ? ' <span class="pill warn">held for a look</span>' : ''}</div>`).join('')
+          <span class="muted"> &middot; ${homeAgo(s.started_at)}</span>${s.status === 'review' ? ' <span class="pill warn">held for a look</span>' : ''}${s.self_reported ? ' <span class="pill">logged by athlete</span>' : ''}</div>`).join('')
         : '<span class="small muted">No sessions yet.</span>'}</div>`;
   homeWireBack(() => (team ? homeShow('team', team.id) : homeShow('teams')));
   const re = $('home-resend');

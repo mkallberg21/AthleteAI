@@ -33,6 +33,9 @@ WINDOW_DAYS: dict[str, int | None] = {
 
 QUALITY_MIN_SESSIONS = 3
 
+# XP rows that came from work the athlete logged by hand. Nobody measured it, so no rank reads it.
+_NOT_LOGGED = "NOT EXISTS (SELECT 1 FROM sessions ls WHERE ls.id = x.session_id AND ls.self_reported = 1)"
+
 
 def window_start(window: Window, today: date | None = None) -> str:
     today = today or datetime.now(timezone.utc).date()
@@ -134,9 +137,11 @@ def _build_leaderboard_query(
 
     # --- value subquery ---
     if board in ("xp", "streak"):
+        # Work an athlete logged by hand is never ranked (the streak board's own value is rebuilt
+        # from the ledger days below, which still count turning up).
         value_sql = (
             "COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
-            "  WHERE x.athlete_id = u.id AND x.day >= ?), 0) AS value"
+            "  WHERE x.athlete_id = u.id AND x.day >= ? AND " + _NOT_LOGGED + "), 0) AS value"
         )
         value_params: list[Any] = [start]
 
@@ -176,9 +181,9 @@ def _build_leaderboard_query(
             prev_start = (date.fromisoformat(start) - timedelta(days=span_days)).isoformat()
         value_sql = (
             "(COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
-            "   WHERE x.athlete_id = u.id AND x.day >= ?), 0) "
+            "   WHERE x.athlete_id = u.id AND x.day >= ? AND " + _NOT_LOGGED + "), 0) "
             " - COALESCE((SELECT SUM(x.amount) FROM xp_ledger x "
-            "   WHERE x.athlete_id = u.id AND x.day >= ? AND x.day < ?), 0)) AS value"
+            "   WHERE x.athlete_id = u.id AND x.day >= ? AND x.day < ? AND " + _NOT_LOGGED + "), 0)) AS value"
         )
         value_params = [start, prev_start, start]
 
@@ -425,7 +430,8 @@ def team_ranking(
         "SELECT u.id AS athlete_id, u.display_name, "
         "  (SELECT t.name FROM team_members tm JOIN teams t ON t.id = tm.team_id "
         "     WHERE tm.user_id = u.id " + name_scope + "ORDER BY tm.team_id LIMIT 1) AS team_name, "
-        "  COALESCE((SELECT SUM(x.amount) FROM xp_ledger x WHERE x.athlete_id = u.id AND x.day >= ?), 0) AS xp, "
+        "  COALESCE((SELECT SUM(x.amount) FROM xp_ledger x WHERE x.athlete_id = u.id AND x.day >= ? AND "
+        + _NOT_LOGGED + "), 0) AS xp, "
         "  (SELECT MAX(x.day) FROM xp_ledger x WHERE x.athlete_id = u.id AND x.amount > 0) AS last_active "
         "FROM users u "
         "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1 " + scope +
@@ -461,11 +467,12 @@ def team_standings(conn: sqlite3.Connection, org_id: int, window: Window = "week
         SELECT t.id AS team_id, t.name AS team_name,
                COUNT(DISTINCT tm.user_id) AS roster,
                COUNT(DISTINCT CASE WHEN x.amount > 0 THEN x.athlete_id END) AS active,
-               COALESCE(SUM(x.amount), 0) AS total_xp
+               COALESCE(SUM(CASE WHEN COALESCE(ls.self_reported, 0) = 0 THEN x.amount ELSE 0 END), 0) AS total_xp
         FROM teams t
         LEFT JOIN team_members tm ON tm.team_id = t.id
         LEFT JOIN users u ON u.id = tm.user_id AND u.role = 'athlete' AND u.active = 1
         LEFT JOIN xp_ledger x ON x.athlete_id = u.id AND x.day >= ?
+        LEFT JOIN sessions ls ON ls.id = x.session_id
         WHERE t.org_id = ?
         GROUP BY t.id
         """,
@@ -509,9 +516,9 @@ def coach_roster(
                u.birth_year, u.guardian_consent_at, tm.jersey, tm.position,
                COALESCE(t.name, 'Unassigned') AS team_name,
                COALESCE((SELECT SUM(x.amount) FROM xp_ledger x
-                         WHERE x.athlete_id = u.id AND x.day >= ?), 0) AS window_xp,
+                         WHERE x.athlete_id = u.id AND x.day >= ? AND {_NOT_LOGGED}), 0) AS window_xp,
                COALESCE((SELECT SUM(x.amount) FROM xp_ledger x
-                         WHERE x.athlete_id = u.id), 0) AS total_xp,
+                         WHERE x.athlete_id = u.id AND {_NOT_LOGGED}), 0) AS total_xp,
                (SELECT COUNT(*) FROM sessions s
                 WHERE s.athlete_id = u.id AND s.status = 'counted'
                 AND date(s.submitted_at) >= ?) AS window_sessions,

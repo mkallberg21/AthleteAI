@@ -14,7 +14,12 @@ from offdays import family as F
 from offdays.db import connect
 from offdays.store import Store, StoreError
 
-TODAY = date.today()
+
+def _utc_today():
+    """Today as the app counts it (UTC), not the machine's local date."""
+    return datetime.now(timezone.utc).date()
+
+TODAY = _utc_today()
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ check-in that costs something, an output that reads like a diagnosis, and a
 coach who can read a child's private note.
 """
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 import pytest
 
@@ -15,7 +15,12 @@ from offdays.db import connect
 from offdays.drills.base import Tissue
 from offdays.store import Store, StoreError
 
-TODAY = date.today()
+
+def _utc_today():
+    """Today as the app counts it (UTC), not the machine's local date."""
+    return datetime.now(timezone.utc).date()
+
+TODAY = _utc_today()
 
 
 @pytest.fixture

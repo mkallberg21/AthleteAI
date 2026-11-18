@@ -719,7 +719,7 @@ function wireDetails() {
             <td>${esc(sn.drill)}</td>
             <td class="num">${sn.reps || (sn.hold_s ? `${sn.hold_s}s` : '–')}</td>
             <td class="small ${sn.status === 'counted' ? 'muted' : 'warn-text'}">${
-              esc(sn.status)}</td>
+              sn.self_reported ? 'logged by athlete' : esc(sn.status)}</td>
           </tr>`).join('')}
           </tbody></table>`;
       } catch (e) { target.textContent = e.message; }

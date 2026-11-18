@@ -152,6 +152,8 @@ def _parse(value: str | None) -> datetime | None:
 # How far back a device-reported completion time may be honoured. Past this
 # the claim is unverifiable, so the session is credited to the day it arrived.
 OFFLINE_BACKDATE_LIMIT_DAYS = 14
+# Things an athlete may log by hand in one day; only the first earns XP.
+MAX_LOGGED_PER_DAY = 4
 
 
 #: Carried in the response and shown on the screen, the way `second_looks`
@@ -2202,7 +2204,7 @@ class Store:
         rows = self.conn.execute(
             "SELECT id, drill_key, status, reps_total, reps_left, reps_right, "
             "  COALESCE(reps_seen, reps_total) AS reps_seen, "
-            "  hold_ms, duration_ms, quality_score, xp_awarded, integrity_notes, "
+            "  hold_ms, duration_ms, quality_score, xp_awarded, integrity_notes, self_reported, "
             "  date(COALESCE(completed_at, submitted_at)) AS day "
             "FROM sessions WHERE athlete_id = ? AND status != 'open' "
             "AND date(COALESCE(completed_at, submitted_at)) >= ? "
@@ -2221,6 +2223,7 @@ class Store:
                 "category": drill.category.value if drill else "",
                 "day": row["day"],
                 "status": row["status"],
+                "self_reported": bool(row["self_reported"]),
                 "reps": int(row["reps_total"] or 0),
                 # What the camera counted, when the day's rep cap held some
                 # back. A coach or parent should see the work was done even
@@ -2502,23 +2505,21 @@ class Store:
         note: str = "",
         day: date | None = None,
     ) -> dict[str, Any]:
-        """Record work the camera could not count.
+        """Record work the camera could not count, in the athlete's own words.
 
-        Gated on the accommodation, not offered to everybody: a general
-        self-report button would be a way around the integrity layer for any
-        athlete who wanted one. Here it exists because the alternative is an
-        athlete whose training this app structurally cannot see, and a streak
-        that punishes them for it.
+        Open to every athlete: the camera misses real work (a bad angle, a
+        drill it cannot see, a phone that died) and an athlete should be able
+        to say so. What keeps it honest is what it is allowed to do, not who is
+        allowed to use it:
 
-        Marked `self_reported` for ever. It counts for turning up -- streaks,
-        participation, the squad goal -- and is kept out of every statistic
-        that needs a measured number, because nobody measured it.
+        * Marked `self_reported` for ever, and shown to the coach and parent as
+          "logged by athlete".
+        * It counts for turning up -- streaks, participation, the squad goal --
+          and is kept out of every rank, personal best and measured statistic,
+          because nobody measured it.
+        * Only the first one of a day earns the small flat XP, and at most
+          MAX_LOGGED_PER_DAY are accepted, so typing more earns nothing more.
         """
-        profile = adaptive.get(self.conn, athlete_id)
-        if not profile.may_self_report:
-            raise StoreError(
-                "self-reported sessions are not switched on for this athlete"
-            )
         if drill_key not in DRILLS_BY_KEY:
             raise StoreError(f"unknown drill: {drill_key!r}")
         if minutes <= 0 or minutes > 240:
@@ -2526,6 +2527,12 @@ class Store:
 
         day = day or _now().date()
         stamp = f"{day.isoformat()}T12:00:00+00:00"
+        already = int(self.conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE athlete_id = ? AND self_reported = 1 "
+            "AND date(completed_at) = ?", (athlete_id, day.isoformat())).fetchone()[0])
+        if already >= MAX_LOGGED_PER_DAY:
+            raise StoreError(
+                f"that is {MAX_LOGGED_PER_DAY} things logged today already; the rest can wait until tomorrow")
         with transaction(self.conn) as conn:
             cur = conn.execute(
                 "INSERT INTO sessions(athlete_id, drill_key, nonce, started_at, "
@@ -2543,7 +2550,8 @@ class Store:
 
         # XP on the same footing as any other session of that length, because
         # the point of the streak is turning up and they turned up.
-        awarded = self._award_self_reported(athlete_id, session_id, drill_key, day)
+        awarded = self._award_self_reported(
+            athlete_id, session_id, drill_key, day, first_of_day=already == 0)
         self._count_in_linked(session_id)
         return {
             "session_id": session_id,
@@ -2554,7 +2562,8 @@ class Store:
         }
 
     def _award_self_reported(
-        self, athlete_id: int, session_id: int, drill_key: str, day: date
+        self, athlete_id: int, session_id: int, drill_key: str, day: date,
+        first_of_day: bool = True,
     ) -> int:
         """A flat, modest award. Deliberately not scaled by the reps claimed.
 
@@ -2562,6 +2571,8 @@ class Store:
         one the app counted, and would hand exactly the wrong incentive to the
         one path here that is not verified.
         """
+        if not first_of_day:
+            return 0                      # the day's turning up is already counted
         award = CONFIG.scoring.streak_min_xp
         with transaction(self.conn) as conn:
             conn.execute(

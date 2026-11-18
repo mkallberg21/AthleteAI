@@ -47,6 +47,9 @@
       <h2>Pick a drill</h2>
       <p class="small muted" style="margin:-4px 0 8px">Tap one. The camera opens and the Start button is at the bottom of the screen.</p>
       <p class="small muted hidden" id="counts-for" style="margin:-2px 0 8px"></p>
+      <button class="secondary" id="log-open" style="margin:0 0 12px">
+        Did something the camera can&rsquo;t see? Tell us what you did
+      </button>
       <div class="drill-list" id="drill-list"></div>
     </div>
 
@@ -418,6 +421,34 @@
   </section>
 
   <!-- ---------- Result ---------- -->
+  <section id="view-log" class="hidden">
+    <div class="card">
+      <h1>Tell us what you did</h1>
+      <div id="log-form">
+        <p class="small muted" style="margin:8px 0 14px">
+          Work the camera missed still counts for showing up. It keeps your streak going.
+          It is marked &ldquo;logged by you&rdquo;, so it does not go on the leaderboard,
+          and your coach and parent can see it.
+        </p>
+        <label class="small" for="log-drill">What did you do?</label>
+        <select id="log-drill" style="width:100%;margin-bottom:12px"></select>
+        <label class="small" for="log-minutes">How many minutes?</label>
+        <input id="log-minutes" type="number" inputmode="numeric" min="1" max="240" value="20"
+               style="width:100%;margin-bottom:12px">
+        <label class="small" for="log-note">Anything to add? (optional)</label>
+        <input id="log-note" type="text" maxlength="200" style="width:100%;margin-bottom:12px"
+               placeholder="for example: phone died halfway">
+        <p class="small warn-text hidden" id="log-error"></p>
+        <button id="log-save">Save it</button>
+        <button class="secondary" id="log-cancel" style="margin-top:10px">Cancel</button>
+      </div>
+      <div id="log-done" class="hidden">
+        <p id="log-done-text" style="font-size:1.05rem"></p>
+        <button id="log-back" style="margin-top:10px">Done</button>
+      </div>
+    </div>
+  </section>
+
   <section id="view-result" class="hidden">
     <div class="card">
       <h1 id="result-title">Session complete</h1>
@@ -432,6 +463,13 @@
       <div id="r-notes" class="small muted" style="margin-top:12px"></div>
       <div id="r-badges" class="badge-grid" style="margin-top:14px"></div>
       <div id="r-transfer" class="transfer-note hidden"></div>
+      <div id="r-log" class="hidden" style="margin-top:14px">
+        <p class="small" style="margin:0 0 8px">
+          We couldn&rsquo;t see that one. If you did the work, tell us what you did and it still
+          counts for showing up.
+        </p>
+        <button id="r-log-open">Tell us what I did</button>
+      </div>
       <button class="secondary hidden" id="r-review" style="margin-top:14px">
         Watch it back
       </button>
@@ -478,7 +516,7 @@ if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
 const views = {
   home: $('view-home'), capture: $('view-capture'),
-  result: $('view-result'), review: $('view-review'), film: $('view-film'),
+  result: $('view-result'), review: $('view-review'), film: $('view-film'), log: $('view-log'),
 };
 function show(name) {
   for (const [key, el] of Object.entries(views)) el.classList.toggle('hidden', key !== name);
@@ -2819,6 +2857,7 @@ function showResult(result) {
     queued: 'Saved. It will send itself.',
   };
   $('result-title').textContent = titles[result.status] || 'Session complete';
+  $('r-log').classList.toggle('hidden', result.status !== 'rejected');
 
   // The moment a kid is most likely to read it: they just finished the work,
   // so this is where "that was not only lacrosse" actually lands.
@@ -3106,6 +3145,49 @@ $('done').addEventListener('click', async () => {
   show('home');
 });
 $('signout').addEventListener('click', logout);
+
+// ---------------------------------------------------------------- tell us what you did
+function openLog(preferKey) {
+  const list = drills.length ? drills : [];
+  $('log-drill').innerHTML = list.map((d) => `<option value="${esc(d.key)}">${esc(d.name)}</option>`).join('');
+  if (preferKey && list.some((d) => d.key === preferKey)) $('log-drill').value = preferKey;
+  $('log-minutes').value = 20;
+  $('log-note').value = '';
+  $('log-error').classList.add('hidden');
+  $('log-form').classList.remove('hidden');
+  $('log-done').classList.add('hidden');
+  show('log');
+}
+$('log-open').addEventListener('click', () => openLog(null));
+$('r-log-open').addEventListener('click', () => openLog(activeDrill && activeDrill.key));
+$('log-cancel').addEventListener('click', () => show('home'));
+$('log-back').addEventListener('click', () => $('done').click());
+$('log-save').addEventListener('click', async () => {
+  const minutes = parseInt($('log-minutes').value, 10);
+  const err = $('log-error');
+  if (!(minutes >= 1 && minutes <= 240)) {
+    err.textContent = 'Put in how many minutes, from 1 to 240.';
+    err.classList.remove('hidden');
+    return;
+  }
+  $('log-save').disabled = true;
+  try {
+    const out = await api('/api/sessions/self-reported', {
+      method: 'POST',
+      body: { drill_key: $('log-drill').value, minutes, note: $('log-note').value.trim() },
+    });
+    $('log-form').classList.add('hidden');
+    $('log-done-text').textContent = out.xp_awarded
+      ? `Logged. That counts for showing up today (+${out.xp_awarded} XP).`
+      : 'Logged. You already showed up today, so this one adds no more XP.';
+    $('log-done').classList.remove('hidden');
+  } catch (e) {
+    err.textContent = e.message || 'That did not save. Try again.';
+    err.classList.remove('hidden');
+  } finally {
+    $('log-save').disabled = false;
+  }
+});
 
 $('bell').addEventListener('click', async () => {
   const card = $('notif-card');

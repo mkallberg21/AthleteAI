@@ -350,6 +350,25 @@ the other has no shared address, so no offer appears; fix the roster email and i
 program does not delete the athlete's data in the other; the parent deletes each. The privacy policy should say
 that linked programs each hold their own copy of the athlete's counted sessions (for the lawyer).
 
+## When the camera cannot count a drill ("Tell us what you did")
+
+Any athlete can log work the camera missed: a standing button above the drill list, and a prompt on the "That one
+didn't count" screen with that drill preselected. They pick what they did, how many minutes (1 to 240) and an optional
+note. No coach switch is needed (`POST /api/sessions/self-reported`, `store.log_self_reported`).
+
+What keeps it honest is what it may do:
+
+- Marked `self_reported` for ever, and shown as "logged by athlete" to the parent (drill list) and the director
+  (player page).
+- Counts for turning up: the streak, participation and the squad goal. Never for a rank: the staff ranking, XP boards,
+  team totals, the roster's window XP and level read only measured XP (`leaderboard._NOT_LOGGED`), and the reps board
+  already excluded it.
+- Only the first one of a day earns XP, a flat amount that ignores the minutes and reps typed. At most
+  `MAX_LOGGED_PER_DAY` (4) are accepted a day, so typing more earns nothing more.
+- In a linked program it counts there too, still marked as logged.
+
+The old "self_report" accommodation no longer gates this; it is harmless and can be left alone.
+
 ## A parent on a new phone (getting back in)
 
 A parent signs up once with an invite code and is then signed in by a code their phone keeps. They have no

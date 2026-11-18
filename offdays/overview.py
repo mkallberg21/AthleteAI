@@ -219,7 +219,7 @@ def player_detail(conn: sqlite3.Connection, org_id: int, athlete_id: int, window
     contacts = [dict(c) for c in conn.execute(
         "SELECT name, email, phone, relationship FROM guardian_contacts WHERE athlete_id = ? ORDER BY id", (athlete_id,))]
     recent = [dict(s) for s in conn.execute(
-        "SELECT drill_key, reps_total, started_at, status FROM sessions WHERE athlete_id = ? "
+        "SELECT drill_key, reps_total, started_at, status, self_reported FROM sessions WHERE athlete_id = ? "
         "AND status IN ('counted','review') ORDER BY id DESC LIMIT 10", (athlete_id,))]
     return {
         "window": window,

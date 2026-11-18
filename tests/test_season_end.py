@@ -8,7 +8,7 @@ a director has to be able to get in to open the next season.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,9 +18,14 @@ from offdays import guardians as G
 from offdays.db import connect
 from offdays.store import Store, StoreError
 
-YESTERDAY = (date.today() - timedelta(days=1)).isoformat()
-TOMORROW = (date.today() + timedelta(days=1)).isoformat()
-TODAY = date.today().isoformat()
+
+def _utc_today():
+    """Today as the app counts it (UTC), not the machine's local date."""
+    return datetime.now(timezone.utc).date()
+
+YESTERDAY = (_utc_today() - timedelta(days=1)).isoformat()
+TOMORROW = (_utc_today() + timedelta(days=1)).isoformat()
+TODAY = _utc_today().isoformat()
 
 
 @pytest.fixture

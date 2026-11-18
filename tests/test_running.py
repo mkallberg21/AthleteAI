@@ -17,7 +17,7 @@ because of what it is wired to -- see `TestLyingAboutItNeverPays`.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 import pytest
 
@@ -29,6 +29,11 @@ from offdays.db import connect
 from offdays.store import Store, StoreError
 
 
+def _utc_today():
+    """Today as the app counts it (UTC), not the machine's local date."""
+    return datetime.now(timezone.utc).date()
+
+
 @pytest.fixture()
 def athlete(tmp_path):
     store = Store(connect(tmp_path / "t.db"))
@@ -37,7 +42,7 @@ def athlete(tmp_path):
 
 
 def _log_week(store, aid, *, minutes, days, offset=0):
-    today = date.today()
+    today = _utc_today()
     for i in range(days):
         store.log_run(aid, minutes=minutes, day=today - timedelta(days=offset + i))
 
@@ -87,7 +92,7 @@ class TestTheModelCanNowSeeRunning:
     def test_a_tiny_earlier_week_is_not_a_baseline(self, athlete):
         """Ten minutes to twenty is a 100% jump and means nothing at all."""
         store, aid = athlete
-        store.log_run(aid, minutes=10, day=date.today() - timedelta(days=9))
+        store.log_run(aid, minutes=10, day=_utc_today() - timedelta(days=9))
         _log_week(store, aid, minutes=40, days=5)
         assert store.load_state(aid).run_change is None
 
@@ -159,7 +164,7 @@ class TestLyingAboutItNeverPays:
 
     def test_one_row_per_day_replaced_rather_than_added(self, athlete):
         store, aid = athlete
-        day = date.today() - timedelta(days=1)
+        day = _utc_today() - timedelta(days=1)
         store.log_run(aid, minutes=30, day=day)
         store.log_run(aid, minutes=45, day=day)
         entries = [e for e in store.run_log(aid) if e["day"] == day.isoformat()]
@@ -172,7 +177,7 @@ class TestLyingAboutItNeverPays:
         with pytest.raises(StoreError):
             store.log_run(aid, minutes=900)
         with pytest.raises(StoreError):
-            store.log_run(aid, minutes=30, day=date.today() + timedelta(days=1))
+            store.log_run(aid, minutes=30, day=_utc_today() + timedelta(days=1))
 
 
 class TestTheTwoRunningDrills:

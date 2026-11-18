@@ -188,12 +188,11 @@ class TestTheSideComparisonSwitchesOff:
 
 
 class TestLoggingWorkTheCameraCannotSee:
-    def test_it_is_refused_without_the_accommodation(self, store, athlete):
-        """A general self-report button would be a way around the integrity
-        layer for anybody who wanted one."""
-        with pytest.raises(StoreError, match="not switched on"):
-            store.log_self_reported(
-                athlete["person"]["id"], "gen_squat", minutes=20)
+    def test_it_is_open_to_every_athlete(self, store, athlete):
+        """The camera misses real work, so any athlete may say so. What keeps it honest is
+        what it may do (see tests/test_logged_work.py), not who may use it."""
+        out = store.log_self_reported(athlete["person"]["id"], "gen_squat", minutes=20)
+        assert out["self_reported"] is True
 
     def test_it_works_with_it(self, store, athlete):
         enable(store, athlete, "self_report")
@@ -379,14 +378,14 @@ class TestOverTheWire:
             f"/api/adaptive?athlete_id={wired['kid']['id'] + 1}",
             headers=wired["athlete"]).status_code == 403
 
-    def test_self_reporting_is_refused_without_the_accommodation(
+    def test_self_reporting_is_open_without_the_accommodation(
         self, client, wired
     ):
         res = client.post(
             "/api/sessions/self-reported",
             json={"drill_key": "gen_squat", "minutes": 20},
             headers=wired["athlete"])
-        assert res.status_code == 400
+        assert res.status_code == 201
 
     def test_and_allowed_with_it(self, client, wired):
         client.put(

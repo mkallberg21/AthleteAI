@@ -5,7 +5,7 @@ never clears anyone, an athlete cannot clear themselves, and a head or neck
 return cannot start on a coach's say-so.
 """
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 import pytest
 
@@ -15,7 +15,12 @@ from offdays.db import connect
 from offdays.drills.base import Tissue
 from offdays.store import Store, StoreError
 
-TODAY = date.today()
+
+def _utc_today():
+    """Today as the app counts it (UTC), not the machine's local date."""
+    return datetime.now(timezone.utc).date()
+
+TODAY = _utc_today()
 
 
 @pytest.fixture

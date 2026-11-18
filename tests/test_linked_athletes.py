@@ -417,10 +417,10 @@ class TestEachProgramKeepsItsOwnRules:
         assert sessions_of(b["kid"]) == []
 
     def test_the_last_day_of_a_season_still_counts(self, client):
-        from datetime import date
+        from datetime import datetime, timezone
         a, b = two_clubs(client)
         link_them(client, a, b)
-        db().execute("UPDATE organizations SET season_ends_on = ? WHERE id = ?", (date.today().isoformat(), b["club"]["org_id"]))
+        db().execute("UPDATE organizations SET season_ends_on = ? WHERE id = ?", (datetime.now(timezone.utc).date().isoformat(), b["club"]["org_id"]))
         db().commit()
         train(client, a)
         assert len(sessions_of(b["kid"])) == 1
@@ -574,7 +574,7 @@ class TestTheAthletePage:
 
     def test_the_saved_pages_on_phones_are_replaced(self):
         sw = (_STATIC / "sw.js").read_text(encoding="utf-8")
-        assert "offdays-shell-v13" in sw
+        assert "offdays-shell-v14" in sw
 
 
 class TestSelfReportedWorkCountsToo:
