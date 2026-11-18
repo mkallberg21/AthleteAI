@@ -510,8 +510,9 @@
       next move is a parent who has not opened their invite, <b>Resend invite
       to parent</b> makes them a fresh one at the address the roster gave.
       To do many at once, tick the families (or <b>Select everyone</b>) and
-      press the button above the list. The program sends nothing unless email
-      is set up: you get each message to send yourself.
+      press the button above the list. When email is on, each parent gets it
+      from 0FFDAYS on your behalf, and their replies come to you. While email
+      is on hold, nothing is sent and you get each message to send yourself.
     </p>
     <div id="families-counts" class="small" style="margin:8px 0 10px"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
@@ -523,6 +524,18 @@
         <option value="program">Waiting on the program</option>
         <option value="all">Everyone</option>
       </select>
+    </div>
+    <div id="msg-box" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin:0 0 12px">
+      <b>Message to parents</b>
+      <p class="small muted" id="msg-from" style="margin:4px 0 8px"></p>
+      <label class="small" for="msg-intro">Your note (optional). It goes at the top of every parent&rsquo;s email, above their personal link.</label>
+      <textarea id="msg-intro" maxlength="1500" rows="4" style="width:100%;margin-top:4px"
+        placeholder="Hi everyone, this is Matt. We are starting a pilot with 0FFDAYS this season. You will get a link to set up your athlete..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="secondary inline" id="msg-preview">Preview</button>
+        <button type="button" class="secondary inline" id="msg-test">Send me a test</button>
+      </div>
+      <div id="msg-out" class="small hidden" role="status" style="margin-top:10px"></div>
     </div>
     <div id="fam-bulk-result" class="fam-result hidden" role="status"></div>
     <div id="fam-bar" class="fam-bar hidden">
@@ -3833,6 +3846,7 @@ function resentHtml(r) {
 function renderFamilies() {
   const d = familiesData;
   if (!d) return;
+  if (!msgHeaderLoaded) { msgHeaderLoaded = true; msgHeader(); }
   const mode = $('families-filter').value;
   const rows = d.athletes.filter((a) => {
     if (mode === 'all') return true;
@@ -3871,6 +3885,46 @@ function renderFamilies() {
   }).join('') : `<p class="muted small">${mode === 'stuck' ? 'Everyone is training.' : 'Nobody here.'}</p>`;
   famBar(rows);
 }
+
+// ---- The message: your own note, who it comes from, what a parent will see, a test to yourself.
+const MSG_KEY = 'offdays.msg.intro';
+try { $('msg-intro').value = localStorage.getItem(MSG_KEY) || ''; } catch { /* fine */ }
+$('msg-intro').addEventListener('input', () => { try { localStorage.setItem(MSG_KEY, $('msg-intro').value); } catch { /* fine */ } });
+
+let msgHeaderLoaded = false;
+async function msgHeader() {
+  try {
+    const m = await api('/api/coach/families/invite-preview', { method: 'POST', body: { intro: '' } });
+    const hold = m.sending ? '' : ' Email is on hold, so nothing is sent yet: you get each message to send yourself.';
+    const reply = m.reply_to ? `Replies come to ${esc(m.reply_to)}.` : 'There is no email on your account, so replies would not be read. Add yours under Settings, in the email sign-in box, and replies will reach you.';
+    $('msg-from').innerHTML = `Sent by 0FFDAYS on your behalf, shown as &ldquo;${esc(m.from_name)}&rdquo;. ${reply}${esc(hold)}`;
+  } catch { $('msg-from').textContent = ''; }
+}
+
+$('msg-preview').addEventListener('click', async () => {
+  const out = $('msg-out');
+  try {
+    const first = famShown && famShown[0] ? famShown[0].athlete_id : null;      // a real child from the list, so the wording is real
+    const m = await api('/api/coach/families/invite-preview', { method: 'POST', body: { intro: $('msg-intro').value, athlete_id: first } });
+    out.innerHTML = `<div class="muted">From: ${esc(m.from_name)}${m.reply_to ? ` &middot; Reply to: ${esc(m.reply_to)}` : ''}</div>`
+      + `<div style="margin:4px 0"><b>Subject:</b> ${esc(m.subject)}</div>`
+      + `<div style="white-space:pre-wrap;border:1px solid var(--border);border-radius:8px;padding:10px;max-height:320px;overflow:auto">${esc(m.text)}</div>`
+      + '<div class="muted" style="margin-top:4px">Each parent gets their own personal link where the example one is.</div>';
+  } catch (e) { out.textContent = e.message || 'Could not make the preview.'; }
+  out.classList.remove('hidden');
+});
+
+$('msg-test').addEventListener('click', async () => {
+  const out = $('msg-out');
+  const btn = $('msg-test');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/coach/families/invite-test', { method: 'POST', body: { intro: $('msg-intro').value } });
+    out.textContent = r.status === 'sent' ? `Sent a test to ${r.sent_to}. Only you got it.` : `The test is queued for ${r.sent_to}.`;
+  } catch (e) { out.textContent = e.message || 'The test could not be sent.'; }
+  out.classList.remove('hidden');
+  btn.disabled = false;
+});
 
 // ---- Send or resend to many families at once. The server does exactly what the single button does, per family.
 const famPicked = new Set();
@@ -3926,9 +3980,13 @@ $('fam-bulk-send').addEventListener('click', async () => {
   const done = [];
   const skipped = [];
   let failure = '';
+  let sentAs = '';
+  let repliesTo = '';
   try {
     for (let i = 0; i < ids.length; i += 200) {
-      const res = await api('/api/coach/families/nudge-many', { method: 'POST', body: { athlete_ids: ids.slice(i, i + 200) } });
+      const res = await api('/api/coach/families/nudge-many', { method: 'POST', body: { athlete_ids: ids.slice(i, i + 200), intro: $('msg-intro').value } });
+      sentAs = res.from_name || sentAs;
+      repliesTo = res.reply_to || repliesTo;
       for (const r of res.results) {
         if (r.status === 'skipped') skipped.push(r); else { done.push(r); resent.set(r.athlete_id, r); }
       }
@@ -3940,7 +3998,10 @@ $('fam-bulk-send').addEventListener('click', async () => {
   const emailed = done.filter((r) => r.status === 'sent').length;
   const ready = done.length - emailed;
   const line = [];
-  if (emailed) line.push(`<b>Emailed ${emailed} parent${emailed === 1 ? '' : 's'}.</b>`);
+  if (emailed) {
+    line.push(`<b>Sent to ${emailed} parent${emailed === 1 ? '' : 's'} from 0FFDAYS.</b> It says it is from ${esc(sentAs)}`
+      + (repliesTo ? `, and a reply goes to ${esc(repliesTo)}.` : '. There is no email on your account, so replies are not read: tell parents to contact you directly.'));
+  }
   if (ready) line.push(`<b>${ready} invite${ready === 1 ? ' is' : 's are'} ready.</b> Nothing was emailed, because the program is not sending email. `
     + `Each has its own link, so send each from your own email (the <b>Send email</b> link on its row), or copy them all and paste them where you write email. `
     + `<button type="button" class="tiny" id="fam-copy-all">Copy all ${ready} messages</button>`);
@@ -3982,7 +4043,7 @@ $('families').addEventListener('click', async (e) => {
   btn.textContent = 'Sending…';
   try {
     const res = await api('/api/coach/families/nudge', {
-      method: 'POST', body: { athlete_id: Number(btn.dataset.nudge) },
+      method: 'POST', body: { athlete_id: Number(btn.dataset.nudge), intro: $('msg-intro').value },
     });
     // The program is not sending email, and this sends nothing: it hands the
     // director the invite to send himself. Kept, because the redraw below

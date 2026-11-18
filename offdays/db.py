@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -1100,6 +1100,10 @@ CREATE TABLE IF NOT EXISTS email_outbox (
     html_body       TEXT NOT NULL,
     text_body       TEXT NOT NULL,
     kind            TEXT NOT NULL,
+    -- A message sent by 0FFDAYS on behalf of a coach or director: the name shown as sender ("Matt (Nashville
+    -- Dogs) via 0FFDAYS"; the address is always the program's own mail domain) and where a reply goes.
+    from_name       TEXT NOT NULL DEFAULT '',
+    reply_to        TEXT NOT NULL DEFAULT '',
     -- Makes queueing idempotent. A cron that fires twice on a Monday must not
     -- send the same digest twice.
     dedupe_key      TEXT NOT NULL UNIQUE,
@@ -1339,6 +1343,10 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
 # they have to be applied explicitly or an upgraded deployment reads a schema it
 # does not have.
 ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "email_outbox": [
+        ("from_name", "TEXT NOT NULL DEFAULT ''"),
+        ("reply_to", "TEXT NOT NULL DEFAULT ''"),
+    ],
     "teams": [
         ("age_group", "TEXT NOT NULL DEFAULT ''"),
         ("daily_wall_ball", "INTEGER NOT NULL DEFAULT 0"),

@@ -350,6 +350,28 @@ the other has no shared address, so no offer appears; fix the roster email and i
 program does not delete the athlete's data in the other; the parent deletes each. The privacy policy should say
 that linked programs each hold their own copy of the athlete's counted sessions (for the lawyer).
 
+## The parent email is a message from 0FFDAYS on behalf of the coach or director
+
+Every invite (roster import, the Families screen's send and resend, one at a time or many) goes out from the program's
+own mail address as a message for a person, not an anonymous notice:
+
+- **From line:** `"Matt Kallberg (Nashville Dogs) via 0FFDAYS" <no-reply@mail.0ffdays.com>`. The name is the person who
+  pressed send (director or coach); the address stays on the verified mail domain. Stored per message in
+  `email_outbox.from_name` / `reply_to` (schema 32) and applied in `mailer._headers`.
+- **Replies** go to that person's address (`invites.staff_reply_to`, the email on their account), so a parent can just
+  reply. A sender with no email on their account gets a footer saying replies are not read, and the screen tells them to
+  add one (Settings, email sign-in box).
+- **A note of their own** (up to 1500 characters, plain text, escaped) goes at the top of every parent's email, above the
+  personal link. The Families screen's "Message to parents" box holds it; it is remembered in the browser.
+- **Preview and test:** `POST /api/coach/families/invite-preview` shows exactly what a parent gets and who it is from;
+  `POST /api/coach/families/invite-test` sends the same message to the sender's own address only (allowed while the hold
+  is on, because it reaches nobody else; the link in it is a placeholder).
+- **Sent right away:** the request queues the mail and hands it to the provider straight after responding
+  (`_send_now`, a background task). The hourly job stays as the retry net.
+- **Unchanged:** the program's email hold. While it is on, nothing is sent to anyone and the director still gets each
+  message to send from their own mail, now including their note. Sender names and reply addresses are cleaned so they
+  cannot break a header.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

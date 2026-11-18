@@ -33,7 +33,72 @@ def invite_link(code: str) -> str:
     return f"{base}/app/index.html?invite={code}"
 
 
+MAX_INTRO = 1500
+
+
+def clean_intro(value: str | None) -> str:
+    """The coach's own words, as plain text: trimmed, bounded, no stray control characters."""
+    text = "".join(c for c in (value or "").replace("\r\n", "\n").replace("\r", "\n") if c == "\n" or c >= " ")
+    lines = [ln.rstrip() for ln in text.strip().split("\n")]
+    out: list[str] = []
+    for ln in lines:                                  # never more than one blank line in a row
+        if ln or (out and out[-1]):
+            out.append(ln)
+    return "\n".join(out).strip()[:MAX_INTRO]
+
+
+def sender_display(coach_name: str, org_name: str) -> str:
+    """The name on the From line: a message from 0FFDAYS, said to be on behalf of this coach."""
+    return mailer.clean_display_name(f"{coach_name} ({org_name}) via 0FFDAYS")
+
+
+def staff_reply_to(conn: sqlite3.Connection, user_id: int | None) -> str:
+    """Where a parent's reply goes: the coach or director who sent it, if the program holds their address."""
+    if not user_id:
+        return ""
+    row = conn.execute("SELECT email FROM users WHERE id = ?", (user_id,)).fetchone()
+    email = ((row["email"] if row else "") or "").strip()
+    return email if mailer.looks_like_email(email) and not any(c in email for c in "\r\n,;<>") else ""
+
+
 def compose(
+    *,
+    athlete_name: str,
+    org_name: str,
+    coach_name: str,
+    code: str,
+    also: list[str] | tuple[str, ...] = (),
+    intro: str = "",
+    reply_to: str = "",
+) -> tuple[str, str, str]:
+    """The invite as a message from 0FFDAYS on behalf of a coach or director.
+
+    Adds to the base invite: the sender's own note on top (`intro`, plain text), and a line at the bottom that
+    says who it is from and where a reply goes.
+    """
+    subject, html, text = _compose_base(
+        athlete_name=athlete_name, org_name=org_name, coach_name=coach_name, code=code, also=also)
+    note = clean_intro(intro)
+    who = f"{coach_name} at {org_name}"
+    if reply_to:
+        foot_text = (f"Sent by 0FFDAYS on behalf of {who}. Just reply to this email and it goes to {coach_name}.")
+        foot_html = (f"Sent by 0FFDAYS on behalf of {escape(coach_name)} at {escape(org_name)}. "
+                     f"Just reply to this email and it goes to {escape(coach_name)}.")
+    else:
+        foot_text = (f"Sent by 0FFDAYS on behalf of {who}. Replies to this address are not read, so please "
+                     f"contact {coach_name} directly.")
+        foot_html = (f"Sent by 0FFDAYS on behalf of {escape(coach_name)} at {escape(org_name)}. Replies to this "
+                     f"address are not read, so please contact {escape(coach_name)} directly.")
+    if note:
+        text = f"{note}\n\n{text}"
+        paras = "".join(f"<p>{escape(p).replace(chr(10), '<br>')}</p>" for p in note.split("\n\n"))
+        html = f'<div style="border-left:3px solid #008BFD;padding-left:12px;margin-bottom:16px">{paras}</div>' + html
+    text = f"{text}\n\n--\n{foot_text}"
+    html = html + f'<p style="color:#777;font-size:85%;margin-top:20px">{foot_html}</p>'
+    return subject, html, text
+
+
+def _compose_base(
     *,
     athlete_name: str,
     org_name: str,
@@ -219,8 +284,14 @@ def deliver(
     *,
     org_name: str,
     coach_name: str,
+    intro: str = "",
+    queued_ids: list[int] | None = None,
 ) -> bool:
     """Queue the invite email. True only if the program can actually send it.
+
+    It goes out as a message from 0FFDAYS on behalf of the person who sent it (their name on the From line,
+    replies to their own address), with their note on top when they wrote one. The id of what was queued is
+    appended to `queued_ids` so the caller can send it at once instead of waiting for the hourly run.
 
     Transactional, so a digest opt-out never holds it back, and keyed on the
     invite id so a refreshed import cannot send the same code twice. An
@@ -241,9 +312,11 @@ def deliver(
     ).fetchone()
     if not mailer.can_send(conn, owner["org_id"] if owner else None):
         return False
+    reply_to = staff_reply_to(conn, invite.get("created_by"))
     subject, html, text = compose(
         athlete_name=invite["athlete_name"], org_name=org_name,
         coach_name=coach_name, code=invite["code"], also=invite.get("also_names") or (),
+        intro=intro, reply_to=reply_to,
     )
     queued = mailer.enqueue(
         conn,
@@ -253,7 +326,11 @@ def deliver(
         text=text,
         kind=mailer.Kind.TRANSACTIONAL,
         dedupe_key=f"guardian_invite:{invite['invite_id']}",
+        from_name=sender_display(coach_name, org_name),
+        reply_to=reply_to,
     )
+    if queued is not None and queued_ids is not None:
+        queued_ids.append(queued)
     return queued is not None
 
 

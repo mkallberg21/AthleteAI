@@ -189,6 +189,18 @@ def mail_held(conn: sqlite3.Connection, org_id: int | None) -> bool:
     return row is None or bool(row["mail_hold"])
 
 
+def clean_display_name(value: str | None, limit: int = 90) -> str:
+    """A sender name that cannot break a header: no line breaks, quotes or angle brackets, bounded length."""
+    cleaned = "".join(" " if c in "\r\n\t" else c for c in (value or ""))
+    cleaned = cleaned.replace('"', "").replace("<", "").replace(">", "").replace("\\", "")
+    return " ".join(cleaned.split())[:limit].strip()
+
+
+def provider_ready() -> bool:
+    """The server has a mail provider (whether or not any program has released its hold)."""
+    return CONFIG.smtp_configured
+
+
 def can_send(conn: sqlite3.Connection, org_id: int | None) -> bool:
     """The server has a mail provider AND the director has released the hold."""
     return CONFIG.smtp_configured and not mail_held(conn, org_id)
@@ -204,8 +216,14 @@ def enqueue(
     kind: str,
     dedupe_key: str,
     user_id: int | None = None,
+    from_name: str = "",
+    reply_to: str = "",
 ) -> int | None:
     """Queue one message. Returns its id, or None if it was not queued.
+
+    `from_name` / `reply_to` make it a message sent by 0FFDAYS on behalf of a person: the sender line reads
+    "<from_name>" on the program's own mail address, and a reply goes to `reply_to` (their coach), not to a
+    mailbox nobody reads.
 
     Not queued means one of: a duplicate, an opt-out, a suppressed address, or
     an address that is not an address. All four are ordinary outcomes rather
@@ -220,13 +238,18 @@ def enqueue(
         return None
 
     now = _now()
+    from_name = clean_display_name(from_name)
+    reply_to = (reply_to or "").strip()
+    if reply_to and (not looks_like_email(reply_to) or any(c in reply_to for c in "\r\n,;<>")):
+        reply_to = ""
     try:
         cur = conn.execute(
             "INSERT INTO email_outbox(user_id, to_email, subject, html_body, text_body, "
-            "kind, dedupe_key, queued_at, next_attempt_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "kind, dedupe_key, queued_at, next_attempt_at, from_name, reply_to) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 user_id, to_email.strip(), subject, html, text, kind,
-                dedupe_key, _iso(now), _iso(now),
+                dedupe_key, _iso(now), _iso(now), from_name, reply_to,
             ),
         )
         conn.commit()
@@ -267,10 +290,11 @@ class SmtpTransport:
 
         message = EmailMessage()
         message["Subject"] = subject
-        message["From"] = CONFIG.smtp_from
+        message["From"] = headers.get("From") or CONFIG.smtp_from
         message["To"] = to_email
         for name, value in headers.items():
-            message[name] = value
+            if name != "From":
+                message[name] = value
         message.set_content(text)
         message.add_alternative(html, subtype="html")
 
@@ -325,6 +349,15 @@ def _headers(row: sqlite3.Row) -> dict[str, str]:
         ),
         "Auto-Submitted": "auto-generated",
     }
+    # Sent by 0FFDAYS on behalf of a person: their name on the program's own address, replies to them.
+    keys = row.keys()
+    if "from_name" in keys and row["from_name"]:
+        from email.utils import formataddr, parseaddr
+        address = parseaddr(CONFIG.smtp_from)[1]
+        if address:
+            headers["From"] = formataddr((row["from_name"], address))
+    if "reply_to" in keys and row["reply_to"]:
+        headers["Reply-To"] = row["reply_to"]
     if row["user_id"] and row["kind"] not in ALWAYS_SEND:
         url = unsubscribe_url(row["user_id"], row["kind"])
         if url.startswith("http"):

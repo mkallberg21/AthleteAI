@@ -4291,6 +4291,7 @@ class Store:
         issue_guardian_invites: bool = True,
         filename: str = "",
         kid_claim_codes: bool = False,
+        queued_sink: list[int] | None = None,
     ) -> dict[str, Any]:
         """Create and update athletes from a resolved plan.
 
@@ -4424,12 +4425,13 @@ class Store:
             org_of = self.conn.execute("SELECT org_id FROM users WHERE id = ?", (athlete_id,)).fetchone()["org_id"]
             family = [int(r["id"]) for r in guardians_mod.family_athletes(self.conn, int(org_of), guardian_email)]
             covered.update(family)
-            sent = invites_mod.deliver(self.conn, invite, **sender)
+            sent = invites_mod.deliver(self.conn, invite, queued_ids=queued_sink, **sender)
             emailed += 1 if sent else 0
             # The whole message, not just the code: when the program has no outbound email, the director sends
             # this from their own account, and a code alone is not a message.
             subject, _html, text = invites_mod.compose(
-                athlete_name=display_name, code=invite["code"], also=invite.get("also_names") or (), **sender,
+                athlete_name=display_name, code=invite["code"], also=invite.get("also_names") or (),
+                reply_to=invites_mod.staff_reply_to(self.conn, created_by), **sender,
             )
             invites.append({
                 "invite_id": invite["invite_id"],

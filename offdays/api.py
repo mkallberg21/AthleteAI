@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import base64
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 import anyio
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -2693,6 +2694,7 @@ class RosterImport(BaseModel):
 @app.post("/api/coach/roster/import", status_code=201)
 def import_roster(
     body: RosterImport,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -2708,12 +2710,15 @@ def import_roster(
         principal.org_id,
         roster_mod.parse(body.content, sport=_org_sport(store, principal.org_id)),
     )
+    queued: list[int] = []
     result = store.apply_import(
         principal.org_id, body.team_id, plan, principal.id,
         issue_guardian_invites=body.invite_guardians,
         filename=body.filename,
         kid_claim_codes=body.print_slips,
+        queued_sink=queued,
     )
+    _send_now(store, queued, background)
     return {"summary": plan.to_dict()["summary"], **result, "smtp_configured": mailer.can_send(store.conn, principal.org_id)}
 
 
@@ -3051,6 +3056,7 @@ class InviteRequest(BaseModel):
 @app.post("/api/coach/guardian-invites", status_code=201)
 def create_guardian_invite(
     body: InviteRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -3069,11 +3075,14 @@ def create_guardian_invite(
     )
     # With an address the invite goes out by email as well as being shown.
     # Without one the coach reads the code out, which is the pilot path.
+    queued: list[int] = []
     sent = invites_mod.deliver(
-        store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
+        store.conn, invite, queued_ids=queued, **store._invite_sender(principal.org_id, principal.id)
     )
+    _send_now(store, queued, background)
     subject, _html, text = invites_mod.compose(
         athlete_name=invite["athlete_name"], code=invite["code"], also=invite.get("also_names") or (),
+        reply_to=invites_mod.staff_reply_to(store.conn, principal.id),
         **store._invite_sender(principal.org_id, principal.id),
     )
     return {
@@ -3118,9 +3127,20 @@ def coach_families(
 
 class NudgeRequest(BaseModel):
     athlete_id: int
+    intro: str = Field(default="", max_length=invites_mod.MAX_INTRO)
 
 
-def _nudge_one(principal: Principal, store: Store, athlete_id: int) -> dict[str, Any]:
+def _send_now(store: Store, queued: list[int], background: BackgroundTasks) -> None:
+    """Hand what was just queued to the mail provider right after the response, not at the next hourly run.
+
+    The hourly job stays as the safety net: anything this misses (a provider hiccup) is retried there.
+    """
+    if queued:
+        background.add_task(mailer.flush, store.conn, only_ids=list(queued))
+
+
+def _nudge_one(principal: Principal, store: Store, athlete_id: int, intro: str = "",
+               queued: list[int] | None = None) -> dict[str, Any]:
     """Make a fresh parent invite for one athlete and send it if the program is sending.
 
     The one place this happens, for the single button and for "many at once", so the two cannot drift apart.
@@ -3164,10 +3184,12 @@ def _nudge_one(principal: Principal, store: Store, athlete_id: int) -> dict[str,
         store.conn, athlete_id, principal.id, contact["email"]
     )
     sent = invites_mod.deliver(
-        store.conn, invite, **store._invite_sender(principal.org_id, principal.id)
+        store.conn, invite, intro=intro, queued_ids=queued,
+        **store._invite_sender(principal.org_id, principal.id)
     )
     subject, _html, text = invites_mod.compose(
         athlete_name=invite["athlete_name"], code=invite["code"], also=invite.get("also_names") or (),
+        intro=intro, reply_to=invites_mod.staff_reply_to(store.conn, principal.id),
         **store._invite_sender(principal.org_id, principal.id),
     )
     return {
@@ -3189,6 +3211,7 @@ def _nudge_one(principal: Principal, store: Store, athlete_id: int) -> dict[str,
 @app.post("/api/coach/families/nudge", status_code=201)
 def nudge_family(
     body: NudgeRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -3200,7 +3223,10 @@ def nudge_family(
     Refused once a parent is linked -- from there the next move is the
     parent's, and the dashboard says so instead of sending mail.
     """
-    return _nudge_one(principal, store, body.athlete_id)
+    queued: list[int] = []
+    made = _nudge_one(principal, store, body.athlete_id, invites_mod.clean_intro(body.intro), queued)
+    _send_now(store, queued, background)
+    return made
 
 
 #: Most families one tap will take. A program of a few hundred is several taps, and a runaway list is refused.
@@ -3209,11 +3235,13 @@ NUDGE_MANY_MAX = 200
 
 class NudgeManyRequest(BaseModel):
     athlete_ids: list[int] = Field(min_length=1, max_length=NUDGE_MANY_MAX)
+    intro: str = Field(default="", max_length=invites_mod.MAX_INTRO)
 
 
 @app.post("/api/coach/families/nudge-many", status_code=201)
 def nudge_many_families(
     body: NudgeManyRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -3228,12 +3256,14 @@ def nudge_many_families(
     results: list[dict[str, Any]] = []
     seen: set[int] = set()
     asked = set(body.athlete_ids)
+    queued: list[int] = []
+    intro = invites_mod.clean_intro(body.intro)
     for athlete_id in body.athlete_ids:
         if athlete_id in seen:
             continue
         seen.add(athlete_id)
         try:
-            made = _nudge_one(principal, store, athlete_id)
+            made = _nudge_one(principal, store, athlete_id, intro, queued)
         except HTTPException as err:
             results.append({"athlete_id": athlete_id, "status": "skipped", "reason": str(err.detail)})
             continue
@@ -3244,15 +3274,90 @@ def nudge_many_families(
                 seen.add(fid)
                 results.append({"athlete_id": fid, "status": "skipped",
                                 "reason": f"the same parent as {made['display_name']}: one invite covers both"})
+    _send_now(store, queued, background)
     sent = sum(1 for r in results if r["status"] == "sent")
     ready = sum(1 for r in results if r["status"] == "ready")
     return {
         "results": results,
+        "from_name": invites_mod.sender_display(
+            store._invite_sender(principal.org_id, principal.id)["coach_name"],
+            store._invite_sender(principal.org_id, principal.id)["org_name"]),
+        "reply_to": invites_mod.staff_reply_to(store.conn, principal.id),
         "emailed": sent,
         "counts": {"invited": sent + ready, "emailed": sent, "ready": ready,
                    "skipped": len(results) - sent - ready},
         "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }
+
+
+class MessagePreviewRequest(BaseModel):
+    intro: str = Field(default="", max_length=invites_mod.MAX_INTRO)
+    athlete_id: int | None = None
+
+
+def _message_sample(principal: Principal, store: Store, body: MessagePreviewRequest, code: str) -> dict[str, Any]:
+    """The invite exactly as a parent would get it (with a placeholder link), and who it is from."""
+    sender = store._invite_sender(principal.org_id, principal.id)
+    name = ""                  # compose words an unnamed child as "your athlete"
+    also: list[str] = []
+    if body.athlete_id is not None:
+        row = store.conn.execute(
+            "SELECT display_name FROM users WHERE id = ? AND org_id = ? AND role = 'athlete'",
+            (body.athlete_id, principal.org_id)).fetchone()
+        if row is not None and store.staff_can_see_athlete(principal, body.athlete_id):
+            name = row["display_name"]
+    reply_to = invites_mod.staff_reply_to(store.conn, principal.id)
+    subject, html, text = invites_mod.compose(
+        athlete_name=name, code=code, also=also, intro=invites_mod.clean_intro(body.intro),
+        reply_to=reply_to, **sender)
+    return {
+        "subject": subject, "text": text, "html": html,
+        "from_name": invites_mod.sender_display(sender["coach_name"], sender["org_name"]),
+        "reply_to": reply_to,
+        "sending": mailer.can_send(store.conn, principal.org_id),
+        "provider_configured": mailer.provider_ready(),
+    }
+
+
+@app.post("/api/coach/families/invite-preview")
+def message_preview(
+    body: MessagePreviewRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What a parent will receive, and from whom. Sends nothing."""
+    return _message_sample(principal, store, body, "ABCD-EFGH-JKLM")
+
+
+@app.post("/api/coach/families/invite-test")
+def message_test(
+    body: MessagePreviewRequest,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Send the message to the sender's OWN address, so they see exactly what parents will see.
+
+    Allowed while the program's email hold is on, because it reaches nobody but the sender. The link in it is a
+    placeholder that opens nothing.
+    """
+    if not mailer.provider_ready():
+        raise HTTPException(status_code=409, detail="This server has no mail provider yet, so nothing can be sent.")
+    mine = invites_mod.staff_reply_to(store.conn, principal.id)
+    if not mine:
+        raise HTTPException(status_code=409, detail="There is no email address on your account to send the test to.")
+    made = _message_sample(principal, store, body, "TEST-ONLY-0000")
+    subject = "TEST: " + made["subject"]
+    text = "This is a test, sent only to you. The link below is a placeholder.\n\n" + made["text"]
+    html = '<p style="color:#b45309"><b>This is a test, sent only to you.</b> The link below is a placeholder.</p>' + made["html"]
+    queued = mailer.enqueue(
+        store.conn, to_email=mine, subject=subject, html=html, text=text, kind=mailer.Kind.TRANSACTIONAL,
+        dedupe_key=f"message_test:{principal.id}:{secrets.token_hex(6)}", user_id=principal.id,
+        from_name=made["from_name"], reply_to=mine)
+    if queued is None:
+        raise HTTPException(status_code=409, detail="That address cannot receive mail (it is on the stop list).")
+    mailer.flush(store.conn, only_ids=[queued], limit=1)
+    status = store.conn.execute("SELECT status FROM email_outbox WHERE id = ?", (queued,)).fetchone()["status"]
+    return {"sent_to": mine, "status": status, "from_name": made["from_name"]}
 
 
 @app.get("/api/org/parents")

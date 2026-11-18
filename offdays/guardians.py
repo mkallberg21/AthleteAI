@@ -244,6 +244,7 @@ def create_invite(
         "code": code,
         "athlete_id": athlete_id,
         "athlete_name": athlete["display_name"],
+        "created_by": created_by,
         "also_names": also,
         "email": email,
         "expires_at": _iso(expires),
