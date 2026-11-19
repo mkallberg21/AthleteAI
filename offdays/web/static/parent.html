@@ -134,6 +134,7 @@
 
 <script type="module">
 import { api, esc, getToken, logout, renderBranding, renderShotHistory } from './api.js';
+import { keepFresh } from './autorefresh.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -1035,6 +1036,9 @@ loadLanguage()
 
 // The club's badge first, before anything else loads.
 renderBranding("masthead", "Parent");
+// A parent's page is full of things they are in the middle of (a link to copy, a form), so it is not redrawn on a timer; it only
+// notices when the app itself has been updated.
+keepFresh(() => {}, { dataToo: false });
 </script>
 <p class="legal-links"><a href="privacy.html">Privacy policy</a></p>
 </body>

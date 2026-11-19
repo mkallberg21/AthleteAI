@@ -488,6 +488,22 @@ Everything that used to sit on the Teams tab is still there, moved to where it i
 shelf, suggestions, the roster table and standings are on **Today**; the old create-team form, coaches and team access,
 bulk setup, the IQ, ball and evaluation cards are in **Settings**.
 
+## The dashboard keeps itself current
+
+`offdays/web/static/autorefresh.js`. Every two minutes, while the coach or director page is open and in front of the person, it
+re-reads the teams, families, roster, standings, review queue, home and (if one is open) the team being viewed, so a parent who
+signs up or a player who trains shows without pressing refresh. A small "Updated 2:31 PM" sits in the corner. Coming back to the
+tab after a minute or more away catches up at once.
+
+It never gets in the way: nothing happens while the tab is hidden or offline, while someone is typing or has clicked in the last
+8 seconds, or while a dialog or a player panel is open; an open team is not redrawn while anything is typed into it; the team
+chosen in each form survives a refresh; failures are silent and retried. The coach list and the open remove boxes are left alone.
+
+When the app itself is updated (`/api/live` reports a different build) an idle page reloads itself once; a page with words typed
+in, or the person mid-click, gets an "Update now" bar instead and keeps its draft. The parent page does not redraw on a timer (it
+is full of links to copy and forms in progress) and only watches for a new version. The athlete and sign-in pages never reload
+themselves, so a drill in progress is never interrupted.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

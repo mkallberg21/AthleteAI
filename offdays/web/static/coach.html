@@ -1307,6 +1307,7 @@
 
 <script type="module">
 import { api, esc, fmtDate, getToken, logout, renderBranding, setOrg } from './api.js';
+import { keepFresh } from './autorefresh.js';
 import {
   MAX_ROWS as RT_MAX, blankRow, rowProblem, filledRows, firstProblem, withoutParent, buildCsv, parsePaste, mergePasted,
 } from './roster_entry.js';
@@ -3723,14 +3724,28 @@ async function loadTeams() {
   select.value = teams.some((t) => String(t.id) === String(want)) ? want : '';
 
   const options = teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
-  $('a-team').innerHTML = options;
-  $('b-team').innerHTML = options;
-  $('import-team').innerHTML = options;
-  $('type-team').innerHTML = options;
-  $('ap-team').innerHTML = options;
-  $('sync-team').innerHTML = options;
-  $('g-team').innerHTML = options;
-  $('ev-team').innerHTML = '<option value="">All teams</option>' + options;
+  // Redrawn on every refresh, so each box keeps the team someone had chosen.
+  const setTeams = (id, html) => { const el = $(id); const was = el.value; el.innerHTML = html; if (was && [...el.options].some((o) => o.value === was)) el.value = was; };
+  setTeams('a-team', options);
+  setTeams('b-team', options);
+  setTeams('import-team', options);
+  setTeams('type-team', options);
+  setTeams('ap-team', options);
+  setTeams('sync-team', options);
+  setTeams('g-team', options);
+  setTeams('ev-team', '<option value="">All teams</option>' + options);
+}
+
+// ---- Every couple of minutes, re-read what is on screen so changes show up without pressing refresh. Never while someone is
+// typing, has just clicked, or has a dialog open (see autorefresh.js). The coach list and the open "remove" boxes are left alone.
+async function refreshEverything() {
+  await Promise.all([loadTeams(), loadFamilies(), loadAll(), loadParents(IS_DIRECTOR)]);
+  homeLoad();
+  if (tdState.id && !document.querySelector('#td-body input:focus, #td-body select:focus')
+      && ![...document.querySelectorAll('#td-body input, #td-body textarea')].some((e) => e.value)) {
+    tdState.data = await api(`/api/coach/teams/${tdState.id}/detail`);
+    drawTeam();
+  }
 }
 
 // ------------------------------------------------------- evaluation export
@@ -5720,6 +5735,7 @@ $('signout').addEventListener('click', logout);
     await loadAll();
     // Last, after every card has rendered: a new director's first visits are the walkthrough.
     await startWizardIfNew(orgs.role === 'director');
+    keepFresh(refreshEverything);
   } catch (e) { showError(e.message); }
 })();
 
