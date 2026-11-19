@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import logging
 import secrets
+from datetime import timedelta
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
@@ -6477,6 +6478,76 @@ def get_teams(
     return {
         "teams": [dict(r) for r in rows if principal.can_see_team(r["id"])],
         "team_scoped": principal.team_scoped,
+    }
+
+
+@app.get("/api/coach/teams/{team_id}/detail")
+def team_detail(
+    team_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """One team, drilled into: who is on it, who has a login and who has not, and what each has been doing.
+
+    A director may open any team in the program, a coach their own teams. Anything else (another program's team, an unknown
+    id, a team a coach is not on) is the same 404. Per player: where their family is in getting started (the same stages as the
+    Families list), whether the parent and the athlete have an email login, and their recent activity. Logged work is
+    counted apart from measured work. No team targets, no ranking.
+    """
+    team = store.conn.execute(
+        "SELECT id, name, season, join_code FROM teams WHERE id = ? AND org_id = ?", (team_id, principal.org_id)).fetchone()
+    if team is None or not principal.can_see_team(team_id):
+        raise HTTPException(status_code=404, detail="no such team")
+    fam = funnel_mod.funnel(store.conn, principal.org_id, team_ids=[team_id])
+    ids = [a["athlete_id"] for a in fam["athletes"]]
+    marks = ",".join("?" * len(ids)) or "NULL"
+    today = guardians_mod._now().date()
+    d7, d30 = (today - timedelta(days=6)).isoformat(), (today - timedelta(days=29)).isoformat()
+    act = {}
+    for r in store.conn.execute(
+        "SELECT athlete_id, MAX(date(COALESCE(completed_at, submitted_at))) AS last_day, "
+        "  SUM(CASE WHEN date(COALESCE(completed_at, submitted_at)) >= ? THEN 1 ELSE 0 END) AS s7, "
+        "  SUM(CASE WHEN date(COALESCE(completed_at, submitted_at)) >= ? THEN 1 ELSE 0 END) AS s30, "
+        "  SUM(CASE WHEN date(COALESCE(completed_at, submitted_at)) >= ? AND self_reported = 1 THEN 1 ELSE 0 END) AS l30 "
+        f"FROM sessions WHERE status = 'counted' AND athlete_id IN ({marks}) GROUP BY athlete_id", (d7, d30, d30, *ids)):
+        act[int(r["athlete_id"])] = r
+    kid_login = {int(r[0]) for r in store.conn.execute(
+        f"SELECT user_id FROM credentials WHERE user_id IN ({marks})", ids)}
+    parent_login = {int(r[0]) for r in store.conn.execute(
+        f"SELECT DISTINCT g.athlete_id FROM guardians g JOIN credentials c ON c.user_id = g.guardian_id "
+        f"WHERE g.athlete_id IN ({marks})", ids)}
+    players = []
+    for a in fam["athletes"]:
+        r = act.get(a["athlete_id"])
+        stage = a["stage"]
+        players.append({
+            "athlete_id": a["athlete_id"], "display_name": a["display_name"], "stage": stage, "label": a["label"],
+            "who": a["who"], "parent_name": a["parent_name"], "parent_email": a["parent_email"],
+            "parent_signed_up": stage not in ("no_parent", "invite_unsent", "invited"),
+            "athlete_signed_in": stage in ("signed_in", "training"),
+            "parent_email_login": a["athlete_id"] in parent_login, "athlete_email_login": a["athlete_id"] in kid_login,
+            "last_trained": r["last_day"] if r else None, "sessions_7d": int(r["s7"]) if r else 0,
+            "sessions_30d": int(r["s30"]) if r else 0, "logged_30d": int(r["l30"]) if r else 0,
+        })
+    coaches = [{**dict(c), "has_login": bool(c["has_login"]), "has_signed_in": bool(c["has_signed_in"])} for c in store.conn.execute(
+        "SELECT u.id, u.display_name, u.email, m.role, "
+        "  EXISTS(SELECT 1 FROM credentials c WHERE c.user_id = u.id) AS has_login, "
+        "  (u.last_seen_at IS NOT NULL) AS has_signed_in "
+        "FROM team_staff ts JOIN users u ON u.id = ts.user_id "
+        "JOIN memberships m ON m.user_id = u.id AND m.org_id = ? AND m.active = 1 "
+        "WHERE ts.team_id = ? AND u.active = 1 ORDER BY u.display_name", (principal.org_id, team_id))]
+    return {
+        "team": {"id": team["id"], "name": team["name"], "season": team["season"], "join_code": team["join_code"]},
+        "coaches": coaches, "players": players,
+        "summary": {
+            "players": len(players),
+            "parent_signed_up": sum(1 for p in players if p["parent_signed_up"]),
+            "athlete_signed_in": sum(1 for p in players if p["athlete_signed_in"]),
+            "email_login": sum(1 for p in players if p["parent_email_login"] or p["athlete_email_login"]),
+            "trained_7d": sum(1 for p in players if p["sessions_7d"]),
+            "no_coach": not coaches,
+        },
+        "can_manage": principal.is_director, "mail_sending": fam["mail_sending"],
     }
 
 

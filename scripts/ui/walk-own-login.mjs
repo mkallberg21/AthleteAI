@@ -82,7 +82,7 @@ await page.goto(`${base}/app/index.html`, { waitUntil: 'networkidle' });
 await page.evaluate((t) => localStorage.setItem('offdays.token', t), dtoken);
 await page.goto(`${base}/app/coach.html`, { waitUntil: 'networkidle' });
 if (await page.locator('#wizard-skip').isVisible().catch(() => false)) { await page.click('#wizard-skip'); await page.waitForTimeout(800); }
-await page.click('#tabbar [data-tab="teams"]');
+await page.click('#tabbar [data-tab="settings"]');
 await page.evaluate(() => { let e = document.querySelector('#staff-list'); while (e) { if (e.classList && e.classList.contains('card')) { e.classList.remove('hidden'); e.classList.add('open'); if (e._foldOpen) e._foldOpen(); } e = e.parentElement; } });
 await page.waitForSelector('[data-remove-coach]');
 const joelSession = (await j('/api/login/password', null, { email: JOEL, password: PW })).json.token;

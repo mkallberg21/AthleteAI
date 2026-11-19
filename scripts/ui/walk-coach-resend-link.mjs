@@ -36,7 +36,7 @@ await page.evaluate(() => localStorage.setItem('offdays.tab.v2', 'teams'));
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForSelector('[data-resend-link]', { state: 'attached', timeout: 20000 });
 if (await page.locator('#wizard-skip').isVisible().catch(() => false)) { await page.click('#wizard-skip'); await page.waitForTimeout(800); }
-await page.click('#tabbar [data-tab="teams"]');
+await page.click('#tabbar [data-tab="settings"]');
 await page.evaluate(() => { let e = document.querySelector('#staff-list'); while (e) { if (e.classList && e.classList.contains('card')) { e.classList.remove('hidden'); e.classList.add('open'); if (e._foldOpen) e._foldOpen(); } e = e.parentElement; } });
 await page.waitForSelector('[data-resend-link]', { timeout: 20000 });
 const rows = await page.locator('[data-resend-link]').count();

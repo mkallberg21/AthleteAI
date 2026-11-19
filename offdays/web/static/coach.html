@@ -187,6 +187,30 @@
     <div id="bc-err" class="err hidden"></div>
   </div>
 
+  <!-- The Teams tab: a button to create a team, the teams, and one team opened at a time. -->
+  <div class="card card--wide" id="teams-home">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h2 style="margin:0">Teams</h2>
+      <button type="button" class="inline hidden" id="tm-create">Create a team</button>
+    </div>
+    <div id="tm-create-box" class="hidden" style="margin:12px 0;padding:12px 14px;background:var(--surface-2);border-radius:var(--radius-sm)">
+      <label for="tm-name"><b>Step 1.</b> Name the team the way your club does</label>
+      <input id="tm-name" placeholder="2031 Red" autocomplete="off">
+      <div style="display:flex;gap:10px;margin-top:8px;align-items:center;flex-wrap:wrap">
+        <button type="button" class="inline" id="tm-create-go">Create team</button>
+        <button type="button" class="secondary inline" id="tm-create-cancel">Cancel</button>
+        <span class="small muted">Next you add the players and a coach.</span>
+      </div>
+      <div id="tm-create-err" class="err hidden"></div>
+    </div>
+    <div id="tm-list" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card card--wide hidden" id="team-detail-card">
+    <button type="button" class="secondary inline" id="td-back">&larr; All teams</button>
+    <div id="td-body" style="margin-top:12px"></div>
+  </div>
+
   <div class="card card--wide" id="teams-card">
     <h2>Teams</h2>
 
@@ -3446,6 +3470,163 @@ document.addEventListener('click', (e) => {
   if (link) { e.preventDefault(); openAthlete(Number(link.dataset.openAthlete)); }
 });
 
+// ---- The Teams tab: create a team, then open any team to see who has a login and what they have been doing.
+const tdState = { id: null, filter: 'all', data: null };
+function goTab(name) { const b = document.querySelector(`#tabbar button[data-tab="${name}"]`); if (b) b.click(); }
+function openCard(id) { let e = document.getElementById(id); if (!e) return; e.classList.remove('hidden'); e.classList.add('open'); if (e._foldOpen) e._foldOpen(); }
+
+function renderTeamsHome(teams) {
+  $('tm-create').classList.toggle('hidden', !IS_DIRECTOR);
+  $('tm-list').innerHTML = teams.length ? teams.map((t) => `
+    <button type="button" class="tm-row" data-open-team="${t.id}" style="display:flex;width:100%;justify-content:space-between;gap:10px;align-items:center;text-align:left;margin:0 0 8px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:inherit;cursor:pointer;min-height:auto">
+      <span><b>${esc(t.name)}</b><br><span class="small muted">${t.roster} ${t.roster === 1 ? 'player' : 'players'} &middot; ${t.coaches ? esc(t.coaches) : '<span style="color:var(--warn)">no coach yet</span>'}</span></span>
+      <span class="small">Open &rarr;</span>
+    </button>`).join('')
+    : `<p class="muted small">${IS_DIRECTOR ? 'No teams yet. Press Create a team to start.' : 'No teams yet.'}</p>`;
+}
+$('tm-list').addEventListener('click', (e) => { const b = e.target.closest('[data-open-team]'); if (b) openTeam(Number(b.dataset.openTeam)); });
+$('tm-create').addEventListener('click', () => { $('tm-create-box').classList.remove('hidden'); $('tm-name').focus(); });
+$('tm-create-cancel').addEventListener('click', () => { $('tm-create-box').classList.add('hidden'); $('tm-create-err').classList.add('hidden'); });
+$('tm-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('tm-create-go').click(); } });
+$('tm-create-go').addEventListener('click', async () => {
+  const name = $('tm-name').value.trim();
+  const err = $('tm-create-err'); err.classList.add('hidden');
+  if (!name) { err.textContent = 'Give the team a name first.'; err.classList.remove('hidden'); return; }
+  $('tm-create-go').disabled = true;
+  try {
+    const team = await api('/api/teams', { method: 'POST', body: { name } });
+    $('tm-name').value = ''; $('tm-create-box').classList.add('hidden');
+    await Promise.all([loadTeams(), loadStaff(IS_DIRECTOR)]);
+    await openTeam(team.id, { fresh: true });
+  } catch (e) { err.textContent = e.message || 'Could not create the team.'; err.classList.remove('hidden'); }
+  finally { $('tm-create-go').disabled = false; }
+});
+$('td-back').addEventListener('click', () => { $('team-detail-card').classList.add('hidden'); $('teams-home').classList.remove('hidden'); tdState.id = null; loadTeams(); });
+$('go-create-team').addEventListener('click', (e) => {
+  e.preventDefault(); goTab('teams');
+  $('team-detail-card').classList.add('hidden'); $('teams-home').classList.remove('hidden');
+  if (!$('tm-create').classList.contains('hidden')) $('tm-create').click();
+  $('teams-home').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+const TD_FILTERS = [['all', 'Everyone'], ['nologin', 'No login yet'], ['signed', 'Signed in'], ['quiet', 'Not trained this week']];
+async function openTeam(id, { fresh = false } = {}) {
+  tdState.id = id;
+  $('teams-home').classList.add('hidden');
+  const card = $('team-detail-card');
+  card.classList.remove('hidden');
+  $('td-body').innerHTML = '<p class="muted small">Loading&hellip;</p>';
+  try {
+    tdState.data = await api(`/api/coach/teams/${id}/detail`);
+    tdState.fresh = fresh;
+    drawTeam();
+  } catch (e) { $('td-body').innerHTML = `<p>${esc(e.message || 'Could not open this team.')}</p>`; }
+  card.scrollIntoView({ block: 'start' });
+}
+function tdPill(ok, yes, no, soft) { return ok ? `<span class="pill ok">${yes}</span>` : `<span class="pill ${soft ? '' : 'warn'}">${no}</span>`; }
+function drawTeam() {
+  const d = tdState.data, t = d.team, sm = d.summary;
+  const f = tdState.filter;
+  const rows = d.players.filter((p) => f === 'all' ? true
+    : f === 'nologin' ? !p.athlete_signed_in && !p.parent_email_login && !p.athlete_email_login
+    : f === 'signed' ? p.athlete_signed_in
+    : !p.sessions_7d);
+  const need = d.can_manage && (!d.players.length || !d.coaches.length);
+  const steps = need ? `<div style="padding:12px 14px;margin:0 0 14px;border:1px solid var(--accent);border-radius:var(--radius-sm)">
+      <b>Next steps for ${esc(t.name)}</b>
+      <div style="margin-top:8px"><span class="pill ${d.players.length ? 'ok' : 'warn'}">${d.players.length ? 'done' : 'to do'}</span>
+        <b>Add the players.</b> ${d.players.length ? `${d.players.length} on the roster.` : 'Upload or type the roster; you see a preview before anything is saved.'}
+        ${d.players.length ? '' : '<button type="button" class="inline" data-td-players>Add players</button>'}</div>
+      <div style="margin-top:8px"><span class="pill ${d.coaches.length ? 'ok' : 'warn'}">${d.coaches.length ? 'done' : 'to do'}</span>
+        <b>Add a coach.</b> ${d.coaches.length ? '' : 'They get an email with their sign-in link and the team named.'}</div></div>` : '';
+  const coachRows = d.coaches.length ? d.coaches.map((c) => `<div class="small" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0" data-td-coach="${c.id}">
+      <b>${esc(c.display_name)}</b> <span class="muted">${esc(c.email || 'no email on file')}</span>
+      ${tdPill(c.has_signed_in, 'has signed in', 'has not signed in yet')} ${c.has_login ? '<span class="pill ok">email login</span>' : ''}
+      ${d.can_manage && c.role === 'coach' ? `<button type="button" class="tiny" data-td-resend="${c.id}" data-name="${esc(c.display_name)}">Resend sign-in link</button>
+        <button type="button" class="tiny" data-td-remove="${c.id}" data-name="${esc(c.display_name)}">Remove</button>` : ''}
+      <span data-td-cmsg></span></div>`).join('') : '<p class="small muted">No coach on this team yet.</p>';
+  const add = d.can_manage ? `<details ${d.coaches.length ? '' : 'open'} style="margin-top:8px"><summary class="small" style="cursor:pointer"><b>Add a coach</b></summary>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;align-items:flex-end">
+        <div style="flex:1 1 150px"><label for="td-cname">Name</label><input id="td-cname" placeholder="Sam Hill" autocomplete="off"></div>
+        <div style="flex:1 1 200px"><label for="td-cemail">Email</label><input id="td-cemail" type="email" placeholder="sam@example.com" autocomplete="off"></div>
+        <button type="button" class="inline" id="td-cadd">Add and email</button></div>
+      <div style="margin-top:8px"><label for="td-cpick" class="small">Or add a coach who is already in the program</label>
+        <select id="td-cpick" class="org-switch"><option value="">Choose&hellip;</option></select></div>
+      </details><div class="small" id="td-cmsg" role="status" style="margin-top:6px"></div>` : '';
+  const table = rows.length ? rows.map((p) => {
+    const parent = p.parent_signed_up ? '<span class="pill ok">signed up</span>' : p.stage === 'no_parent' ? '<span class="pill bad">no parent on file</span>'
+      : '<span class="pill warn">not yet</span>';
+    const kid = p.athlete_signed_in ? '<span class="pill ok">signed in</span>' : p.stage === 'link_sent' ? '<span class="pill warn">link sent</span>' : '<span class="pill">not yet</span>';
+    const em = [p.parent_email_login ? 'parent' : '', p.athlete_email_login ? 'player' : ''].filter(Boolean).join(' + ') || '<span class="muted">none</span>';
+    return `<tr><td data-label="Player"><a href="#" data-open-athlete="${p.athlete_id}" style="font-weight:700;color:inherit;text-decoration:underline dotted">${esc(p.display_name)}</a>
+        <br><span class="small muted">${esc(p.label)}</span></td>
+      <td data-label="Parent">${parent}</td><td data-label="Player login">${kid}</td><td data-label="Email login" class="small">${em}</td>
+      <td data-label="Last trained">${p.last_trained ? esc(fmtDate(p.last_trained)) : '<span class="muted">never</span>'}</td>
+      <td class="num" data-label="This week">${p.sessions_7d}</td><td class="num" data-label="30 days">${p.sessions_30d}${p.logged_30d ? ` <span class="small muted">(${p.logged_30d} logged)</span>` : ''}</td></tr>`;
+  }).join('') : `<tr><td colspan="7" class="muted small">${d.players.length ? 'Nobody matches.' : 'No players on this team yet.'}</td></tr>`;
+  $('td-body').innerHTML = `<h2 style="margin:0 0 4px">${esc(t.name)}</h2>
+    <div class="small muted">${sm.players} ${sm.players === 1 ? 'player' : 'players'} &middot; ${sm.parent_signed_up} of ${sm.players} parents signed up &middot; ${sm.athlete_signed_in} of ${sm.players} players signed in &middot; ${sm.email_login} with an email login &middot; ${sm.trained_7d} trained this week</div>
+    ${steps}
+    <h3 style="margin:14px 0 4px">Coaches</h3>${coachRows}${add}
+    <h3 style="margin:16px 0 4px">Players</h3>
+    <div style="margin:6px 0">${TD_FILTERS.map(([k, label]) => `<button type="button" class="tiny${k === f ? '' : ' secondary'}" data-td-filter="${k}" aria-pressed="${k === f}">${label}</button>`).join(' ')}
+      ${d.can_manage ? '<button type="button" class="tiny secondary" data-td-players>Add players</button>' : ''}</div>
+    <div style="overflow-x:auto"><table class="roster-table"><thead><tr><th>Player</th><th>Parent</th><th>Player login</th><th>Email login</th><th>Last trained</th><th class="num">This week</th><th class="num">30 days</th></tr></thead><tbody>${table}</tbody></table></div>
+    <p class="small muted" style="margin-top:8px">&ldquo;Logged&rdquo; is work the player typed in themselves. It counts for showing up, never for rankings.</p>`;
+  wireTeam();
+}
+async function wireTeam() {
+  const body = $('td-body'), id = tdState.id;
+  body.querySelectorAll('[data-td-filter]').forEach((b) => b.addEventListener('click', () => { tdState.filter = b.dataset.tdFilter; drawTeam(); }));
+  body.querySelectorAll('[data-td-players]').forEach((b) => b.addEventListener('click', () => {
+    goTab('families'); openCard('import-card');
+    const sel = $('import-team'); if (sel) { sel.value = String(id); sel.dispatchEvent(new Event('change')); }
+    $('import-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  const refresh = async () => { tdState.data = await api(`/api/coach/teams/${id}/detail`); drawTeam(); };
+  body.querySelectorAll('[data-td-remove]').forEach((b) => b.addEventListener('click', async () => {
+    if (!window.confirm(`Remove ${b.dataset.name} from the program? They lose access at once and leave every team.`)) return;
+    try { await api(`/api/coach/staff/${b.dataset.tdRemove}/remove`, { method: 'POST', body: {} }); await refresh(); loadTeams(); loadStaff(true); }
+    catch (e) { b.closest('[data-td-coach]').querySelector('[data-td-cmsg]').textContent = e.message || 'Could not remove.'; }
+  }));
+  body.querySelectorAll('[data-td-resend]').forEach((b) => b.addEventListener('click', async () => {
+    if (!window.confirm(`Send ${b.dataset.name} a new sign-in link? Their old link stops working.`)) return;
+    const out = b.closest('[data-td-coach]').querySelector('[data-td-cmsg]');
+    try {
+      const res = await api(`/api/coach/staff/${b.dataset.tdResend}/resend-link`, { method: 'POST' });
+      out.innerHTML = res.emailed ? `Sent to ${esc(res.email)}.`
+        : `${res.has_email ? 'Email is on hold, so nothing was sent.' : 'No email on file.'} Link to pass on: <code style="word-break:break-all">${esc(res.link)}</code>`;
+    } catch (e) { out.textContent = e.message || 'Could not resend.'; }
+  }));
+  if (!tdState.data.can_manage) return;
+  const msg = $('td-cmsg');
+  try {
+    const { staff } = await api('/api/coach/staff');
+    const here = new Set(tdState.data.coaches.map((c) => c.id));
+    $('td-cpick').innerHTML = '<option value="">Choose&hellip;</option>' + staff.filter((p) => p.role === 'coach' && !here.has(p.id))
+      .map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('');
+  } catch { /* the picker stays empty */ }
+  $('td-cpick').addEventListener('change', async (e) => {
+    if (!e.target.value) return;
+    try {
+      const r = await api('/api/coach/staff/assign', { method: 'POST', body: { user_id: Number(e.target.value), team_id: id } });
+      await refresh(); const m = $('td-cmsg'); if (m) m.textContent = r.emailed ? 'Added, and emailed that they are on this team.' : 'Added. Nothing was emailed (email is on hold, or they have no address).';
+    } catch (er) { msg.textContent = er.message || 'Could not add.'; }
+  });
+  $('td-cadd').addEventListener('click', async () => {
+    const name = $('td-cname').value.trim(), email = $('td-cemail').value.trim();
+    if (!name) { msg.textContent = 'Type the coach\u2019s name.'; return; }
+    $('td-cadd').disabled = true;
+    try {
+      const r = await api('/api/coach/staff', { method: 'POST', body: { display_name: name, email: email || null, team_ids: [id] } });
+      await refresh(); loadTeams(); loadStaff(true);
+      const m = $('td-cmsg');
+      m.innerHTML = r.emailed ? `Added. ${esc(name)} was emailed their sign-in link, naming ${esc(tdState.data.team.name)}.`
+        : `Added. ${r.email ? 'Email is on hold, so nothing was sent.' : 'No email address given.'} Their sign-in link: <code style="word-break:break-all">${esc(r.link || '')}</code>`;
+    } catch (er) { msg.textContent = er.message || 'Could not add the coach.'; $('td-cadd').disabled = false; }
+  });
+}
+
 // Every player, ranked. The server does the ranking (ties share a rank, nobody is left out for having done nothing);
 // this only draws it. Re-fetched with the page's team and window, so it always matches the standings above it.
 async function loadRanking(teamId, window_) {
@@ -3509,6 +3690,7 @@ function renderReview(sessions) {
 
 async function loadTeams() {
   const { teams } = await api('/api/coach/teams');
+  renderTeamsHome(teams);
   // data-label: on a phone each row stacks into a labelled block (styles.css
   // .teams-table) so the join code and Remove are on screen, not off to the right.
   $('teams').innerHTML = teams.length ? teams.map((t) => `
@@ -5343,7 +5525,6 @@ async function suggestFromName() {
   } catch { /* leave as is */ }
 }
 $('new-team').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(suggestFromName, 250); });
-$('go-create-team').addEventListener('click', (e) => { e.preventDefault(); $('teams-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => $('new-team').focus(), 400); });
 
 $('add-team').addEventListener('click', async () => {
   const name = $('new-team').value.trim();
@@ -5790,7 +5971,7 @@ async function initTeamDrills() {
 (function () {
   var KEY = 'offdays.fold.v1';
   var KEEP_OPEN = { 'needs-card': 1 };                  // the front door starts open
-  var NEVER = { 'wizard': 1, 'setup-card': 1, 'code-card': 1, 'blockers-card': 1, 'scope-card': 1 };
+  var NEVER = { 'wizard': 1, 'setup-card': 1, 'code-card': 1, 'blockers-card': 1, 'scope-card': 1, 'teams-home': 1, 'team-detail-card': 1 };
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
   function store() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} }
@@ -5856,17 +6037,18 @@ async function initTeamDrills() {
     'mailhold-card': 'families', 'families-card': 'families', 'parents-card': 'families',
     'slips-card': 'families', 'add-player-card': 'families', 'import-card': 'families',
     'family-card': 'families',
-    'teams-card': 'teams', 'roster-card': 'teams', 'staff-card': 'teams',
-    'team-drills-card': 'teams', 'goals-card': 'teams', 'film-card': 'teams', 'shelf-card': 'teams', 'suggest-card': 'teams',
-    'iq-card': 'teams', 'ball-card': 'teams', 'evaluation-card': 'teams',
-    'bulk-teams-card': 'teams', 'bulk-coaches-card': 'teams',
+    'teams-home': 'teams', 'team-detail-card': 'teams',
+    'roster-card': 'today', 'team-drills-card': 'today', 'goals-card': 'today', 'film-card': 'today', 'shelf-card': 'today',
+    'suggest-card': 'today',
+    'teams-card': 'settings', 'staff-card': 'settings', 'iq-card': 'settings', 'ball-card': 'settings',
+    'evaluation-card': 'settings', 'bulk-teams-card': 'settings', 'bulk-coaches-card': 'settings',
     'contact-card': 'settings', 'password-card': 'settings', 'badge-card': 'settings', 'season-card': 'settings',
     'billing-card': 'settings', 'specialisation-card': 'settings', 'recognition-card': 'settings',
     'library-card': 'settings', 'digest-card': 'settings', 'code-card': 'settings'
   };
   // Boxes with no id are found by their heading.
   var TAB_OF_HEADING = { 'assignments': 'today', 'message the team': 'today',
-                         'team standings': 'teams' };
+                         'team standings': 'today' };
   var KEY = 'offdays.tab.v2';
   var grid = document.querySelector('.wrap--grid');
   var bar = document.getElementById('tabbar');
@@ -5889,8 +6071,8 @@ async function initTeamDrills() {
     grid.querySelectorAll(':scope > .card, :scope > .stat-row').forEach(function (c) {
       var t = c.id === 'summary' || c.classList.contains('stat-row') ? 'today' : tabFor(c);
       var away = (!!t && t !== tab) || (DETAIL[c.id] && !opened[c.id]);
-      // The team and window filter belongs to Today, Families and Teams; Home has its own and Settings has none.
-      if (c.id === 'filter-card' && (tab === 'home' || tab === 'settings')) away = true;
+      // The team and window filter belongs to Today and Families; Home has its own, and Teams and Settings have none.
+      if (c.id === 'filter-card' && (tab === 'home' || tab === 'settings' || tab === 'teams')) away = true;
       c.classList.toggle('tab-off', !!away);
     });
     bar.querySelectorAll('button').forEach(function (b) {

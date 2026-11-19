@@ -12,10 +12,11 @@ def _between(start: str, end: str) -> str:
 
 
 class TestSettingsHasNoUseForTheTeamFilter:
-    def test_the_filter_is_hidden_on_settings_and_home_but_not_on_the_tabs_it_filters(self):
+    def test_the_filter_is_hidden_on_settings_home_and_teams_but_not_on_the_tabs_it_filters(self):
+        # The Teams tab is the teams and one open team; it has nothing for a team or window filter to narrow.
         paint = _between("function paint()", "function dots()")
-        assert "c.id === 'filter-card' && (tab === 'home' || tab === 'settings')" in paint
-        for tab in ("today", "families", "teams"):
+        assert "c.id === 'filter-card' && (tab === 'home' || tab === 'settings' || tab === 'teams')" in paint
+        for tab in ("today", "families"):
             assert f"tab === '{tab}'" not in paint.split("filter-card")[1].split("away = true")[0]
 
 

@@ -470,6 +470,24 @@ player" with their own words, shown in grey on the strip, and never counted as m
 teams; anyone else, an unknown id, a coach or a director id all get the same 404. It shows no team targets, no rank and no
 other player.
 
+## The Teams tab
+
+Just the teams and a **Create a team** button (director). Press it, name the team, and the next screen is that team with its next
+steps: **Add players** (opens the roster import with this team already chosen) and **Add a coach** (name and email: they are
+emailed their sign-in link with the team named; or pick a coach already in the program).
+
+Click any team to open it: who is on the roster and who has a login, and what each has done. For each player: whether their
+parent has signed up, whether the player has signed in, whether the parent or the player has made an email login, when they
+last trained, and sessions this week and in 30 days (work they logged themselves is counted apart, in brackets). The
+buttons narrow it to no login yet, signed in, or not trained this week; a player's name opens their full activity. The team's
+coaches are listed with whether they have signed in, and a director can resend a coach's link or remove them from here.
+A coach can open their own teams but not manage coaches. `GET /api/coach/teams/{id}/detail`; another program's team, an
+unknown id and a team a coach is not on are the same 404. No team targets and no ranking appear.
+
+Everything that used to sit on the Teams tab is still there, moved to where it is used: team drills, goals, video clips, the
+shelf, suggestions, the roster table and standings are on **Today**; the old create-team form, coaches and team access,
+bulk setup, the IQ, ball and evaluation cards are in **Settings**.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

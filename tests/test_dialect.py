@@ -88,7 +88,9 @@ class TestTheInventoryIsAccurate:
         """The bug that made the first run report 115 date functions when
         there are 21. Python's own date() is on every other line here."""
         finding = self._find("date_functions")
-        assert finding.total < 40, (
+        # Real SQLite date() calls have grown past the first 40 as features read activity by day; the bug this guards
+        # reported 115, so the ceiling sits well below that.
+        assert finding.total < 70, (
             f"{finding.total} 'SQLite date functions' is Python's date() "
             "leaking into the count"
         )

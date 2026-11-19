@@ -43,7 +43,7 @@ async function asUser(token, label) {
 
 // ---- the director, from the roster
 let page = await asUser(dt, 'director');
-await page.click('#tabbar [data-tab="teams"]');
+await page.click('#tabbar [data-tab="today"]');
 await page.evaluate(() => { let e = document.querySelector('#roster'); while (e) { if (e.classList && e.classList.contains('card')) { e.classList.remove('hidden'); e.classList.add('open'); if (e._foldOpen) e._foldOpen(); } e = e.parentElement; } });
 await page.waitForSelector('#roster [data-open-athlete]', { timeout: 20000 });
 await page.locator('#roster [data-open-athlete]', { hasText: 'Dillon Langdon' }).click();
@@ -63,7 +63,7 @@ check(await page.locator('#athlete-dd').isHidden(), 'Escape closes it');
 
 // ---- Joel (2031 Red only)
 page = await asUser(joel.code, 'coach');
-await page.click('#tabbar [data-tab="teams"]');
+await page.click('#tabbar [data-tab="today"]');
 await page.evaluate(() => { let e = document.querySelector('#roster'); while (e) { if (e.classList && e.classList.contains('card')) { e.classList.remove('hidden'); e.classList.add('open'); if (e._foldOpen) e._foldOpen(); } e = e.parentElement; } });
 await page.waitForSelector('#roster [data-open-athlete]', { timeout: 20000 });
 const names = await page.locator('#roster [data-open-athlete]').allInnerTexts();
