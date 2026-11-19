@@ -3829,8 +3829,19 @@ function inviteAsText(r) {
   return `To: ${r.email}\nSubject: ${r.subject}\n\n${r.text}`;
 }
 async function copyInviteText(btn, r) {
-  try { await navigator.clipboard.writeText(inviteAsText(r)); btn.textContent = 'Copied'; }
-  catch { btn.textContent = 'Select and copy manually'; }
+  // Copied as a real email (text AND html), so pasting it into Gmail or Outlook keeps the link a link.
+  try {
+    if (r.html && window.ClipboardItem && navigator.clipboard.write) {
+      const html = `<p><b>To:</b> ${esc(r.email)}<br><b>Subject:</b> ${esc(r.subject)}</p>${r.html}`;
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([inviteAsText(r)], { type: 'text/plain' }),
+      })]);
+    } else {
+      await navigator.clipboard.writeText(inviteAsText(r));
+    }
+    btn.textContent = 'Copied';
+  } catch { btn.textContent = 'Select and copy manually'; }
 }
 
 const resent = new Map();   // athlete_id -> the invite just made, until the page reloads
@@ -4023,8 +4034,9 @@ $('msg-preview').addEventListener('click', async () => {
     const m = await api('/api/coach/families/invite-preview', { method: 'POST', body: { intro: $('msg-intro').value, athlete_id: first } });
     out.innerHTML = `<div class="muted">From: ${esc(m.from_name)}${m.reply_to ? ` &middot; Reply to: ${esc(m.reply_to)}` : ''}</div>`
       + `<div style="margin:4px 0"><b>Subject:</b> ${esc(m.subject)}</div>`
-      + `<div style="white-space:pre-wrap;border:1px solid var(--border);border-radius:8px;padding:10px;max-height:320px;overflow:auto">${esc(m.text)}</div>`
-      + '<div class="muted" style="margin-top:4px">Each parent gets their own personal link where the example one is.</div>';
+      + `<iframe title="What a parent will receive" sandbox="allow-popups allow-popups-to-escape-sandbox" style="width:100%;height:420px;border:1px solid var(--border);border-radius:8px;background:#fff"
+           srcdoc="${esc('<base target="_blank"><div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.45;color:#222;padding:12px">' + m.html + '</div>')}"></iframe>`
+      + '<div class="muted" style="margin-top:4px">This is the email as a parent sees it: the button and the link under it are both clickable. Each parent gets their own personal link where the example one is.</div>';
   } catch (e) { out.textContent = e.message || 'Could not make the preview.'; }
   out.classList.remove('hidden');
 });

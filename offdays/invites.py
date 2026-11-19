@@ -120,16 +120,18 @@ def _compose_base(
         return _compose_family([first] + [n.split()[0] for n in also if n.strip()],
                                org_name=org_name, coach_name=coach_name, code=code, link=link, days=days)
     subject = f"{org_name}: set up {first}'s training app"
+    why_text, why_html = _reasons(first, coach_name, many=False)
 
     text = (
         f"{coach_name} at {org_name} uses 0FFDAYS so {first} can record "
         f"drills at home and get credit for the work.\n\n"
-        f"The app counts reps on {first}'s own phone. The video never leaves "
-        f"the phone: it is not uploaded or stored anywhere. Their coach sees "
+        + why_text +
+        f"The app counts reps on {first}'s own phone or tablet. The video never leaves "
+        f"the phone or tablet: it is not uploaded or stored anywhere. Their coach sees "
         f"the numbers, never the footage.\n\n"
         f"Nothing happens until you say so. Set up your parent account, decide "
         f"whether {first} can train, and the app gives you a sign-in link to "
-        f"text or email to {first}'s phone.\n\n"
+        f"text or email to {first}'s phone or tablet.\n\n"
         f"Open this link:\n{link}\n\n"
         f"Or go to the app and enter the invite code {code}.\n\n"
         f"The code works once and expires in {days} days. If it has expired, "
@@ -141,15 +143,17 @@ def _compose_base(
     html = (
         f"<p>{escape(coach_name)} at <b>{escape(org_name)}</b> uses 0FFDAYS so "
         f"{escape(first)} can record drills at home and get credit for the work.</p>"
-        f"<p>The app counts reps on {escape(first)}'s own phone. <b>The video never "
-        f"leaves the phone</b>: it is not uploaded or stored anywhere. Their coach "
+        + why_html +
+        f"<p>The app counts reps on {escape(first)}'s own phone or tablet. <b>The video never "
+        f"leaves the phone or tablet</b>: it is not uploaded or stored anywhere. Their coach "
         f"sees the numbers, never the footage.</p>"
         f"<p>Nothing happens until you say so. Set up your parent account, decide "
         f"whether {escape(first)} can train, and the app gives you a sign-in link "
-        f"to text or email to {escape(first)}'s phone.</p>"
+        f"to text or email to {escape(first)}'s phone or tablet.</p>"
         f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;'
         f'background:#111;color:#fff;text-decoration:none;border-radius:6px">'
         f"Set up {escape(first)}'s account</a></p>"
+        f"{mailer.link_fallback_html(link)}"
         f'<p style="color:#555">Or go to the app and enter the invite code '
         f"<code>{escape(code)}</code>.</p>"
         f'<p style="color:#555">The code works once and expires in {days} days. '
@@ -161,6 +165,39 @@ def _compose_base(
     return subject, html, text
 
 
+def _reasons(who: str, coach_name: str, many: bool) -> tuple[str, str]:
+    """(text, html) for the part of the first email that answers a parent's real questions.
+
+    Why the program uses the app, what an athlete gets out of it in body and in mind, and what it runs on. Every
+    claim is something the app does: short sessions sized for the athlete's age and rest suggested after heavy weeks
+    (offdays/week_plan.py, load advisories), strength and conditioning drills beside the sport's own (push-ups, planks,
+    jump rope in the drill catalog), streaks and badges, the soreness check-in, and a browser app that needs only a
+    camera. No health outcome is promised.
+    """
+    they = "each athlete" if many else who
+    age = "each athlete's age" if many else f"{who}'s age"
+    heading = "What each athlete gets out of it" if many else f"What {who} gets out of it"
+    why = (f"Practice is only a few hours a week. Most of the improvement happens on the days in between, and 0FFDAYS "
+           f"makes that work short, guided and easy to keep up. It also shows {coach_name} who is putting in the effort.")
+    body = (f"skill reps for the sport, plus strength, conditioning and coordination work such as push-ups, planks and "
+            f"jump rope. Sessions are short and sized for {age}, and the app suggests rest after a heavy stretch of "
+            f"training, so the work builds {they} up without wearing them out.")
+    mind = (f"a habit of showing up, and the confidence that comes from seeing real progress through streaks and "
+            f"badges. A quick check-in lets {they} say when something is sore, and the plan goes easy on it.")
+    device = ("Any phone or tablet with a camera and a web browser will do. There is nothing to download: open the "
+              f"link, prop the device up so the camera can see {they}, and start.")
+    text = (f"Why we are doing this: {why}\n\n"
+            f"{heading}:\n"
+            f"  * Physically: {body}\n"
+            f"  * Mentally: {mind}\n\n"
+            f"Works on a phone or a tablet. {device}\n\n")
+    html = (f"<p><b>Why we are doing this.</b> {escape(why)}</p>"
+            f"<p><b>{escape(heading)}.</b></p>"
+            f"<ul><li><b>Physically:</b> {escape(body)}</li><li><b>Mentally:</b> {escape(mind)}</li></ul>"
+            f"<p><b>Works on a phone or a tablet.</b> {escape(device)}</p>")
+    return text, html
+
+
 def _join(names: list[str]) -> str:
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
@@ -170,13 +207,16 @@ def _compose_family(firsts: list[str], *, org_name: str, coach_name: str, code: 
     """The same invite for a parent with several children on the roster: one email, one account."""
     names = _join(firsts)
     subject = f"{org_name}: set up {names} on 0FFDAYS"
+    why_text, why_html = _reasons(names, coach_name, many=True)
     text = (
         f"{coach_name} at {org_name} uses 0FFDAYS so {names} can record drills at home and get credit for the "
         f"work.\n\n"
-        f"The app counts reps on each athlete's own phone. The video never leaves the phone: it is not uploaded or "
-        f"stored anywhere. Their coach sees the numbers, never the footage.\n\n"
+        + why_text +
+        f"The app counts reps on each athlete's own phone or tablet. The video never leaves the phone or tablet: it "
+        f"is not uploaded or stored anywhere. Their coach sees the numbers, never the footage.\n\n"
         f"One parent account covers all of them. Set it up once, decide for each athlete whether they can train, "
-        f"and the app gives you a separate sign-in link for each to text or email to that athlete's phone.\n\n"
+        f"and the app gives you a separate sign-in link for each to text or email to that athlete's phone or "
+        f"tablet.\n\n"
         f"Open this link:\n{link}\n\n"
         f"Or go to the app and enter the invite code {code}.\n\n"
         f"The code works once and expires in {days} days. If it has expired, ask {coach_name} for a new one.\n\n"
@@ -186,14 +226,16 @@ def _compose_family(firsts: list[str], *, org_name: str, coach_name: str, code: 
     html = (
         f"<p>{escape(coach_name)} at <b>{escape(org_name)}</b> uses 0FFDAYS so {escape(names)} can record drills "
         f"at home and get credit for the work.</p>"
-        f"<p>The app counts reps on each athlete's own phone. <b>The video never leaves the phone</b>: it is not "
-        f"uploaded or stored anywhere. Their coach sees the numbers, never the footage.</p>"
+        + why_html +
+        f"<p>The app counts reps on each athlete's own phone or tablet. <b>The video never leaves the phone or "
+        f"tablet</b>: it is not uploaded or stored anywhere. Their coach sees the numbers, never the footage.</p>"
         f"<p><b>One parent account covers all of them.</b> Set it up once, decide for each athlete whether they can "
         f"train, and the app gives you a separate sign-in link for each to text or email to that athlete's "
-        f"phone.</p>"
+        f"phone or tablet.</p>"
         f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;'
         f'background:#111;color:#fff;text-decoration:none;border-radius:6px">'
         f"Set up {escape(names)}</a></p>"
+        f"{mailer.link_fallback_html(link)}"
         f'<p style="color:#555">Or go to the app and enter the invite code <code>{escape(code)}</code>.</p>'
         f'<p style="color:#555">The code works once and expires in {days} days. '
         f"If it has expired, ask {escape(coach_name)} for a new one.</p>"
@@ -239,6 +281,7 @@ def compose_staff(
         f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;'
         f'background:#111;color:#fff;text-decoration:none;border-radius:6px">'
         f"Open your coach dashboard</a></p>"
+        f"{mailer.link_fallback_html(link)}"
         f'<p style="color:#555">Or go to the app and enter the code '
         f"<code>{escape(code)}</code>.</p>"
         f'<p style="color:#555;font-size:90%">Keep this message: the link is your '

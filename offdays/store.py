@@ -4429,7 +4429,7 @@ class Store:
             emailed += 1 if sent else 0
             # The whole message, not just the code: when the program has no outbound email, the director sends
             # this from their own account, and a code alone is not a message.
-            subject, _html, text = invites_mod.compose(
+            subject, html, text = invites_mod.compose(
                 athlete_name=display_name, code=invite["code"], also=invite.get("also_names") or (),
                 reply_to=invites_mod.staff_reply_to(self.conn, created_by), **sender,
             )
@@ -4443,6 +4443,7 @@ class Store:
                 "link": invites_mod.invite_link(invite["code"]),
                 "subject": subject,
                 "text": text,
+                "html": html,
                 "emailed": sent,
             })
 

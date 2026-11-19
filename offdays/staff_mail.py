@@ -130,8 +130,10 @@ _FOOTER_HTML = ('<p style="color:#666;font-size:90%">This message was sent autom
 
 
 def _button(url: str, label: str) -> str:
+    """A button, and under it the address written out as a clickable link (it works in every mail program)."""
     return (f'<p><a href="{escape(url)}" style="display:inline-block;padding:12px 20px;background:#111;'
-            f'color:#fff;text-decoration:none;border-radius:6px">{escape(label)}</a></p>')
+            f'color:#fff;text-decoration:none;border-radius:6px">{escape(label)}</a></p>'
+            + mailer.link_fallback_html(url))
 
 
 def _compose(kind: str, org_name: str, link: str = "") -> tuple[str, str, str]:

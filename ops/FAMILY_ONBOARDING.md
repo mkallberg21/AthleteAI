@@ -382,6 +382,34 @@ own mail address as a message for a person, not an anonymous notice:
   message to send from their own mail, now including their note. Sender names and reply addresses are cleaned so they
   cannot break a header.
 
+## Links in emails are hyperlinks
+
+Every email that tells someone to open a link (parent invite, coach sign-in, confirm and reset, parent back in, sender
+confirm) carries it three ways: the plain-text part has the address on a line of its own (never mid-sentence, where mail
+programs most often leave it as text); the HTML part has the button; and under the button the address is written out as
+a hyperlink (`mailer.link_fallback_html`), for mail programs that strip button styling. `tests/test_email_links.py`
+parses every kind and fails if any address in the text is not a hyperlink in the HTML.
+
+Where the message is not sent by 0FFDAYS, a link cannot be formatted: a `mailto:` body is plain text by definition. So:
+- the director's dashboard preview shows the real HTML email (a sandboxed frame), and "Copy message" puts BOTH html and
+  text on the clipboard, so pasting into Gmail or Outlook keeps the link a link (the invite responses carry `html`);
+- a parent's email to their athlete (the Email button in the portal) puts the sign-in link on a line of its own;
+  a text message keeps one line.
+
+## What the first email to a parent says
+
+Above the link, in this order: why the program uses the app (practice is a few hours a week, most improvement happens
+between practices, and the coach can see who is putting in the effort); what the athlete gets out of it, physically
+(skill reps plus strength, conditioning and coordination work, short sessions sized for age, rest suggested after a heavy
+stretch) and mentally (a habit of showing up, confidence from visible progress through streaks and badges, a soreness
+check-in the plan responds to); and that it works on a phone or a tablet (any with a camera and a web browser, nothing
+to download). Single child and family versions share `invites._reasons`.
+
+Every claim is something the app does, and `tests/test_invite_content.py` checks that the things it names exist (the
+Push-Ups, Plank Hold and Jump Rope drills, streaks and badges, the check-in route, the age-sized weekly plan, a browser
+app on the device camera). No health outcome is promised, no child's gender is assumed, no dashes, American spelling.
+Edit the wording there, not in a template elsewhere; the preview and the email that goes out are the same text.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

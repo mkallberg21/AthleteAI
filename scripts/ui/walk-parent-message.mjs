@@ -114,9 +114,17 @@ await page.click('#msg-preview');
 await page.waitForSelector('#msg-out:not(.hidden)');
 const prev = (await page.locator('#msg-out').innerText()).replace(/\s+/g, ' ');
 check(/From: Matt Kallberg \(Nashville Dogs\) via 0FFDAYS/.test(prev) && new RegExp(`Reply to: ${DIR_EMAIL.replace(/\./g, '\\.')}`).test(prev), 'the preview shows who it is from and where replies go');
-check(/Hi everyone, this is Matt/.test(prev) && /Sent by 0FFDAYS on behalf of Matt Kallberg/.test(prev), 'it shows the note and the on-behalf line');
+const emailText = (await page.frameLocator('#msg-out iframe').locator('body').innerText()).replace(/\s+/g, ' ');
+check(/Hi everyone, this is Matt/.test(emailText) && /Sent by 0FFDAYS on behalf of Matt Kallberg/.test(emailText), 'it shows the note and the on-behalf line');
 check(fresh() === '', 'a preview sends nothing');
+const frame = page.frameLocator('#msg-out iframe');
+await frame.locator('a').first().waitFor({ timeout: 10000 });
+const hrefs = await frame.locator('a').evaluateAll((as) => as.map((a) => ({ href: a.getAttribute('href'), text: a.textContent.trim(), target: a.target || '' })));
+const invLinks = hrefs.filter((a) => /invite=ABCD-EFGH-JKLM/.test(a.href || ''));
+check(invLinks.length === 2, 'the preview is the real email: the button and the written-out link are both hyperlinks', `(${invLinks.length})`);
+check(invLinks.some((a) => a.text.startsWith('http') && a.text === a.href), 'the written-out link shows the same address it opens');
 await page.screenshot({ path: `${out}/2-preview.png` });
+await page.locator('#msg-out iframe').screenshot({ path: `${out}/2b-email.png` });
 
 // a test goes only to the director
 await page.click('#msg-test');

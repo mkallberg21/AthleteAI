@@ -24,6 +24,7 @@ import hashlib
 import hmac
 import logging
 import sqlite3
+from html import escape
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
@@ -187,6 +188,17 @@ def mail_held(conn: sqlite3.Connection, org_id: int | None) -> bool:
         "SELECT mail_hold FROM organizations WHERE id = ?", (org_id,)
     ).fetchone()
     return row is None or bool(row["mail_hold"])
+
+
+def link_fallback_html(url: str) -> str:
+    """The link written out under a button, and itself a hyperlink.
+
+    A button is a hyperlink too, but some mail programs strip button styling or show only its label. Writing the
+    address out as clickable text means the link works in every one of them, and a person can still see where it goes.
+    """
+    u = escape(url)
+    return (f'<p style="color:#555;font-size:90%;word-break:break-all">If the button does not work, open this link: '
+            f'<a href="{u}">{u}</a></p>')
 
 
 def clean_display_name(value: str | None, limit: int = 90) -> str:

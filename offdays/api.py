@@ -3120,14 +3120,14 @@ def create_guardian_invite(
         store.conn, invite, queued_ids=queued, **store._invite_sender(principal.org_id, principal.id)
     )
     _send_now(store, queued, background)
-    subject, _html, text = invites_mod.compose(
+    subject, html, text = invites_mod.compose(
         athlete_name=invite["athlete_name"], code=invite["code"], also=invite.get("also_names") or (),
         reply_to=invites_mod.staff_reply_to(store.conn, principal.id),
         **store._invite_sender(principal.org_id, principal.id),
     )
     return {
         **invite, "link": invites_mod.invite_link(invite["code"]),
-        "subject": subject, "text": text, "emailed": sent,
+        "subject": subject, "text": text, "html": html, "emailed": sent,
         "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }
 
@@ -3227,7 +3227,7 @@ def _nudge_one(principal: Principal, store: Store, athlete_id: int, intro: str =
         store.conn, invite, intro=intro, queued_ids=queued,
         **store._invite_sender(principal.org_id, principal.id)
     )
-    subject, _html, text = invites_mod.compose(
+    subject, html, text = invites_mod.compose(
         athlete_name=invite["athlete_name"], code=invite["code"], also=invite.get("also_names") or (),
         intro=intro, reply_to=invites_mod.staff_reply_to(store.conn, principal.id),
         **store._invite_sender(principal.org_id, principal.id),
@@ -3243,6 +3243,7 @@ def _nudge_one(principal: Principal, store: Store, athlete_id: int, intro: str =
         "link": invites_mod.invite_link(invite["code"]),
         "subject": subject,
         "text": text,
+        "html": html,
         "emailed": sent,
         "smtp_configured": mailer.can_send(store.conn, principal.org_id),
     }

@@ -156,6 +156,9 @@ function renderSigninLink(wrap, res) {
   const whole = (u) => (/^https?:\/\//i.test(u) ? u : `${location.origin}${u.startsWith('/') ? '' : '/'}${u}`);
   const link = whole(res.link || `/app/index.html?code=${encodeURIComponent(res.code)}`);
   const message = `${first}, tap this to sign in to your training app: ${link}`;
+  // In an email the link goes on a line of its own: a link sitting after a colon in a sentence is the one mail
+  // programs most often leave as plain text.
+  const emailBody = `${first}, tap this link to sign in to your training app:\n\n${link}\n\nIt keeps working all season. Keep this email.`;
   const subject = `${first}'s training app sign-in`;
   const canShare = typeof navigator.share === 'function';
 
@@ -167,7 +170,7 @@ function renderSigninLink(wrap, res) {
       <button class="secondary inline" data-copy>Copy</button>
       ${canShare ? '<button class="secondary inline" data-share>Share</button>' : ''}
       <a class="btn-link" href="sms:?&body=${encodeURIComponent(message)}">Text</a>
-      <a class="btn-link" href="mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}">Email</a>
+      <a class="btn-link" href="mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}">Email</a>
     </div>
     <div class="small muted" style="margin-top:6px">
       Keeps working all season, on any phone: a new phone or a cleared browser

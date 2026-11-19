@@ -92,6 +92,7 @@ def _compose(org_name: str, link: str) -> tuple[str, str, str]:
         "<p>Confirm that this is your email address.</p>"
         f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;'
         'text-decoration:none;border-radius:6px">Confirm my email</a></p>'
+        + mailer.link_fallback_html(link) +
         "<p>After you do, the emails you send to parents from 0FFDAYS say they are sent on your behalf, and when a "
         "parent replies, the reply comes to this inbox. 0FFDAYS never reads your email or sends from your account.</p>"
         f'<p style="color:#666;font-size:90%">The link works once and lasts {CONFIRM_HOURS} hours. If you did not ask '
