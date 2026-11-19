@@ -46,13 +46,13 @@
     <!-- Who are you? One button each; the page shows only that role's part. -->
     <div class="role-grid" id="roles" role="tablist" aria-label="I am a">
       <button type="button" class="role-btn" data-role="athlete" role="tab" aria-controls="panel-athlete">
-        <span class="role-icon">🥍</span><b>Athlete</b><span>Use the link your parent sent</span>
+        <span class="role-icon">🥍</span><b>Athlete</b><span>Sign in</span>
       </button>
       <button type="button" class="role-btn" data-role="parent" role="tab" aria-controls="panel-parent">
-        <span class="role-icon">👪</span><b>Parent</b><span>Set up your child</span>
+        <span class="role-icon">👪</span><b>Parent</b><span>Sign in</span>
       </button>
       <button type="button" class="role-btn" data-role="coach" role="tab" aria-controls="panel-coach">
-        <span class="role-icon">📋</span><b>Coach</b><span>Your team's dashboard</span>
+        <span class="role-icon">📋</span><b>Coach</b><span>Sign in</span>
       </button>
       <button type="button" class="role-btn" data-role="director" role="tab" aria-controls="panel-director">
         <span class="role-icon">🏆</span><b>Director</b><span>Start or run a program</span>
@@ -71,29 +71,21 @@
       <div class="landing-empty-inner">
         <div style="font-size:2.2rem">&larr;</div>
         <b>Pick who you are</b>
-        <span class="small muted">Athletes use the link a parent sent. Parents set up their child. Coaches and directors sign in with their code.</span>
+        <span class="small muted">Athletes, parents and coaches sign in with their email and password. Directors can start a program or sign in.</span>
       </div>
     </div>
 
     <!-- ATHLETE: the link from a parent signs them in; the code is the fallback -->
     <div class="role-panel hidden" id="panel-athlete">
-    <div class="card">
-      <div class="section-header">
-        <span class="section-title">Athlete sign-in</span>
-      </div>
-      <p class="small muted" style="margin-top:0.25rem;">Your parent or guardian texts or emails you a link. Tap it and you are in; nothing to type. Lost the link? Ask them to send it again, or paste the code from it here.</p>
-      <form id="signin-form" style="margin-top:0.5rem;" action="/api/me/login" method="post" novalidate>
-        <div class="form-group">
-          <label class="form-label" for="token">The code from your link</label>
-          <input id="token" class="form-input" type="password" autocomplete="off"
-                 placeholder="Paste your code"
-                 value="" name="token"
-                 aria-describedby="err">
-          <div id="err" class="form-error hidden"></div>
-        </div>
-        <button type="submit" class="btn btn-primary" id="go">Continue</button>
-      </form>
-    </div>
+    <!-- A sign-in link a parent sent (?code=) is spent by this form, which is never shown. What an athlete sees is the email and
+         password card below; a link that no longer works says so here. -->
+    <div id="err" class="form-error hidden" role="alert"></div>
+    <form id="signin-form" class="hidden" action="/api/me/login" method="post" novalidate>
+      <input id="token" type="password" autocomplete="off" name="token" tabindex="-1" aria-hidden="true">
+      <button type="submit" id="go" tabindex="-1">Continue</button>
+    </form>
+
+    <!-- Printed claim slips    </div>
 
     <!-- Printed claim slips (families with no email on file). Hidden unless a
          slip's ?claim= link brings someone here; the normal athlete path is the
@@ -114,9 +106,9 @@
     </div>
     </div>
 
-    <!-- PARENT: redeem the club's invite, or a family on its own -->
+    <!-- PARENT: sign in. The invite card above shows only when the invite link in the email is opened. -->
     <div class="role-panel hidden" id="panel-parent">
-    <div class="card">
+    <div class="card hidden" id="parent-card">
       <div class="section-header">
         <span class="section-title">Set up your child</span>
       </div>
@@ -185,7 +177,7 @@
       <div class="section-header">
         <span class="section-title">Coach sign-in</span>
       </div>
-      <p class="small muted" style="margin-top:0.25rem;">Your director emailed you a sign-in link; tapping it brings you straight in. No link? Paste the code from that email.</p>
+      <p class="small muted" style="margin-top:0.25rem;">Sign in with your email and password.</p>
       <form class="pw-signin" style="margin-top:0.5rem;" novalidate>
         <div class="form-group">
           <label class="form-label" for="coach-email">Email</label>
@@ -199,17 +191,6 @@
         <button type="submit" class="btn btn-primary">Sign in</button>
         <p class="small" style="margin:0.6rem 0 0"><a href="#" class="pw-forgot">Forgot your password?</a></p>
       </form>
-      <details class="code-fallback" style="margin-top:0.9rem">
-        <summary class="small muted" style="cursor:pointer">No password yet? Use your code</summary>
-      <form class="staff-signin" style="margin-top:0.5rem;" novalidate>
-        <div class="form-group">
-          <label class="form-label" for="coach-token">Your code</label>
-          <input id="coach-token" class="form-input" type="password" autocomplete="off" placeholder="Paste your code">
-          <div id="coach-err" class="form-error hidden"></div>
-        </div>
-        <button type="submit" class="btn btn-secondary">Open my dashboard</button>
-      </form>
-      </details>
     </div>
     </div>
 
@@ -219,8 +200,9 @@
       <div class="section-header">
         <span class="section-title">Start your program</span>
       </div>
-      <p class="small muted" style="margin-top:0.25rem;">Name it, pick the sport, and you are the director. Next you add coaches, import the roster with parents' emails, and the app takes it from there. Fifty cents per rostered athlete per day of the season you set; nothing until then.</p>
-      <form style="margin-top:0.75rem;">
+      <p class="small muted" style="margin-top:0.25rem;">Name it, pick the sport, and you are the director. We email you a link to verify your address; after that you add teams, coaches and the rosters with parents' emails, and the app takes it from there. Fifty cents per rostered athlete per day of the season you set, one total for the whole program; nothing until then.</p>
+      <form style="margin-top:0.75rem;" id="org-form" novalidate>
+       <div id="org-fields">
         <div class="form-group">
           <label class="form-label" for="org-name">Program name</label>
           <input id="org-name" class="form-input" placeholder="Northshore Lacrosse Club">
@@ -235,6 +217,11 @@
           <input id="org-director" class="form-input" placeholder="Dana Pierce" autocomplete="name">
         </div>
         <div class="form-group">
+          <label class="form-label" for="org-email">Your email</label>
+          <input id="org-email" class="form-input" type="email" placeholder="you@example.com" autocomplete="email" required>
+          <p class="form-hint">We send a link here to verify it. It is also how you sign in.</p>
+        </div>
+        <div class="form-group">
           <label class="terms-check" for="org-terms">
             <input type="checkbox" id="org-terms">
             <span>I agree to the <a href="terms.html" target="_blank" rel="noopener">Program Terms</a>,
@@ -243,7 +230,8 @@
         </div>
         <div id="oerr" class="form-error hidden"></div>
         <button type="button" class="btn btn-secondary" id="create-org">Create program</button>
-        <div id="org-token" class="small muted hidden" style="margin-top:0.75rem; padding:0.75rem; background:var(--surface-2); border-radius:var(--radius-sm);"></div>
+       </div>
+        <div id="org-token" class="small hidden" role="status" style="margin-top:0.75rem; padding:0.75rem; background:var(--surface-2); border-radius:var(--radius-sm);"></div>
       </form>
     </div>
 
@@ -276,6 +264,20 @@
       </form>
       </details>
     </div>
+    </div>
+    <div class="card hidden" id="verify-card">
+      <div class="section-header"><span class="section-title" id="verify-title">Checking your link&hellip;</span></div>
+      <p class="small muted" id="verify-text" style="margin-top:0.25rem;"></p>
+      <form id="verify-form" class="hidden" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="verify-pw">Choose a password</label>
+          <input id="verify-pw" class="form-input" type="password" autocomplete="new-password">
+          <p class="form-hint">At least 10 characters. A few unrelated words is easy to remember and hard to guess.</p>
+          <div id="verify-err" class="form-error hidden" role="alert"></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="verify-go">Continue to set up my program</button>
+      </form>
+      <p class="small hidden" id="verify-again" style="margin-top:0.75rem;"><a href="#director" id="verify-restart">Start again</a></p>
     </div>
     <div class="card hidden" id="create-card">
       <div class="section-header"><span class="section-title">Choose your password</span></div>
@@ -442,10 +444,17 @@ $('create-family').addEventListener('click', async () => {
 $('create-org').addEventListener('click', async () => {
   const name = $('org-name').value.trim();
   const director = $('org-director').value.trim();
+  const email = $('org-email').value.trim();
   $('oerr').classList.add('hidden');
   if (!name || !director) {
     $('oerr').textContent = 'A program name and your name, please.';
     $('oerr').classList.remove('hidden');
+    return;
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    $('oerr').textContent = 'Enter your email address. We send a link there to verify it.';
+    $('oerr').classList.remove('hidden');
+    $('org-email').focus();
     return;
   }
   if (!$('org-terms').checked) {
@@ -454,15 +463,15 @@ $('create-org').addEventListener('click', async () => {
     $('org-terms').focus();
     return;
   }
+  $('create-org').disabled = true;
   try {
-    const res = await api('/api/orgs', {
+    // Nothing is created yet: the details wait, and the email carries a link. Opening it asks for a password and only then makes
+    // the program and signs the director in.
+    const res = await api('/api/orgs/start', {
       method: 'POST',
-      body: { name, sport: $('org-sport').value, director_name: director, accept_terms: true },
+      body: { name, sport: $('org-sport').value, director_name: director, email, accept_terms: true },
     });
-    // Straight in. The walkthrough shows the code once, as its own step,
-    // where it can be copied or emailed; nobody should have to stop here.
-    try { sessionStorage.setItem('offdays.newDirectorCode', res.director.token); } catch { /* fine */ }
-    await signIn(res.director.token, { button: $('create-org'), error: $('oerr') });
+    showCheckEmail(res.email || email);
   } catch (e) {
     // The server asked for the terms and this page did not offer them: it is an older copy than the server. Load
     // the current page once (never in a loop) instead of leaving a message the person cannot act on.
@@ -475,8 +484,35 @@ $('create-org').addEventListener('click', async () => {
     }
     $('oerr').textContent = e.message;
     $('oerr').classList.remove('hidden');
-  }
+  } finally { $('create-org').disabled = false; }
 });
+
+// The form is replaced by what to do next: open the email.
+function showCheckEmail(email) {
+  $('org-fields').classList.add('hidden');
+  const box = $('org-token');
+  box.classList.remove('hidden');
+  box.innerHTML = `<b>Check your email.</b> We sent a link to <b>${escapeHtml(email)}</b>. Open it and tap <b>Verify email</b>, choose a password,
+    and then add your teams, coaches and rosters.
+    <div class="muted" style="margin-top:0.5rem">No email after a few minutes? Check your spam folder.
+      <a href="#" id="org-resend">Send it again</a> or <a href="#" id="org-restart">use a different address</a>.</div>
+    <div id="org-resend-note" class="small" style="margin-top:0.4rem" role="status"></div>`;
+  $('org-resend').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const note = $('org-resend-note'); note.style.color = '';
+    try {
+      const r = await api('/api/orgs/resend-verification', { method: 'POST', body: { email } });
+      note.textContent = r.message || 'Sent again.';
+    } catch (x) { note.style.color = 'var(--danger)'; note.textContent = x.message || 'Could not send it again. Try in a minute.'; }
+  });
+  $('org-restart').addEventListener('click', (e) => {
+    e.preventDefault();
+    box.classList.add('hidden'); $('org-fields').classList.remove('hidden'); $('org-email').focus();
+  });
+}
+function escapeHtml(v) {
+  return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 const errEl = document.getElementById('err');
 const goBtn = document.getElementById('go');
@@ -541,14 +577,15 @@ document.querySelectorAll('.pw-signin').forEach((form) => {
   });
 });
 
-// ---- Everyone can sign in with an email and a password, and make that login themselves (no link to wait for).
+// ---- Athletes and parents sign in with an email and password (coaches and directors have their own cards above). Forgot your password
+// is also how a first password is chosen: it emails a link to the address the program has.
 const LOGIN_HOMES = { athlete: 'capture.html', guardian: 'parent.html' };
 (function emailLogins() {
   const PEOPLE = {
-    athlete: { nick: 'ath', signin: true, create: null },
-    parent: { nick: 'par', signin: true, create: 'the email your program has for you (the one your invite went to)' },
-    coach: { nick: 'coa', signin: false, create: 'the email your director added you with' },
-    director: { nick: 'dir', signin: false, create: 'the email on your account' },
+    athlete: { nick: 'ath', signin: true },
+    parent: { nick: 'par', signin: true },
+    coach: { nick: 'coa', signin: false },
+    director: { nick: 'dir', signin: false },
   };
   for (const [role, cfg] of Object.entries(PEOPLE)) {
     const panel = $(`panel-${role}`);
@@ -567,22 +604,7 @@ const LOGIN_HOMES = { athlete: 'capture.html', guardian: 'parent.html' };
           <p class="small" style="margin:0.6rem 0 0"><a href="#" id="${n}-forgot">Forgot your password?</a></p>
         </form>
       </div>` : '';
-    const create = cfg.create ? `
-      <details class="card" id="${n}-create-card" style="margin-top:0.75rem">
-        <summary class="small" style="cursor:pointer"><b>First time? Create my login</b></summary>
-        <p class="small muted" style="margin-top:0.5rem">Type ${cfg.create}. We email it a link; open it and choose a password. After that you sign in with your email and password, and nobody has to send you a link.</p>
-        <form id="${n}-create" novalidate>
-          <div class="form-group"><label class="form-label" for="${n}-create-email">Email</label>
-            <input id="${n}-create-email" class="form-input" type="email" autocomplete="email" placeholder="you@example.com"></div>
-          <div id="${n}-create-msg" class="small" style="margin:0.4rem 0" role="status"></div>
-          <button type="submit" class="btn btn-secondary">Email me a link</button>
-        </form>
-      </details>` : `
-      <details class="card" id="${n}-create-card" style="margin-top:0.75rem">
-        <summary class="small" style="cursor:pointer"><b>Make my own login</b></summary>
-        <p class="small muted" style="margin-top:0.5rem">Open the link your parent sent you once. On your home screen tap <b>Make my login</b>, type an email address, and open the link we send to it. Next time you sign in with that email and a password, with no link from anyone.</p>
-      </details>`;
-    panel.insertAdjacentHTML('beforeend', signin + create);
+    panel.insertAdjacentHTML('beforeend', signin);
 
     if (cfg.signin) {
       $(`${n}-signin`).addEventListener('submit', async (e) => {
@@ -607,23 +629,6 @@ const LOGIN_HOMES = { athlete: 'capture.html', guardian: 'parent.html' };
         resetStep('forgot');
         $('pw-reset-card').classList.remove('hidden');
         $('pw-reset-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    }
-    if (cfg.create) {
-      $(`${n}-create`).addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const msg = $(`${n}-create-msg`); msg.style.color = '';
-        const email = $(`${n}-create-email`).value.trim();
-        if (!email) { msg.style.color = 'var(--danger)'; msg.textContent = 'Type your email address.'; return; }
-        const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true;
-        try {
-          const res = await fetch('/api/login/create-start', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }) });
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(res.status === 429 ? 'Too many tries. Wait a few minutes and try again.' : (body.detail || 'Could not send.'));
-          msg.textContent = body.message || 'If that address is set up, a link is on its way.';
-        } catch (ex) { msg.style.color = 'var(--danger)'; msg.textContent = ex.message; }
-        finally { btn.disabled = false; }
       });
     }
   }
@@ -730,7 +735,6 @@ document.getElementById('signin-form').addEventListener('submit', async (e) => {
 });
 
 for (const [form, inputId, errId] of [
-  [document.querySelector('#panel-coach .staff-signin'), 'coach-token', 'coach-err'],
   [document.querySelector('#panel-director .staff-signin'), 'director-token', 'director-err'],
 ]) {
   form.addEventListener('submit', async (e) => {
@@ -808,11 +812,13 @@ const parentLink = params.get('parent');
 const confirmLink = params.get('confirm');
 const senderLink = params.get('sender');
 const createLink = params.get('create');
+const verifyLink = params.get('verify');
 // A link carries a secret: take it out of the address bar and history once read.
-if (resetLink || confirmLink || parentLink || senderLink || createLink) history.replaceState(null, '', window.location.pathname);
+if (resetLink || confirmLink || parentLink || senderLink || createLink || verifyLink) history.replaceState(null, '', window.location.pathname);
 
 // A parent getting back in: ask for a link by email, and spend the one that arrives.
 function openParentBack() {
+  $('parent-card').classList.remove('hidden');
   $('parent-back').classList.remove('hidden');
   $('parent-back-email').focus();
 }
@@ -859,6 +865,45 @@ if (parentLink) {
   resetStep('link');
   $('pw-reset-card').classList.remove('hidden');
   $('link-new').focus();
+} else if (verifyLink) {
+  // The link in the Verify email message: opening it proves the address. Choose a password and the program is created.
+  const verifyToken = verifyLink.trim();
+  $('landing-empty').classList.add('hidden');
+  document.querySelector('main.landing').classList.add('has-role');
+  $('verify-card').classList.remove('hidden');
+  const verifyFail = (text) => {
+    $('verify-title').textContent = 'That link did not work';
+    $('verify-text').textContent = text;
+    $('verify-form').classList.add('hidden');
+    $('verify-again').classList.remove('hidden');
+  };
+  $('verify-restart').addEventListener('click', (e) => { e.preventDefault(); $('verify-card').classList.add('hidden'); showRole('director'); });
+  fetch('/api/orgs/verify-peek', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: verifyToken }) })
+    .then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return verifyFail(r.status === 429 ? 'Too many tries. Wait a few minutes and open the link again.'
+        : (typeof data.detail === 'string' && data.detail) || 'That link has expired or was already used. Start again to get a new one.');
+      $('verify-title').textContent = 'Thanks, your email is verified';
+      $('verify-text').textContent = `${data.email} is confirmed. Choose a password to finish starting ${data.org_name}; then you add your teams, coaches and rosters.`;
+      $('verify-form').classList.remove('hidden');
+      $('verify-pw').focus();
+    })
+    .catch(() => verifyFail('Could not reach the server. Open the link again.'));
+  $('verify-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $('verify-err'); err.classList.add('hidden');
+    const btn = $('verify-go'); btn.disabled = true;
+    try {
+      const res = await fetch('/api/orgs/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: verifyToken, password: $('verify-pw').value }) });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) return verifyFail(body.detail || 'That link has expired or was already used. Start again to get a new one.');
+      if (res.status === 429) throw new Error('Too many tries. Wait a few minutes and try again.');
+      if (!res.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Could not finish. Try again.');
+      setToken(body.token);
+      window.location.href = 'coach.html';
+    } catch (ex) { btn.disabled = false; showFieldError(err, ex.message); }
+  });
 } else if (createLink) {
   createToken = createLink.trim();
   $('create-card').classList.remove('hidden');
@@ -891,6 +936,7 @@ if (parentLink) {
     .catch(() => { resetStep('forgot'); showFieldError($('forgot-err'), 'Could not reach the server. Try the link again.'); });
 } else if (invited) {
   showRole('parent', { focus: false });
+  $('parent-card').classList.remove('hidden');
   $('invite').value = invited.trim().toUpperCase();
   $('pname').focus();
 } else if (linked) {

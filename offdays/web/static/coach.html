@@ -130,6 +130,7 @@
     <div class="setup-bar" style="margin-top:10px"><i id="wizard-fill" style="width:0%"></i></div>
     <p class="small muted" id="wizard-lede" style="margin:10px 0 0"></p>
     <div id="wizard-slot" style="margin-top:14px"></div>
+    <p class="small hidden" id="wizard-total" role="status" style="margin:12px 0 0;padding:10px 12px;background:var(--surface-2);border-radius:8px"></p>
     <div style="display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap">
       <button class="secondary inline hidden" id="wizard-back">Back</button>
       <button class="inline" id="wizard-next" disabled>Next</button>
@@ -1311,7 +1312,7 @@ import { keepFresh } from './autorefresh.js';
 import {
   MAX_ROWS as RT_MAX, blankRow, rowProblem, filledRows, firstProblem, withoutParent, buildCsv, parsePaste, mergePasted,
 } from './roster_entry.js';
-import { parseTeamNames, coachCalls, teamsWithoutCoach, rosterProgress } from './setup_flow.js';
+import { parseTeamNames, coachCalls, teamsWithoutCoach, rosterProgress, programTotal } from './setup_flow.js';
 
 if (!getToken()) location.href = 'index.html';
 const $ = (id) => document.getElementById(id);
@@ -2171,12 +2172,13 @@ let wizardStep = 0;
 let wizardOn = false;
 
 async function wizardStatus() {
-  const [ob, brand, season, teams, contact] = await Promise.all([
+  const [ob, brand, season, teams, contact, invoice] = await Promise.all([
     api('/api/coach/onboarding').catch(() => null),
     api('/api/branding').catch(() => ({ logo: '' })),
     api('/api/org/season').catch(() => ({})),
     api('/api/coach/teams').catch(() => ({ teams: [] })),
     api('/api/me/contact').catch(() => ({ complete: false })),
+    api('/api/org/invoice').catch(() => null),      // the director's; a coach is refused and sees no dollars
   ]);
   const step = (k) => (ob && ob.steps.find((s) => s.key === k)) || {};
   return {
@@ -2187,9 +2189,18 @@ async function wizardStatus() {
     athletes: teams.teams.reduce((n, t) => n + (t.roster || 0), 0),
     uncoached: teamsWithoutCoach(teams.teams).length,
     teamList: teams.teams,
+    total: programTotal(teams.teams, invoice),
     complete: !!(ob && ob.complete),
     firstSession: !!step('first_session').done,
   };
+}
+
+// While rosters go in, the director sees one running total for the whole program: never an amount per team.
+function wizardShowTotal(s, st) {
+  const el = $('wizard-total');
+  const on = IS_DIRECTOR && ['roster', 'release', 'send'].includes(s.key) && !!st.total;
+  el.classList.toggle('hidden', !on);
+  el.textContent = on ? st.total : '';
 }
 
 function wizardPlace(cardId) {
@@ -2235,6 +2246,7 @@ async function wizardShow(i) {
   $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
   $('wizard-next').disabled = !(done || s.optional);
   $('wizard-hint').textContent = (s.hint && s.hint(st)) || (done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.'));
+  wizardShowTotal(s, st);
   // Cards in the slot are director-only or already role-gated; make sure the
   // ones we embed are visible even when their own loader hid them.
   if (s.card === 'season-card') $('season-card').classList.remove('hidden');
@@ -2266,6 +2278,7 @@ async function wizardRefresh() {
   $('wizard-next').textContent = last ? 'Finish' : (done ? 'Next' : (s.optional ? 'Skip for now' : 'Next'));
   $('wizard-next').disabled = !(done || s.optional);
   $('wizard-hint').textContent = (s.hint && s.hint(st)) || (done ? 'Done.' : (s.optional ? '' : 'Next unlocks when this step is done.'));
+  wizardShowTotal(s, st);
 }
 
 function wizardFinish() {

@@ -535,6 +535,30 @@ player that a coach can see a second look and that it reads as making sure. A cl
 whether the question was answered right stays per clip, never per player. Same access as the rest of the panel: a coach sees
 their own teams' players, a director anyone.
 
+## Starting a program: verify the email first
+
+A director fills in the program name, sport, their name and email and agrees to the terms. Create program creates nothing yet:
+the details wait in `program_signups` and an email with a **Verify email** link goes to that address. Opening it shows
+"your email is verified", asks for a password (one field) and only then makes the program, the director and their email and
+password login, and signs them in to the setup walkthrough (teams, coaches, rosters). Their email is already filled in on the
+contact step. Links work once and last 24 hours; asking again retires the old one; a few a day per address; an unfinished
+signup is forgotten after a week. The reply is the same whether or not the address already has a login, so the form cannot be
+used to find out who is a director. A server with no email cannot start a program this way and says so. Where email works,
+`POST /api/orgs` is closed (`REQUIRE_VERIFIED_SIGNUP`); the test suite switches it off in `tests/conftest.py` for its fixtures.
+
+## The front page for athletes, parents and coaches
+
+Athlete, Parent and Coach each show only an email, a password and Forgot your password (which emails a link and also covers
+choosing a first password). No code boxes and no create a login box. Links in emails still work as before: an invite link opens
+the parent sign up, a sign-in link signs a child in, a reset link opens the new password form. Mail to a family stays held while
+the program's email hold is on, including a family member's reset link.
+
+## One program total while rosters go in
+
+On the roster step of the setup (and the two after it) a director sees one line: "Whole program so far: 12 players on 3 teams.
+Season total: $600.00. One total for the program, not per team." It is the program's invoice (`/api/org/invoice`), so it grows as
+each team's roster goes in; there is no amount per team anywhere, and a coach sees no dollar figure.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -645,6 +645,21 @@ CREATE TABLE IF NOT EXISTS athlete_drills (
     set_at      TEXT NOT NULL,
     PRIMARY KEY (athlete_id, drill_key)
 );
+
+-- A program someone has asked to start but not yet verified the email for. Nothing exists (no program, no director) until the link
+-- is opened and a password chosen; the details wait here, and an unfinished one is forgotten after a week. Only a hash of the link.
+CREATE TABLE IF NOT EXISTS program_signups (
+    id            INTEGER PRIMARY KEY,
+    email         TEXT NOT NULL,
+    org_name      TEXT NOT NULL,
+    sport         TEXT NOT NULL,
+    director_name TEXT NOT NULL,
+    token_hash    TEXT NOT NULL UNIQUE,
+    created_at    TEXT NOT NULL,
+    expires_at    TEXT NOT NULL,
+    used_at       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_program_signups_email ON program_signups(email, created_at);
 
 CREATE TABLE IF NOT EXISTS badges (
     id          INTEGER PRIMARY KEY,

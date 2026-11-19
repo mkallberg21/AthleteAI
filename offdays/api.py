@@ -33,6 +33,7 @@ from .config import CONFIG
 from . import assignments as assignments_mod
 from . import sender_email as sender_email_mod
 from . import create_login as create_login_mod
+from . import signup as signup_mod
 from . import badge as badge_mod
 from . import teamsnap as teamsnap_mod
 from . import team_age as team_age_mod
@@ -820,6 +821,10 @@ class CreateOrgRequest(BaseModel):
     accept_terms: bool = False
 
 
+#: Whether POST /api/orgs refuses to create a program without a verified email (when the server can send mail).
+REQUIRE_VERIFIED_SIGNUP = True
+
+
 @app.post("/api/orgs", status_code=201)
 def create_org(body: CreateOrgRequest, store: Store = Depends(get_store)) -> dict[str, Any]:
     """Bootstrap a program and its first director account.
@@ -837,6 +842,14 @@ def create_org(body: CreateOrgRequest, store: Store = Depends(get_store)) -> dic
             status_code=400,
             detail="Please agree to the terms to start a program.",
         )
+    # Wherever the server can send email, a program starts by verifying the director's address (POST /api/orgs/start). This
+    # direct route stays only for a server with no mail (a developer's machine), where there is nothing to verify with, and for the
+    # test suite's fixtures (tests/conftest.py switches REQUIRE_VERIFIED_SIGNUP off; the tests of the real flow switch it on).
+    if REQUIRE_VERIFIED_SIGNUP and staff_mail_mod.mail_available():
+        raise HTTPException(
+            status_code=403,
+            detail="Starting a program now begins with your email address: use Create program on the sign-in page.",
+        )
     resolved = sports_mod.normalize(body.sport)
     if resolved is None:
         known = ", ".join(s.label for s in sports_mod.CATALOG)
@@ -847,6 +860,112 @@ def create_org(body: CreateOrgRequest, store: Store = Depends(get_store)) -> dic
     org_id = store.create_org(body.name, resolved.key, terms_accepted=True)
     director = store.create_user(org_id, "director", body.director_name)
     return {"org_id": org_id, "director": director}
+
+
+class StartProgramRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    sport: str = "lacrosse"
+    director_name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=1, max_length=200)
+    accept_terms: bool = False
+
+
+class VerifyProgramRequest(BaseModel):
+    token: str = Field(max_length=200)
+    password: str = Field(default="", max_length=400)
+
+
+class ResendProgramRequest(BaseModel):
+    email: str = Field(max_length=200)
+
+
+_NO_MAIL = "Email is not switched on for this server yet, so the verification email cannot be sent."
+
+
+@app.post("/api/orgs/start")
+def start_program(
+    request: Request, body: StartProgramRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Begin a program: hold the details and email the director a link to verify the address. Creates nothing yet.
+
+    The reply is the same whether or not the address already has a login, so this cannot be used to find out who is a director.
+    Every ask counts toward a per-source limit.
+    """
+    attempt = throttle.Attempt.for_link(_client_host(request), "programstart")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    if not body.accept_terms:
+        raise HTTPException(status_code=400, detail="Please agree to the terms to start a program.")
+    resolved = sports_mod.normalize(body.sport)
+    if resolved is None:
+        known = ", ".join(s.label for s in sports_mod.CATALOG)
+        raise HTTPException(status_code=400, detail=f"{body.sport!r} is not a sport we know. Pick one of: {known}")
+    throttle.record_failure(store.conn, attempt)      # every ask counts, answered or not
+    try:
+        out = signup_mod.start(store.conn, org_name=body.name, sport=resolved.key,
+                               director_name=body.director_name, email=body.email)
+    except signup_mod.SignupError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not out["mail"]:
+        raise HTTPException(status_code=503, detail=_NO_MAIL)
+    return {"ok": True, "message": signup_mod.REPLY, "email": passwords_mod.normalise_email(body.email)}
+
+
+@app.post("/api/orgs/resend-verification")
+def resend_program_verification(
+    request: Request, body: ResendProgramRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Send the verify link again. The same reply for every address."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "programstart")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    throttle.record_failure(store.conn, attempt)
+    out = signup_mod.resend(store.conn, body.email)
+    if not out["mail"]:
+        raise HTTPException(status_code=503, detail=_NO_MAIL)
+    return {"ok": True, "message": signup_mod.REPLY}
+
+
+@app.post("/api/orgs/verify-peek")
+def peek_program_verification(
+    request: Request, body: VerifyProgramRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """What a verify link is for (the program and the address), without using it."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "programverify")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    found = signup_mod.peek(store.conn, body.token)
+    if found is None:
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That link has expired or was already used. Start again to get a new one.")
+    return found
+
+
+@app.post("/api/orgs/verify", status_code=201)
+def verify_program(
+    request: Request, body: VerifyProgramRequest, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Spend the verify link with a chosen password: the program, its director and their login are made, and they are signed in."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "programverify")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        made = signup_mod.finish(store, body.token, body.password)
+    except passwords_mod.PasswordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc   # link not spent
+    if made is None:
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That link has expired or was already used. Start again to get a new one.")
+    throttle.record_success(store.conn, attempt)
+    return {**made, "side": _side_words(store, made["org_id"])}
 
 
 class CreateTeamRequest(BaseModel):

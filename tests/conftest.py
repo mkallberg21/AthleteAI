@@ -31,11 +31,16 @@ def _isolated_api_store(tmp_path):
     previous = api_module._store
     previous_probe = (health_module._probe_conn, health_module._db_ok)
     api_module._store = Store(connect(tmp_path / "autouse.db"))
+    # Most fixtures make a program straight through POST /api/orgs. The real flow (verify the director's email first) is switched
+    # on by the tests of that flow (tests/test_program_signup.py).
+    previous_gate = api_module.REQUIRE_VERIFIED_SIGNUP
+    api_module.REQUIRE_VERIFIED_SIGNUP = False
     health_module._probe_conn = api_module._store.conn
     health_module._db_ok = True
     try:
         yield
     finally:
+        api_module.REQUIRE_VERIFIED_SIGNUP = previous_gate
         health_module._probe_conn, health_module._db_ok = previous_probe
         current = api_module._store
         api_module._store = previous

@@ -176,8 +176,14 @@ class TestWhatTheAthleteSees:
         assert "Enter your athlete code again" not in API_JS
         assert "Your sign-in ended" in API_JS
 
-    def test_the_sign_in_page_already_says_lost_the_link_ask_them_to_send_it_again(self):
-        assert "Lost the link? Ask" in INDEX or "Lost the link?" in INDEX
+    def test_the_sign_in_page_is_email_and_password_only_and_a_link_still_signs_a_child_in(self):
+        """The athlete page used to explain a pasted code ("Lost the link? Ask them to send it again"). The front page is now just email and
+        password for athletes, parents and coaches, so there is no code box to explain; a parent's link still signs the child in, through a
+        form that is not shown, and a link that no longer works says so on the page."""
+        panel = INDEX.split('id="panel-athlete"', 1)[1].split('id="panel-parent"', 1)[0]
+        assert 'id="signin-form" class="hidden"' in panel and 'id="err" class="form-error hidden" role="alert"' in panel
+        assert "The code from your link" not in INDEX and "Lost the link?" not in INDEX
+        assert "Ask your parent to send you a new one" in INDEX
 
 
 class TestTheLinkIsSomethingYouCanActuallySend:
@@ -191,7 +197,6 @@ class TestTheLinkIsSomethingYouCanActuallySend:
         fn = PARENT.split("function renderSigninLink", 1)[1].split("function renderAthlete", 1)[0]
         assert fn.count('class="btn-link"') == 2
 
-    def test_the_note_names_the_box_the_sign_in_page_really_has(self):
+    def test_the_note_does_not_name_a_box_the_sign_in_page_no_longer_has(self):
         fn = PARENT.split("function renderSigninLink", 1)[1].split("function renderAthlete", 1)[0]
-        assert "The code from your link" in fn and "The code from your link" in INDEX
-        assert "Your athlete code" not in fn
+        assert "The code from your link" not in fn and "Your athlete code" not in fn

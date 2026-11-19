@@ -80,6 +80,23 @@ export function teamsWithoutCoach(teams) {
   return (teams || []).filter((t) => !squash(t.coaches));
 }
 
+/**
+ * What the program owes, as ONE number for the whole program. The season is billed per rostered athlete per day across every
+ * team, so a director adding the second and third rosters watches a single total grow; there is no per-team amount anywhere.
+ * `invoice` is /api/org/invoice (program-wide). Empty until anyone is on a roster.
+ */
+export function programTotal(teams, invoice) {
+  const all = teams || [];
+  const athletes = Number(invoice && invoice.athletes) || all.reduce((n, t) => n + (Number(t.roster) || 0), 0);
+  if (!athletes) return '';
+  const players = `${athletes} ${athletes === 1 ? 'player' : 'players'}`;
+  const teamWords = `${all.length} ${all.length === 1 ? 'team' : 'teams'}`;
+  if (invoice && invoice.season_set && invoice.total_display) {
+    return `Whole program so far: ${players} on ${teamWords}. Season total: ${invoice.total_display}. One total for the program, not per team.`;
+  }
+  return `Whole program so far: ${players} on ${teamWords}. Set the season dates to see the one total for the program.`;
+}
+
 /** The one sentence under the step bar for the roster step: how many teams have players. */
 export function rosterProgress(teams) {
   const all = teams || [];
