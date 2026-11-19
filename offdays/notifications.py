@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -108,8 +109,40 @@ def enqueue(
 
     if mirror and about == user_id:
         _mirror_to_guardians(conn, user_id, kind, title, body, key, from_name)
+        _email_guardians(conn, user_id, kind, title, body, key, from_name)
     conn.commit()
     return made
+
+
+#: Outbox ids queued for parents' copies since a route last took them, so the route can send them right after its response
+#: instead of waiting for the hourly run. Losing one costs nothing: the hourly job still sends whatever is queued.
+_MAIL_IDS: list[int] = []
+_MAIL_LOCK = threading.Lock()
+
+
+def take_mail_ids() -> list[int]:
+    """The parent-copy emails queued so far, handed over once."""
+    with _MAIL_LOCK:
+        ids = list(_MAIL_IDS)
+        _MAIL_IDS.clear()
+    return ids
+
+
+def _email_guardians(
+    conn: sqlite3.Connection, athlete_id: int, kind: str, title: str, body: str, key: str, from_name: str
+) -> None:
+    """Email each parent exactly what their child was sent (recognition and a coach's own messages), unless email is on hold."""
+    if kind not in (Kind.RECOGNITION, Kind.COACH_MESSAGE):
+        return
+    from . import message_copy
+    try:
+        ids = message_copy.email_parents(conn, athlete_id, kind, title, body, key, from_name)
+    except Exception:  # noqa: BLE001 - never stop the child's message because a parent's copy failed
+        log.exception("parent copy failed for athlete %s", athlete_id)
+        return
+    if ids:
+        with _MAIL_LOCK:
+            _MAIL_IDS.extend(ids)
 
 
 def _mirror_to_guardians(

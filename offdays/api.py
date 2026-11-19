@@ -1257,10 +1257,26 @@ class SubmitSessionRequest(BaseModel):
 @app.post("/api/sessions/submit")
 def submit_session(
     body: SubmitSessionRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_athlete),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
     """Submit a finished session. Counts only -- no imagery is accepted."""
+    try:
+        return _submit_and_mail(store, background, principal, body)
+    except StoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _submit_and_mail(store: Store, background: BackgroundTasks, principal: Principal, body: "SubmitSessionRequest") -> dict[str, Any]:
+    """Save the session; whatever recognition it earned reaches the parents by email right after the response."""
+    try:
+        return _submit_session_now(store, principal, body)
+    finally:
+        _send_now(store, notify.take_mail_ids(), background)
+
+
+def _submit_session_now(store: Store, principal: Principal, body: "SubmitSessionRequest") -> dict[str, Any]:
     try:
         return store.submit_session(
             principal.id,
@@ -2287,6 +2303,7 @@ class BroadcastRequest(BaseModel):
 @app.post("/api/coach/broadcast")
 def coach_broadcast(
     body: BroadcastRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -2300,6 +2317,7 @@ def coach_broadcast(
     if not principal.can_see_team(body.team_id):
         raise HTTPException(status_code=403, detail="you are not assigned to that team")
     sent = notify.broadcast(store.conn, body.team_id, body.title, body.body, principal.id)
+    _send_now(store, notify.take_mail_ids(), background)
     return {"sent": sent}
 
 
@@ -2317,6 +2335,7 @@ _REST_FLAGS = {"load_spike", "needs_rest"}
 @app.post("/api/coach/nudge-everyone")
 def coach_nudge_message(
     body: NudgeMessageRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -2348,6 +2367,7 @@ def coach_nudge_message(
         ):
             sent += 1
     store.conn.commit()
+    _send_now(store, notify.take_mail_ids(), background)
     return {"sent": sent, "skipped_rest": len(resting), "on_list": len(flagged)}
 
 
@@ -3116,7 +3136,9 @@ def unsubscribe(token: str) -> str:
     return (
         "<!doctype html><meta charset='utf-8'>"
         "<body style='font-family:system-ui;padding:40px;max-width:32rem;line-height:1.6'>"
-        f"<h2>Unsubscribed</h2><p>{who} will no longer receive the weekly email.</p>"
+        f"<h2>Unsubscribed</h2><p>{who} will no longer receive "
+        + ("an email copy of the messages your athlete is sent" if kind == mailer.Kind.MESSAGE_COPY else "the weekly email")
+        + ".</p>"
         "<p style='color:#5b6b7c'>Alerts inside the app are unaffected, and this "
         "changes nothing for your athletes. You can turn the email back on from "
         "your dashboard at any time.</p></body>"

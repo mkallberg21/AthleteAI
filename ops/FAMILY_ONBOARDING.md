@@ -559,6 +559,18 @@ On the roster step of the setup (and the two after it) a director sees one line:
 Season total: $600.00. One total for the program, not per team." It is the program's invoice (`/api/org/invoice`), so it grows as
 each team's roster goes in; there is no amount per team anywhere, and a coach sees no dollar figure.
 
+## Parents are emailed exactly what their child was sent
+
+Every message an athlete gets is already copied into the parent's in-app feed. For the automatic recognition ("Coach noticed
+...") and a coach's own messages (a note to the team, or to the players who need a nudge) each parent is also emailed the same
+words, word for word: the title and body as the child saw them, who sent it (the email comes from the coach by name), and a link
+to open 0FFDAYS. Streak reminders, badges and assignment notices stay in the app only.
+
+It follows the program's email hold like every other email to a family: nothing is queued while held, so releasing the hold does
+not send old messages. A household program is not emailed (the parent wrote the words). A parent can stop these copies from the
+link in the email; the in-app copy is unaffected. A parent of two children on one team gets one email per child. Sent right
+after the response; the hourly run is the safety net.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

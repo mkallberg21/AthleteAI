@@ -44,6 +44,8 @@ BACKOFF_MINUTES = (5, 20, 60, 240)
 class Kind:
     COACH_DIGEST = "coach_digest"
     GUARDIAN_DIGEST = "guardian_digest"
+    #: A parent's copy of a message their child was sent (message_copy.py). A parent can switch this one off.
+    MESSAGE_COPY = "message_copy"
     TRANSACTIONAL = "transactional"
 
 
