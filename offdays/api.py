@@ -4938,6 +4938,60 @@ def my_shot_speed(
     return _shot_payload(store, principal.id)
 
 
+@app.get("/api/coach/athletes/{athlete_id}/training")
+def coach_athlete_training(
+    athlete_id: int,
+    days: int = Query(default=30, ge=7, le=180),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """One player, drilled into: what they have been doing, drill by drill, for a coach whose team they are on.
+
+    The same picture a parent gets of their own child (`store.drill_log`), plus the level, streak and badges and a strip of
+    the last 28 days. Work the athlete logged themselves is marked as such, never mixed in as measured. No team targets,
+    no rank and no other player appear here. A coach asking for a player outside their teams, or anyone who is not an
+    athlete, is refused the same way, so a guessed id tells them nothing.
+    """
+    row = store.conn.execute(
+        "SELECT id FROM users WHERE id = ? AND org_id = ? AND role = 'athlete' AND active = 1",
+        (athlete_id, principal.org_id)).fetchone()
+    if row is None or not store.staff_can_see_athlete(principal, athlete_id):
+        raise HTTPException(status_code=404, detail="no such player on your teams")
+    profile = store.athlete_profile(athlete_id)
+    log = store.drill_log(athlete_id, days)
+    teams = [r["name"] for r in store.conn.execute(
+        "SELECT t.name FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE tm.user_id = ? AND t.org_id = ? "
+        "ORDER BY t.name", (athlete_id, principal.org_id))]
+    from datetime import timedelta
+    today = guardians_mod._now().date()
+    strip_days = {}
+    for s in store.drill_log(athlete_id, 28)["sessions"]:
+        if s["status"] != "counted":
+            continue
+        d = strip_days.setdefault(s["day"], {"sessions": 0, "logged": 0})
+        d["sessions"] += 1
+        d["logged"] += 1 if s["self_reported"] else 0
+    strip = []
+    for i in range(27, -1, -1):
+        day = (today - timedelta(days=i)).isoformat()
+        d = strip_days.get(day, {"sessions": 0, "logged": 0})
+        strip.append({"day": day, **d})
+    # Newest day first, whatever order they were synced in: an offline session recorded Sunday and uploaded Monday sits on
+    # Sunday.
+    log["sessions"] = sorted(log["sessions"], key=lambda s: (s["day"], s["session_id"]), reverse=True)
+    counted = [s for s in log["sessions"] if s["status"] == "counted"]
+    return {
+        "athlete": {
+            "athlete_id": athlete_id, "display_name": profile["display_name"], "teams": teams,
+            "level": profile["level"], "streak": profile["streak"], "longest_streak": profile["longest_streak"],
+            "badges": [{"name": b["name"], "tier": b["tier"]} for b in profile["badges"]],
+            "last_active": counted[0]["day"] if counted else None,
+        },
+        "strip": strip,
+        **log,
+    }
+
+
 @app.get("/api/coach/athletes/{athlete_id}/shot-speed")
 def coach_shot_speed(
     athlete_id: int,

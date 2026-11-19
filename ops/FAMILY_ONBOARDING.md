@@ -460,6 +460,16 @@ added with teams, and a team created with a coach all email the coach which team
 for someone already in; the first email also carries their sign-in link). Nothing is sent while the hold is on.
 A coach with no team sees the whole program, so give a new coach a team straight away.
 
+## Drilling into a player
+
+Click a player's name in the Roster or the Ranking (Teams tab) and a panel opens: level, streak, last trained, badges, the
+last 7, 30 or 90 days as totals (sessions, days trained, reps, minutes, anything held), a strip of the last 28 days, a
+by-drill table, and every session newest day first with its status. Work the player logged themselves is tagged "logged by
+player" with their own words, shown in grey on the strip, and never counted as measured. Held sessions are shown as held.
+`GET /api/coach/athletes/{id}/training`: a director sees any player in the program, a coach only players on their own
+teams; anyone else, an unknown id, a coach or a director id all get the same 404. It shows no team targets, no rank and no
+other player.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

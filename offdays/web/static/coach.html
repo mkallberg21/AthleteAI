@@ -3316,7 +3316,7 @@ function renderRoster(athletes) {
       : '<span class="pill ok">on track</span>';
     const review = a.pending_review ? ` <span class="pill warn">${a.pending_review} in review</span>` : '';
     return `<tr>
-      <td><b>${esc(a.display_name)}</b>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
+      <td><a href="#" data-open-athlete="${a.athlete_id}" style="font-weight:700;color:inherit;text-decoration:underline dotted" title="See what ${esc(a.display_name)} has been doing">${esc(a.display_name)}</a>${a.jersey ? ` <span class="muted small">#${esc(a.jersey)}</span>` : ''}
           <br><span class="small muted">${esc(a.team_name)} &middot; Lvl ${a.level}</span>
           <button class="tiny" data-invite="${a.athlete_id}"
                 title="Prepare the invite email to this player's parent, with the player code in it. Nothing is sent until you send it.">Email parent</button></td>
@@ -3373,6 +3373,79 @@ document.getElementById('roster').addEventListener('click', (e) => {
   if (btn) inviteGuardian(btn);
 });
 
+// ---- Drill into one player: what they have been doing, drill by drill.
+// Opens from a name in the roster or the ranking. Read only. Work the player logged themselves is labelled as that.
+const DD_STATUS = { counted: ['ok', 'counted'], review: ['warn', 'in review'], rejected: ['bad', 'not counted'] };
+async function openAthlete(id, days = 30) {
+  let wrap = document.getElementById('athlete-dd');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'athlete-dd';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', 'Player detail');
+    wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:flex-start;justify-content:center;z-index:9998;overflow:auto;padding:16px';
+    wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-dd-close]')) closeAthlete(); });
+    document.body.appendChild(wrap);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAthlete(); });
+  }
+  wrap.style.display = 'flex';
+  wrap.innerHTML = '<div class="dd-card"><p class="muted small">Loading&hellip;</p></div>';
+  try {
+    const d = await api(`/api/coach/athletes/${id}/training?days=${days}`);
+    wrap.innerHTML = renderAthleteDetail(d, days);
+    wrap.querySelectorAll('[data-dd-days]').forEach((b) => b.addEventListener('click', () => openAthlete(id, Number(b.dataset.ddDays))));
+    wrap.querySelector('[data-dd-close]').focus();
+  } catch (e) {
+    wrap.innerHTML = `<div class="dd-card"><p>${esc(e.message || 'Could not load this player.')}</p><button type="button" class="secondary" data-dd-close>Close</button></div>`;
+  }
+}
+function closeAthlete() { const w = document.getElementById('athlete-dd'); if (w) { w.style.display = 'none'; w.innerHTML = ''; } }
+function ddDay(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+function renderAthleteDetail(d, days) {
+  const a = d.athlete, t = d.totals;
+  const strip = d.strip.map((s) => `<span title="${esc(ddDay(s.day))}: ${s.sessions ? `${s.sessions} session${s.sessions === 1 ? '' : 's'}${s.logged ? ` (${s.logged} logged by the player)` : ''}` : 'nothing'}"
+    style="display:inline-block;width:14px;height:22px;margin:1px;border-radius:3px;background:${s.sessions ? (s.logged === s.sessions ? 'var(--text-muted,#8aa)' : 'var(--accent,#008BFD)') : 'var(--border,#234)'}"></span>`).join('');
+  const drills = d.by_drill.length ? d.by_drill.map((b) => `<tr><td>${esc(b.drill)}</td><td class="num">${b.sessions}</td><td class="num">${b.reps}</td><td class="num">${b.minutes}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted small">Nothing in this window.</td></tr>';
+  const rows = d.sessions.length ? d.sessions.slice(0, 60).map((s) => {
+    const [cls, label] = DD_STATUS[s.status] || ['', s.status];
+    const own = s.self_reported ? '<span class="pill">logged by player</span> ' : '';
+    const note = s.self_reported ? (s.notes || []).join(' ').replace(/^Logged by the athlete because the camera could not count this work\.\s*/, '') : '';
+    const side = !s.self_reported && (s.left || s.right) ? ` <span class="muted small">(${s.left} L / ${s.right} R)</span>` : '';
+    const detail = s.self_reported ? `${s.minutes} min${s.reps ? `, ${s.reps} reps` : ''}` : `${s.reps} reps${side}${s.hold_s ? `, held ${s.hold_s}s` : ''}`;
+    return `<tr><td>${esc(ddDay(s.day))}</td><td>${esc(s.drill)}${note ? `<br><span class="small muted">&ldquo;${esc(note.replace(/^Note:\s*/, ''))}&rdquo;</span>` : ''}</td>
+      <td>${detail}</td><td>${own}<span class="pill ${cls}">${esc(label)}</span></td></tr>`;
+  }).join('') : '<tr><td colspan="4" class="muted small">No sessions in this window.</td></tr>';
+  const badges = a.badges.length ? a.badges.map((b) => `<span class="pill ok">${esc(b.name)}</span>`).join(' ') : '<span class="muted small">none yet</span>';
+  return `<div class="dd-card" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:760px;width:100%;margin:auto">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+      <div><h2 style="margin:0">${esc(a.display_name)}</h2>
+        <div class="small muted">${esc(a.teams.join(', ') || 'No team')} &middot; Level ${a.level} &middot; ${a.streak}-day streak (best ${a.longest_streak})${a.last_active ? ` &middot; last trained ${esc(ddDay(a.last_active))}` : ' &middot; has not trained yet'}</div></div>
+      <button type="button" class="secondary inline" data-dd-close>Close</button></div>
+    <div style="margin:10px 0">${[7, 30, 90].map((n) => `<button type="button" class="tiny${n === days ? '' : ' secondary'}" data-dd-days="${n}" aria-pressed="${n === days}">${n} days</button>`).join(' ')}</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin:8px 0">
+      <div><b style="font-size:1.4rem">${t.sessions}</b><div class="small muted">sessions</div></div>
+      <div><b style="font-size:1.4rem">${t.days_trained}</b><div class="small muted">days trained</div></div>
+      <div><b style="font-size:1.4rem">${t.reps}</b><div class="small muted">reps counted</div></div>
+      <div><b style="font-size:1.4rem">${t.minutes}</b><div class="small muted">minutes</div></div>
+      ${t.held ? `<div><b style="font-size:1.4rem">${t.held}</b><div class="small muted">held or not counted</div></div>` : ''}
+    </div>
+    <div class="small muted" style="margin-top:8px">Last 4 weeks (blue: counted by the camera, grey: logged by the player)</div>
+    <div aria-label="Last 28 days" style="margin:4px 0 10px">${strip}</div>
+    <div class="small" style="margin:6px 0">Badges: ${badges}</div>
+    <h3 style="margin:12px 0 4px">By drill</h3>
+    <table class="roster-table"><thead><tr><th>Drill</th><th class="num">Sessions</th><th class="num">Reps</th><th class="num">Min</th></tr></thead><tbody>${drills}</tbody></table>
+    <h3 style="margin:12px 0 4px">Every session</h3>
+    <div style="overflow-x:auto"><table class="roster-table"><thead><tr><th>Day</th><th>Drill</th><th>What</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small muted" style="margin-top:8px">Work a player logged themselves counts for showing up, never for rankings or levels.</p>
+  </div>`;
+}
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('[data-open-athlete]');
+  if (link) { e.preventDefault(); openAthlete(Number(link.dataset.openAthlete)); }
+});
+
 // Every player, ranked. The server does the ranking (ties share a rank, nobody is left out for having done nothing);
 // this only draws it. Re-fetched with the page's team and window, so it always matches the standings above it.
 async function loadRanking(teamId, window_) {
@@ -3383,7 +3456,7 @@ async function loadRanking(teamId, window_) {
     box.innerHTML = data.rows.length ? data.rows.map((r) => `
       <div class="rank-row${r.trained ? '' : ' idle'}">
         <span class="rank-n">${r.rank}</span>
-        <span class="rank-who"><b>${esc(r.display_name)}</b> <span class="small muted">${esc(r.team_name)}</span></span>
+        <span class="rank-who"><a href="#" data-open-athlete="${r.athlete_id}" style="font-weight:700;color:inherit;text-decoration:underline dotted">${esc(r.display_name)}</a> <span class="small muted">${esc(r.team_name)}</span></span>
         <span class="rank-xp">${r.trained ? `${r.xp.toLocaleString()} XP` : '<span class="small muted">not started</span>'}</span>
       </div>`).join('') : '<p class="small muted">No players yet.</p>';
   } catch (e) {
@@ -4064,7 +4137,7 @@ function mailChooser(to, subject, body) {
   wrap.setAttribute('role', 'dialog');
   wrap.setAttribute('aria-label', 'Choose your email');
   wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
-  wrap.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:380px;width:100%">
+  wrap.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:380px;width:100%">
     <b>Which email do you use?</b>
     <p class="small muted" style="margin:4px 0 10px">It opens a new message with the parent&rsquo;s address and the text filled in. You press send.</p>
     ${Object.entries(MAIL_APPS).map(([k, a]) => `<button type="button" class="secondary" data-mail-pick="${k}" style="display:block;width:100%;margin:6px 0;text-align:left">${esc(a.name)}</button>`).join('')}
