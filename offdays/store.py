@@ -3003,12 +3003,12 @@ class Store:
         ).fetchone()
         if row is None:
             # Not a six-character code: it may be a session minted by an email and
-            # password sign-in (coaches and directors only).
+            # password sign-in (any role, once they have made a login).
             uid = passwords_mod.session_user(self.conn, token) if len(token) > 12 else None
             if uid is not None:
                 row = self.conn.execute(
                     "SELECT id, org_id, role, display_name, dominant_hand FROM users "
-                    "WHERE id = ? AND active = 1 AND role IN ('coach', 'director')",
+                    "WHERE id = ? AND active = 1 AND role IN ('athlete', 'coach', 'director', 'guardian')",
                     (uid,),
                 ).fetchone()
         if row is None:

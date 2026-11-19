@@ -1477,12 +1477,47 @@ async function loadStaff(isDirector) {
         <div style="margin-top:6px">
           <button class="tiny" data-resend-link="${person.id}" data-name="${esc(person.display_name)}" data-has-email="${person.email ? '1' : ''}"
             title="Sends a new sign-in link to this coach. Any earlier link stops working.">Resend sign-in link</button>
+          <button class="tiny" data-remove-coach="${person.id}" data-name="${esc(person.display_name)}"
+            title="Takes this coach out of the program. Their access ends at once.">Remove coach</button>
           <div class="small" data-resend-out="${person.id}" style="margin:6px 0"></div>
+          <div class="small hidden" data-remove-box="${person.id}" style="margin:6px 0;padding:10px;border:1px solid var(--border);border-radius:8px"></div>
           <button class="tiny" data-reset-code="${person.id}" data-name="${esc(person.display_name)}">Forgot password? Give a reset code</button>
           <div class="small" data-reset-out="${person.id}" style="margin-top:6px"></div>
         </div>` : ''}
     </div>`;
   }).join('');
+
+  // Remove a coach. They lose access at once; their teams can go to another coach, who is emailed.
+  $('staff-list').querySelectorAll('[data-remove-coach]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.removeCoach, name = btn.dataset.name;
+      const box = $('staff-list').querySelector(`[data-remove-box="${id}"]`);
+      const others = staff.filter((p) => String(p.id) !== String(id) && (p.role === 'coach' || p.role === 'director'));
+      box.classList.remove('hidden');
+      box.innerHTML = `<b>Remove ${esc(name)}?</b><br>${esc(name)} loses access at once, on every device. What they did stays on record.`
+        + `<div style="margin:8px 0"><label class="small">Give their teams to
+            <select data-remove-heir class="org-switch"><option value="">Nobody for now</option>
+              ${others.map((p) => `<option value="${p.id}">${esc(p.display_name)}${p.role === 'director' ? ' (director)' : ''}</option>`).join('')}
+            </select></label></div>`
+        + `<button type="button" class="tiny" data-remove-go>Remove ${esc(name)}</button> <button type="button" class="tiny" data-remove-cancel>Cancel</button>`
+        + `<div class="small" data-remove-msg style="margin-top:6px"></div>`;
+      box.querySelector('[data-remove-cancel]').addEventListener('click', () => box.classList.add('hidden'));
+      box.querySelector('[data-remove-go]').addEventListener('click', async (ev) => {
+        const heir = box.querySelector('[data-remove-heir]').value;
+        const msg = box.querySelector('[data-remove-msg]');
+        ev.target.disabled = true;
+        try {
+          const res = await api(`/api/coach/staff/${id}/remove`, { method: 'POST', body: { replace_with: heir ? Number(heir) : null } });
+          const bits = [`${name} was removed.`];
+          if (res.replaced_by) bits.push(`${res.teams.join(', ') || 'Their teams'} now ${res.teams.length === 1 ? 'belongs' : 'belong'} to ${res.replaced_by}${res.notified ? ', who was emailed' : ''}.`);
+          else if (res.teams_without_coach.length) bits.push(`${res.teams_without_coach.join(', ')} ${res.teams_without_coach.length === 1 ? 'has' : 'have'} no coach now. Add one with Add team on another coach, or Add a coach below.`);
+          await Promise.all([loadStaff(true), loadTeams()]);
+          const row = $('staff-list');
+          row.insertAdjacentHTML('afterbegin', `<div class="small" role="status" style="margin-bottom:8px">${esc(bits.join(' '))}</div>`);
+        } catch (e) { ev.target.disabled = false; msg.style.color = 'var(--danger)'; msg.textContent = e.message || 'Could not remove.'; }
+      });
+    });
+  });
 
   // Resend a coach their sign-in link (new link, old one stops working). Under the email hold the director
   // gets the message to send herself instead.
@@ -1548,11 +1583,14 @@ async function loadStaff(isDirector) {
   $('staff-list').querySelectorAll('[data-assign]').forEach((sel) => {
     sel.addEventListener('change', async () => {
       if (!sel.value) return;
-      await api('/api/coach/staff/assign', {
+      const who = sel.closest('.staff-row').querySelector('b').textContent;
+      const teamName = sel.options[sel.selectedIndex].textContent;
+      const res = await api('/api/coach/staff/assign', {
         method: 'POST',
         body: { user_id: Number(sel.dataset.assign), team_id: Number(sel.value) },
       });
       await loadStaff(true);
+      $('staff-list').insertAdjacentHTML('afterbegin', `<div class="small" role="status" style="margin-bottom:8px">${esc(who)} was put on ${esc(teamName)}${res.emailed ? ' and emailed.' : '. Nothing was emailed (email is on hold, or they have no address).'}</div>`);
     });
   });
   $('staff-list').querySelectorAll('[data-unassign]').forEach((btn) => {

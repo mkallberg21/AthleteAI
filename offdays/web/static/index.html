@@ -277,6 +277,19 @@
       </details>
     </div>
     </div>
+    <div class="card hidden" id="create-card">
+      <div class="section-header"><span class="section-title">Choose your password</span></div>
+      <p class="small muted" style="margin-top:0.25rem;">Your email address is confirmed. Choose a password and from now on you sign in with this email and password. Nobody has to send you a link again.</p>
+      <form id="create-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="create-pw">Password</label>
+          <input id="create-pw" class="form-input" type="password" autocomplete="new-password">
+          <p class="form-hint">At least 10 characters. A few unrelated words is easy to remember and hard to guess.</p>
+          <div id="create-err" class="form-error hidden"></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="create-go">Create my login</button>
+      </form>
+    </div>
     <div class="card hidden" id="sender-card">
       <h2 id="sender-title">Confirming your email&hellip;</h2>
       <p id="sender-text" class="small muted"></p>
@@ -528,6 +541,111 @@ document.querySelectorAll('.pw-signin').forEach((form) => {
   });
 });
 
+// ---- Everyone can sign in with an email and a password, and make that login themselves (no link to wait for).
+const LOGIN_HOMES = { athlete: 'capture.html', guardian: 'parent.html' };
+(function emailLogins() {
+  const PEOPLE = {
+    athlete: { nick: 'ath', signin: true, create: null },
+    parent: { nick: 'par', signin: true, create: 'the email your program has for you (the one your invite went to)' },
+    coach: { nick: 'coa', signin: false, create: 'the email your director added you with' },
+    director: { nick: 'dir', signin: false, create: 'the email on your account' },
+  };
+  for (const [role, cfg] of Object.entries(PEOPLE)) {
+    const panel = $(`panel-${role}`);
+    if (!panel) continue;
+    const n = cfg.nick;
+    const signin = cfg.signin ? `
+      <div class="card" id="${n}-signin-card">
+        <div class="section-header"><span class="section-title">Sign in with email and password</span></div>
+        <form id="${n}-signin" novalidate style="margin-top:0.5rem;">
+          <div class="form-group"><label class="form-label" for="${n}-email">Email</label>
+            <input id="${n}-email" class="form-input" type="email" autocomplete="username" placeholder="you@example.com"></div>
+          <div class="form-group"><label class="form-label" for="${n}-pw">Password</label>
+            <input id="${n}-pw" class="form-input" type="password" autocomplete="current-password">
+            <div id="${n}-err" class="form-error hidden"></div></div>
+          <button type="submit" class="btn btn-primary">Sign in</button>
+          <p class="small" style="margin:0.6rem 0 0"><a href="#" id="${n}-forgot">Forgot your password?</a></p>
+        </form>
+      </div>` : '';
+    const create = cfg.create ? `
+      <details class="card" id="${n}-create-card" style="margin-top:0.75rem">
+        <summary class="small" style="cursor:pointer"><b>First time? Create my login</b></summary>
+        <p class="small muted" style="margin-top:0.5rem">Type ${cfg.create}. We email it a link; open it and choose a password. After that you sign in with your email and password, and nobody has to send you a link.</p>
+        <form id="${n}-create" novalidate>
+          <div class="form-group"><label class="form-label" for="${n}-create-email">Email</label>
+            <input id="${n}-create-email" class="form-input" type="email" autocomplete="email" placeholder="you@example.com"></div>
+          <div id="${n}-create-msg" class="small" style="margin:0.4rem 0" role="status"></div>
+          <button type="submit" class="btn btn-secondary">Email me a link</button>
+        </form>
+      </details>` : `
+      <details class="card" id="${n}-create-card" style="margin-top:0.75rem">
+        <summary class="small" style="cursor:pointer"><b>Make my own login</b></summary>
+        <p class="small muted" style="margin-top:0.5rem">Open the link your parent sent you once. On your home screen tap <b>Make my login</b>, type an email address, and open the link we send to it. Next time you sign in with that email and a password, with no link from anyone.</p>
+      </details>`;
+    panel.insertAdjacentHTML('beforeend', signin + create);
+
+    if (cfg.signin) {
+      $(`${n}-signin`).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const err = $(`${n}-err`); err.classList.add('hidden');
+        const email = $(`${n}-email`).value.trim(); const password = $(`${n}-pw`).value;
+        if (!email || !password) return showFieldError(err, 'Enter your email and password.');
+        const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true;
+        try {
+          const res = await fetch('/api/login/password', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }) });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(res.status === 429 ? 'Too many tries. Wait a minute and try again.' : (body.detail || 'Sign in failed.'));
+          setToken(body.token);
+          window.location.href = LOGIN_HOMES[body.role] || 'coach.html';
+        } catch (ex) { btn.disabled = false; showFieldError(err, ex.message); }
+      });
+      $(`${n}-forgot`).addEventListener('click', (ev) => {
+        ev.preventDefault();
+        $('forgot-email').value = $(`${n}-email`).value.trim();
+        $('reset-email').value = $(`${n}-email`).value.trim();
+        resetStep('forgot');
+        $('pw-reset-card').classList.remove('hidden');
+        $('pw-reset-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+    if (cfg.create) {
+      $(`${n}-create`).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = $(`${n}-create-msg`); msg.style.color = '';
+        const email = $(`${n}-create-email`).value.trim();
+        if (!email) { msg.style.color = 'var(--danger)'; msg.textContent = 'Type your email address.'; return; }
+        const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true;
+        try {
+          const res = await fetch('/api/login/create-start', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }) });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(res.status === 429 ? 'Too many tries. Wait a few minutes and try again.' : (body.detail || 'Could not send.'));
+          msg.textContent = body.message || 'If that address is set up, a link is on its way.';
+        } catch (ex) { msg.style.color = 'var(--danger)'; msg.textContent = ex.message; }
+        finally { btn.disabled = false; }
+      });
+    }
+  }
+})();
+
+// The link in the "finish creating your login" email: choose a password, and you are signed in.
+let createToken = '';
+$('create-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('create-err'); err.classList.add('hidden');
+  const btn = $('create-go'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/login/create-finish', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: createToken, password: $('create-pw').value }) });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 401) { $('create-form').classList.add('hidden'); throw new Error('That link has expired or was already used. Go back to the sign-in page and ask for a new one.'); }
+    if (!res.ok) throw new Error(body.detail || 'Could not create your login.');
+    setToken(body.token);
+    window.location.href = LOGIN_HOMES[body.role] || 'coach.html';
+  } catch (ex) { btn.disabled = false; showFieldError(err, ex.message); }
+});
+
 // The four steps of the "forgot" card; exactly one shows at a time.
 function resetStep(step) {
   for (const id of ['forgot', 'link', 'code', 'confirmed']) $(`${id}-step`).classList.toggle('hidden', id !== step);
@@ -689,8 +807,9 @@ const resetLink = params.get('reset');
 const parentLink = params.get('parent');
 const confirmLink = params.get('confirm');
 const senderLink = params.get('sender');
+const createLink = params.get('create');
 // A link carries a secret: take it out of the address bar and history once read.
-if (resetLink || confirmLink || parentLink || senderLink) history.replaceState(null, '', window.location.pathname);
+if (resetLink || confirmLink || parentLink || senderLink || createLink) history.replaceState(null, '', window.location.pathname);
 
 // A parent getting back in: ask for a link by email, and spend the one that arrives.
 function openParentBack() {
@@ -740,6 +859,10 @@ if (parentLink) {
   resetStep('link');
   $('pw-reset-card').classList.remove('hidden');
   $('link-new').focus();
+} else if (createLink) {
+  createToken = createLink.trim();
+  $('create-card').classList.remove('hidden');
+  $('create-pw').focus();
 } else if (senderLink) {
   // A coach or director confirming the address their messages to parents are sent on behalf of.
   const card = $('sender-card');

@@ -235,8 +235,11 @@ def send_reset(conn: sqlite3.Connection, email: str) -> None:
     row = pw.by_email(conn, address)
     if row is None or not row["email_verified_at"]:
         return
-    user = conn.execute("SELECT active, role FROM users WHERE id = ?", (row["user_id"],)).fetchone()
-    if user is None or not user["active"] or user["role"] not in ("coach", "director"):
+    user = conn.execute("SELECT active, role, org_id FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+    if user is None or not user["active"]:
+        return
+    # A parent or an athlete is a family member: nothing goes to them until the director has released the hold.
+    if user["role"] in ("guardian", "athlete") and mailer.mail_held(conn, user["org_id"]):
         return
     if mailer.is_suppressed(conn, address):
         return

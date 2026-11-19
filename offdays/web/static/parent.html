@@ -104,6 +104,13 @@
     <div id="link-note" class="small hidden" style="margin-top:8px"></div>
   </div>
 
+  <div class="card" id="mylogin-card">
+    <h2>Sign in with an email and password</h2>
+    <p class="small muted">So you do not have to wait for a link when you get a new phone.</p>
+    <div id="mylogin"></div>
+    <div id="kidlogins"></div>
+  </div>
+
   <div class="card" id="account-card">
     <h2>Delete my account</h2>
     <p class="small muted">
@@ -549,6 +556,10 @@ async function load() {
 
 
   wire();
+  import('./mylogin.js').then(async (m) => {
+    await m.mountMyLogin($('mylogin'), { who: 'you' });
+    await m.mountChildLogins($('kidlogins'), data.athletes);
+  }).catch(() => { $('mylogin-card').classList.add('hidden'); });
   await loadDecisions();
   await loadReports(data.athletes);
 

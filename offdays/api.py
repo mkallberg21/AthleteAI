@@ -31,6 +31,7 @@ from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
 from . import sender_email as sender_email_mod
+from . import create_login as create_login_mod
 from . import badge as badge_mod
 from . import teamsnap as teamsnap_mod
 from . import team_age as team_age_mod
@@ -799,6 +800,7 @@ def suggest_team_targets(
 @app.post("/api/teams", status_code=201)
 def create_team(
     body: CreateTeamRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -827,16 +829,17 @@ def create_team(
     )
     if picked is not None:
         store.assign_staff_to_team(int(picked["id"]), team["id"])
+        told = _tell_coach_about_teams(store, principal, int(picked["id"]), [team["id"]], background)
         team["coach"] = {
             "user_id": int(picked["id"]), "display_name": picked["display_name"],
-            "email": picked["email"], "reused": True, "emailed": False,
+            "email": picked["email"], "reused": True, "emailed": told,
             "team_ids": [team["id"]],
         }
     elif coach_name:
         team["coach"] = create_staff(
             CreateStaffRequest(display_name=coach_name, email=body.coach_email.strip() or None,
                                team_ids=[team["id"]]),
-            principal, store)
+            background, principal, store)
     return team
 
 
@@ -1309,7 +1312,7 @@ def password_login(
     row = store.conn.execute(
         "SELECT id, org_id, role, display_name, active FROM users WHERE id = ?", (uid,)
     ).fetchone() if uid else None
-    if row is None or not row["active"] or row["role"] not in ("coach", "director"):
+    if row is None or not row["active"]:
         throttle.record_failure(store.conn, attempt)
         raise HTTPException(status_code=401, detail=_BAD_LOGIN)
     throttle.record_success(store.conn, attempt)
@@ -1321,6 +1324,96 @@ def password_login(
         "token": passwords_mod.start_session(store.conn, int(row["id"])),
         "side": _side_words(store, row["org_id"]),
     }
+
+
+class CreateLoginStart(BaseModel):
+    email: str = Field(max_length=200)
+
+
+class CreateLoginFinish(BaseModel):
+    token: str = Field(max_length=200)
+    password: str = Field(max_length=400)
+
+
+@app.post("/api/login/create-start")
+def create_login_start(
+    request: Request, body: CreateLoginStart, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Email a link to finish creating an email and password login, to an address a program added.
+
+    The reply is the same for every address, known or not. Every ask counts toward a per-source limit.
+    """
+    attempt = throttle.Attempt.for_link(_client_host(request), "createlogin")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    throttle.record_failure(store.conn, attempt)
+    create_login_mod.start(store.conn, body.email)
+    return {"ok": True, "message": create_login_mod.REPLY, "mail": staff_mail_mod.mail_available()}
+
+
+@app.post("/api/login/create-finish")
+def create_login_finish(
+    request: Request, body: CreateLoginFinish, store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """Spend the emailed link and choose a password. Signs the person in."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "createfinish")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    try:
+        out = create_login_mod.finish(store.conn, body.token, body.password)
+    except passwords_mod.PasswordError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if out is None:
+        throttle.record_failure(store.conn, attempt)
+        raise HTTPException(status_code=401, detail="That link has expired or was already used. Ask for a new one.")
+    throttle.record_success(store.conn, attempt)
+    return {"role": out["role"], "athlete_id": out["user_id"], "display_name": out["display_name"],
+            "org_id": out["org_id"], "token": out["token"], "email": out["email"],
+            "side": _side_words(store, out["org_id"])}
+
+
+@app.get("/api/me/login")
+def my_login(principal: Principal = Depends(_principal), store: Store = Depends(get_store)) -> dict[str, Any]:
+    return {**create_login_mod.status(store.conn, principal.id), "mail": staff_mail_mod.mail_available()}
+
+
+@app.post("/api/me/make-login")
+def make_my_login(
+    request: Request, body: CreateLoginStart, principal: Principal = Depends(_principal),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Someone already signed in by their link chooses the email for their own login. A link goes to that address."""
+    attempt = throttle.Attempt.for_link(_client_host(request), "makelogin")
+    try:
+        throttle.check(store.conn, attempt)
+    except throttle.Throttled as exc:
+        raise _throttled(exc) from None
+    throttle.record_failure(store.conn, attempt)
+    try:
+        return create_login_mod.start_for(store.conn, principal.id, body.email)
+    except (create_login_mod.LoginError, passwords_mod.PasswordError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/guardians/athlete-login/{athlete_id}")
+def guardian_remove_athlete_login(
+    athlete_id: int, principal: Principal = Depends(_guardian), store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A parent switches off their child's email login. The sign-in link they sent keeps working."""
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    return {"removed": create_login_mod.remove_login(store.conn, athlete_id)}
+
+
+@app.get("/api/guardians/athlete-login/{athlete_id}")
+def guardian_athlete_login(
+    athlete_id: int, principal: Principal = Depends(_guardian), store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    guardians_mod.require_guardianship(store.conn, principal.id, athlete_id)
+    return create_login_mod.status(store.conn, athlete_id)
 
 
 @app.post("/api/login/reset")
@@ -1491,7 +1584,7 @@ def reset_with_link(
     row = store.conn.execute(
         "SELECT id, org_id, role, display_name, active FROM users WHERE id = ?", (uid,)
     ).fetchone() if uid else None
-    if row is None or not row["active"] or row["role"] not in ("coach", "director"):
+    if row is None or not row["active"]:
         throttle.record_failure(store.conn, attempt)
         raise HTTPException(status_code=401, detail="That link has expired or was already used. Ask for a new one.")
     throttle.record_success(store.conn, attempt)
@@ -2219,9 +2312,29 @@ class StaffAssignment(BaseModel):
     team_id: int
 
 
+def _tell_coach_about_teams(store: Store, principal: Principal, user_id: int, team_ids: list[int],
+                            background: BackgroundTasks) -> bool:
+    """Email a coach that they were put on these teams (no code in it). False if it could not be sent."""
+    coach = store.conn.execute("SELECT display_name, email FROM users WHERE id = ?", (user_id,)).fetchone()
+    names = [r["name"] for r in store.conn.execute(
+        f"SELECT name FROM teams WHERE org_id = ? AND id IN ({','.join('?' * len(team_ids))}) ORDER BY name",
+        (principal.org_id, *team_ids))] if team_ids else []
+    if coach is None or not names:
+        return False
+    sender = store._invite_sender(principal.org_id, principal.id)
+    queued: list[int] = []
+    sent = invites_mod.deliver_team_notice(
+        store.conn, user_id=user_id, email=coach["email"] or "", coach_name=coach["display_name"],
+        org_name=sender["org_name"], director_name=sender["coach_name"], team_names=names,
+        can_choose_drills=library.coach_may_pick(store.conn, principal.org_id, user_id), queued_ids=queued)
+    _send_now(store, queued, background)
+    return sent
+
+
 @app.post("/api/coach/staff/assign")
 def assign_staff(
     body: StaffAssignment,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -2236,14 +2349,93 @@ def assign_staff(
     if team is None or team["org_id"] != principal.org_id:
         raise HTTPException(status_code=404, detail="unknown team")
     member = store.conn.execute(
-        "SELECT 1 FROM memberships WHERE user_id = ? AND org_id = ?",
+        "SELECT 1 FROM memberships WHERE user_id = ? AND org_id = ? AND active = 1 "
+        "AND role IN ('coach','director')",
         (body.user_id, principal.org_id),
     ).fetchone()
     if member is None:
         raise HTTPException(status_code=404, detail="that person is not in this program")
 
+    already = store.conn.execute(
+        "SELECT 1 FROM team_staff WHERE team_id = ? AND user_id = ?", (body.team_id, body.user_id)).fetchone()
     store.assign_staff_to_team(body.user_id, body.team_id)
-    return {"assigned": True, "user_id": body.user_id, "team_id": body.team_id}
+    emailed = False
+    if already is None and body.user_id != principal.id:
+        emailed = _tell_coach_about_teams(store, principal, body.user_id, [body.team_id], background)
+    return {"assigned": True, "user_id": body.user_id, "team_id": body.team_id, "emailed": emailed}
+
+
+class RemoveCoach(BaseModel):
+    replace_with: int | None = None
+
+
+@app.post("/api/coach/staff/{user_id}/remove")
+def remove_coach(
+    user_id: int,
+    body: RemoveCoach,
+    background: BackgroundTasks,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Take a coach out of the program, optionally handing their teams to another coach. Directors only.
+
+    Their access ends at once: their sign-in link and any open session stop working, and they leave every team. What
+    they did stays on record. Never a director, never yourself. If they also belong to another program, only this
+    membership ends.
+    """
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can remove a coach")
+    if user_id == principal.id:
+        raise HTTPException(status_code=400, detail="you cannot remove yourself")
+    coach = store.conn.execute(
+        "SELECT u.id, u.display_name FROM users u JOIN memberships m ON m.user_id = u.id "
+        "WHERE u.id = ? AND m.org_id = ? AND m.role = 'coach' AND m.active = 1", (user_id, principal.org_id),
+    ).fetchone()
+    if coach is None:
+        raise HTTPException(status_code=404, detail="no such coach in this program")
+    heir = None
+    if body.replace_with is not None:
+        if body.replace_with == user_id:
+            raise HTTPException(status_code=400, detail="pick a different coach to take over")
+        heir = store.conn.execute(
+            "SELECT u.id, u.display_name FROM users u JOIN memberships m ON m.user_id = u.id "
+            "WHERE u.id = ? AND m.org_id = ? AND m.role IN ('coach','director') AND m.active = 1 AND u.active = 1",
+            (body.replace_with, principal.org_id)).fetchone()
+        if heir is None:
+            raise HTTPException(status_code=404, detail="that coach is not in this program")
+    team_rows = store.conn.execute(
+        "SELECT t.id, t.name FROM team_staff ts JOIN teams t ON t.id = ts.team_id "
+        "WHERE ts.user_id = ? AND t.org_id = ? ORDER BY t.name", (user_id, principal.org_id)).fetchall()
+    team_ids = [int(r["id"]) for r in team_rows]
+    with transaction(store.conn) as c:
+        if heir is not None:
+            for tid in team_ids:
+                c.execute("INSERT OR IGNORE INTO team_staff(team_id, user_id, created_at) VALUES (?,?,?)",
+                          (tid, int(heir["id"]), guardians_mod._iso(guardians_mod._now())))
+        c.execute("DELETE FROM team_staff WHERE user_id = ? AND team_id IN (SELECT id FROM teams WHERE org_id = ?)",
+                  (user_id, principal.org_id))
+        c.execute("UPDATE memberships SET active = 0 WHERE user_id = ? AND org_id = ?", (user_id, principal.org_id))
+        others = c.execute("SELECT COUNT(*) FROM memberships WHERE user_id = ? AND active = 1",
+                           (user_id,)).fetchone()[0]
+        if not others:
+            c.execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
+        c.execute("DELETE FROM login_links WHERE user_id = ?", (user_id,))
+    passwords_mod.end_sessions(store.conn, user_id)
+    store.conn.commit()
+    notified = False
+    if heir is not None and team_ids:
+        notified = _tell_coach_about_teams(store, principal, int(heir["id"]), team_ids, background)
+    left = []
+    if heir is None:
+        for r in team_rows:
+            has = store.conn.execute(
+                "SELECT 1 FROM team_staff ts JOIN memberships m ON m.user_id = ts.user_id AND m.org_id = ? "
+                "WHERE ts.team_id = ? AND m.active = 1 AND m.role = 'coach'", (principal.org_id, r["id"])).fetchone()
+            if has is None:
+                left.append(r["name"])
+    return {"removed": True, "user_id": user_id, "display_name": coach["display_name"],
+            "teams": [r["name"] for r in team_rows], "replaced_by": heir["display_name"] if heir else None,
+            "notified": notified, "teams_without_coach": left}
 
 
 @app.post("/api/coach/staff/unassign")
@@ -2269,6 +2461,7 @@ class CreateStaffRequest(BaseModel):
 @app.post("/api/coach/staff", status_code=201)
 def create_staff(
     body: CreateStaffRequest,
+    background: BackgroundTasks,
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
@@ -2304,18 +2497,28 @@ def create_staff(
             (principal.org_id, email.lower()),
         ).fetchone()
     if existing is not None:
+        added = []
         for team_id in body.team_ids:
+            had = store.conn.execute("SELECT 1 FROM team_staff WHERE team_id = ? AND user_id = ?",
+                                     (team_id, int(existing["id"]))).fetchone()
             store.assign_staff_to_team(int(existing["id"]), team_id)
+            if had is None:
+                added.append(team_id)
+        told = _tell_coach_about_teams(store, principal, int(existing["id"]), added, background) if added else False
         return {
             "user_id": int(existing["id"]), "display_name": existing["display_name"],
             "email": email, "code": None, "link": None, "subject": "", "text": "",
-            "team_ids": body.team_ids, "emailed": False, "reused": True,
+            "team_ids": body.team_ids, "emailed": told, "reused": True,
             "smtp_configured": mailer.can_send(store.conn, principal.org_id),
         }
     coach = store.create_user(principal.org_id, "coach", body.display_name, email=email)
     for team_id in body.team_ids:
         store.assign_staff_to_team(coach["id"], team_id)
     sender = store._invite_sender(principal.org_id, principal.id)
+    team_names = [r["name"] for r in store.conn.execute(
+        f"SELECT name FROM teams WHERE org_id = ? AND id IN ({','.join('?' * len(body.team_ids))}) ORDER BY name",
+        (principal.org_id, *body.team_ids))] if body.team_ids else []
+    queued: list[int] = []
     emailed = invites_mod.deliver_staff(
         store.conn,
         user_id=coach["id"],
@@ -2324,10 +2527,13 @@ def create_staff(
         org_name=sender["org_name"],
         director_name=sender["coach_name"],
         code=coach["token"],
+        team_names=team_names,
+        queued_ids=queued,
     )
+    _send_now(store, queued, background)
     subject, _html, text = invites_mod.compose_staff(
         coach_name=body.display_name, org_name=sender["org_name"],
-        director_name=sender["coach_name"], code=coach["token"],
+        director_name=sender["coach_name"], code=coach["token"], team_names=team_names,
     )
     return {
         "user_id": coach["id"],

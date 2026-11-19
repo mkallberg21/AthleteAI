@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 34
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -1237,6 +1237,17 @@ CREATE TABLE IF NOT EXISTS sender_emails (
     window_start TEXT,
     sent_count   INTEGER NOT NULL DEFAULT 0
 );
+-- A link to finish creating an email and password login (offdays/create_login.py). Only a hash is kept.
+CREATE TABLE IF NOT EXISTS login_links (
+    id         INTEGER PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email      TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_login_links_user ON login_links(user_id);
 -- A parent's way back in: a one-time link emailed to an address the program gave us.
 -- Only a hash of the link is kept.
 CREATE TABLE IF NOT EXISTS parent_links (

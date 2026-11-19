@@ -432,6 +432,34 @@ coach is on ("You are on 2031 Red") and what they can do there: choose the team'
 locked that for them) and add video clips. Under the email hold, or with no address on file, nothing is sent: the
 director gets the link and a Copy message button to pass it on. `POST /api/coach/staff/{id}/resend-link`.
 
+## Everyone can make their own email and password login
+
+So nobody has to send a new link. `offdays/create_login.py`, table `login_links` (schema 34). A login is attached to a
+person the program already added; the person proves the address by opening a link sent to it.
+
+- **Coach or director:** front page, choose the role, "First time? Create my login", type the address the director added
+  them with. A link goes to it (not held by the email hold: it is mail to one staff member who asked).
+- **Parent:** the same, with an address the program gave us (roster, or the one the invite went to). The address typed at
+  sign-up is never enough. Nothing is sent while the program's email hold is on. One address holds one account; a parent
+  with the same address in two programs gets the one with more children.
+- **Athlete:** a child has no address the program knows, so cannot start from the front page. Signed in once by the link their
+  parent sent, the home screen offers "Make my login": they type an address, a link goes to it, they choose a password.
+  The parent sees it on their page and can turn it off (the link they sent keeps working). Held by the email hold.
+- After that, every role signs in with email and password (athlete and parent panels have the form; coach and director
+  already did). "Forgot your password" works for all four.
+- The reply to "email me a link" is the same for every address. Links are single use, last an hour, a new one kills the
+  old, three an hour at most. A weak password does not spend the link. Only hashes are stored.
+
+## Removing a coach and putting a new one on a team
+
+Teams tab, Coaches & team access. **Remove coach** (director only, coaches only, never yourself or a director) ends their
+access at once (link, password and open sessions) and takes them off every team; what they did stays on record. A coach
+who also belongs to another program only leaves this one. The box offers **Give their teams to** another coach, who is
+emailed; with nobody chosen the screen names the teams now without a coach. **Add team** on a coach's row, a new coach
+added with teams, and a team created with a coach all email the coach which teams they are on (a plain sign-in page link
+for someone already in; the first email also carries their sign-in link). Nothing is sent while the hold is on.
+A coach with no team sees the whole program, so give a new coach a team straight away.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

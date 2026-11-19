@@ -253,6 +253,11 @@
       <div class="sponsor-text">Sponsored by</div>
     </div>
 
+    <div class="card" id="mylogin-card" style="margin-top:10px">
+      <h2>Sign in with an email</h2>
+      <div id="mylogin"></div>
+    </div>
+
     <button class="secondary" id="signout" style="margin-top:10px">Sign out</button>
   </section>
 
@@ -3145,6 +3150,7 @@ $('done').addEventListener('click', async () => {
   show('home');
 });
 $('signout').addEventListener('click', logout);
+import('./mylogin.js').then((m) => m.mountMyLogin($('mylogin'))).catch(() => { $('mylogin-card').classList.add('hidden'); });
 
 // ---------------------------------------------------------------- tell us what you did
 function openLog(preferKey) {

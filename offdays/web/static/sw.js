@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v21';
+const CACHE = 'offdays-shell-v22';
 
 // Pages where the server enforces rules the page must match (agree to terms at sign-up, the director's dashboard,
 // the parent's consent screens). A saved copy of one of these from before a release shows the old form while the
@@ -37,6 +37,7 @@ const SHELL = [
   'fonts/barlow-condensed-700-latin.woff2',
   'fonts/jetbrains-mono-400-latin.woff2',
   'api.js',
+  'mylogin.js',
   'counter.js',
   // Wall ball counts by ear. The worklet is only fetched the first time a
   // wall-ball drill opens the microphone, which may well be in a driveway.

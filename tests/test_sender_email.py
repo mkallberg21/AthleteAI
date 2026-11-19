@@ -255,7 +255,7 @@ class TestTheScreens:
         html = self.page("index.html")
         assert "params.get('sender')" in html and "/api/login/sender-confirm" in html
         assert 'id="sender-card"' in html and "Your email is confirmed" in html
-        assert "|| senderLink) history.replaceState" in html               # the secret leaves the address bar
+        assert "|| senderLink || createLink) history.replaceState" in html               # the secret leaves the address bar
 
     def test_the_message_box_walks_through_confirming(self):
         html = self.page("coach.html")

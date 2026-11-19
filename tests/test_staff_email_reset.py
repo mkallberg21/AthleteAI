@@ -442,8 +442,9 @@ class TestWhoMayUseIt:
         assert client.post("/api/me/email", headers=h, json={"email": "a@b.example", "current_password": "x"}).status_code in (401, 403)
         assert client.post("/api/me/password/confirm-link", headers=h).status_code in (401, 403)
 
-    def test_an_athlete_address_never_gets_a_reset_link(self, client, program, mail):
-        # Even if a confirmed credentials row somehow existed for a child, no link goes out.
+    def test_an_athlete_with_a_login_gets_a_reset_link_only_once_the_hold_is_released(self, client, program, mail):
+        # A child can make their own email login now (offdays/create_login.py), so "forgot your password" works for them,
+        # but like every mail to a family it waits for the director to release the hold.
         kid = program["athletes"][0]["id"]
         _db().execute(
             "INSERT INTO credentials(user_id, email, pw_hash, email_verified_at, created_at, updated_at) "
@@ -451,7 +452,11 @@ class TestWhoMayUseIt:
             (kid, "kid@example.com", "scrypt$x", "2026-11-01T00:00:00+00:00", "2026-11-01", "2026-11-01"))
         _db().commit()
         _forgot(client, "kid@example.com")
-        assert mail.sent == []
+        assert mail.sent == []                                             # the hold is on
+        _db().execute("UPDATE organizations SET mail_hold = 0")
+        _db().commit()
+        _forgot(client, "kid@example.com")
+        assert [m["to"] for m in mail.sent] == ["kid@example.com"]
 
     def test_the_routes_need_no_sign_in_but_reveal_nothing(self, client, program, mail):
         for path, body in (("/api/login/forgot", {"email": "x@y.example"}),

@@ -305,6 +305,50 @@ def compose_staff(
     return subject, html, text
 
 
+def compose_team_notice(
+    *, coach_name: str, org_name: str, director_name: str, team_names: list[str], can_choose_drills: bool = True,
+) -> tuple[str, str, str]:
+    """Subject, HTML and text telling a coach they were put on a team. No code in it: they sign in as usual."""
+    base = (CONFIG.app_base_url or "").rstrip("/")
+    link = f"{base}/app/index.html"
+    names = _join(list(team_names))
+    can = "choose the team's drills and add video clips" if can_choose_drills else "add video clips"
+    subject = f"{org_name}: you are now coaching {names} on 0FFDAYS"
+    text = (f"{director_name} put you on {names} at {org_name} on 0FFDAYS. You can {can}, and see how every athlete "
+            f"on {'that team' if len(team_names) == 1 else 'those teams'} is doing.\n\n"
+            f"Sign in here, on any phone, tablet or computer:\n{link}\n\n"
+            f"Use your email and password, or the link {director_name} sent you before.")
+    html = (f"<p>{escape(director_name)} put you on <b>{escape(names)}</b> at {escape(org_name)} on 0FFDAYS. You can "
+            f"{escape(can)}, and see how every athlete on {'that team' if len(team_names) == 1 else 'those teams'} "
+            f"is doing.</p>"
+            f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;'
+            f'text-decoration:none;border-radius:6px">Open 0FFDAYS</a></p>'
+            f"{mailer.link_fallback_html(link)}"
+            f'<p style="color:#555">Use your email and password, or the link {escape(director_name)} sent you before.</p>')
+    return subject, html, text
+
+
+def deliver_team_notice(
+    conn: sqlite3.Connection, *, user_id: int, email: str, coach_name: str, org_name: str, director_name: str,
+    team_names: list[str], can_choose_drills: bool = True, queued_ids: list[int] | None = None,
+) -> bool:
+    """Queue the "you were put on a team" email. True only if the program can send it."""
+    email = (email or "").strip()
+    owner = conn.execute("SELECT org_id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not email or not team_names or not mailer.can_send(conn, owner["org_id"] if owner else None):
+        return False
+    subject, html, text = compose_team_notice(
+        coach_name=coach_name, org_name=org_name, director_name=director_name, team_names=team_names,
+        can_choose_drills=can_choose_drills)
+    import secrets as _secrets
+    queued = mailer.enqueue(
+        conn, to_email=email, subject=subject, html=html, text=text, kind=mailer.Kind.TRANSACTIONAL,
+        dedupe_key=f"staff_team:{user_id}:{_secrets.token_hex(6)}", user_id=user_id)
+    if queued is not None and queued_ids is not None:
+        queued_ids.append(queued)
+    return queued is not None
+
+
 def deliver_staff(
     conn: sqlite3.Connection,
     *,
