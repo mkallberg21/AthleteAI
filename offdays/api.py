@@ -100,6 +100,7 @@ from .leaderboard import (
     team_ranking as team_ranking_rows,
     team_standings,
 )
+from .db import fresh_token, hash_token
 from .store import Principal, Store, StoreError, transaction
 
 logger = logging.getLogger(__name__)
@@ -1533,6 +1534,55 @@ def change_my_email(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     throttle.record_success(store.conn, attempt)
     return {"ok": True, **staff_mail_mod.status(store.conn, principal.id)}
+
+
+@app.post("/api/coach/staff/{user_id}/resend-link")
+def resend_staff_link(
+    user_id: int,
+    background: BackgroundTasks,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A director sends a coach a fresh sign-in link, with their teams named in the email.
+
+    Director only, a coach in the same program only (never another director). The new link replaces the old one
+    everywhere. While email is on hold nothing is sent: the director gets the message and link to pass on herself.
+    """
+    if principal.role != "director":
+        raise HTTPException(status_code=403, detail="only a director can do this")
+    coach = store.conn.execute(
+        "SELECT u.id, u.display_name, u.email FROM users u JOIN memberships m ON m.user_id = u.id "
+        "WHERE u.id = ? AND m.org_id = ? AND m.role = 'coach' AND m.active = 1",
+        (user_id, principal.org_id),
+    ).fetchone()
+    if coach is None:
+        raise HTTPException(status_code=404, detail="no such coach in this program")
+    team_names = [r["name"] for r in store.conn.execute(
+        "SELECT t.name FROM team_staff ts JOIN teams t ON t.id = ts.team_id "
+        "WHERE ts.user_id = ? AND t.org_id = ? ORDER BY t.name", (user_id, principal.org_id))]
+    may_pick = library.coach_may_pick(store.conn, principal.org_id, user_id)
+    token = fresh_token(store.conn)
+    with transaction(store.conn) as c:
+        c.execute("UPDATE users SET token_hash = ? WHERE id = ?", (hash_token(token), user_id))
+    sender = store._invite_sender(principal.org_id, principal.id)
+    queued: list[int] = []
+    email = (coach["email"] or "").strip()
+    emailed = invites_mod.deliver_staff(
+        store.conn, user_id=user_id, email=email, coach_name=coach["display_name"], org_name=sender["org_name"],
+        director_name=sender["coach_name"], code=token, team_names=team_names, can_choose_drills=may_pick,
+        resend=True, queued_ids=queued,
+    )
+    _send_now(store, queued, background)
+    subject, _html, text = invites_mod.compose_staff(
+        coach_name=coach["display_name"], org_name=sender["org_name"], director_name=sender["coach_name"],
+        code=token, team_names=team_names, can_choose_drills=may_pick, resend=True,
+    )
+    return {
+        "user_id": user_id, "display_name": coach["display_name"], "email": email, "emailed": emailed,
+        "has_email": bool(email), "team_names": team_names,
+        "smtp_configured": mailer.can_send(store.conn, principal.org_id),
+        "subject": subject, "text": text, "link": None if emailed else guardians_mod.signin_link(token),
+    }
 
 
 @app.post("/api/coach/staff/{user_id}/reset-code")

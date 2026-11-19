@@ -574,7 +574,7 @@ class TestTheAthletePage:
 
     def test_the_saved_pages_on_phones_are_replaced(self):
         sw = (_STATIC / "sw.js").read_text(encoding="utf-8")
-        assert "offdays-shell-v20" in sw
+        assert "offdays-shell-v21" in sw
 
 
 class TestSelfReportedWorkCountsToo:

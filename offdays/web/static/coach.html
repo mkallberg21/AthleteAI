@@ -1475,11 +1475,42 @@ async function loadStaff(isDirector) {
           Can choose this coach's team drills
         </label>
         <div style="margin-top:6px">
+          <button class="tiny" data-resend-link="${person.id}" data-name="${esc(person.display_name)}" data-has-email="${person.email ? '1' : ''}"
+            title="Sends a new sign-in link to this coach. Any earlier link stops working.">Resend sign-in link</button>
+          <div class="small" data-resend-out="${person.id}" style="margin:6px 0"></div>
           <button class="tiny" data-reset-code="${person.id}" data-name="${esc(person.display_name)}">Forgot password? Give a reset code</button>
           <div class="small" data-reset-out="${person.id}" style="margin-top:6px"></div>
         </div>` : ''}
     </div>`;
   }).join('');
+
+  // Resend a coach their sign-in link (new link, old one stops working). Under the email hold the director
+  // gets the message to send herself instead.
+  $('staff-list').querySelectorAll('[data-resend-link]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const out = $('staff-list').querySelector(`[data-resend-out="${btn.dataset.resendLink}"]`);
+      const name = btn.dataset.name;
+      if (!window.confirm(`Send ${name} a new sign-in link?\n\nTheir old link stops working.`)) return;
+      btn.disabled = true; out.style.color = '';
+      try {
+        const res = await api(`/api/coach/staff/${btn.dataset.resendLink}/resend-link`, { method: 'POST' });
+        const teams = res.team_names.length ? ` It names ${esc(res.team_names.join(', '))}.` : ' They are not on a team yet.';
+        if (res.emailed) {
+          out.innerHTML = `Sent to ${esc(res.email)}.${teams}`;
+        } else {
+          const why = !res.has_email ? 'No email address on file for them.'
+            : !res.smtp_configured ? 'Email is on hold, so nothing was sent.' : 'It could not be sent.';
+          out.innerHTML = `${why} The new link is ready to pass on:<br><code style="word-break:break-all">${esc(res.link)}</code>`
+            + ` <button type="button" class="tiny" data-copy-staff-link>Copy message</button>`;
+          out.querySelector('[data-copy-staff-link]').addEventListener('click', async (ev) => {
+            try { await navigator.clipboard.writeText(res.text); ev.target.textContent = 'Copied'; } catch { ev.target.textContent = 'Copy failed'; }
+          });
+        }
+      } catch (e) {
+        out.style.color = 'var(--danger)'; out.textContent = e.message || 'Could not resend.';
+      } finally { btn.disabled = false; }
+    });
+  });
 
   // A coach who forgot their password: the director reads them a one-time code.
   // It works once, for a day, and is not emailed.

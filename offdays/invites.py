@@ -251,6 +251,9 @@ def compose_staff(
     org_name: str,
     director_name: str,
     code: str,
+    team_names: list[str] | None = None,
+    can_choose_drills: bool = True,
+    resend: bool = False,
 ) -> tuple[str, str, str]:
     """Subject, HTML and plain text for a coach's sign-in.
 
@@ -263,19 +266,31 @@ def compose_staff(
     first = coach_name.split()[0] if coach_name.strip() else "Coach"
     link = signin_link(code)
     subject = f"{org_name}: your 0FFDAYS coach sign-in"
+    names = _join(list(team_names)) if team_names else ""
+    can = ("choose the team's drills and add video clips" if can_choose_drills else "add video clips")
+    team_text = (f"You are on {names}. Once you sign in you can {can} for {'that team' if len(team_names) == 1 else 'those teams'}.\n\n"
+                 if team_names else "")
+    team_html = (f"<p>You are on <b>{escape(names)}</b>. Once you sign in you can {escape(can)} for "
+                 f"{'that team' if len(team_names) == 1 else 'those teams'}.</p>" if team_names else "")
+    lead = ("Here is your new sign-in link. It replaces any earlier one.\n\n" if resend else "")
+    lead_html = ("<p>Here is your new sign-in link. It replaces any earlier one.</p>" if resend else "")
     text = (
-        f"{director_name} added you as a coach at {org_name} on 0FFDAYS.\n\n"
-        f"Your athletes record drills at home on their own phones; the app "
+        lead
+        + f"{director_name} added you as a coach at {org_name} on 0FFDAYS.\n\n"
+        + team_text +
+        f"Your athletes record drills at home on their own phones or tablets; the app "
         f"counts the reps and you see who is putting the work in. No video "
         f"ever reaches you, only the numbers.\n\n"
-        f"Sign in here, on any phone or computer:\n{link}\n\n"
+        f"Sign in here, on any phone, tablet or computer:\n{link}\n\n"
         f"Or go to the app and enter the code {code}.\n\n"
         f"Keep this message: the link is your sign-in for the season."
     )
     html = (
-        f"<p>{escape(director_name)} added you as a coach at <b>{escape(org_name)}</b> "
+        lead_html
+        + f"<p>{escape(director_name)} added you as a coach at <b>{escape(org_name)}</b> "
         f"on 0FFDAYS.</p>"
-        f"<p>Your athletes record drills at home on their own phones; the app counts "
+        + team_html +
+        f"<p>Your athletes record drills at home on their own phones or tablets; the app counts "
         f"the reps and you see who is putting the work in. No video ever reaches you, "
         f"only the numbers.</p>"
         f'<p><a href="{escape(link)}" style="display:inline-block;padding:12px 20px;'
@@ -299,6 +314,10 @@ def deliver_staff(
     org_name: str,
     director_name: str,
     code: str,
+    team_names: list[str] | None = None,
+    can_choose_drills: bool = True,
+    resend: bool = False,
+    queued_ids: list[int] | None = None,
 ) -> bool:
     """Queue the coach's sign-in email. True only if the program can send it."""
     email = (email or "").strip()
@@ -307,6 +326,7 @@ def deliver_staff(
         return False
     subject, html, text = compose_staff(
         coach_name=coach_name, org_name=org_name, director_name=director_name, code=code,
+        team_names=team_names, can_choose_drills=can_choose_drills, resend=resend,
     )
     queued = mailer.enqueue(
         conn,
@@ -315,9 +335,11 @@ def deliver_staff(
         html=html,
         text=text,
         kind=mailer.Kind.TRANSACTIONAL,
-        dedupe_key=f"staff_signin:{user_id}:{code[:2]}",
+        dedupe_key=(f"staff_resend:{user_id}:{code}" if resend else f"staff_signin:{user_id}:{code[:2]}"),
         user_id=user_id,
     )
+    if queued is not None and queued_ids is not None:
+        queued_ids.append(queued)
     return queued is not None
 
 

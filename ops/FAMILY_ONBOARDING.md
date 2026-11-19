@@ -424,6 +424,14 @@ Push-Ups, Plank Hold and Jump Rope drills, streaks and badges, the check-in rout
 app on the device camera). No health outcome is promised, no child's gender is assumed, no dashes, American spelling.
 Edit the wording there, not in a template elsewhere; the preview and the email that goes out are the same text.
 
+## Resending a coach their sign-in link
+
+Teams tab, Coaches & team access: each coach row has "Resend sign-in link" (director only, coaches only, same program only).
+It makes a NEW link, which kills the old one everywhere, and emails it to the address on file, naming the teams the
+coach is on ("You are on 2031 Red") and what they can do there: choose the team's drills (only if the director has not
+locked that for them) and add video clips. Under the email hold, or with no address on file, nothing is sent: the
+director gets the link and a Copy message button to pass it on. `POST /api/coach/staff/{id}/resend-link`.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a
