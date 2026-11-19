@@ -3874,7 +3874,7 @@ function renderFamilies() {
       : '';
     const whose = a.who === 'parent' ? '<span class="pill warn">parent</span>'
       : a.who === 'athlete' ? '<span class="pill">athlete</span>'
-      : a.who === 'program' ? '<span class="pill bad">you</span>'
+      : a.who === 'program' ? '<span class="pill bad">coach or director</span>'
       : '<span class="pill ok">done</span>';
     const parent = a.parent_name || a.parent_email
       ? `${esc(a.parent_name)}${a.parent_name && a.parent_email ? ' &middot; ' : ''}${esc(a.parent_email)}`
