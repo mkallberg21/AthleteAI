@@ -350,6 +350,20 @@ the other has no shared address, so no offer appears; fix the roster email and i
 program does not delete the athlete's data in the other; the parent deletes each. The privacy policy should say
 that linked programs each hold their own copy of the athlete's counted sessions (for the lawyer).
 
+## "Select everyone" then "Send invites"
+
+One press makes every ticked family their own fresh invite (`POST /api/coach/families/nudge-many`) and, when email is
+on, emails each parent straight away: one email per parent address, naming their child or children, with that parent's
+own sign-up link and the director's note. The child's own sign-in link is not in it: the parent makes that after they
+say yes, so a coach never hands a child a code. Brothers and sisters under one parent address are one email, and the
+button and the question count parents, not children.
+
+Email on hold is the default and still stops everything. So that holding does not leave the director sending 23 emails by
+hand, a director who presses the button while it is on hold, on a server with a mail provider, is asked once: "turn email
+on and email N parents now?" OK turns the hold off (the same switch as "Start sending email") and sends; Cancel only
+prepares the invites, as before. A coach is not offered the switch (director only) and is told to ask the director. A line
+under the button always says what pressing it will do in the current state.
+
 ## The parent email is a message from 0FFDAYS on behalf of the coach or director
 
 Every invite (roster import, the Families screen's send and resend, one at a time or many) goes out from the program's

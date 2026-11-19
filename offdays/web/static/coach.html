@@ -544,6 +544,7 @@
       <label><input type="checkbox" id="fam-all"><span id="fam-all-label">Select everyone who can be sent an invite</span></label>
       <button type="button" class="inline" id="fam-bulk-send" disabled>Send invites</button>
     </div>
+    <p class="small muted hidden" id="fam-bulk-note" style="margin:6px 0 10px"></p>
     <div id="families"></div>
     <div id="families-err" class="err hidden"></div>
   </div>
@@ -3905,9 +3906,12 @@ try { $('msg-intro').value = localStorage.getItem(MSG_KEY) || ''; } catch { /* f
 $('msg-intro').addEventListener('input', () => { try { localStorage.setItem(MSG_KEY, $('msg-intro').value); } catch { /* fine */ } });
 
 let msgHeaderLoaded = false;
+let msgState = null;      // { sending, provider_configured } as last reported by the server
 async function msgHeader() {
   try {
     const m = await api('/api/coach/families/invite-preview', { method: 'POST', body: { intro: '' } });
+    msgState = m;
+    famNote();
     const hold = m.sending ? '' : ' Email is on hold, so nothing is sent yet: you get each message to send yourself.';
     const reply = m.reply_to ? `Replies come to ${esc(m.reply_to)}.` : 'Confirm your email below and replies will reach you.';
     $('msg-from').innerHTML = `Sent by 0FFDAYS on your behalf, shown as &ldquo;${esc(m.from_name)}&rdquo;. ${reply}${esc(hold)}`;
@@ -4058,6 +4062,26 @@ const famPicked = new Set();
 let famShown = [];          // the families in the list right now that a tap could send to
 let famRows = [];           // every family in the list right now
 
+// One email goes to each PARENT, not each child: brothers and sisters under one address are one family.
+const famKey = (a) => (a.parent_email || '').trim().toLowerCase() || `athlete:${a.athlete_id}`;
+const famCount = (list) => new Set(list.map(famKey)).size;
+
+// What pressing the button will do, in plain words, for the state email is in right now.
+function famNote() {
+  const note = $('fam-bulk-note');
+  if (!note) return;
+  const picked = famShown ? famShown.filter((a) => famPicked.has(a.athlete_id)).length : 0;
+  const sending = (familiesData && familiesData.mail_sending) || (msgState && msgState.sending);
+  const canTurnOn = IS_DIRECTOR && msgState && msgState.provider_configured && !sending;
+  if (!famShown || !famShown.length) { note.classList.add('hidden'); return; }
+  note.classList.remove('hidden');
+  note.textContent = sending
+    ? 'Each parent gets their own email from 0FFDAYS, with their athlete\u2019s name and their own sign-up link. You do not need to send them one by one.'
+    : canTurnOn
+      ? 'Email is on hold, so nothing has been sent yet. When you press the button it asks to turn email on and then sends every parent their own email, with their athlete\u2019s name and their own link.'
+      : 'Email is on hold, so nothing is sent: you get each message to send yourself. The director can turn email on in the Email to families card.';
+}
+
 function famBar(rows) {
   famRows = rows;
   famShown = rows.filter((a) => a.can_nudge && !resent.has(a.athlete_id));
@@ -4076,8 +4100,10 @@ function famBar(rows) {
   const fresh = picked.filter((a) => a.stage === 'invite_unsent').length;
   const verb = !picked.length ? 'Send invites' : fresh === picked.length ? 'Send invites' : fresh === 0 ? 'Resend invites' : 'Send or resend invites';
   const btn = $('fam-bulk-send');
-  btn.textContent = n ? `${verb} to ${n} parent${n === 1 ? '' : 's'}` : 'Send invites';
+  const parents = famCount(picked);
+  btn.textContent = n ? `${verb} to ${parents} parent${parents === 1 ? '' : 's'}` : 'Send invites';
   btn.disabled = n === 0;
+  famNote();
 }
 
 $('families').addEventListener('change', (e) => {
@@ -4097,8 +4123,26 @@ $('fam-all').addEventListener('change', () => {
 $('fam-bulk-send').addEventListener('click', async () => {
   const ids = famShown.filter((a) => famPicked.has(a.athlete_id)).map((a) => a.athlete_id);
   if (!ids.length) return;
-  const sending = familiesData && familiesData.mail_sending;
-  if (sending && !window.confirm(`Email ${ids.length} parent${ids.length === 1 ? '' : 's'} now?\n\nEach gets a fresh invite, and any earlier invite to them stops working.`)) return;
+  let sending = familiesData && familiesData.mail_sending;
+  const parents = famCount(famShown.filter((a) => famPicked.has(a.athlete_id)));
+  const word = `${parents} parent${parents === 1 ? '' : 's'}`;
+  if (!sending && IS_DIRECTOR && msgState && msgState.provider_configured) {
+    // On hold: one question turns email on and sends, instead of leaving the director to send each one by hand.
+    if (window.confirm(`Email is on hold, so nothing would be sent.\n\nPress OK to turn email on and email ${word} now. Each gets their own email from 0FFDAYS with their athlete's name and their own link. Press Cancel to only prepare the invites.`)) {
+      try {
+        await api('/api/org/mail-hold', { method: 'PUT', body: { held: false } });
+        sending = true;
+        if (familiesData) familiesData.mail_sending = true;
+        if (msgState) msgState.sending = true;
+        loadMailHold();
+        msgHeader();
+      } catch (err) {
+        $('fam-bulk-result').textContent = err.message || 'Could not turn email on.';
+        $('fam-bulk-result').classList.remove('hidden');
+        return;
+      }
+    }
+  } else if (sending && !window.confirm(`Email ${word} now?\n\nEach gets a fresh invite, and any earlier invite to them stops working.`)) return;
   const btn = $('fam-bulk-send');
   const result = $('fam-bulk-result');
   btn.disabled = true;

@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 import pytest
@@ -343,3 +344,89 @@ class TestThePreviewReadsRightWithoutAChild:
         assert "set up your athlete's training app" in m["subject"]
         assert "your's" not in m["text"] and "so your can" not in m["text"]
         assert "so your athlete can record drills" in m["text"]
+
+
+class TestSendToEveryoneAtOnce:
+    """\"Select everyone, Send invites\": one press, an email to every parent, in their own name and with their own link."""
+
+    ROSTER = (
+        "First Name,Last Name,Birth Year,Parent Email\n"
+        + "".join(f"Kid{n},Family{n},2013,parent{n}@example.com\n" for n in range(1, 24))
+    )
+
+    def _everyone(self, client, p):
+        rows = client.get("/api/coach/team-ranking", headers=p["h"], params={"team_id": p["team"]}).json()["rows"]
+        return [r["athlete_id"] for r in rows]
+
+    def test_every_parent_gets_their_own_email_with_their_childs_name_and_their_own_link(self, client, rec):
+        p = program(client, release=False)
+        roster(client, p, self.ROSTER)
+        assert rec.sent == []                                                   # on hold: nothing yet
+        client.put("/api/org/mail-hold", headers=p["h"], json={"held": False})
+        ids = self._everyone(client, p)
+        assert len(ids) == 23
+        res = client.post("/api/coach/families/nudge-many", headers=p["h"], json={"athlete_ids": ids}).json()
+        assert res["counts"]["emailed"] == 23 and res["counts"]["skipped"] == 0
+        assert len(rec.sent) == 23
+        by = {m["to"]: m for m in rec.sent}
+        assert set(by) == {f"parent{n}@example.com" for n in range(1, 24)}
+        codes = set()
+        for n in range(1, 24):
+            m = by[f"parent{n}@example.com"]
+            assert m["subject"].endswith(f"set up Kid{n}'s training app") and f"so Kid{n} can record drills" in m["text"]
+            code = re.search(r"invite=([A-Z0-9-]{14})", m["text"]).group(1)
+            codes.add(code)
+            assert code in m["html"] and "Why we are doing this" in m["text"]
+        assert len(codes) == 23                                                # every link is their own
+
+    def test_a_family_is_emailed_once_however_many_children_it_has(self, client, rec):
+        p = program(client, release=True)
+        roster(client, p, "First Name,Last Name,Birth Year,Parent Email\nAnn,Cole,2013,c@example.com\nBo,Cole,2015,c@example.com\n"
+                          "Cy,Dane,2013,d@example.com\n")
+        rec.sent.clear()
+        ids = self._everyone(client, p)
+        client.post("/api/coach/families/nudge-many", headers=p["h"], json={"athlete_ids": ids})
+        assert sorted(m["to"] for m in rec.sent) == ["c@example.com", "d@example.com"]
+
+    def test_while_on_hold_nobody_is_emailed_and_each_invite_is_left_ready(self, client, rec):
+        p = program(client, release=False)
+        roster(client, p, self.ROSTER)
+        res = client.post("/api/coach/families/nudge-many", headers=p["h"], json={"athlete_ids": self._everyone(client, p)}).json()
+        assert rec.sent == [] and res["counts"]["ready"] == 23 and res["counts"]["emailed"] == 0
+
+    def test_only_the_director_can_turn_email_on(self, client, rec):
+        p = program(client, release=False)
+        coach = api_module._store.create_user(p["org_id"], "coach", "Sam", email="s@x.example")
+        res = client.put("/api/org/mail-hold", headers={"Authorization": f"Bearer {coach['token']}"}, json={"held": False})
+        assert res.status_code == 403
+        assert client.get("/api/org/mail-hold", headers=p["h"]).json()["held"] is True
+
+
+class TestTheBulkButtonExplainsAndTurnsEmailOn:
+    @staticmethod
+    def page():
+        from pathlib import Path
+        return (Path(api_module.__file__).parent / "web" / "static" / "coach.html").read_text(encoding="utf-8")
+
+    def test_a_line_under_the_button_says_what_it_will_do(self):
+        html = self.page()
+        assert 'id="fam-bulk-note"' in html
+        assert "Each parent gets their own email from 0FFDAYS, with their athlete" in html
+        assert "You do not need to send them one by one" in html
+        assert "Email is on hold, so nothing has been sent yet. When you press the button it asks to turn email on" in html
+
+    def test_pressing_it_on_hold_offers_to_turn_email_on_and_send(self):
+        html = self.page()
+        assert "Press OK to turn email on and email ${word} now" in html
+        assert "api('/api/org/mail-hold', { method: 'PUT', body: { held: false } })" in html
+        assert "Press Cancel to only prepare the invites" in html
+
+    def test_it_counts_parents_not_children(self):
+        """Two brothers under one address are one parent, so the button and the question say so."""
+        html = self.page()
+        assert "const famCount = (list) => new Set(list.map(famKey)).size;" in html
+        assert "const parents = famCount(picked);" in html and "${verb} to ${parents} parent" in html
+        assert "const word = `${parents} parent${parents === 1 ? '' : 's'}`;" in html
+
+    def test_a_coach_is_not_offered_the_switch(self):
+        assert "if (!sending && IS_DIRECTOR && msgState && msgState.provider_configured)" in self.page()

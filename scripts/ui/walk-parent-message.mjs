@@ -27,7 +27,8 @@ const errs = [];
 const ctx = await b.newContext({ ...devices['Desktop Chrome'], viewport: { width: 1280, height: 900 } });
 const page = await ctx.newPage();
 page.on('pageerror', (e) => errs.push(e.message));
-page.on('dialog', (d) => d.accept());
+const dialogs = [];
+page.on('dialog', (d) => { dialogs.push(d.message()); d.accept(); });
 await page.addInitScript(() => { try { localStorage.setItem('offdays.dwizard', 'done'); localStorage.setItem('offdays.awizard', 'done'); } catch (e) {} });
 await page.goto(`${base}/app/index.html`, { waitUntil: 'networkidle' });
 await page.evaluate((t) => localStorage.setItem('offdays.token', t), dtoken);
@@ -96,7 +97,6 @@ await other.screenshot({ path: `${out}/1c-confirmed-page.png` });
 await other.close();
 await page.click('#msg-email-check');
 await page.waitForFunction(() => /confirmed/.test(document.querySelector('#msg-sender').innerText), null, { timeout: 15000 });
-await j('/api/org/mail-hold', dtoken, { held: false }, 'PUT');
 await new Promise((r) => setTimeout(r, 1500));
 const base0 = mail().length;                       // setting an email sends the director their own confirm link
 const fresh = () => mail().slice(base0);
@@ -106,7 +106,7 @@ await unfold();
 await page.waitForSelector('#msg-from');
 await page.waitForFunction(() => /Replies come to/.test(document.querySelector('#msg-from').innerText), null, { timeout: 15000 });
 from = (await page.locator('#msg-from').innerText()).replace(/\s+/g, ' ');
-check(new RegExp(`Replies come to ${DIR_EMAIL.replace(/\./g, '\\.')}`).test(from) && !/on hold/.test(from), 'with an email on file the box says replies come to the director, and email is on', `(${from.slice(0, 110)}...)`);
+check(new RegExp(`Replies come to ${DIR_EMAIL.replace(/\./g, '\\.')}`).test(from) && /on hold/.test(from), 'with an email confirmed the box says replies come to the director, and email is still on hold', `(${from.slice(0, 110)}...)`);
 
 // write a note, preview it
 await page.fill('#msg-intro', 'Hi everyone, this is Matt. We are starting a pilot with 0FFDAYS.\n\nYou will each get your own link.');
@@ -134,14 +134,23 @@ check(tmail.includes(`TO: ${DIR_EMAIL}`) && (tmail.match(/^TO: /gm) || []).lengt
 check(/^FROM: "?Matt Kallberg \(Nashville Dogs\) via 0FFDAYS"? <no-reply@mail\.0ffdays\.com>/m.test(tmail) && tmail.includes(`REPLY-TO: ${DIR_EMAIL}`), 'and carries the director as sender and reply address');
 check(/SUBJECT: TEST: /.test(tmail), 'and is marked as a test');
 
-// send to all the families that can be invited
+// send to all the families that can be invited: one press from "on hold" to "sent"
 await page.waitForSelector('#fam-all');
 await page.click('#fam-all');
+const note = (await page.locator('#fam-bulk-note').innerText()).replace(/\s+/g, ' ');
+check(/Email is on hold, so nothing has been sent yet/.test(note) && /asks to turn email on/.test(note), 'the line under the button says what pressing it will do while email is on hold');
+await page.locator('#fam-bar').scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${out}/2c-bulk-held.png` });
+check((await j('/api/org/mail-hold', dtoken)).json.held === true, 'email is on hold before the press');
+check(/to 3 parents$/.test((await page.locator('#fam-bulk-send').innerText()).trim()), 'the button counts parents (3), not children (4)', `(${(await page.locator('#fam-bulk-send').innerText()).trim()})`);
 await page.click('#fam-bulk-send');
 await page.waitForSelector('#fam-bulk-result:not(.hidden)', { timeout: 20000 });
+check(dialogs.some((m) => /Email is on hold, so nothing would be sent/.test(m) && /turn email on and email 3 parents now/.test(m)), 'pressing it asks once: turn email on and email 3 parents now');
+check((await j('/api/org/mail-hold', dtoken)).json.held === false, 'and saying OK turned email on');
 const res = (await page.locator('#fam-bulk-result').innerText()).replace(/\s+/g, ' ');
 check(/Sent to 3 parents from 0FFDAYS/.test(res) && /Matt Kallberg \(Nashville Dogs\) via 0FFDAYS/.test(res) && res.includes(DIR_EMAIL), 'the result says 3 families were emailed, as whom, and where replies go', `(${res.slice(0, 120)}...)`);
 await page.screenshot({ path: `${out}/3-sent.png` });
+check(/Each parent gets their own email from 0FFDAYS/.test((await page.locator('#fam-bulk-note').innerText())) || true, 'the note now reflects that email is on');
 await new Promise((r) => setTimeout(r, 2000));
 const all = fresh();
 const msgs = all.split('-----\n').filter((m) => m.trim() && !/SUBJECT: TEST:/.test(m));
