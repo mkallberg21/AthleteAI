@@ -482,6 +482,9 @@ class CustomDrill(BaseModel):
     based_on: str = Field(min_length=1, max_length=60)
     description: str = Field(default="", max_length=600)
     setup_hint: str = Field(default="", max_length=300)
+    # Optional: put it straight on a team's list, or on one player's, so a coach does not add it and then hunt for it.
+    team_id: int | None = None
+    athlete_id: int | None = None
 
 
 @app.get("/api/coach/library")
@@ -553,20 +556,40 @@ def create_custom_drill(
 
     The borrowing is the honest part and is not hidden from them: the response
     says what it will be counted as, in the same words the form asked in.
-    Director only: a program's own drill goes on the program list, which is
-    the director's to shape.
+    A director, or a coach the director has left free to choose drills. A coach's drill joins the program's list (it is the
+    program's list that every picker draws from), and can be put on one of the coach's own teams or on one of their players in
+    the same step. Retiring one stays with the director.
     """
-    if not principal.is_director:
+    if not principal.is_director and not library.coach_may_pick(store.conn, principal.org_id, principal.id):
         raise HTTPException(
             status_code=403,
-            detail="only a director can add drills to the program's list",
+            detail="your director chooses the drills for your teams. Ask them to add this one, or to let you choose.",
         )
+    sport = _org_sport(store, principal.org_id)
+    if body.team_id is not None and body.athlete_id is not None:
+        raise HTTPException(status_code=400, detail="put it on a team or on a player, not both at once")
+    if body.team_id is not None and not (principal.is_director or principal.can_see_team(body.team_id)):
+        raise HTTPException(status_code=403, detail="you are not assigned to that team")
+    if body.athlete_id is not None and not _athlete_for_staff(store, principal, body.athlete_id):
+        raise HTTPException(status_code=404, detail="no such player on your teams")
     try:
         spec = library.create(
             store.conn, principal.org_id,
             name=body.name, based_on=body.based_on,
             description=body.description, setup_hint=body.setup_hint,
             created_by=principal.id)
+        placed = None
+        if body.team_id is not None:
+            now_showing = library.effective_team_keys(store.conn, principal.org_id, sport, body.team_id)
+            if now_showing is not None:
+                library.set_team_drills(store.conn, principal.org_id, sport, body.team_id,
+                                        [*now_showing, spec.key], set_by=principal.id)
+            placed = {"team_id": body.team_id}
+        elif body.athlete_id is not None:
+            library.set_athlete_extras(store.conn, principal.org_id, sport, body.athlete_id,
+                                       [*library.athlete_extra_keys(store.conn, body.athlete_id), spec.key],
+                                       set_by=principal.id)
+            placed = {"athlete_id": body.athlete_id}
     except library.LibraryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     base = DRILLS_BY_KEY[body.based_on]
@@ -575,6 +598,7 @@ def create_custom_drill(
         "name": spec.name,
         "counted_as": {"key": base.key, "name": base.name,
                        "metric": base.metric.value},
+        "placed": placed,
     }
 
 
@@ -676,6 +700,78 @@ def set_team_drills(
     except library.LibraryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"team_id": team_id, "strict": bool(keys), "selected": keys}
+
+
+def _athlete_for_staff(store: Store, principal: Principal, athlete_id: int) -> bool:
+    """An active athlete in this program that this staff member may see (a coach: only their own teams' players)."""
+    row = store.conn.execute(
+        "SELECT id FROM users WHERE id = ? AND org_id = ? AND role = 'athlete' AND active = 1",
+        (athlete_id, principal.org_id)).fetchone()
+    return row is not None and store.staff_can_see_athlete(principal, athlete_id)
+
+
+def _player_drill_view(store: Store, principal: Principal, athlete_id: int) -> dict[str, Any]:
+    sport = _org_sport(store, principal.org_id)
+    program = library.offered(store.conn, principal.org_id, sport)
+    extras = set(library.athlete_extra_keys(store.conn, athlete_id))
+    team_ids = [r["team_id"] for r in store.conn.execute(
+        "SELECT tm.team_id FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE tm.user_id = ? AND t.org_id = ?",
+        (athlete_id, principal.org_id))]
+    per_team = [library.effective_team_keys(store.conn, principal.org_id, sport, t) for t in team_ids] \
+        or [library.default_team_keys(store.conn, principal.org_id, sport)]
+    everything = any(k is None for k in per_team)
+    on_team = {d.key for d in program} if everything else {x for ks in per_team for x in ks}
+    can = principal.is_director or library.coach_may_pick(store.conn, principal.org_id, principal.id)
+    return {
+        "athlete_id": athlete_id,
+        "can_edit": can,
+        "why_not": None if can else "your director chooses the drills for your teams. Ask them to let you choose.",
+        "choices": [
+            {"key": d.key, "name": d.name, "category": d.category.value, "metric": d.metric.value,
+             "description": d.description, "on_team": d.key in on_team, "extra": d.key in extras and d.key not in on_team}
+            for d in program
+        ],
+        "movements": [{"key": d.key, "name": d.name, "metric": d.metric.value} for d in ALL_DRILLS],
+    }
+
+
+@app.get("/api/coach/athletes/{athlete_id}/drills")
+def player_drills(
+    athlete_id: int,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """What one player is offered: the team's drills, and the extra ones a coach gave this player (a specialist's work)."""
+    if not _athlete_for_staff(store, principal, athlete_id):
+        raise HTTPException(status_code=404, detail="no such player on your teams")
+    return _player_drill_view(store, principal, athlete_id)
+
+
+class PlayerDrillsBody(BaseModel):
+    # The extras only: what the team already offers is not repeated here. Empty takes the extras away.
+    drill_keys: list[str] = Field(default_factory=list, max_length=200)
+
+
+@app.put("/api/coach/athletes/{athlete_id}/drills")
+def set_player_drills(
+    athlete_id: int,
+    body: PlayerDrillsBody,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Give one player drills on top of their team's list."""
+    if not _athlete_for_staff(store, principal, athlete_id):
+        raise HTTPException(status_code=404, detail="no such player on your teams")
+    if not principal.is_director and not library.coach_may_pick(store.conn, principal.org_id, principal.id):
+        raise HTTPException(
+            status_code=403,
+            detail="your director chooses the drills for your teams. Ask them to let you choose.")
+    try:
+        library.set_athlete_extras(store.conn, principal.org_id, _org_sport(store, principal.org_id), athlete_id,
+                                   body.drill_keys, set_by=principal.id)
+    except library.LibraryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _player_drill_view(store, principal, athlete_id)
 
 
 class CoachPickSwitch(BaseModel):
@@ -1906,7 +2002,15 @@ def create_assignment(
     # players cannot open.
     team_list = library.team_offered(
         store.conn, principal.org_id, _org_sport(store, principal.org_id), body.team_id)
-    if body.drill_key not in {d.key for d in team_list}:
+    on_list = body.drill_key in {d.key for d in team_list}
+    # A drill given to a specialist can be assigned to them, and only them: every named player must have it.
+    if not on_list and body.athlete_ids:
+        on_list = all(
+            body.drill_key in library.athlete_extra_keys(store.conn, a)
+            and body.drill_key in {d.key for d in library.offered(
+                store.conn, principal.org_id, _org_sport(store, principal.org_id))}
+            for a in body.athlete_ids)
+    if not on_list:
         raise HTTPException(
             status_code=400,
             detail="that drill is not on this team's list. Add it to the team's "

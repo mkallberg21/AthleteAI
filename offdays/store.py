@@ -1727,6 +1727,12 @@ class Store:
         # because this is where the splitting rule lives, and a limit on the
         # whole box would let one enormous message through and reject forty
         # good short ones.
+        broken = recognition.bad_tokens(text)
+        if broken:
+            fields = ", ".join(recognition.TOKEN_LABELS[t] for t in recognition.TOKENS)
+            raise StoreError(
+                f"{broken[0]} is not a field. The fields are {fields}; use the buttons under the box so they "
+                "fill in the right name")
         wordings = recognition.variants(text)
         if len(wordings) > MAX_WORDINGS:
             raise StoreError(

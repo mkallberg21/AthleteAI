@@ -437,6 +437,29 @@ def variants(body: str) -> tuple[str, ...]:
     return tuple(b for b in blocks if b)
 
 
+#: What each field is called to the person writing, in the order the editor offers them.
+TOKEN_LABELS = {"{first_name}": "first name", "{streak}": "streak", "{coach}": "coach", "{team}": "team"}
+
+
+def bad_tokens(text: str) -> list[str]:
+    """Anything in a message that looks like a field but is not one of ours.
+
+    The fields are fixed: a coach chooses where `{first_name}` goes, never what it is called. `{firstname}`, `{First_Name}`, a
+    half-deleted `{first_na` or a stray brace would send a child a message with the brace in it, so they are refused at save.
+    Returns the offending fragments, in order, without repeats.
+    """
+    import re
+    found: list[str] = []
+    rest = text or ""
+    for token in TOKENS:
+        rest = rest.replace(token, "")
+    for m in re.finditer(r"\{[^{}\n]*\}?|[{}]", rest):
+        frag = m.group(0)
+        if frag and frag not in found:
+            found.append(frag)
+    return found
+
+
 def render(body: str, *, first_name: str, streak: int, coach: str, team: str) -> str:
     """Fill a coach's template.
 

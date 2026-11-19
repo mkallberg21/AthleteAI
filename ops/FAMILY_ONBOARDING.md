@@ -504,6 +504,28 @@ in, or the person mid-click, gets an "Update now" bar instead and keeps its draf
 is full of links to copy and forms in progress) and only watches for a new version. The athlete and sign-in pages never reload
 themselves, so a drill in progress is never interrupted.
 
+## "Say it in your own words": the fields are fixed
+
+In a milestone message the fields (first name, streak, coach, team) are blocks in the box, not text: a coach can write any words
+around them and put a field wherever it fits (the buttons under the box, or typing it exactly), but cannot type into one, split
+one or rename one. Backspace removes a whole field. The server refuses anything else that looks like a field (`{firstname}`,
+`{First_Name}`, a half-deleted `{first_na`, a stray brace) with a plain reason under the box, so a child never gets a message
+with a brace in it. Enter is a line break; two in a row still start another wording. Saving now says "Saved." under the box
+(the old button label was redrawn away at once).
+
+## Drills the list does not have, and drills for one player
+
+A coach can add a drill of their own (Settings, the drill library, or from a player's panel) unless the director has locked their
+drill choices. It joins the program's list and is counted as the catalog movement the coach picks, so a clamp is a timed hold. It is
+never pushed to anyone by being added: it goes to a team, or to one player, only when the coach says so. Retiring a drill stays with
+the director.
+
+Open any player on a team and the panel has **Drills for <name>**: the team's drills are ticked and greyed, and anything else ticked
+is for that player only (a face off specialist gets clamp work, a goalie gets goalie work, the rest of the team does not see it).
+"Add a drill that is not on the list" does both steps at once. A coach reaches only players on their own teams; a director reaches
+anyone. A drill given to a player can be assigned to that player (named in the assignment), never to the whole team. Takes the drill
+off the program list and it stops reaching the player too.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

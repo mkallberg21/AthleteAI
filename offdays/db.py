@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -635,6 +635,16 @@ CREATE TABLE IF NOT EXISTS custom_drills (
     active      INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_custom_drills_org ON custom_drills(org_id);
+
+-- Drills a coach gave one player on top of what their team offers (a face off specialist's clamp work). Always chosen from the
+-- program's list; a drill the director later takes off the list stops reaching the player with it.
+CREATE TABLE IF NOT EXISTS athlete_drills (
+    athlete_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    drill_key   TEXT NOT NULL,
+    set_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    set_at      TEXT NOT NULL,
+    PRIMARY KEY (athlete_id, drill_key)
+);
 
 CREATE TABLE IF NOT EXISTS badges (
     id          INTEGER PRIMARY KEY,

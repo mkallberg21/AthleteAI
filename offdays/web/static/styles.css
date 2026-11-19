@@ -2431,3 +2431,18 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .terms-check a { text-decoration: underline; }
 .show-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; font-size: .9rem; }
 .show-row input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; margin: 2px 0 0; flex: none; }
+
+/* A milestone message: plain words with fields (first name, streak...) that are blocks, not text, so they cannot be edited. */
+.recog-edit {
+  width: 100%; min-height: 96px; padding: 0.7rem 0.9rem; margin-top: 6px;
+  font-family: var(--font); font-size: 1rem; line-height: 1.5; color: var(--text);
+  background: var(--surface-2); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  white-space: pre-wrap; overflow-wrap: anywhere; outline: none;
+}
+.recog-edit:focus { border-color: var(--accent); }
+.recog-chip {
+  display: inline-block; padding: 0 10px; margin: 0 1px; border-radius: 999px; line-height: 1.5;
+  background: var(--accent); color: #fff; font-size: .9rem; font-weight: 600;
+  user-select: none; -webkit-user-select: none; cursor: default;
+}
+.recog-edit { max-height: 280px; overflow-y: auto; }

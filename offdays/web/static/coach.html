@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0A0A0B">
 <link rel="apple-touch-icon" href="icon-192.png?v=3">
-<link rel="stylesheet" href="styles.css?v=41">
+<link rel="stylesheet" href="styles.css?v=42">
 <style id="home-style">
 /* The director's home. Kept here, not in styles.css, so it ships without re-pinning the shared stylesheet. */
 #home-card .home-tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin:0 0 12px; }
@@ -2766,6 +2766,42 @@ $('family-compare').addEventListener('change', async (event) => {
   } catch (e) { showError(e.message); }
 });
 
+// ---- The fields in a milestone message ({first_name}, {streak}, {coach}, {team}) are fixed. A coach chooses where one goes and
+// what words surround it, never what it is called: each field is a block that cannot be typed into or split, and the server
+// refuses anything else that looks like a field. The words are written in a box that holds those blocks (not a plain textarea).
+const RECOG_FIELDS = [['{first_name}', 'first name'], ['{streak}', 'streak'], ['{coach}', 'coach'], ['{team}', 'team']];
+const RECOG_LABEL = Object.fromEntries(RECOG_FIELDS);
+const recogChip = (token) => `<span class="recog-chip" contenteditable="false" data-token="${token}" title="A field: it fills in by itself, so it cannot be edited">${esc(RECOG_LABEL[token])}</span>`;
+function recogHtml(text) {
+  const tokens = RECOG_FIELDS.map(([t]) => t.replace(/[{}]/g, '\\$&')).join('|');
+  return String(text || '').split(new RegExp(`(${tokens})`)).map((part, i) => (i % 2 ? recogChip(part)
+    : esc(part).replace(/\n/g, '<br>'))).join('');
+}
+function recogText(el) {
+  let out = '';
+  (function walk(node) {
+    node.childNodes.forEach((c) => {
+      if (c.nodeType === 3) out += c.nodeValue;
+      else if (c.nodeType === 1) {
+        if (c.dataset && c.dataset.token) out += c.dataset.token;
+        else if (c.tagName === 'BR') out += '\n';
+        else {
+          const block = c.tagName === 'DIV' || c.tagName === 'P';
+          if (block && out && !out.endsWith('\n')) out += '\n';
+          walk(c);
+          if (block && !out.endsWith('\n')) out += '\n';
+        }
+      }
+    });
+  })(el);
+  return out.replace(/[\u200b]/g, '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
+}
+function recogBox(row) { return row.querySelector('[data-recog-body]'); }
+function recogSay(row, text, bad) {
+  const e = row.querySelector('.recog-err');
+  e.textContent = text || ''; e.style.color = bad ? 'var(--danger)' : '';
+}
+
 async function loadRecognition() {
   let data;
   try { data = await api('/api/coach/recognition'); } catch { return; }
@@ -2795,7 +2831,9 @@ async function loadRecognition() {
         <b>${esc(m.label)}</b>
         ${m.customised ? '' : '<span class="small muted">&middot; default wording</span>'}
       </label>
-      <textarea rows="4" data-recog-body>${esc((m.bodies || [m.body]).join('\n\n'))}</textarea>
+      <div class="recog-edit" contenteditable="true" role="textbox" aria-multiline="true" aria-label="${esc(m.label)} message" data-recog-body>${recogHtml((m.bodies || [m.body]).join('\n\n'))}</div>
+      <div class="small" style="margin-top:4px">Fields, filled in for each athlete:
+        ${RECOG_FIELDS.filter(([t]) => t !== '{team}' || !data.is_family).map(([t, label]) => `<button type="button" class="tiny secondary" data-recog-insert="${t}">+ ${esc(label)}</button>`).join(' ')}</div>
       <div class="small muted">${m.wordings} way${m.wordings === 1 ? '' : 's'}
         of saying it${m.short_by
           ? `, <b>${m.short_by} short</b> of your squad, so that many
@@ -2813,6 +2851,7 @@ async function loadRecognition() {
         <button class="secondary inline" data-recog-save>Save</button>
         <button class="secondary inline" data-recog-preview>Preview</button>
       </div>
+      <div class="small recog-err" role="alert"></div>
       <div class="small muted recog-preview"></div>
     </div>`).join('');
 
@@ -2840,7 +2879,7 @@ $('recognition-list').addEventListener('click', async (event) => {
     try {
       const out = await api('/api/coach/recognition/preview', {
         method: 'POST',
-        body: { body: row.querySelector('[data-recog-body]').value },
+        body: { body: recogText(recogBox(row)) },
       });
       target.innerHTML = `<b>${esc(out.signed)} noticed</b><br>${esc(out.preview)}
         <br><span class="small muted">as ${esc(out.as_read_by)} will read it</span>`;
@@ -2848,25 +2887,83 @@ $('recognition-list').addEventListener('click', async (event) => {
     return;
   }
 
+  const insert = event.target.closest('[data-recog-insert]');
+  if (insert) {
+    // Where the caret was, even if the box has since lost focus; at the end if it was never clicked into.
+    const box = recogBox(insert.closest('[data-milestone]'));
+    box.focus();
+    const sel = window.getSelection();
+    const r = (recogCaret.box === box && recogCaret.range && box.contains(recogCaret.range.startContainer)) ? recogCaret.range.cloneRange() : null;
+    sel.removeAllRanges();
+    if (r) sel.addRange(r);
+    else { const end = document.createRange(); end.selectNodeContents(box); end.collapse(false); sel.addRange(end); }
+    // Put the field in by hand and park the caret after it, so the next field button starts from here.
+    const at = sel.getRangeAt(0);
+    at.deleteContents();
+    const holder = document.createElement('span');
+    holder.innerHTML = recogChip(insert.dataset.recogInsert);
+    const chip = holder.firstChild;
+    const gap = document.createTextNode('\u00a0');
+    at.insertNode(gap);
+    at.insertNode(chip);
+    const after = document.createRange();
+    after.setStartAfter(gap); after.collapse(true);
+    sel.removeAllRanges(); sel.addRange(after);
+    recogCaret.box = box; recogCaret.range = after.cloneRange();
+    return;
+  }
   const button = event.target.closest('[data-recog-save]');
   if (!button) return;
   const row = button.closest('[data-milestone]');
+  recogSay(row, '');
   try {
     await api('/api/coach/recognition', {
       method: 'PUT',
       body: {
         milestone: row.dataset.milestone,
-        body: row.querySelector('[data-recog-body]').value,
+        body: recogText(recogBox(row)),
         enabled: row.querySelector('[data-recog-on]').checked,
         from_voice: row.querySelector('[data-recog-voice]')
           && row.querySelector('[data-recog-voice]').checked ? 'voice' : 'coach',
       },
     });
-    button.textContent = 'Saved';
-    setTimeout(() => { button.textContent = 'Save'; }, 1500);
     await loadRecognition();
-  await loadFamilyBoard();
-  } catch (e) { showError(e.message); }
+    await loadFamilyBoard();
+    // The list was redrawn from what the server now holds, so say so on the fresh row (the old button is gone).
+    const fresh = document.querySelector(`[data-milestone="${row.dataset.milestone}"]`);
+    if (fresh) recogSay(fresh, 'Saved.', false);
+  } catch (e) { recogSay(row, e.message || 'Could not save.', true); }
+});
+// Remember where the caret is in a message box, so a field button puts the field there and not at the start.
+const recogCaret = { box: null, range: null };
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  const node = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+  const box = node && node.closest && node.closest('[data-recog-body]');
+  if (box) { recogCaret.box = box; recogCaret.range = sel.getRangeAt(0).cloneRange(); }
+});
+// Pressing a field button must not take the caret out of the box.
+$('recognition-list').addEventListener('mousedown', (e) => { if (e.target.closest('[data-recog-insert]')) e.preventDefault(); });
+// Typing stays plain words: a new line is a line break, a paste is plain text, a field is never split, and a field typed out by hand
+// turns into a real one when the box is left.
+$('recognition-list').addEventListener('keydown', (e) => {
+  if (e.target.matches('[data-recog-body]') && e.key === 'Enter') { e.preventDefault(); document.execCommand('insertLineBreak'); }
+});
+$('recognition-list').addEventListener('paste', (e) => {
+  if (!e.target.matches('[data-recog-body]')) return;
+  e.preventDefault();
+  document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
+});
+$('recognition-list').addEventListener('focusout', (e) => {
+  if (!e.target.matches('[data-recog-body]')) return;
+  const text = recogText(e.target);
+  if (recogHtml(text) !== e.target.innerHTML) {
+    e.target.innerHTML = recogHtml(text);
+    // The old caret pointed into what was just replaced; park it at the end so a field button adds to the end.
+    const end = document.createRange(); end.selectNodeContents(e.target); end.collapse(false);
+    recogCaret.box = e.target; recogCaret.range = end;
+  }
 });
 
 async function loadRecognitionSent() {
@@ -3401,6 +3498,62 @@ document.getElementById('roster').addEventListener('click', (e) => {
 // ---- Drill into one player: what they have been doing, drill by drill.
 // Opens from a name in the roster or the ranking. Read only. Work the player logged themselves is labelled as that.
 const DD_STATUS = { counted: ['ok', 'counted'], review: ['warn', 'in review'], rejected: ['bad', 'not counted'] };
+// ---- Drills for one player, on top of their team's: a coach ticks any drill on the program list to give it to this player only
+// (a face off specialist's clamp work), or adds one the list does not have and gives it to them in the same step.
+async function loadPlayerDrills(id, name) {
+  const box = document.getElementById('pd-box');
+  if (!box) return;
+  let v;
+  try { v = await api(`/api/coach/athletes/${id}/drills`); } catch (e) { box.innerHTML = `<p class="small muted">${esc(e.message || 'Could not load this player\'s drills.')}</p>`; return; }
+  const first = esc(name.split(' ')[0]);
+  // What this player already has beyond the team comes first, so the specialist's own drills are not buried in the list.
+  const ordered = [...v.choices.filter((c) => c.extra), ...v.choices.filter((c) => !c.extra)];
+  const rows = ordered.map((c) => `<label class="pd-row" data-pd-text="${esc((c.name + ' ' + c.category).toLowerCase())}" style="display:flex;gap:8px;align-items:flex-start;margin:0;padding:6px 4px;border-bottom:1px solid var(--border)">
+      <input type="checkbox" data-pd-key="${esc(c.key)}" ${c.on_team || c.extra ? 'checked' : ''} ${c.on_team || !v.can_edit ? 'disabled' : ''} style="width:auto;margin-top:3px">
+      <span><b>${esc(c.name)}</b> <span class="small muted">${c.on_team ? 'on the team list' : c.extra ? `extra for ${first}` : esc(c.category)}</span></span></label>`).join('');
+  box.innerHTML = `<h3 style="margin:14px 0 4px">Drills for ${esc(name)}</h3>
+    <p class="small muted" style="margin:0 0 6px">${esc(first)} sees the team's drills plus any you tick here. Ticked and greyed drills are already on the team list; anything else you tick is for ${first} only.</p>
+    ${v.can_edit ? '' : `<p class="small" style="color:var(--warn)">${esc(v.why_not)}</p>`}
+    <input data-pd-find placeholder="Search drills" autocomplete="off" aria-label="Search drills" style="margin-bottom:6px">
+    <div data-pd-list style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:2px 8px">${rows}</div>
+    ${v.can_edit ? `<div style="margin-top:8px"><button type="button" class="tiny" data-pd-save>Save ${first}'s drills</button> <span class="small" data-pd-note role="status"></span></div>
+    <details style="margin-top:10px" data-pd-new-wrap><summary class="small muted" style="cursor:pointer">Add a drill that is not on the list</summary>
+      <p class="small muted" style="margin:6px 0">It is counted as a movement the app already knows, so pick the closest one: it scores exactly what that scores. For a clamp, a timed hold such as a plank counts the time.</p>
+      <label>What do you call it?</label><input data-pd-name maxlength="60" placeholder="Face Off Clamp">
+      <label>Counted as</label><select data-pd-based>${v.movements.map((m) => `<option value="${esc(m.key)}">${esc(m.name)} (${m.metric === 'hold' ? 'timed hold' : 'reps'})</option>`).join('')}</select>
+      <label>What should ${first} do?</label><textarea data-pd-desc rows="2" maxlength="600" placeholder="Set the clamp, hold it, then pop out."></textarea>
+      <label>Where should the phone go?</label><input data-pd-hint maxlength="300" placeholder="Side-on, whole body in frame.">
+      <button type="button" class="tiny secondary" data-pd-new style="margin-top:8px">Add it and give it to ${first}</button> <span class="small" data-pd-new-note role="status"></span>
+    </details>` : ''}`;
+  const say = (sel, text, bad) => { const n = box.querySelector(sel); if (n) { n.textContent = text; n.style.color = bad ? 'var(--danger)' : ''; } };
+  box.querySelector('[data-pd-find]').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    box.querySelectorAll('.pd-row').forEach((r) => { r.style.display = !q || r.dataset.pdText.includes(q) ? 'flex' : 'none'; });
+  });
+  const save = box.querySelector('[data-pd-save]');
+  if (save) save.addEventListener('click', async () => {
+    const keys = [...box.querySelectorAll('[data-pd-key]:checked:not(:disabled)')].map((c) => c.dataset.pdKey);
+    save.disabled = true; say('[data-pd-note]', '');
+    try {
+      await api(`/api/coach/athletes/${id}/drills`, { method: 'PUT', body: { drill_keys: keys } });
+      await loadPlayerDrills(id, name);
+      say('[data-pd-note]', keys.length ? `Saved. ${first} now has ${keys.length} extra ${keys.length === 1 ? 'drill' : 'drills'}.` : `Saved. ${first} has the team's drills only.`);
+    } catch (e) { say('[data-pd-note]', e.message || 'Could not save.', true); save.disabled = false; }
+  });
+  const add = box.querySelector('[data-pd-new]');
+  if (add) add.addEventListener('click', async () => {
+    const nm = box.querySelector('[data-pd-name]').value.trim();
+    if (!nm) { say('[data-pd-new-note]', 'Give it a name first.', true); return; }
+    add.disabled = true; say('[data-pd-new-note]', '');
+    try {
+      const made = await api('/api/coach/drills', { method: 'POST', body: {
+        name: nm, based_on: box.querySelector('[data-pd-based]').value, athlete_id: id,
+        description: box.querySelector('[data-pd-desc]').value.trim(), setup_hint: box.querySelector('[data-pd-hint]').value.trim() } });
+      await loadPlayerDrills(id, name);
+      say('[data-pd-note]', `Added "${made.name}" and gave it to ${first}. It is counted as ${made.counted_as.name}.`);
+    } catch (e) { say('[data-pd-new-note]', e.message || 'Could not add it.', true); add.disabled = false; }
+  });
+}
 async function openAthlete(id, days = 30) {
   let wrap = document.getElementById('athlete-dd');
   if (!wrap) {
@@ -3421,6 +3574,7 @@ async function openAthlete(id, days = 30) {
     wrap.innerHTML = renderAthleteDetail(d, days);
     wrap.querySelectorAll('[data-dd-days]').forEach((b) => b.addEventListener('click', () => openAthlete(id, Number(b.dataset.ddDays))));
     wrap.querySelector('[data-dd-close]').focus();
+    loadPlayerDrills(id, d.athlete.display_name);
   } catch (e) {
     wrap.innerHTML = `<div class="dd-card"><p>${esc(e.message || 'Could not load this player.')}</p><button type="button" class="secondary" data-dd-close>Close</button></div>`;
   }
@@ -3459,6 +3613,7 @@ function renderAthleteDetail(d, days) {
     <div class="small muted" style="margin-top:8px">Last 4 weeks (blue: counted by the camera, grey: logged by the player)</div>
     <div aria-label="Last 28 days" style="margin:4px 0 10px">${strip}</div>
     <div class="small" style="margin:6px 0">Badges: ${badges}</div>
+    <div id="pd-box"><p class="small muted">Loading drills&hellip;</p></div>
     <h3 style="margin:12px 0 4px">By drill</h3>
     <table class="roster-table"><thead><tr><th>Drill</th><th class="num">Sessions</th><th class="num">Reps</th><th class="num">Min</th></tr></thead><tbody>${drills}</tbody></table>
     <h3 style="margin:12px 0 4px">Every session</h3>
@@ -5857,11 +6012,10 @@ async function loadLibrary() {
   // own team's list above instead.
   if (!IS_DIRECTOR) {
     $('lib-list').querySelectorAll('[data-lib]').forEach((b) => { b.disabled = true; });
-    $('library-card').querySelectorAll('details').forEach((d) => d.classList.add('hidden'));
     $('cd-list').querySelectorAll('[data-retire]').forEach((b) => b.classList.add('hidden'));
     $('lib-lede').textContent =
-      'Every drill your program offers, set by your director. Pick your team\'s '
-      + 'drills from these in Team drills above.';
+      'Every drill your program offers. Pick your team\'s drills from these in Team drills above, '
+      + 'or add one of your own below. To give one player a drill for their specialty, open the player.';
   }
 }
 

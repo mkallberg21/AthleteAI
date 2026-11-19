@@ -447,8 +447,47 @@ def athlete_offered(
                 if team_ids else [default_team_keys(conn, org_id, sport)])
     if any(keys is None for keys in per_team):
         return program
-    wanted = {k for keys in per_team for k in keys}
+    wanted = {k for keys in per_team for k in keys} | set(athlete_extra_keys(conn, athlete_id))
     return [d for d in program if d.key in wanted]
+
+
+def athlete_extra_keys(conn: sqlite3.Connection, athlete_id: int) -> list[str]:
+    """Drills a coach gave this one player on top of their team's list, in the order they were given."""
+    try:
+        rows = conn.execute(
+            "SELECT drill_key FROM athlete_drills WHERE athlete_id = ? ORDER BY set_at, drill_key", (athlete_id,)).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [r["drill_key"] for r in rows]
+
+
+def set_athlete_extras(
+    conn: sqlite3.Connection, org_id: int, sport: str, athlete_id: int, drill_keys: list[str],
+    set_by: int | None = None,
+) -> list[str]:
+    """Replace the extra drills one player has. Every key must be on the program list.
+
+    A drill the player's teams already offer is not stored again: it would only linger after a coach took it off the team.
+    """
+    allowed = {d.key for d in offered(conn, org_id, sport)}
+    keys = list(dict.fromkeys(k for k in drill_keys if k))
+    outside = [k for k in keys if k not in allowed]
+    if outside:
+        raise LibraryError(
+            "not on the program's drill list: " + ", ".join(outside)
+            + ". Add it as a drill of your own first, or ask your director to put it on the list.")
+    team_ids = [r["team_id"] for r in conn.execute(
+        "SELECT tm.team_id FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE tm.user_id = ? AND t.org_id = ?",
+        (athlete_id, org_id))]
+    per_team = [effective_team_keys(conn, org_id, sport, t) for t in team_ids] or [default_team_keys(conn, org_id, sport)]
+    on_team = set() if any(k is None for k in per_team) else {x for ks in per_team for x in ks}
+    keep = [k for k in keys if k not in on_team] if not any(k is None for k in per_team) else []
+    stamp = _now()
+    conn.execute("DELETE FROM athlete_drills WHERE athlete_id = ?", (athlete_id,))
+    conn.executemany("INSERT INTO athlete_drills(athlete_id, drill_key, set_by, set_at) VALUES (?,?,?,?)",
+                     [(athlete_id, k, set_by, stamp) for k in keep])
+    conn.commit()
+    return keep
 
 
 def coach_may_pick(conn: sqlite3.Connection, org_id: int, user_id: int) -> bool:
