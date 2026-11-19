@@ -1269,6 +1269,40 @@ class Store:
             ),
         }
 
+    def film_watch_log(self, athlete_id: int, days: int = 30) -> dict[str, Any]:
+        """The clips one athlete watched, and how many times each, for the coach of a team they are on.
+
+        One row per clip, most recently watched first. Never ordered by how often a clip was watched: the film module tells the
+        athlete (rewatch.NOTICE) that a coach can see a second look and that it reads as making sure, and a list sorted by count
+        would read as a list of who is slow. A clip the player's phone could not play is left out, since nothing was watched.
+        Whether the question was answered right is not here: that stays reported per clip, never per athlete.
+        """
+        start = (_now().date() - timedelta(days=days - 1)).isoformat()
+        rows = self.conn.execute(
+            "SELECT c.id AS clip_id, c.title, c.credit, w.day, w.looks, w.verdict, w.watched_s, w.id AS wid "
+            "FROM clip_watches w JOIN clips c ON c.id = w.clip_id "
+            "WHERE w.athlete_id = ? AND w.day >= ? AND w.unplayable = 0 ORDER BY w.day, w.id",
+            (athlete_id, start)).fetchall()
+        by_clip: dict[int, dict[str, Any]] = {}
+        for r in rows:
+            c = by_clip.setdefault(int(r["clip_id"]), {
+                "clip_id": int(r["clip_id"]), "title": r["title"], "credit": r["credit"], "times": 0, "days": 0,
+                "first_on": r["day"], "last_on": r["day"], "last_verdict": r["verdict"], "seconds": 0.0})
+            c["times"] += max(1, int(r["looks"]))
+            c["days"] += 1
+            c["last_on"] = r["day"]
+            c["last_verdict"] = r["verdict"]
+            c["seconds"] += float(r["watched_s"] or 0)
+        clips = sorted(by_clip.values(), key=lambda c: (c["last_on"], c["clip_id"]), reverse=True)
+        for c in clips:
+            c["minutes"] = round(c.pop("seconds") / 60.0, 1)
+        return {
+            "clips": clips,
+            "total_clips": len(clips),
+            "total_times": sum(c["times"] for c in clips),
+            "again": sum(1 for c in clips if c["times"] > 1),
+        }
+
     def film_history(
         self, athlete_id: int, days: int = 28
     ) -> dict[str, Any]:

@@ -526,6 +526,15 @@ is for that player only (a face off specialist gets clamp work, a goalie gets go
 anyone. A drill given to a player can be assigned to that player (named in the assignment), never to the whole team. Takes the drill
 off the program list and it stops reaching the player too.
 
+## Film a player has watched
+
+The player panel (Teams, then a player's name) has a **Film watched** section: each clip, how many times it was watched
+(passes through it, added up across days), when, and how the last view went (watched it all, stopped early, skimmed, played
+but not watched), for the 7, 30 or 90 days chosen. Newest first, never ordered by how often, because the film module tells the
+player that a coach can see a second look and that it reads as making sure. A clip their phone could not play is left out, and
+whether the question was answered right stays per clip, never per player. Same access as the rest of the panel: a coach sees
+their own teams' players, a director anyone.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

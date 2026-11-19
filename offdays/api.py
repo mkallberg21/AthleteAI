@@ -5093,6 +5093,7 @@ def coach_athlete_training(
             "last_active": counted[0]["day"] if counted else None,
         },
         "strip": strip,
+        "film": store.film_watch_log(athlete_id, days),
         **log,
     }
 

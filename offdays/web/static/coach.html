@@ -3581,6 +3581,18 @@ async function openAthlete(id, days = 30) {
 }
 function closeAthlete() { const w = document.getElementById('athlete-dd'); if (w) { w.style.display = 'none'; w.innerHTML = ''; } }
 function ddDay(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+const FILM_VERDICT = { watched: 'watched it all', partial: 'stopped early', skimmed: 'skimmed', background: 'played, not watched' };
+function renderFilmLog(f) {
+  if (!f) return '';
+  const rows = f.clips.length ? f.clips.map((c) => `<tr><td>${esc(c.title)}${c.credit ? `<br><span class="small muted">${esc(c.credit)}</span>` : ''}</td>
+      <td class="num"><b>${c.times}</b>${c.times > 1 ? ' <span class="small muted">times</span>' : ''}</td>
+      <td>${esc(c.days > 1 ? `${ddDay(c.first_on)} to ${ddDay(c.last_on)}` : ddDay(c.last_on))}</td>
+      <td class="small">${esc(FILM_VERDICT[c.last_verdict] || c.last_verdict)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted small">No film watched in this window.</td></tr>';
+  return `<h3 style="margin:12px 0 4px">Film watched</h3>
+    <p class="small muted" style="margin:0 0 6px">${f.total_clips ? `${f.total_clips} ${f.total_clips === 1 ? 'clip' : 'clips'}, ${f.total_times} ${f.total_times === 1 ? 'view' : 'views'}${f.again ? `, ${f.again} watched more than once` : ''}. ` : ''}Going back to a clip is the film module working: the player is making sure. Newest first.</p>
+    <div style="overflow-x:auto"><table class="roster-table"><thead><tr><th>Clip</th><th class="num">Watched</th><th>When</th><th>Last view</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 function renderAthleteDetail(d, days) {
   const a = d.athlete, t = d.totals;
   const strip = d.strip.map((s) => `<span title="${esc(ddDay(s.day))}: ${s.sessions ? `${s.sessions} session${s.sessions === 1 ? '' : 's'}${s.logged ? ` (${s.logged} logged by the player)` : ''}` : 'nothing'}"
@@ -3614,6 +3626,7 @@ function renderAthleteDetail(d, days) {
     <div aria-label="Last 28 days" style="margin:4px 0 10px">${strip}</div>
     <div class="small" style="margin:6px 0">Badges: ${badges}</div>
     <div id="pd-box"><p class="small muted">Loading drills&hellip;</p></div>
+    ${renderFilmLog(d.film)}
     <h3 style="margin:12px 0 4px">By drill</h3>
     <table class="roster-table"><thead><tr><th>Drill</th><th class="num">Sessions</th><th class="num">Reps</th><th class="num">Min</th></tr></thead><tbody>${drills}</tbody></table>
     <h3 style="margin:12px 0 4px">Every session</h3>
