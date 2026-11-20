@@ -3850,14 +3850,16 @@ def _message_sample(principal: Principal, store: Store, body: MessagePreviewRequ
         if row is not None and store.staff_can_see_athlete(principal, body.athlete_id):
             name = row["display_name"]
     reply_to = invites_mod.staff_reply_to(store.conn, principal.id)
+    sending = mailer.can_send(store.conn, principal.org_id)
+    from . import parent_guide
     subject, html, text = invites_mod.compose(
         athlete_name=name, code=code, also=also, intro=invites_mod.clean_intro(body.intro),
-        reply_to=reply_to, **sender)
+        reply_to=reply_to, guide=sending and parent_guide.available(), **sender)
     return {
         "subject": subject, "text": text, "html": html,
         "from_name": invites_mod.sender_display(sender["coach_name"], sender["org_name"]),
         "reply_to": reply_to,
-        "sending": mailer.can_send(store.conn, principal.org_id),
+        "sending": sending,
         "provider_configured": mailer.provider_ready(),
     }
 

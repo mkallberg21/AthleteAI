@@ -9,6 +9,10 @@ python-multipart>=0.0.9
 # Verifies email-webhook (SES/SNS, SendGrid) and OCSP/CRL signatures.
 cryptography>=42
 
+# The guide for parents: the program's logo laid on a PDF (offdays/parent_guide.py).
+pillow>=10
+pypdf>=5
+
 # The operator's invoicing (offdays/admin.py). Imported lazily: the app starts without it.
 stripe>=12
 

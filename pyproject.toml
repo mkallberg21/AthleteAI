@@ -18,6 +18,9 @@ dependencies = [
     # staple.py, webhooks.py. Without it, a real bounce webhook 500s instead
     # of being verified.
     "cryptography>=42",
+    # The guide for parents: the program's logo laid on a PDF (offdays/parent_guide.py).
+    "pillow>=10",
+    "pypdf>=5",
     # Operator invoicing (offdays/admin.py); imported lazily.
     "stripe>=12",
 ]

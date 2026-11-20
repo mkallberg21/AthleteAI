@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 36
+SCHEMA_VERSION = 37
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -1129,6 +1129,8 @@ CREATE TABLE IF NOT EXISTS email_outbox (
     -- Dogs) via 0FFDAYS"; the address is always the program's own mail domain) and where a reply goes.
     from_name       TEXT NOT NULL DEFAULT '',
     reply_to        TEXT NOT NULL DEFAULT '',
+    -- What to attach when it is sent, by name ("parent_guide:<program id>"), never the file itself.
+    attachment      TEXT NOT NULL DEFAULT '',
     -- Makes queueing idempotent. A cron that fires twice on a Monday must not
     -- send the same digest twice.
     dedupe_key      TEXT NOT NULL UNIQUE,
@@ -1393,6 +1395,9 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
     "email_outbox": [
         ("from_name", "TEXT NOT NULL DEFAULT ''"),
         ("reply_to", "TEXT NOT NULL DEFAULT ''"),
+        # What to attach when it is sent, by name ("parent_guide:<program id>"), never the file itself: the
+        # PDF is made at send time, so the queue holds a few bytes instead of a megabyte per parent.
+        ("attachment", "TEXT NOT NULL DEFAULT ''"),
     ],
     "teams": [
         ("age_group", "TEXT NOT NULL DEFAULT ''"),

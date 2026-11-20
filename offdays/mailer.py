@@ -232,6 +232,7 @@ def enqueue(
     user_id: int | None = None,
     from_name: str = "",
     reply_to: str = "",
+    attachment: str = "",
 ) -> int | None:
     """Queue one message. Returns its id, or None if it was not queued.
 
@@ -259,11 +260,11 @@ def enqueue(
     try:
         cur = conn.execute(
             "INSERT INTO email_outbox(user_id, to_email, subject, html_body, text_body, "
-            "kind, dedupe_key, queued_at, next_attempt_at, from_name, reply_to) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "kind, dedupe_key, queued_at, next_attempt_at, from_name, reply_to, attachment) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 user_id, to_email.strip(), subject, html, text, kind,
-                dedupe_key, _iso(now), _iso(now), from_name, reply_to,
+                dedupe_key, _iso(now), _iso(now), from_name, reply_to, attachment,
             ),
         )
         conn.commit()
@@ -297,7 +298,8 @@ class SmtpTransport:
     """Delivery over SMTP using the standard library."""
 
     def send(
-        self, to_email: str, subject: str, html: str, text: str, headers: dict[str, str]
+        self, to_email: str, subject: str, html: str, text: str, headers: dict[str, str],
+        attachments: list[tuple[str, str, bytes]] | None = None,
     ) -> SendResult:
         import smtplib
         from email.message import EmailMessage
@@ -311,6 +313,9 @@ class SmtpTransport:
                 message[name] = value
         message.set_content(text)
         message.add_alternative(html, subtype="html")
+        for filename, mime, data in attachments or ():
+            maintype, _, subtype = mime.partition("/")
+            message.add_attachment(data, maintype=maintype, subtype=subtype or "octet-stream", filename=filename)
 
         try:
             with smtplib.SMTP(CONFIG.smtp_host, CONFIG.smtp_port, timeout=20) as server:
@@ -338,9 +343,10 @@ class ConsoleTransport:
     """
 
     def send(
-        self, to_email: str, subject: str, html: str, text: str, headers: dict[str, str]
+        self, to_email: str, subject: str, html: str, text: str, headers: dict[str, str],
+        attachments: list[tuple[str, str, bytes]] | None = None,
     ) -> SendResult:
-        log.info("[email] to=%s subject=%s", to_email, subject)
+        log.info("[email] to=%s subject=%s attachments=%d", to_email, subject, len(attachments or ()))
         return SendResult(ok=True)
 
 
@@ -378,6 +384,28 @@ def _headers(row: sqlite3.Row) -> dict[str, str]:
             headers["List-Unsubscribe"] = f"<{url}>"
             headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     return headers
+
+
+def _attachments(conn: sqlite3.Connection, row: sqlite3.Row) -> list[tuple[str, str, bytes]]:
+    """What a queued message carries, made now. A failure here sends the message without it rather than not at all."""
+    if "attachment" not in row.keys() or not row["attachment"]:
+        return []
+    try:
+        from . import parent_guide
+        return parent_guide.attachments_for(conn, row["attachment"])
+    except Exception:  # noqa: BLE001
+        log.warning("could not make the attachment for outbox message %s", row["id"], exc_info=True)
+        return []
+
+
+def _takes_attachments(transport: Any) -> bool:
+    """A transport written before attachments existed has the old five-argument `send`; leave it alone."""
+    import inspect
+    try:
+        params = inspect.signature(transport.send).parameters
+    except (TypeError, ValueError):
+        return False
+    return "attachments" in params or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
 
 
 def flush(
@@ -421,9 +449,13 @@ def flush(
             stats["suppressed"] += 1
             continue
 
+        extra: dict[str, Any] = {}
+        attachments = _attachments(conn, row)
+        if attachments and _takes_attachments(transport):
+            extra["attachments"] = attachments
         result = transport.send(
             row["to_email"], row["subject"], row["html_body"],
-            row["text_body"], _headers(row),
+            row["text_body"], _headers(row), **extra,
         )
         attempts = int(row["attempts"]) + 1
 

@@ -571,6 +571,26 @@ not send old messages. A household program is not emailed (the parent wrote the 
 link in the email; the in-app copy is unaffected. A parent of two children on one team gets one email per child. Sent right
 after the response; the hourly run is the safety net.
 
+## The guide for parents rides on the invite
+
+Every parent invite the app sends carries a short PDF, "0FFDAYS-guide-for-parents.pdf": what the app is, how it helps an
+athlete grow (discipline, confidence, ownership, resilience, each tied to something the app does), what a parent sees,
+privacy, and the questions parents ask. Nothing in it is about money.
+
+- **The program's logo is at the top.** It is the badge the director uploaded (or a preset club logo), laid on a white tile
+  in the header band. `offdays/parent_guide.py` does it at send time with Pillow and pypdf. A program with no logo, or a
+  logo that cannot be drawn (an SVG, a damaged file, a huge image), gets the same guide with only the 0FFDAYS mark. The
+  invite is never held back by it. There is one logo per program, not one per team.
+- **The queue holds a name, not a file.** `email_outbox.attachment` is `parent_guide:<program id>`; the PDF is made when the
+  message is sent (cached by the logo's file and time), so a roster of 300 does not put 300 megabytes in the database.
+- **It follows the email hold.** Nothing is queued or sent until the director releases the hold. The director's preview says
+  "attached" only when the app will really send it. The copies the director sends from their own mail (no provider, or
+  held) do not carry the PDF.
+- **Changing the wording.** Edit `offdays/assets/parent_guide/guide.html`, then run `scripts/ui/build-parent-guide.mjs`
+  (needs playwright, like the other scripts in `scripts/ui`) and commit the two PDFs it writes. The server has no browser.
+- **Mail transports.** `send` takes an optional `attachments` list of (filename, type, bytes). A transport that does not
+  accept it is called the old way and the message goes without the PDF.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a

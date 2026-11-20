@@ -61,6 +61,11 @@ def staff_reply_to(conn: sqlite3.Connection, user_id: int | None) -> str:
     return sender_email.confirmed_address(conn, user_id)
 
 
+#: Said in the invite only when the guide is really attached.
+GUIDE_LINE = ("A short guide for parents is attached: what 0FFDAYS is, how it helps an athlete grow, "
+              "and answers to the questions parents ask most.")
+
+
 def compose(
     *,
     athlete_name: str,
@@ -70,6 +75,7 @@ def compose(
     also: list[str] | tuple[str, ...] = (),
     intro: str = "",
     reply_to: str = "",
+    guide: bool = False,
 ) -> tuple[str, str, str]:
     """The invite as a message from 0FFDAYS on behalf of a coach or director.
 
@@ -93,6 +99,9 @@ def compose(
         text = f"{note}\n\n{text}"
         paras = "".join(f"<p>{escape(p).replace(chr(10), '<br>')}</p>" for p in note.split("\n\n"))
         html = f'<div style="border-left:3px solid #008BFD;padding-left:12px;margin-bottom:16px">{paras}</div>' + html
+    if guide:
+        text = f"{text}\n\n{GUIDE_LINE}"
+        html = html + f'<p style="color:#555"><b>{escape(GUIDE_LINE)}</b></p>'
     text = f"{text}\n\n--\n{foot_text}"
     html = html + f'<p style="color:#777;font-size:85%;margin-top:20px">{foot_html}</p>'
     return subject, html, text
@@ -422,10 +431,13 @@ def deliver(
     if not mailer.can_send(conn, owner["org_id"] if owner else None):
         return False
     reply_to = staff_reply_to(conn, invite.get("created_by"))
+    from . import parent_guide
+    org_id = owner["org_id"] if owner else None
+    with_guide = bool(org_id) and parent_guide.available()
     subject, html, text = compose(
         athlete_name=invite["athlete_name"], org_name=org_name,
         coach_name=coach_name, code=invite["code"], also=invite.get("also_names") or (),
-        intro=intro, reply_to=reply_to,
+        intro=intro, reply_to=reply_to, guide=with_guide,
     )
     queued = mailer.enqueue(
         conn,
@@ -437,6 +449,7 @@ def deliver(
         dedupe_key=f"guardian_invite:{invite['invite_id']}",
         from_name=sender_display(coach_name, org_name),
         reply_to=reply_to,
+        attachment=parent_guide.attachment_name(org_id) if with_guide else "",
     )
     if queued is not None and queued_ids is not None:
         queued_ids.append(queued)
