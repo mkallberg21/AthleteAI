@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 37
+SCHEMA_VERSION = 38
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS organizations (
     -- the server to a mail provider must never, by itself, start emailing
     -- parents.
     mail_hold   INTEGER NOT NULL DEFAULT 1,
+    -- The one administrator who can add and remove the others and hand the program over (offdays/admins.py).
+    -- NULL means the earliest active director, which is who started the program.
+    owner_user_id INTEGER,
     -- Terms the director agreed to at sign-up, and the permission inside them
     -- to show the program's name and badge on the 0FFDAYS website. The wall
     -- only lists a program whose image 0FFDAYS has approved (showcase_ok_logo
@@ -1451,6 +1454,7 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("email_verified_at", "TEXT"),
     ],
     "organizations": [
+        ("owner_user_id", "INTEGER"),
         ("teamsnap_token", "TEXT NOT NULL DEFAULT ''"),
         ("teamsnap_user", "TEXT NOT NULL DEFAULT ''"),
         ("teamsnap_connected_at", "TEXT NOT NULL DEFAULT ''"),

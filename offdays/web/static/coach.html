@@ -486,6 +486,32 @@
     </div>
   </div>
 
+  <div class="card card--wide hidden" id="admins-card">
+    <h2>Administrators</h2>
+    <p class="small muted" id="admins-blurb"></p>
+    <div id="admins-list"></div>
+    <div id="admins-add" class="hidden" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <b>Give someone director access</b>
+      <p class="small muted" style="margin:4px 0 8px">
+        They can upload rosters, add teams and coaches, send parent invites and see every athlete. We email them a sign-in link.
+        If they are already a coach here, they keep their login and gain an administrator's access.
+      </p>
+      <div class="inline-form">
+        <div style="flex:1 1 160px">
+          <label for="admin-name">Name</label>
+          <input id="admin-name" placeholder="Dana Park" autocomplete="off">
+        </div>
+        <div style="flex:1 1 220px">
+          <label for="admin-email">Email</label>
+          <input id="admin-email" type="email" placeholder="dana@example.com" autocomplete="off">
+        </div>
+        <button class="secondary inline" id="admin-add">Make administrator</button>
+      </div>
+      <div id="admin-out" class="small hidden" style="margin-top:8px"></div>
+      <div id="admin-err" class="err hidden"></div>
+    </div>
+  </div>
+
   <div class="card card--wide" id="digest-card">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
       <h2 style="margin:0">Last week's team numbers</h2>
@@ -1465,8 +1491,85 @@ function syncCoachFields() {
   document.querySelectorAll('.new-coach-field').forEach((el) => el.classList.toggle('hidden', picked));
 }
 
+// Administrators: other people with a director's access. Only the owner adds, removes or hands the program over.
+async function loadAdmins(isDirector) {
+  $('admins-card').classList.toggle('hidden', !isDirector);
+  if (!isDirector) return;
+  let d;
+  try { d = await api('/api/coach/admins'); } catch { $('admins-card').classList.add('hidden'); return; }
+  $('admins-blurb').innerHTML = d.you_are_owner
+    ? 'An administrator has your access: rosters, teams, coaches, parent invites and every athlete. Only you, as the owner, can add or remove administrators, hand the program over, or change the plan.'
+    : `An administrator has a director's access. Only ${esc(d.owner_name)}, who owns the program, can add or remove administrators, hand the program over, or change the plan.`;
+  $('admins-add').classList.toggle('hidden', !d.you_are_owner || d.room === 0);
+  $('admins-list').innerHTML = d.admins.map((a) => `<div class="staff-row" data-admin-row="${a.id}">
+      <span><b>${esc(a.display_name)}</b>
+        <span class="pill ${a.is_owner ? 'ok' : 'warn'}">${a.is_owner ? 'owner' : 'administrator'}</span>
+        ${a.is_you ? '<span class="pill">you</span>' : ''}
+        ${a.email ? `<br><span class="small muted">${esc(a.email)}</span>` : ''}
+      </span>
+      ${d.you_are_owner && !a.is_owner ? `<div style="margin-top:6px">
+        <button class="tiny" data-admin-owner="${a.id}" data-name="${esc(a.display_name)}" title="Makes ${esc(a.display_name)} the owner of the program.">Hand the program to ${esc(a.display_name.split(' ')[0])}</button>
+        <button class="tiny" data-admin-remove="${a.id}" data-name="${esc(a.display_name)}" title="Their access ends at once.">Remove</button>
+        <div class="small hidden" data-admin-box="${a.id}" style="margin:8px 0;padding:10px;border:1px solid var(--border);border-radius:8px"></div>
+      </div>` : ''}
+    </div>`).join('');
+
+  $('admins-list').querySelectorAll('[data-admin-remove]').forEach((btn) => btn.addEventListener('click', async () => {
+    if (!window.confirm(`Remove ${btn.dataset.name} as an administrator?\n\nTheir access ends at once, on every device.`)) return;
+    btn.disabled = true;
+    try { await api(`/api/coach/admins/${btn.dataset.adminRemove}/remove`, { method: 'POST' }); await Promise.all([loadAdmins(true), loadStaff(true)]); }
+    catch (e) { window.alert(e.message || 'Could not remove.'); btn.disabled = false; }
+  }));
+
+  $('admins-list').querySelectorAll('[data-admin-owner]').forEach((btn) => btn.addEventListener('click', () => {
+    const id = btn.dataset.adminOwner, name = btn.dataset.name;
+    const box = $('admins-list').querySelector(`[data-admin-box="${id}"]`);
+    box.classList.remove('hidden');
+    box.innerHTML = `<b>Hand ${esc(d.org_name)} to ${esc(name)}?</b><br>${esc(name)} becomes the owner. Only the owner can add or remove administrators, hand the program on, or change the plan. We email you both.`
+      + `<div style="margin:8px 0"><label class="small">Type the program's name to confirm<br><input data-ho-name placeholder="${esc(d.org_name)}" autocomplete="off" style="max-width:320px"></label></div>`
+      + `<label class="small" style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><input type="checkbox" data-ho-leave> I am leaving the program: end my own access too</label>`
+      + `<button type="button" class="tiny" data-ho-go>Hand over</button> <button type="button" class="tiny" data-ho-cancel>Cancel</button>`
+      + `<div class="small err" data-ho-msg style="margin-top:6px"></div>`;
+    box.querySelector('[data-ho-cancel]').addEventListener('click', () => box.classList.add('hidden'));
+    box.querySelector('[data-ho-go]').addEventListener('click', async (ev) => {
+      const msg = box.querySelector('[data-ho-msg]');
+      ev.target.disabled = true; msg.textContent = '';
+      try {
+        const res = await api(`/api/coach/admins/${id}/make-owner`, { method: 'POST', body: {
+          confirm_name: box.querySelector('[data-ho-name]').value, step_down: box.querySelector('[data-ho-leave]').checked } });
+        if (res.you_left) { window.alert(`${res.owner_name} now owns the program. Your access has ended.`); window.location.href = 'index.html'; return; }
+        await Promise.all([loadAdmins(true), loadStaff(true)]);
+      } catch (e) { msg.textContent = e.message || 'Could not hand over.'; ev.target.disabled = false; }
+    });
+  }));
+}
+
+$('admin-add').addEventListener('click', async () => {
+  const out = $('admin-out'), err = $('admin-err');
+  out.classList.add('hidden'); err.classList.add('hidden');
+  const display_name = $('admin-name').value.trim(), email = $('admin-email').value.trim();
+  if (!display_name || !email) { err.textContent = 'Give a name and an email address.'; err.classList.remove('hidden'); return; }
+  $('admin-add').disabled = true;
+  try {
+    const res = await api('/api/coach/admins', { method: 'POST', body: { display_name, email } });
+    $('admin-name').value = ''; $('admin-email').value = '';
+    out.classList.remove('hidden');
+    if (res.emailed) {
+      out.innerHTML = `${res.promoted ? `${esc(res.display_name)} was already a coach here, so they keep their login and now have an administrator's access.` : `${esc(res.display_name)} is now an administrator.`} We emailed ${esc(res.email)}.`;
+    } else {
+      out.innerHTML = `${esc(res.display_name)} is now an administrator. ${res.smtp_configured ? 'The email could not be sent.' : 'Email is on hold, so nothing was sent.'} Send them this link yourself:<br><code style="word-break:break-all">${esc(res.link)}</code> <button type="button" class="tiny" data-copy-admin>Copy message</button>`;
+      out.querySelector('[data-copy-admin]').addEventListener('click', async (ev) => {
+        try { await navigator.clipboard.writeText(res.text); ev.target.textContent = 'Copied'; } catch { ev.target.textContent = 'Copy failed'; }
+      });
+    }
+    await Promise.all([loadAdmins(true), loadStaff(true)]);
+  } catch (e) { err.textContent = e.message || 'Could not add.'; err.classList.remove('hidden'); }
+  finally { $('admin-add').disabled = false; }
+});
+
 async function loadStaff(isDirector) {
   $('staff-card').classList.toggle('hidden', !isDirector);
+  loadAdmins(isDirector);
   if (!isDirector) return;
 
   const [{ staff }, { teams }] = await Promise.all([
@@ -6236,7 +6339,7 @@ async function initTeamDrills() {
     'teams-home': 'teams', 'team-detail-card': 'teams',
     'roster-card': 'today', 'team-drills-card': 'today', 'goals-card': 'today', 'film-card': 'today', 'shelf-card': 'today',
     'suggest-card': 'today',
-    'teams-card': 'settings', 'staff-card': 'settings', 'iq-card': 'settings', 'ball-card': 'settings',
+    'teams-card': 'settings', 'staff-card': 'settings', 'admins-card': 'settings', 'iq-card': 'settings', 'ball-card': 'settings',
     'evaluation-card': 'settings', 'bulk-teams-card': 'settings', 'bulk-coaches-card': 'settings',
     'contact-card': 'settings', 'password-card': 'settings', 'badge-card': 'settings', 'season-card': 'settings',
     'billing-card': 'settings', 'specialisation-card': 'settings', 'recognition-card': 'settings',

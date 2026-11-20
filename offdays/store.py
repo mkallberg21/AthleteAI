@@ -1839,9 +1839,9 @@ class Store:
         )
         if not sender:
             row = self.conn.execute(
-                "SELECT display_name FROM users WHERE org_id = ? AND role = 'director' "
-                "ORDER BY id LIMIT 1",
-                (org_id,),
+                "SELECT display_name FROM users WHERE org_id = ? AND role = 'director' AND active = 1 "
+                "ORDER BY (id = COALESCE((SELECT owner_user_id FROM organizations WHERE id = ?), 0)) DESC, id LIMIT 1",
+                (org_id, org_id),
             ).fetchone()
             sender = row["display_name"] if row else "Your coach"
 
@@ -1891,9 +1891,9 @@ class Store:
         ).fetchone()
         if row is None:
             row = self.conn.execute(
-                "SELECT id, display_name FROM users WHERE org_id = ? AND role = 'director' "
-                "AND active = 1 ORDER BY id LIMIT 1",
-                (org_id,),
+                "SELECT id, display_name FROM users WHERE org_id = ? AND role = 'director' AND active = 1 "
+                "ORDER BY (id = COALESCE((SELECT owner_user_id FROM organizations WHERE id = ?), 0)) DESC, id LIMIT 1",
+                (org_id, org_id),
             ).fetchone()
         if row is None:
             return None, "Your coach"

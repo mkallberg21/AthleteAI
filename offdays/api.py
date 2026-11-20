@@ -43,6 +43,7 @@ from . import billing as billing_mod
 from . import funnel as funnel_mod
 from . import digest as digest_mod
 from . import mailer
+from . import admins as admins_mod
 from . import invites as invites_mod
 from . import contacts as contacts_mod
 from . import staple as staple_mod
@@ -2822,6 +2823,89 @@ def list_staff(
     return {"staff": out}
 
 
+class AddAdminRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=200)
+
+
+class HandOverRequest(BaseModel):
+    confirm_name: str = Field(max_length=200)
+    step_down: bool = False
+
+
+def _need_director(principal: Principal) -> None:
+    if not principal.is_director:
+        raise HTTPException(status_code=403, detail="only a director can see the administrators")
+
+
+def _need_owner(principal: Principal, store: Store) -> None:
+    _need_director(principal)
+    if not admins_mod.is_owner(store.conn, principal.org_id, principal.id):
+        owner = admins_mod.list_admins(store.conn, principal.org_id, principal.id)["owner_name"] or "the owner"
+        raise HTTPException(status_code=403, detail=f"only {owner}, who owns the program, can do this")
+
+
+def _admin_call(fn, *args, **kwargs) -> dict[str, Any]:
+    try:
+        return fn(*args, **kwargs)
+    except admins_mod.AdminError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@app.get("/api/coach/admins")
+def get_admins(principal: Principal = Depends(_staff), store: Store = Depends(get_store)) -> dict[str, Any]:
+    """The program's administrators and who owns it. Any director may look."""
+    _need_director(principal)
+    return admins_mod.list_admins(store.conn, principal.org_id, principal.id)
+
+
+@app.post("/api/coach/admins", status_code=201)
+def add_admin(
+    body: AddAdminRequest,
+    background: BackgroundTasks,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Make someone an administrator: a director's access (rosters, teams, coaches, invites). Owner only.
+
+    They are emailed their sign-in; the link is also returned so the owner can pass it on while email is on hold.
+    A coach with the same email is promoted rather than duplicated.
+    """
+    _need_owner(principal, store)
+    queued: list[int] = []
+    out = _admin_call(admins_mod.add_admin, store, principal.org_id, principal.id,
+                      display_name=body.display_name, email=body.email, queued=queued)
+    _send_now(store, queued, background)
+    return out
+
+
+@app.post("/api/coach/admins/{user_id}/remove")
+def remove_admin(user_id: int, principal: Principal = Depends(_staff), store: Store = Depends(get_store)) -> dict[str, Any]:
+    """End an administrator's access at once, on every device. Owner only; never the owner."""
+    _need_owner(principal, store)
+    return _admin_call(admins_mod.remove_admin, store.conn, principal.org_id, principal.id, user_id)
+
+
+@app.post("/api/coach/admins/{user_id}/make-owner")
+def hand_over_program(
+    user_id: int,
+    body: HandOverRequest,
+    background: BackgroundTasks,
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """Hand the program to another administrator. Owner only, with the program's name typed to confirm.
+
+    Both people are emailed. With `step_down` the caller's own access ends as well; otherwise they stay an administrator.
+    """
+    _need_owner(principal, store)
+    queued: list[int] = []
+    out = _admin_call(admins_mod.hand_over, store.conn, principal.org_id, principal.id, user_id,
+                      confirm_name=body.confirm_name, step_down=body.step_down, queued=queued)
+    _send_now(store, queued, background)
+    return out
+
+
 @app.get("/api/billing")
 def get_billing(
     principal: Principal = Depends(_staff),
@@ -2861,6 +2945,8 @@ def change_plan(
         raise HTTPException(
             status_code=403, detail="only a director can change the plan"
         )
+    if not admins_mod.is_owner(store.conn, principal.org_id, principal.id):
+        raise HTTPException(status_code=403, detail="only the program's owner can change the plan")
     subscription = billing_mod.start_subscription(
         store.conn, principal.org_id, body.plan_code,
         trial=False, seats=body.seats, actor=principal.display_name,

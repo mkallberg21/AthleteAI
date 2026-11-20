@@ -591,6 +591,26 @@ privacy, and the questions parents ask. Nothing in it is about money.
 - **Mail transports.** `send` takes an optional `attachments` list of (filename, type, bytes). A transport that does not
   accept it is called the old way and the message goes without the PDF.
 
+## Administrators: handing director access to someone else
+
+A director can give another person the same access they have, so someone else can upload rosters, add teams and coaches,
+send parent invites and watch every athlete. An administrator is a director (same role, so every director screen and
+route works for them); what is special is the **owner**.
+
+- **Owner only:** add or remove an administrator, hand the program to another administrator, and change the billing plan.
+  The owner is `organizations.owner_user_id`; when that was never set (every program before this), it is the earliest
+  active director, which is whoever started the program. Nobody has to migrate anything.
+- **Adding one:** Settings, "Administrators". Name and email (an email is required, so they can get back in). They are
+  emailed a sign-in link, hyperlinked, and the link is also shown to the owner while email is on hold. Someone already a
+  coach here with the same email is promoted rather than duplicated. Up to five administrators, the owner included.
+- **Removing one:** their access ends at once on every device (`memberships.active = 0`, sessions and links ended).
+- **Handing over:** the owner picks an administrator and types the program's name. The new owner takes over; the old owner
+  stays an administrator, or ticks "I am leaving the program" and loses access in the same step. Both are emailed. There
+  is never a moment without an owner.
+- **Whose name goes on messages:** a message "from the program" with no coach of its own names the owner, not whoever
+  happens to have the lowest id.
+- **The email hold applies** to every email in this flow.
+
 ## A parent with several children on the team
 
 One parent, one email, one account, however many children. The roster gives the same parent address for each of a
