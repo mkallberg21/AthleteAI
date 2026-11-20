@@ -432,7 +432,12 @@ def team_ranking(
         "     WHERE tm.user_id = u.id " + name_scope + "ORDER BY tm.team_id LIMIT 1) AS team_name, "
         "  COALESCE((SELECT SUM(x.amount) FROM xp_ledger x WHERE x.athlete_id = u.id AND x.day >= ? AND "
         + _NOT_LOGGED + "), 0) AS xp, "
-        "  (SELECT MAX(x.day) FROM xp_ledger x WHERE x.athlete_id = u.id AND x.amount > 0) AS last_active "
+        # The latest day of counted work, whether or not it earned XP. A session that earned nothing (the day's cap was already
+        # reached, or it was a quick extra set) is still the athlete training today; reading only the XP ledger made a player who
+        # trained today show "yesterday".
+        "  (SELECT MAX(d) FROM (SELECT x.day AS d FROM xp_ledger x WHERE x.athlete_id = u.id AND x.amount > 0 "
+        "     UNION ALL SELECT date(COALESCE(cs.completed_at, cs.submitted_at)) FROM sessions cs "
+        "     WHERE cs.athlete_id = u.id AND cs.status = 'counted')) AS last_active "
         "FROM users u "
         "WHERE u.org_id = ? AND u.role = 'athlete' AND u.active = 1 " + scope +
         "ORDER BY xp DESC, u.display_name COLLATE NOCASE ASC",
