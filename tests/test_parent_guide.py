@@ -259,3 +259,43 @@ class TestSmtp:
         mailer.SmtpTransport().send("a@example.com", "Hi", "<p>x</p>", "x", {})
         parsed = message_from_bytes(captured["m"].as_bytes())
         assert not [p for p in parsed.walk() if p.get_content_type() == "application/pdf"]
+
+
+class TestTheResearchSection:
+    @staticmethod
+    def html():
+        return (parent_guide.ASSETS / "guide.html").read_text(encoding="utf-8")
+
+    def test_every_citation_has_a_source_and_every_source_is_cited(self):
+        import re
+        html = self.html()
+        cited = {int(n) for grp in re.findall(r'<span class="cite">\[(.*?)\]</span>', html) for n in re.findall(r'href="#src-(\d+)"', grp)}
+        listed = {int(n) for n in re.findall(r'<li id="src-(\d+)">', html)}
+        assert cited and cited == listed, (cited ^ listed)
+
+    def test_every_source_has_a_doi_link(self):
+        import re
+        html = self.html()
+        items = re.findall(r'<li id="src-\d+">.*?</li>', html, re.S)
+        assert len(items) >= 10
+        for item in items:
+            assert re.search(r'href="https://doi\.org/10\.\d{4,9}/\S+"', item), item[:80]
+
+    def test_it_says_the_studies_are_not_about_this_app_and_what_they_cannot_show(self):
+        html = self.html()
+        assert "not about this app" in html and "no study says an app guarantees results" in html
+        assert html.count("The honest part") >= 2
+
+    def test_no_dashes_and_no_money_in_the_guide(self):
+        import re
+        html = self.html()
+        text = re.sub(r"<style>.*?</style>", "", html, flags=re.S)
+        text = re.sub(r"<[^>]+>", " ", text)
+        assert "\u2014" not in text and "\u2013" not in text and " - " not in text
+        assert not re.search(r"\$\d|\bdues\b|\bprice\b", text, re.I)
+
+    def test_the_shipped_pdfs_were_built_from_this_wording(self):
+        from pypdf import PdfReader
+        for name in ("guide_plain.pdf", "guide_logo.pdf"):
+            text = PdfReader(str(parent_guide.ASSETS / name)).pages[0].extract_text()
+            low = " ".join(text.lower().split()); assert "what the research" in low and "sports specialization and intensive training" in low, name
