@@ -222,6 +222,38 @@ test('hands: each sound rep takes the top hand from the throw before it', () => 
   assert.ok(sc.reps.every((r) => r.source === 'sound'));
 });
 
+/** A strong-hand set filmed right-handed, where the bottom hand wrongly rises above the top one before some impacts. */
+function misreadSession(key, flipEvery) {
+  const drill = spec(key);
+  const sr = 48000;
+  const sc = new SoundRepCounter(drill, new RepCounter(drill), { sampleRate: sr });
+  const audio = track(21500, IMPACTS.map((t) => ({ t, level: 0.3 })));
+  for (let i = 0; i < audio.length; i += 128) sc.pushAudio(audio.subarray(i, i + 128), (i / sr) * 1000);
+  for (let t = 0; t < 21500; t += 33) {
+    const k = IMPACTS.findIndex((x) => x >= t);
+    const next = k < 0 ? 99999 : IMPACTS[k];
+    const h = next - t < 700 ? 0.2 : -0.4;
+    const flipped = k >= 0 && k % flipEvery === flipEvery - 1;
+    // Normally the right hand is on top; on a flipped throw the left wrist reads higher.
+    sc.pushPose(skeleton(flipped ? { left: h, right: h - 0.6 } : { right: h, left: h - 0.6 }), t);
+  }
+  return sc;
+}
+
+test('hands: a strong-hand set is one hand even when the camera misreads some throws', () => {
+  const sc = misreadSession('lax_wall_ball_strong', 4);
+  assert.strictEqual(sc.count, IMPACTS.length);
+  assert.deepStrictEqual(sc.handCounts(), { left: 0, right: IMPACTS.length });
+  assert.ok(sc.reps.every((r) => r.hand === 'right'));
+  assert.ok(sc.toSubmission(1, 'n', 21500).reps.every((r) => r.hand === 'right'));
+});
+
+test('hands: a drill that changes hands on purpose keeps what the camera read', () => {
+  const sc = misreadSession('lax_wall_ball_cross', 2);
+  const { left, right } = sc.handCounts();
+  assert.ok(left > 0 && right > 0, `${left}/${right}`);
+});
+
 test('hands: when the camera cannot see the top hand, the rep counts but no hand is claimed', () => {
   const sc = session('right', { hidden: true });
   assert.strictEqual(sc.count, IMPACTS.length);

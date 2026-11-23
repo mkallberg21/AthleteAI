@@ -366,6 +366,35 @@ export function saveReachSignal(landmarks) {
 }
 
 /**
+ * Drills where one hand is on top for the whole set, by definition: the strong hand, the off hand, and the one-handed
+ * set. A player does not change hands halfway through these, so a rep read as the other hand is the camera being wrong
+ * (the bottom hand rose past the top one on a catch, or the stick hand was hidden for a frame), not the athlete.
+ */
+export const SINGLE_HAND_DRILLS = new Set(['lax_wall_ball_strong', 'lax_wall_ball_offhand', 'lax_wall_ball_one_hand']);
+
+/**
+ * The hands of a set of reps, with the misreads taken out.
+ *
+ * On a single-hand drill every rep that named a hand is given the hand most of them named. A tie changes nothing
+ * (the set is genuinely mixed, so there is nothing to correct), and a rep that named no hand stays 'none' rather than
+ * being given one it never measured. Other drills are returned untouched: cross, behind-the-back and split wall ball
+ * change hands on purpose.
+ *
+ * Returns new objects; the reps it is given are not changed.
+ */
+export function settleHands(reps, spec) {
+  if (!spec || !spec.tracks_handedness || !SINGLE_HAND_DRILLS.has(spec.key)) return reps;
+  let left = 0, right = 0;
+  for (const r of reps) {
+    if (r.hand === 'left') left += 1;
+    else if (r.hand === 'right') right += 1;
+  }
+  if (left === right) return reps;
+  const hand = right > left ? 'right' : 'left';
+  return reps.map((r) => (r.hand === 'left' || r.hand === 'right') && r.hand !== hand ? { ...r, hand } : r);
+}
+
+/**
  * Which of the nine cells the hands are in.
  *
  * Reach counts the rep; this recovers the direction the rep went, which on a
@@ -609,7 +638,7 @@ export class RepCounter {
 
   handCounts() {
     let left = 0, right = 0;
-    for (const r of this.reps) {
+    for (const r of settleHands(this.reps, this.spec)) {
       if (r.hand === 'left') left += 1;
       else if (r.hand === 'right') right += 1;
     }
@@ -918,7 +947,7 @@ export class RepCounter {
       session_id: sessionId,
       nonce,
       duration_ms: Math.round(durationMs),
-      reps: this.reps,
+      reps: settleHands(this.reps, this.spec),
       hold_ms: Math.round(this.holdMs),
       mean_confidence: Math.round(this.meanConfidence * 1000) / 1000,
       ...(this.spec.signal.kind === 'footwork_motion'

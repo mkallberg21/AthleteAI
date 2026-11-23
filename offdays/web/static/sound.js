@@ -38,7 +38,7 @@
  * calibration bench and in a Node test.
  */
 
-import { wallBallSignal } from './counter.js';
+import { wallBallSignal, settleHands } from './counter.js';
 
 /** Analysis hop. Short enough to time an impact to within a video frame. */
 export const HOP_MS = 10;
@@ -560,13 +560,15 @@ export class SoundRepCounter {
   get reps() {
     const confidence = Math.round(this.pose.meanConfidence * 1000) / 1000;
     const releases = this.releases;
-    return this.grouping.cycles.map((c, i) => {
+    const reps = this.grouping.cycles.map((c, i) => {
       const rep = { t_ms: c.t_ms, hand: this._hand(c), confidence, source: 'sound' };
       // Omitted, not null, when no catch was heard: a phone on the far side
       // from the stick never hears one, and that is not a slow release.
       if (releases[i] !== null) rep.release_ms = releases[i];
       return rep;
     });
+    // A strong-hand set is one hand; a rep the camera read as the other is a misread (see settleHands).
+    return settleHands(reps, this.spec);
   }
 
   /**
@@ -584,15 +586,18 @@ export class SoundRepCounter {
   get meanConfidence() { return this.pose.meanConfidence; }
 
   handCounts() {
-    let left = 0, right = 0;
-    for (const c of this.grouping.cycles) {
-      // Wall ball: unsettled sounds are not counted for a side yet rather
-      // than guessed. Ball: read from the tracker as it stands now.
+    // Wall ball: unsettled sounds are not counted for a side yet rather
+    // than guessed. Ball: read from the tracker as it stands now.
+    const read = this.grouping.cycles.map((c) => {
       let hand = 'none';
       if (this.spec.tracks_handedness && this.handFrom === 'wall_ball') hand = c.hand;
       else if (this.spec.tracks_handedness && this.handFrom === 'ball') hand = this.ballHandFor(c.t_ms);
-      if (hand === 'left') left += 1;
-      else if (hand === 'right') right += 1;
+      return { hand };
+    });
+    let left = 0, right = 0;
+    for (const r of settleHands(read, this.spec)) {
+      if (r.hand === 'left') left += 1;
+      else if (r.hand === 'right') right += 1;
     }
     return { left, right };
   }
