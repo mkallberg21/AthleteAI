@@ -487,14 +487,24 @@ class TestCoachDashboard:
 #: legitimate form arrived. This is the rule itself.
 BODY_TYPES_ALLOWED = {"application/json", "application/x-www-form-urlencoded"}
 
-#: The one endpoint that takes a file, named here with its reason so the
+#: The endpoints that take a file, each named here with its reason so the
 #: invariant stays "no endpoint accepts a file except these, and here is
-#: why". A program's badge is a director's own image of their own club,
+#: why".
+#:
+#: A program's badge is a director's own image of their own club,
 #: typed from its bytes, capped at 2 MB, with SVG scripting stripped
 #: (offdays/badge.py, tests/test_badge_upload.py). It never carries a
 #: child's likeness or footage: a logo is not a photo, and the director is
 #: the only role that can send it.
-MULTIPART_ALLOWED = {("post", "/api/org/logo")}
+#:
+#: A coach's own film for the film shelf (offdays/staff_film.py,
+#: tests/test_clip_sources.py) is staff only, typed from its bytes, capped in
+#: size and length, kept out of the public folder and played through a signed,
+#: expiring address. It is NOT an athlete's training video: nothing a phone
+#: films while counting reps can reach it, because no athlete or parent may
+#: call it. It can show people, so the coach must confirm it is theirs to
+#: share before it is accepted.
+MULTIPART_ALLOWED = {("post", "/api/org/logo"), ("post", "/api/coach/clips/file")}
 
 
 

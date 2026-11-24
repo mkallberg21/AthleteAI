@@ -10,8 +10,9 @@ link), edits the "what players should watch for" line if they like, and taps **A
 A suggestion has to become a clip an athlete can watch **with attention tracking** and that a coach can
 verify. Only YouTube gives that (IFrame API: position, mute, visibility, rate). TikTok, Instagram and
 Facebook have no search a server can use without a reviewed developer account and no embed with playback
-telemetry, and give nothing to check that someone is teaching. A coach can still paste any link by hand:
-the existing "link" provider opens it with no tracking and is labelled weaker.
+telemetry, and give nothing to check that someone is teaching. A coach can still add one by hand: an
+Instagram post or reel link plays in Instagram's own player and is recorded as opened, not watched (README,
+"Two more sources"), and is shown only to athletes 13 and over.
 
 ## What the machine checks, and what it cannot
 

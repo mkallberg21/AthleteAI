@@ -35,6 +35,7 @@ from . import library
 from .drills.catalog import ALL_DRILLS
 from . import family
 from . import film
+from . import staff_film
 from . import iq_shelf
 from . import rtp
 from . import wellness
@@ -754,6 +755,7 @@ class Store:
         max_age: int = 200,
         question: dict[str, Any] | None = None,
         created_by: int | None = None,
+        media_bytes: int = 0,
     ) -> dict[str, Any]:
         """Curate a clip. Coaches paste a link; this works out what it is."""
         if provider not in film.PROVIDERS:
@@ -762,6 +764,20 @@ class Store:
             video_id = film.parse_youtube_id(raw_video)
             if video_id is None:
                 raise StoreError("that does not look like a YouTube link or video id")
+        elif provider == "instagram":
+            video_id = film.parse_instagram(raw_video)
+            if video_id is None:
+                raise StoreError("that does not look like a link to an Instagram post or reel")
+            # Instagram's player gives no start, end or length, so there is nothing to trim and nothing to time.
+            start_s, end_s = 0, None
+            min_age = max(int(min_age), film.INSTAGRAM_MIN_AGE)
+        elif provider == "upload":
+            video_id = (raw_video or "").strip()
+            if staff_film.path_for(video_id) is None:
+                raise StoreError("that video file is not here")
+            if not end_s:
+                raise StoreError("the video's length is needed")
+            start_s = 0
         else:
             video_id = (raw_video or "").strip()
             if not video_id.startswith("https://"):
@@ -801,11 +817,12 @@ class Store:
         with transaction(self.conn) as conn:
             cur = conn.execute(
                 "INSERT INTO clips(org_id, provider, video_id, title, focus, start_s, "
-                "end_s, positions, min_age, max_age, question, created_by, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "end_s, positions, min_age, max_age, question, created_by, created_at, media_bytes, rights_ok_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (org_id, provider, video_id, title.strip(), focus.strip(), int(start_s),
                  end_s, ",".join(positions or []), int(min_age), int(max_age),
-                 json.dumps(question) if question else None, created_by, _iso(_now())),
+                 json.dumps(question) if question else None, created_by, _iso(_now()),
+                 int(media_bytes) if provider == "upload" else 0, _iso(_now()) if provider == "upload" else None),
             )
         return self.clip(int(cur.lastrowid))
 
@@ -832,11 +849,40 @@ class Store:
         return self._row_to_clip(row).to_dict()
 
     def retire_clip(self, org_id: int, clip_id: int) -> bool:
+        row = self.conn.execute(
+            "SELECT provider, video_id FROM clips WHERE id = ? AND org_id = ?", (clip_id, org_id)).fetchone()
         with transaction(self.conn) as conn:
-            return bool(conn.execute(
-                "UPDATE clips SET active = 0 WHERE id = ? AND org_id = ?",
+            done = bool(conn.execute(
+                "UPDATE clips SET active = 0, media_bytes = 0 WHERE id = ? AND org_id = ?",
                 (clip_id, org_id),
             ).rowcount)
+        # A coach's own file is deleted with the clip, not kept: removing it has to mean it is gone.
+        if done and row is not None and row["provider"] == "upload":
+            staff_film.remove(row["video_id"])
+        return done
+
+    def uploaded_video_bytes(self, org_id: int) -> int:
+        """How much of the program's allowance its coaches' own videos are using."""
+        return int(self.conn.execute(
+            "SELECT COALESCE(SUM(media_bytes), 0) FROM clips WHERE org_id = ? AND provider = 'upload' AND active = 1",
+            (org_id,)).fetchone()[0])
+
+    def in_program(self, user_id: int, org_id: int) -> bool:
+        """An active person who belongs to this program (their home program, or a membership in it)."""
+        return self.conn.execute(
+            "SELECT 1 FROM users u WHERE u.id = ? AND u.active = 1 AND (u.org_id = ? OR EXISTS ("
+            "SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.org_id = ? AND m.active = 1))",
+            (user_id, org_id, org_id)).fetchone() is not None
+
+    def uploaded_clip_file(self, clip_id: int, user_id: int) -> tuple[pathlib.Path, str] | None:
+        """(path, mime) of a coach's uploaded clip, if it is still on the shelf and this person may see it."""
+        row = self.conn.execute(
+            "SELECT org_id, video_id FROM clips WHERE id = ? AND active = 1 AND provider = 'upload'",
+            (clip_id,)).fetchone()
+        if row is None or not self.in_program(user_id, int(row["org_id"])):
+            return None
+        path = staff_film.path_for(row["video_id"])
+        return (path, staff_film.mime_for(row["video_id"])) if path is not None else None
 
     def set_shelf_clip_hidden(self, org_id: int, clip_id: int, hidden: bool) -> bool:
         """Hide a built-in clip from this program, or bring it back. False if it is not one of theirs.
@@ -927,9 +973,10 @@ class Store:
         day = day or _now().date()
         state = self.film_day(athlete_id, day)
         profile = self.conn.execute(
-            "SELECT birth_year FROM users WHERE id = ?", (athlete_id,)
+            "SELECT birth_year, birth_year_estimated FROM users WHERE id = ?", (athlete_id,)
         ).fetchone()
         age = day.year - int(profile["birth_year"]) if profile and profile["birth_year"] else None
+        estimated = bool(profile["birth_year_estimated"]) if profile else False
 
         # A clip this athlete's phone could not play is never offered to them again,
         # and does not count as having been seen.
@@ -960,7 +1007,7 @@ class Store:
             (org_id,),
         ):
             clip = self._row_to_clip(row)
-            if clip.id in dead or not clip.suits(age, state.band):
+            if clip.id in dead or not clip.suits(age, state.band, estimated):
                 continue
             if clip.id in seen:
                 again.append({
@@ -1057,6 +1104,20 @@ class Store:
         ).fetchone()
         if clip is None:
             raise StoreError("no clip with that id")
+        provider = clip["provider"]
+        if provider == "instagram":
+            # Checked here as well as on the shortlist: the shortlist is only what the screen shows.
+            who = self.conn.execute(
+                "SELECT birth_year, birth_year_estimated FROM users WHERE id = ?", (athlete_id,)).fetchone()
+            age = day.year - int(who["birth_year"]) if who and who["birth_year"] else None
+            if age is None or (who and who["birth_year_estimated"]) or age < film.INSTAGRAM_MIN_AGE:
+                raise StoreError("no clip with that id")
+        if provider == "upload" and not self.in_program(athlete_id, int(clip["org_id"])):
+            raise StoreError("no clip with that id")
+        extra: dict[str, Any] = {}
+        if provider == "upload":
+            extra["media_url"] = staff_film.media_url(clip_id, athlete_id)
+            extra["media_type"] = staff_film.mime_for(clip["video_id"])
 
         state = self.film_day(athlete_id, day)
         existing = self.conn.execute(
@@ -1082,7 +1143,7 @@ class Store:
             # Nothing about the watch state is reset. Coverage stays where it
             # was, so a second pass cannot manufacture credit that a first one
             # did not earn.
-            if existing["verdict"] == film.Verdict.WATCHED:
+            if existing["verdict"] in (film.Verdict.WATCHED, film.Verdict.OPENED):
                 looks += 1
                 with transaction(self.conn) as conn:
                     conn.execute(
@@ -1094,18 +1155,23 @@ class Store:
                 "resumed": True,
                 "looks": looks,
                 "rewatch_notice": rewatch.NOTICE,
+                **extra,
             }
+        # An Instagram clip is "opened" from the start and stays that way: its player says nothing about what was
+        # played, so it is never called watched and never earns film XP.
+        first = film.Verdict.OPENED if provider == "instagram" else film.Verdict.PARTIAL
         with transaction(self.conn) as conn:
             cur = conn.execute(
                 "INSERT INTO clip_watches(athlete_id, clip_id, day, started_at, "
-                "last_beat_at) VALUES (?,?,?,?,?)",
-                (athlete_id, clip_id, day.isoformat(), now, now),
+                "last_beat_at, verdict) VALUES (?,?,?,?,?,?)",
+                (athlete_id, clip_id, day.isoformat(), now, now, first),
             )
         return {
             "watch_id": int(cur.lastrowid),
             "resumed": False,
             "looks": rewatch.for_athlete(self.conn, athlete_id, clip_id),
             "rewatch_notice": rewatch.NOTICE,
+            **extra,
         }
 
     def record_beat(
@@ -1126,11 +1192,14 @@ class Store:
         report whatever makes the numbers work.
         """
         row = self.conn.execute(
-            "SELECT w.*, c.start_s, c.end_s FROM clip_watches w "
+            "SELECT w.*, c.start_s, c.end_s, c.provider FROM clip_watches w "
             "JOIN clips c ON c.id = w.clip_id WHERE w.id = ? AND w.athlete_id = ?",
             (watch_id, athlete_id),
         ).fetchone()
         if row is None:
+            raise StoreError("no watch with that id")
+        if row["provider"] not in film.TRACKED:
+            # Nothing a client says about an untracked player can be checked, so nothing is credited.
             raise StoreError("no watch with that id")
 
         now = now or _now()
@@ -1368,7 +1437,7 @@ class Store:
         marks = ",".join("?" for _ in athlete_ids)
 
         clips = self.conn.execute(
-            "SELECT id, title, focus, question FROM clips "
+            "SELECT id, title, focus, question, provider FROM clips "
             "WHERE org_id = ? AND active = 1 AND shelf = '' ORDER BY id DESC",
             (org_id,),
         ).fetchall()
@@ -1430,6 +1499,8 @@ class Store:
                 "title": clip["title"],
                 "focus": clip["focus"],
                 "has_question": bool(clip["question"]),
+                "provider": clip["provider"],
+                "tracked": clip["provider"] in film.TRACKED,
                 "watched": sorted(watched, key=key),
                 "started": sorted(started, key=key),
                 "not_yet": sorted(not_yet, key=key),

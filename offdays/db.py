@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 38
+SCHEMA_VERSION = 39
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -318,7 +318,11 @@ CREATE TABLE IF NOT EXISTS clips (
     credit      TEXT NOT NULL DEFAULT '',
     -- How many players' phones could not play it. A video can be taken down or
     -- stop allowing embedding at any time; three of these and it stops being offered.
-    unavailable_n INTEGER NOT NULL DEFAULT 0
+    unavailable_n INTEGER NOT NULL DEFAULT 0,
+    -- provider 'upload' only (offdays/staff_film.py): the size of the coach's file, for the program's allowance,
+    -- and when the coach confirmed it is theirs to share.
+    media_bytes INTEGER NOT NULL DEFAULT 0,
+    rights_ok_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_clips_org ON clips(org_id, active);
 
@@ -1505,6 +1509,8 @@ ADDED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("shelf", "TEXT NOT NULL DEFAULT ''"),
         ("credit", "TEXT NOT NULL DEFAULT ''"),
         ("unavailable_n", "INTEGER NOT NULL DEFAULT 0"),
+        ("media_bytes", "INTEGER NOT NULL DEFAULT 0"),
+        ("rights_ok_at", "TEXT"),
     ],
 }
 

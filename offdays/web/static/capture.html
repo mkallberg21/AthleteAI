@@ -407,7 +407,8 @@
       <h1 id="film-title">Clip</h1>
       <p class="small" id="film-focus"></p>
       <p class="small muted" id="film-credit" style="margin:2px 0 8px"></p>
-      <div class="film-frame"><div id="film-player"></div></div>
+      <p class="small muted hidden" id="film-untracked" style="margin:0 0 8px">This one plays in Instagram's own player. Your coach can see that you opened it, not how much you watched. <a href="#" id="film-wont-show">Not showing?</a></p>
+      <div class="film-frame" id="film-frame"><div id="film-player"></div></div>
       <div id="film-broken" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--border);border-radius:10px">
         <b>That video will not play on this phone.</b>
         <p class="small muted" style="margin:6px 0 0">It may have been taken down. That does not count against today, and it will not be offered to you again. Pick another one.</p>
@@ -774,6 +775,12 @@ let filmWatch = null;
 let filmBeat = null;
 let filmClip = null;
 
+// What the list says under a clip. Instagram's player gives no length, so it says where it plays instead.
+function clipLength(c) {
+  if (c.provider === 'instagram') return 'From Instagram';
+  return `${Math.round(c.length_s)} seconds${c.provider === 'upload' ? ' &middot; from your coach' : ''}`;
+}
+
 async function loadFilm() {
   let data;
   try { data = await api('/api/film'); } catch { return; }
@@ -788,7 +795,7 @@ async function loadFilm() {
     <button class="drill-btn" data-clip="${i}">
       <b>${esc(c.title)}</b>
       <span>${esc(c.focus)}</span>
-      <span class="transfer-inline">${Math.round(c.length_s)} seconds${credit(c)}${note(c)}</span>
+      <span class="transfer-inline">${clipLength(c)}${credit(c)}${note(c)}</span>
     </button>`).join('');
   $('film-list').dataset.clips = JSON.stringify(data.clips);
 
@@ -799,7 +806,7 @@ async function loadFilm() {
   $('film-again').innerHTML = again.map((c, i) => `
     <button class="drill-btn" data-again="${i}">
       <b>${esc(c.title)}</b>
-      <span class="transfer-inline">${Math.round(c.length_s)} seconds &middot; watch again</span>
+      <span class="transfer-inline">${clipLength(c)} &middot; ${c.provider === 'instagram' ? 'open again' : 'watch again'}</span>
     </button>`).join('');
   $('film-again').dataset.clips = JSON.stringify(again);
 }
@@ -833,24 +840,80 @@ function loadYouTubeApi() {
   return loadYouTubeApi._pending;
 }
 
+// Whatever is playing, behind one small surface, so the beats do not care which player it is.
+// null for a player that reports nothing (Instagram).
+let filmSource = null;
+
+function closePlayer() {
+  clearInterval(filmBeat);
+  clearTimeout(openClip._wait);
+  if (filmPlayer) { try { filmPlayer.destroy(); } catch { /* already gone */ } filmPlayer = null; }
+  filmSource = null;
+  // Rebuilt every time: YouTube swaps the placeholder for its own frame, and a video or an
+  // Instagram frame left behind would keep playing under the next clip.
+  $('film-frame').innerHTML = '<div id="film-player"></div>';
+}
+
 async function openClip(clip) {
   filmClip = clip;
   show('film');
+  closePlayer();
   $('film-title').textContent = clip.title;
   $('film-focus').textContent = clip.focus;
-  $('film-credit').textContent = clip.credit ? `From ${clip.credit}. Plays in YouTube's own player.` : '';
+  $('film-credit').textContent = clip.provider === 'upload' ? 'From your coach.'
+    : clip.provider === 'instagram' ? ''
+    : clip.credit ? `From ${clip.credit}. Plays in YouTube's own player.` : '';
   $('film-broken').classList.add('hidden');
   $('film-question').classList.add('hidden');
   $('film-because').textContent = '';
   $('film-progress').style.width = '0%';
-  $('film-state').textContent = 'Sound on, screen on. That is the whole trick.';
+  const tracked = clip.provider !== 'instagram';
+  $('film-untracked').classList.toggle('hidden', tracked);
+  $('film-progress').parentElement.classList.toggle('hidden', !tracked);
+  $('film-state').textContent = tracked ? 'Sound on, screen on. That is the whole trick.' : '';
 
   try {
     filmWatch = await api(`/api/film/${clip.id}/start`, { method: 'POST' });
   } catch (e) { showError(e.message); show('home'); return; }
 
+  if (clip.provider === 'instagram') {
+    // Instagram's embedded player for a public post. It is loaded only now, so an athlete who
+    // never opens one of these never talks to Instagram at all.
+    const frame = document.createElement('iframe');
+    frame.src = clip.embed_url;
+    frame.title = clip.title;
+    frame.setAttribute('allow', 'encrypted-media; picture-in-picture; fullscreen');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.setAttribute('scrolling', 'no');
+    frame.style.cssText = 'width:100%;max-width:420px;height:min(64vh,640px);border:0;border-radius:10px;display:block;margin:0 auto;background:#000';
+    $('film-frame').replaceChildren(frame);
+    showClipQuestion();
+    return;
+  }
+
+  if (clip.provider === 'upload') {
+    const video = document.createElement('video');
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.setAttribute('controlslist', 'nodownload noplaybackrate');
+    video.disablePictureInPicture = true;
+    video.style.cssText = 'width:100%;max-height:70vh;border-radius:10px;background:#000;display:block';
+    video.addEventListener('error', () => videoWontPlay());
+    video.addEventListener('ended', () => sendBeat(true));
+    video.src = filmWatch.media_url;
+    $('film-frame').replaceChildren(video);
+    filmSource = {
+      playing: () => !video.paused && !video.ended && video.readyState > 2,
+      time: () => video.currentTime,
+      muted: () => video.muted || video.volume === 0,
+      rate: () => video.playbackRate,
+    };
+    startBeats();
+    return;
+  }
+
   await loadYouTubeApi();
-  if (filmPlayer) { filmPlayer.destroy(); filmPlayer = null; }
   filmPlayer = new YT.Player('film-player', {
     host: 'https://www.youtube-nocookie.com',
     videoId: clip.video_id,
@@ -860,9 +923,15 @@ async function openClip(clip) {
     },
     events: { onReady: startBeats, onError: () => videoWontPlay() },
   });
+  const yt = filmPlayer;
+  filmSource = {
+    playing: () => yt.getPlayerState() === YT.PlayerState.PLAYING,
+    time: () => yt.getCurrentTime() - (clip.start_s || 0),
+    muted: () => yt.isMuted() || yt.getVolume() === 0,
+    rate: () => yt.getPlaybackRate(),
+  };
   // The player can fail without ever raising onError (blocked network, removed video on some
   // phones). If nothing has started after a while, say so rather than leave a black box.
-  clearTimeout(openClip._wait);
   openClip._wait = setTimeout(() => {
     try {
       if (filmWatch && filmPlayer && !(filmPlayer.getPlayerState && filmPlayer.getPlayerState() === YT.PlayerState.PLAYING)
@@ -871,6 +940,9 @@ async function openClip(clip) {
     } catch { videoWontPlay(); }
   }, 12000);
 }
+
+// Instagram's frame cannot tell us it failed (a private post, a sign-in wall), so the athlete can.
+$('film-wont-show').addEventListener('click', (event) => { event.preventDefault(); $('film-untracked').classList.add('hidden'); videoWontPlay(); });
 
 // The video would not load. Tell the kid plainly, give the slot back, and let the server stop
 // offering it. Reported once per watch.
@@ -885,31 +957,40 @@ async function videoWontPlay() {
 
 // Beats carry position, not elapsed time: the server measures elapsed itself,
 // because a payload that reports its own clock can report whatever it likes.
-function startBeats() {
-  clearInterval(filmBeat);
-  filmBeat = setInterval(async () => {
-    if (!filmPlayer || !filmWatch) return;
-    if (filmPlayer.getPlayerState() !== YT.PlayerState.PLAYING) return;
+// `atEnd` is the one beat sent while nothing is playing: a video that finishes between two beats
+// would otherwise never report its last few seconds, and a short clip could not be finished.
+async function sendBeat(atEnd) {
+    const src = filmSource;
+    if (!src || !filmWatch || sendBeat.done) return;
+    let playing = false;
+    try { playing = src.playing(); } catch { return; }
+    if (!playing && !atEnd) return;
     try {
       const out = await api(`/api/film/watches/${filmWatch.watch_id}/beat`, {
         method: 'POST',
         body: {
-          position_s: filmPlayer.getCurrentTime() - (filmClip.start_s || 0),
-          muted: filmPlayer.isMuted() || filmPlayer.getVolume() === 0,
+          position_s: Math.max(0, src.time()),
+          muted: src.muted(),
           hidden: document.visibilityState !== 'visible',
-          rate: filmPlayer.getPlaybackRate(),
+          rate: src.rate(),
         },
       });
       $('film-progress').style.width = `${Math.round(out.coverage * 100)}%`;
       if (out.verdict === 'watched') {
         clearInterval(filmBeat);
+        sendBeat.done = true;
         $('film-state').textContent = 'Watched, start to finish. Nice.';
         showClipQuestion();
       } else if (out.audible_share < 0.6) {
         $('film-state').textContent = 'Turn the sound up. The coaching is in the audio.';
       }
     } catch { /* a dropped beat is not worth interrupting a clip for */ }
-  }, 4000);
+}
+
+function startBeats() {
+  clearInterval(filmBeat);
+  sendBeat.done = false;
+  filmBeat = setInterval(() => sendBeat(false), 4000);
 }
 
 function showClipQuestion() {
@@ -938,9 +1019,7 @@ $('film-options').addEventListener('click', async (event) => {
 });
 
 $('film-done').addEventListener('click', async () => {
-  clearInterval(filmBeat);
-  clearTimeout(openClip._wait);
-  if (filmPlayer) { filmPlayer.destroy(); filmPlayer = null; }
+  closePlayer();
   filmWatch = null;
   show('home');
   await loadFilm();

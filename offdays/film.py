@@ -103,7 +103,36 @@ def band_for(age: int | None, estimated: bool = False) -> FilmBand:
 # Clips
 # ---------------------------------------------------------------------------
 
-PROVIDERS = ("youtube", "link")
+PROVIDERS = ("youtube", "link", "instagram", "upload")
+
+#: Providers whose player reports position, mute and speed, so a watch can be scored. Instagram's embed reports
+#: nothing at all: all that can be known is that the athlete opened it.
+TRACKED = ("youtube", "upload")
+
+#: Instagram's own minimum age. A clip from it is never offered to a younger athlete, or to one whose age is unknown
+#: or estimated (guess low, as everywhere else): the embed loads Instagram in that child's browser.
+INSTAGRAM_MIN_AGE = 13
+
+_INSTAGRAM_URL = re.compile(
+    r"(?:^|//|\.)instagram\.com/(?:[A-Za-z0-9_.]{1,30}/)?(p|reel|reels|tv)/([A-Za-z0-9_-]{5,40})(?:[/?#]|$)"
+)
+_INSTAGRAM_ID = re.compile(r"^(p|reel|tv)/[A-Za-z0-9_-]{5,40}$")
+
+
+def parse_instagram(raw: str) -> str | None:
+    """'reel/<code>' or 'p/<code>' from an Instagram post or reel link, else None.
+
+    Only the kind and the code are kept, never the link as pasted: what is stored is interpolated into an embed URL,
+    and a share link carries tracking parameters that say who shared it.
+    """
+    text = (raw or "").strip()
+    if _INSTAGRAM_ID.match(text):
+        return text
+    found = _INSTAGRAM_URL.search(text)
+    if not found:
+        return None
+    kind = "reel" if found.group(1) == "reels" else found.group(1)
+    return f"{kind}/{found.group(2)}"
 
 #: YouTube ids are a fixed alphabet and length. Validated rather than trusted
 #: because this string is interpolated into an embed URL.
@@ -136,6 +165,14 @@ def embed_url(provider: str, video_id: str, start_s: int, end_s: int | None) -> 
     the request still goes to Google and still comes from a child's browser --
     and the README says so rather than implying this makes it private.
     """
+    if provider == "instagram":
+        # Instagram's own embedded player for a public post. It plays without an account when Instagram allows it,
+        # which is their decision per post and can change.
+        return f"https://www.instagram.com/{video_id}/embed/" if _INSTAGRAM_ID.match(video_id) else ""
+    if provider == "upload":
+        # A coach's own file. Its address carries a key made for one person (staff_film.media_url), so it is
+        # handed out when a watch starts, never in a list.
+        return ""
     if provider != "youtube":
         return video_id
     params = [
@@ -247,7 +284,9 @@ class Clip:
             return 0
         return max(0, self.end_s - self.start_s)
 
-    def suits(self, age: int | None, band: FilmBand) -> bool:
+    def suits(self, age: int | None, band: FilmBand, estimated: bool = False) -> bool:
+        if self.provider == "instagram" and (age is None or estimated or age < INSTAGRAM_MIN_AGE):
+            return False
         if self.length_s and self.length_s > band.clip_max_s:
             return False
         if age is None:
@@ -271,6 +310,7 @@ class Clip:
             "question": self.question.to_dict(include_answer) if self.question else None,
             "shelf": self.shelf,
             "credit": self.credit,
+            "tracked": self.provider in TRACKED,
         }
 
 
@@ -283,6 +323,7 @@ class Verdict:
     PARTIAL = "partial"        # stopped early
     SKIMMED = "skimmed"        # covered the clip, but scrubbed or raced it
     BACKGROUND = "background"  # played to an empty room, or muted
+    OPENED = "opened"          # an Instagram clip: opened, and nothing more can be known
 
 
 @dataclass

@@ -21,6 +21,7 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -44,6 +45,7 @@ from . import funnel as funnel_mod
 from . import digest as digest_mod
 from . import mailer
 from . import admins as admins_mod
+from . import staff_film as staff_film_mod
 from . import invites as invites_mod
 from . import contacts as contacts_mod
 from . import staple as staple_mod
@@ -4626,7 +4628,7 @@ class NewClip(BaseModel):
     video: str = Field(min_length=5, max_length=500)
     title: str = Field(min_length=1, max_length=160)
     focus: str = Field(default="", max_length=400)
-    provider: Literal["youtube", "link"] = "youtube"
+    provider: Literal["youtube", "link", "instagram"] = "youtube"
     start_s: int = Field(default=0, ge=0, le=86_400)
     end_s: int | None = Field(default=None, ge=1, le=86_400)
     positions: list[str] = Field(default_factory=list, max_length=8)
@@ -4928,9 +4930,24 @@ def list_clips(
         "SELECT * FROM clips WHERE org_id = ? AND active = 1 AND shelf = '' ORDER BY id DESC",
         (principal.org_id,),
     ).fetchall()
+    clips = []
+    for r in rows:
+        item = store._row_to_clip(r).to_dict(include_answer=True)
+        if r["provider"] == "upload":
+            # So the coach can play back what they put up. The key is theirs alone and expires.
+            item["media_url"] = staff_film_mod.media_url(int(r["id"]), principal.id)
+            item["media_mb"] = round(int(r["media_bytes"] or 0) / (1024 * 1024), 1)
+        clips.append(item)
     return {
-        "clips": [store._row_to_clip(r).to_dict(include_answer=True) for r in rows],
+        "clips": clips,
         "bands": [b.to_dict() for b in film_mod.BANDS],
+        "own_video": {
+            "used_mb": round(store.uploaded_video_bytes(principal.org_id) / (1024 * 1024), 1),
+            "room_mb": staff_film_mod.ORG_QUOTA_BYTES // (1024 * 1024),
+            "max_mb": staff_film_mod.MAX_BYTES // (1024 * 1024),
+            "max_s": max(b.clip_max_s for b in film_mod.BANDS),
+        },
+        "instagram_min_age": film_mod.INSTAGRAM_MIN_AGE,
     }
 
 
@@ -4940,10 +4957,13 @@ def create_clip(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
+    # A pasted Instagram link is an Instagram clip whichever box it was pasted into.
+    provider = "instagram" if film_mod.parse_instagram(body.video) else body.provider
     # Watching is scored as the share of the clip seen, so a clip with no end has
     # no length and can never be finished: it would sit on the shelf scoring
-    # "partial" for every athlete who watched it properly.
-    if body.end_s is None:
+    # "partial" for every athlete who watched it properly. (Instagram's player
+    # reports nothing, so there is no length to give and nothing to score.)
+    if body.end_s is None and provider != "instagram":
         raise HTTPException(
             status_code=400,
             detail="Give the clip an end time (in seconds). Without one nobody can "
@@ -4952,7 +4972,7 @@ def create_clip(
     try:
         return store.create_clip(
             principal.org_id, body.video, body.title,
-            focus=body.focus, provider=body.provider,
+            focus=body.focus, provider=provider,
             start_s=body.start_s, end_s=body.end_s, positions=body.positions,
             min_age=body.min_age, max_age=body.max_age,
             question=body.question.model_dump() if body.question else None,
@@ -4960,6 +4980,135 @@ def create_clip(
         )
     except StoreError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _question_from_form(raw: str) -> dict[str, Any] | None:
+    if not (raw or "").strip():
+        return None
+    try:
+        return ClipQuestion.model_validate_json(raw).model_dump()
+    except Exception as exc:  # noqa: BLE001 -- any bad question is the same answer
+        raise HTTPException(status_code=400, detail="the question could not be read") from exc
+
+
+@app.post("/api/coach/clips/file", status_code=201)
+async def add_own_clip(
+    file: UploadFile = File(...),
+    title: str = Form(min_length=1, max_length=160),
+    focus: str = Form(default="", max_length=400),
+    length_s: float = Form(default=0, ge=0, le=86_400),
+    rights: str = Form(default=""),
+    question: str = Form(default="", max_length=2000),
+    principal: Principal = Depends(_staff),
+    store: Store = Depends(get_store),
+) -> dict[str, Any]:
+    """A coach puts a video they made on the film shelf (offdays/staff_film.py).
+
+    This is staff film, kept on the server so the team can watch it with no third party involved. It is not an
+    athlete's training video: that still never leaves the phone.
+    """
+    if rights != "yes":
+        raise HTTPException(
+            status_code=400,
+            detail="Tick the box to confirm this is your video to share, and that the people in it are fine with "
+                   "the team seeing it.")
+    marker = film_mod.looks_like_highlights(title)
+    if marker is not None:
+        raise HTTPException(status_code=400, detail=f"\u201c{marker}\u201d in the title -- this shelf is for clips "
+                            "that teach a decision, not for highlight reels. " + film_mod.WHAT_TO_CUT)
+    parsed_question = _question_from_form(question)
+    used = store.uploaded_video_bytes(principal.org_id)
+    if used >= staff_film_mod.ORG_QUOTA_BYTES:
+        raise HTTPException(status_code=413, detail="Your program's own videos have filled its space. Remove one first.")
+
+    head = await file.read(64)
+    try:
+        kind = staff_film_mod.sniff(head)
+    except staff_film_mod.VideoError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    folder = staff_film_mod.folder()
+    folder.mkdir(parents=True, exist_ok=True)
+    name = staff_film_mod.new_name(principal.org_id, kind)
+    path = folder / name
+    size = len(head)
+    try:
+        with path.open("wb") as out:
+            out.write(head)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > staff_film_mod.MAX_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"That file is over {staff_film_mod.MAX_BYTES // (1024 * 1024)} MB. Trim it to the "
+                               "moment that teaches something, or export it at a lower quality.")
+                if used + size > staff_film_mod.ORG_QUOTA_BYTES:
+                    raise HTTPException(status_code=413, detail="That would fill your program's space for its own "
+                                        "videos. Remove one first.")
+                out.write(chunk)
+        # The file's own length where it says one (MP4, MOV); otherwise what the coach's browser measured.
+        measured = staff_film_mod.mp4_duration_s(path) if kind in ("mp4", "mov") else None
+        seconds = measured if measured else float(length_s or 0)
+        if seconds < 1:
+            raise HTTPException(status_code=400, detail="The video's length could not be read. Try exporting it as an MP4.")
+        longest = max(b.clip_max_s for b in film_mod.BANDS)
+        if seconds > longest + 1:
+            raise HTTPException(
+                status_code=400,
+                detail=f"That video is {int(round(seconds))} seconds. Clips are capped at {longest} seconds, so trim "
+                       "it to the moment that teaches something.")
+        return store.create_clip(
+            principal.org_id, name, title, focus=focus, provider="upload", start_s=0,
+            end_s=max(1, min(longest, int(round(seconds)))), question=parsed_question,
+            created_by=principal.id, media_bytes=size)
+    except HTTPException:
+        staff_film_mod.remove(name)
+        raise
+    except StoreError as exc:
+        staff_film_mod.remove(name)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        staff_film_mod.remove(name)
+        raise
+
+
+@app.get("/api/film/media/{clip_id}")
+def film_media(clip_id: int, request: Request, k: str = "", store: Store = Depends(get_store)) -> Response:
+    """Play a coach's uploaded clip.
+
+    Signed in by the key in the address, not a header, because a video element cannot send one. The key names one
+    person and one clip and expires; who they are and whether the clip is still on the shelf is checked again here.
+    """
+    user_id = staff_film_mod.read_key(clip_id, k)
+    found = store.uploaded_clip_file(clip_id, user_id) if user_id is not None else None
+    if found is None:
+        raise HTTPException(status_code=404, detail="no video here")
+    path, mime = found
+    size = path.stat().st_size
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600",
+               "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline"}
+    span = staff_film_mod.parse_range(request.headers.get("range"), size)
+    if span == (-1, -1):
+        return Response(status_code=416, headers={**headers, "Content-Range": f"bytes */{size}"})
+    if span is None:
+        return FileResponse(path, media_type=mime, headers=headers)
+    first, last = span
+
+    def part():
+        left = last - first + 1
+        with path.open("rb") as f:
+            f.seek(first)
+            while left > 0:
+                chunk = f.read(min(256 * 1024, left))
+                if not chunk:
+                    break
+                left -= len(chunk)
+                yield chunk
+
+    return StreamingResponse(part(), status_code=206, media_type=mime, headers={
+        **headers, "Content-Range": f"bytes {first}-{last}/{size}", "Content-Length": str(last - first + 1)})
 
 
 @app.delete("/api/coach/clips/{clip_id}")
@@ -5587,9 +5736,10 @@ def share_clip(
 ) -> dict[str, Any]:
     """Send one clip to the coaching staff.
 
-    The only route in this product that accepts video, and it exists because a
-    parent turned it on and an athlete chose this clip. Nothing calls it
-    automatically.
+    The only route in this product that accepts an athlete's video, and it exists
+    because a parent turned it on and an athlete chose this clip. Nothing calls it
+    automatically. (A coach can put their own film on the shelf, which is a
+    different thing: see add_own_clip.)
     """
     try:
         raw = base64.b64decode(body.data, validate=True)

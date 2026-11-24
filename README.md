@@ -160,7 +160,7 @@ offdays/
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
-  store.py          The largest SQL surface (~28% of queries; see dialect.py)
+  store.py          The largest SQL surface (~29% of queries; see dialect.py)
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
@@ -2054,6 +2054,32 @@ Mitigations, not cures:
   film never talks to Google at all
 - the `link` provider exists for programs that host their own clips
 
+### Two more sources: an Instagram link, and a coach's own video
+
+**Instagram** (`film.parse_instagram`, provider `instagram`). A coach pastes a post or reel link; only its kind and
+code are stored, and it plays in Instagram's own embedded player. Three things follow, and the screens say all three:
+
+- it must be a **public** post, and whether it plays without an account is Instagram's decision, per post
+- the embed reports nothing, so a watch is recorded as **opened**: never "watched", no film XP, and a beat sent for
+  one is refused. The coach's coverage says "opened"
+- it is offered only to athletes aged **13 and over with a known birth year** (`INSTAGRAM_MIN_AGE`; unknown or
+  estimated ages are treated as younger). The same check is made again when a watch starts. The frame is created only
+  when a clip is opened, so nobody else's browser ever contacts Instagram
+
+**A coach's own video** (`staff_film.py`, provider `upload`, `POST /api/coach/clips/file`). This is the one case where
+the file is kept here, and it is deliberately not the same thing as an athlete's training video, which still never
+leaves the phone: only staff can call the route, and the coach confirms it is theirs to share.
+
+- typed from its bytes (MP4, MOV, WebM), 60 MB a clip, 500 MB a program, and the same length cap as any clip. An
+  MP4's length is read from the file; a WebM's is what the coach's browser measured
+- stored beside the database in `film/`, outside `/uploads/`, so it is never served by name. A player gets a signed
+  address for that one person and clip that expires in three hours (`staff_film.play_key`), and the clip and the
+  person are checked again on every request. Range requests are answered, which phones need
+- watched and scored exactly like a YouTube clip. Removing the clip deletes the file
+- no transcoding: the server has no ffmpeg, so an iPhone `.mov` in HEVC may not play on some Android phones. MP4
+  (H.264) plays everywhere
+- not in the program export, and not yet removed when a whole program is deleted
+
 ### Suggested videos (`video_scout.py`)
 
 Once a week the server searches YouTube (Data API, key in `OFFDAYS_YOUTUBE_API_KEY`) for lacrosse clips about
@@ -2789,8 +2815,8 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 49 modules across 746 call sites.
-store.py holds 28% of them.
+SQL lives in 49 modules across 751 call sites.
+store.py holds 29% of them.
 
 1382 occurrences are mechanical (search-and-replace with tests behind it).
 82 need judgement.
