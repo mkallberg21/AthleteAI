@@ -3818,6 +3818,26 @@ function renderFilmLog(f) {
     <p class="small muted" style="margin:0 0 6px">${f.total_clips ? `${f.total_clips} ${f.total_clips === 1 ? 'clip' : 'clips'}, ${f.total_times} ${f.total_times === 1 ? 'view' : 'views'}${f.again ? `, ${f.again} watched more than once` : ''}. ` : ''}Going back to a clip is the film module working: the player is making sure. Newest first.</p>
     <div style="overflow-x:auto"><table class="roster-table"><thead><tr><th>Clip</th><th class="num">Watched</th><th>When</th><th>Last view</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+// What one session was, in the words that fit the drill. A movement drill is time spent moving, not reps and not a hold.
+// A hand split always adds up to the reps: what the camera could not put on a hand is said, not left out.
+function ddClock(sec) { return sec >= 60 ? `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s` : `${sec}s`; }
+function sessionWhat(s) {
+  if (s.measure === 'moving') return `moving ${ddClock(s.hold_s)} of a ${ddClock(s.duration_s)} recording`;
+  if (s.measure === 'hold') return `held ${ddClock(s.hold_s)}`;
+  let side = '';
+  if (s.sides && s.reps) {
+    const unread = Math.max(0, s.reps - s.left - s.right);
+    // A one-hand set read cleanly names the hand. One stored with both hands (before sets were settled) shows what was stored.
+    if (s.one_hand && !(s.left && s.right)) {
+      const hand = s.right ? 'right' : s.left ? 'left' : '';
+      side = !hand ? 'hand not read'
+        : unread ? `${hand} hand on ${s.left + s.right}, hand not read on ${unread}` : `${hand} hand`;
+    } else if (s.left || s.right) {
+      side = `${s.left} L / ${s.right} R${unread ? ` / ${unread} not read` : ''}`;
+    }
+  }
+  return `${s.reps} reps${side ? ` <span class="muted small">(${side})</span>` : ''}`;
+}
 function renderAthleteDetail(d, days) {
   const a = d.athlete, t = d.totals;
   const strip = d.strip.map((s) => `<span title="${esc(ddDay(s.day))}: ${s.sessions ? `${s.sessions} session${s.sessions === 1 ? '' : 's'}${s.logged ? ` (${s.logged} logged by the player)` : ''}` : 'nothing'}"
@@ -3828,8 +3848,7 @@ function renderAthleteDetail(d, days) {
     const [cls, label] = DD_STATUS[s.status] || ['', s.status];
     const own = s.self_reported ? '<span class="pill">logged by player</span> ' : '';
     const note = s.self_reported ? (s.notes || []).join(' ').replace(/^Logged by the athlete because the camera could not count this work\.\s*/, '') : '';
-    const side = !s.self_reported && (s.left || s.right) ? ` <span class="muted small">(${s.left} L / ${s.right} R)</span>` : '';
-    const detail = s.self_reported ? `${s.minutes} min${s.reps ? `, ${s.reps} reps` : ''}` : `${s.reps} reps${side}${s.hold_s ? `, held ${s.hold_s}s` : ''}`;
+    const detail = s.self_reported ? `${s.minutes} min${s.reps ? `, ${s.reps} reps` : ''}` : sessionWhat(s);
     return `<tr><td>${esc(ddDay(s.day))}</td><td>${esc(s.drill)}${note ? `<br><span class="small muted">&ldquo;${esc(note.replace(/^Note:\s*/, ''))}&rdquo;</span>` : ''}</td>
       <td>${detail}</td><td>${own}<span class="pill ${cls}">${esc(label)}</span></td></tr>`;
   }).join('') : '<tr><td colspan="4" class="muted small">No sessions in this window.</td></tr>';

@@ -731,7 +731,7 @@ function wireDetails() {
           ${data.sessions.slice(0, 25).map((sn) => `<tr>
             <td class="small muted">${esc(sn.day)}</td>
             <td>${esc(sn.drill)}</td>
-            <td class="num">${sn.reps || (sn.hold_s ? `${sn.hold_s}s` : '–')}</td>
+            <td class="num">${sn.measure === 'moving' ? `${sn.hold_s}s moving` : (sn.reps || (sn.hold_s ? `${sn.hold_s}s` : '–'))}</td>
             <td class="small ${sn.status === 'counted' ? 'muted' : 'warn-text'}">${
               sn.self_reported ? 'logged by athlete' : esc(sn.status)}</td>
           </tr>`).join('')}

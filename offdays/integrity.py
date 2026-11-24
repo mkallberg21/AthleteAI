@@ -15,10 +15,32 @@ reps reaching a leaderboard.
 from __future__ import annotations
 
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .config import CONFIG, IntegrityConfig
-from .drills import DrillSpec, Metric
+from .drills import DrillSpec, Metric, SignalKind
+
+
+#: Drills done with one hand for the whole set. Kept in step with SINGLE_HAND_DRILLS in web/static/counter.js (a test
+#: compares the two).
+SINGLE_HAND_DRILLS = frozenset({"lax_wall_ball_strong", "lax_wall_ball_offhand", "lax_wall_ball_one_hand"})
+
+
+def settle_hands(reps: list["RepEvent"], drill: DrillSpec) -> list["RepEvent"]:
+    """On a single-hand drill, give every rep that named a hand the hand most of them named.
+
+    The phone does this too (settleHands in counter.js), but a phone can be running an older copy of the app, and the
+    report a coach reads is built from what is stored here. A tie changes nothing, and a rep whose hand was not read
+    stays "none": it is reported as not read, never given a hand nobody measured.
+    """
+    if not drill.tracks_handedness or drill.key not in SINGLE_HAND_DRILLS:
+        return reps
+    left = sum(1 for r in reps if r.hand == "left")
+    right = sum(1 for r in reps if r.hand == "right")
+    if left == right:
+        return reps
+    hand = "right" if right > left else "left"
+    return [replace(r, hand=hand) if r.hand in ("left", "right") and r.hand != hand else r for r in reps]
 
 
 @dataclass
@@ -235,9 +257,12 @@ def evaluate(
             notes.append("Reported hold time exceeds the session length.")
             return result
         if claim.hold_ms < drill.validation.min_duration_ms:
+            # A movement drill is timed while the athlete is moving; nothing is "held".
+            moving = drill.signal.kind is SignalKind.FOOTWORK_MOTION
             notes.append(
-                f"Hold of {claim.hold_ms / 1000:.0f}s is below the "
-                f"{drill.validation.min_duration_ms / 1000:.0f}s minimum."
+                (f"Moving for {claim.hold_ms / 1000:.0f}s of a {claim.duration_ms / 1000:.0f}s recording, below the "
+                 if moving else f"Hold of {claim.hold_ms / 1000:.0f}s is below the ")
+                + f"{drill.validation.min_duration_ms / 1000:.0f}s minimum."
             )
             score -= 0.40
 

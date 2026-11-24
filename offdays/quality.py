@@ -34,7 +34,7 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Any
 
-from .drills import DrillSpec, Metric
+from .drills import DrillSpec, Metric, SignalKind
 
 # A component score at or above this is worth praising rather than coaching.
 STRONG = 0.80
@@ -320,6 +320,8 @@ def analyze(
 
     # Hold drills have no reps, so quality is time spent genuinely in position.
     if drill.metric is Metric.HOLD_SECONDS:
+        if drill.signal.kind is SignalKind.FOOTWORK_MOTION:
+            return _analyze_moving(hold_ms, duration_ms)
         return _analyze_hold(hold_ms, duration_ms)
 
     usable = [r for r in reps if r.measurable]
@@ -378,6 +380,26 @@ def analyze(
                 report.offhand_rom_ratio = round(weak_rom / strong_rom, 3)
 
     report.coaching_note = _coaching_note(report, drill, dominant_hand)
+    return report
+
+
+def _analyze_moving(hold_ms: int, duration_ms: int) -> QualityReport:
+    """A movement drill (ground balls) is timed, not scored: how much of the recording the athlete was seen moving.
+
+    No score is given. The clock depends on the camera seeing the athlete from head to feet, so a low share can be a
+    framing problem as easily as standing about, and a form score built on it would be a guess.
+    """
+    report = QualityReport(measurable_reps=0)
+    if duration_ms <= 0:
+        report.coaching_note = "No timing data for this session."
+        return report
+    share = max(0.0, min(1.0, hold_ms / duration_ms))
+    if share >= 0.8:
+        report.coaching_note = "You kept moving nearly the whole time."
+    else:
+        report.coaching_note = (
+            f"The camera saw you moving for {share:.0%} of the recording. Keep the ball moving, and prop the phone "
+            "back far enough to see you from head to feet the whole time.")
     return report
 
 

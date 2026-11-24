@@ -58,7 +58,7 @@ from . import injury_history
 from . import roster_sync
 from . import technique
 from . import notifications as notify
-from .integrity import RepEvent, SessionClaim, evaluate
+from .integrity import SINGLE_HAND_DRILLS, RepEvent, SessionClaim, evaluate, settle_hands
 from .quality import QualityReport, RepFeature, analyze as analyze_quality
 from .scoring import (
     AthleteStats,
@@ -2342,7 +2342,14 @@ class Store:
                 "reps_seen": int(row["reps_seen"] or 0),
                 "left": int(row["reps_left"] or 0),
                 "right": int(row["reps_right"] or 0),
+                # What kind of number this drill produces, so a screen can say it in the right words: a movement
+                # drill is "moving 30s of 1m 19s", a plank is "held 30s", and neither has reps to show.
+                "measure": ("moving" if drill and drill.signal.kind is SignalKind.FOOTWORK_MOTION
+                            else "hold" if drill and drill.metric is Metric.HOLD_SECONDS else "reps"),
+                "sides": bool(drill and drill.tracks_handedness),
+                "one_hand": bool(drill and drill.key in SINGLE_HAND_DRILLS),
                 "hold_s": round(int(row["hold_ms"] or 0) / 1000),
+                "duration_s": round(int(row["duration_ms"] or 0) / 1000),
                 "minutes": round(int(row["duration_ms"] or 0) / 60000, 1),
                 "quality": row["quality_score"],
                 "xp": int(row["xp_awarded"] or 0),
@@ -3449,6 +3456,9 @@ class Store:
             mean_confidence=float(mean_confidence),
             client_version=client_version,
         )
+        # A strong-hand set is one hand. Settled here as well as on the phone, so an older copy of the app on a phone
+        # cannot store a set as part left and part right.
+        claim.reps = settle_hands(claim.reps, drill)
         # Counted before this session is written, so "your first one" is
         # recognised on the session that makes it true rather than the one
         # after it.
