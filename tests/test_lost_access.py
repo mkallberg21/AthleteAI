@@ -164,8 +164,10 @@ class TestTheParentPage:
 
 class TestWhatTheAthleteSees:
 
-    def test_a_dead_link_tells_the_child_to_ask_a_parent(self):
-        assert "Ask your parent to send you a new one." in INDEX
+    def test_a_dead_link_tells_the_child_what_to_do(self):
+        """Two ways back: ask a coach from this page (access_requests.py), or a new link from a parent."""
+        assert "Ask your coach to let you in below, or ask your parent to send you a new one." in INDEX
+        assert 'id="ask-card"' in INDEX.split('id="panel-athlete"', 1)[1].split('id="panel-parent"', 1)[0]
 
     def test_that_message_is_only_for_someone_who_tapped_a_link(self):
         assert "window.__linkTapped" in INDEX
@@ -183,7 +185,7 @@ class TestWhatTheAthleteSees:
         panel = INDEX.split('id="panel-athlete"', 1)[1].split('id="panel-parent"', 1)[0]
         assert 'id="signin-form" class="hidden"' in panel and 'id="err" class="form-error hidden" role="alert"' in panel
         assert "The code from your link" not in INDEX and "Lost the link?" not in INDEX
-        assert "Ask your parent to send you a new one" in INDEX
+        assert "ask your parent to send you a new one" in INDEX
 
 
 class TestTheLinkIsSomethingYouCanActuallySend:

@@ -160,7 +160,7 @@ offdays/
   assignments.py    Coach prescriptions and derived compliance
   notifications.py  Nudge generation, dedupe, and delivery channels
   leaderboard.py    Windowed boards, team standings, coach roster rollups
-  store.py          The largest SQL surface (~29% of queries; see dialect.py)
+  store.py          The largest SQL surface (~28% of queries; see dialect.py)
   api.py            FastAPI surface
   web/static/
     counter.js      On-device pose -> reps engine (shared spec with server)
@@ -2815,8 +2815,8 @@ prints it; and tests assert both that the README matches the code and that the
 tool is not over-counting itself.
 
 ```
-SQL lives in 49 modules across 751 call sites.
-store.py holds 29% of them.
+SQL lives in 50 modules across 771 call sites.
+store.py holds 28% of them.
 
 1382 occurrences are mechanical (search-and-replace with tests behind it).
 82 need judgement.

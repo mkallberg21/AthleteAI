@@ -17,7 +17,7 @@ from typing import Iterator
 
 from .config import CONFIG
 
-SCHEMA_VERSION = 39
+SCHEMA_VERSION = 40
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -1282,6 +1282,28 @@ CREATE TABLE IF NOT EXISTS login_links (
     used_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_login_links_user ON login_links(user_id);
+-- An athlete with no working link asks a coach to let them in (offdays/access_requests.py). The phone that asked
+-- holds a secret; only its hash is kept, and the hash of the sign-in it was swapped for once a coach said yes.
+-- athlete_id is NULL when the typed name matched nobody: the row exists so the phone cannot tell the difference.
+-- Never in a program export.
+CREATE TABLE IF NOT EXISTS access_requests (
+    id           INTEGER PRIMARY KEY,
+    athlete_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    org_id       INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+    device_hash  TEXT NOT NULL,
+    source_hash  TEXT NOT NULL DEFAULT '',
+    pair_code    TEXT NOT NULL,
+    typed_name   TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','denied','claimed')),
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    decided_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    decided_at   TEXT,
+    session_hash TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_access_requests_device ON access_requests(device_hash);
+CREATE INDEX IF NOT EXISTS idx_access_requests_org ON access_requests(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_access_requests_athlete ON access_requests(athlete_id);
 -- A parent's way back in: a one-time link emailed to an address the program gave us.
 -- Only a hash of the link is kept.
 CREATE TABLE IF NOT EXISTS parent_links (

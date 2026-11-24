@@ -241,12 +241,12 @@ def reset(conn: sqlite3.Connection, email: str, code: str, new_password: str) ->
 
 # ---------------------------------------------------------------- sessions
 
-def start_session(conn: sqlite3.Connection, user_id: int) -> str:
+def start_session(conn: sqlite3.Connection, user_id: int, days: int = SESSION_DAYS) -> str:
     token = _token()
     now = _now()
     conn.execute(
         "INSERT INTO staff_sessions(token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
-        (_token_digest(token), user_id, _iso(now), _iso(now + timedelta(days=SESSION_DAYS))),
+        (_token_digest(token), user_id, _iso(now), _iso(now + timedelta(days=days))),
     )
     # Quietly forget sessions that ended, so the table is the size of today.
     conn.execute("DELETE FROM staff_sessions WHERE expires_at < ?", (_iso(now),))

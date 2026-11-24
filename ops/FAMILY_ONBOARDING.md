@@ -65,8 +65,7 @@ involved. It is the first thing under the athlete's name: "Send <first> a new si
 /api/guardians/athlete-link/{id}`). It gives a link to text, email, share or copy. Each new link replaces the last
 everywhere, so a link that went astray or a lost phone is dealt with in one tap, and it is the same athlete with the
 same history. It needs the parent's yes to training first, and only that child's parent can do it (not the athlete, not
-a coach). What the athlete sees on a dead link: "This link does not work any more. Ask your parent to send you a new
-one." A director can see who has not signed in from the Home tab (Player page) and nudge the parent, but cannot mint an
+a coach). What the athlete sees on a dead link: "This link does not work any more. Ask your coach to let you in below, or ask your parent to send you a new one." A director can see who has not signed in from the Home tab (Player page) and nudge the parent, but cannot mint an
 athlete's link: a child's sign-in is the parent's to hand out.
 
 From here the system runs it: parents sign up and say yes, send the kid the
@@ -675,3 +674,31 @@ Rules:
 - It opens a parent account and nothing else (never a coach, director or athlete).
 - If nothing arrives, the reply tells the parent to ask their director to check the address on the roster.
 
+## An athlete with no way in: "Ask your coach to let you in"
+
+A child signs in with the link a parent sent. Links go missing: a new phone, a cleared browser, the app added to the
+home screen (on an iPhone that starts signed out), or a parent who made a newer link, which retires the old one. The
+child has no email address, so "Forgot your password?" is no use to them.
+
+On the athlete sign-in page the first card is "Ask your coach to let you in". The athlete types a first and last name
+and is shown a two digit number. The coaches of that athlete's teams and the program's directors see the request in a
+bar at the top of the dashboard, on every tab, within about 20 seconds, and get one email. One tap on "Let them in"
+signs in the phone that asked, and only that phone. The athlete does nothing more: the waiting page moves on by itself,
+and it still works if the page was closed and opened again later on the same phone.
+
+What keeps it safe (`offdays/access_requests.py`, `tests/test_access_requests.py`):
+
+- nobody gets in by asking. A coach or director who can already see that athlete has to say yes
+- the number on the phone is shown beside the request, so a coach who is unsure can ask what number is on the screen
+- only an athlete whose parent has said yes to training can be let in
+- the parent is emailed that a coach let their child in (held with the program's email hold). A new link from the
+  parent page signs out every phone, including one a coach let in, and closes any request still waiting
+- the answer to "ask" is the same whether or not the name matched, so the page cannot be used to learn who is on a team.
+  A name that matched nobody simply keeps waiting, which is why the waiting card says to check the spelling
+- the email to staff links only to the dashboard. Nothing in it can let anyone in, so a mail scanner opening links
+  does nothing
+- limits: three requests waiting per athlete, 30 an hour from one network, and a request lapses after three days
+- the phone stays signed in for 180 days
+
+Two athletes with exactly the same name in two programs: each program sees a request, and whichever coach says yes
+first decides who the phone is signed in as. The number is the check.

@@ -33,6 +33,7 @@ from . import __version__
 from .config import CONFIG
 from . import assignments as assignments_mod
 from . import sender_email as sender_email_mod
+from . import access_requests as access_mod
 from . import create_login as create_login_mod
 from . import signup as signup_mod
 from . import badge as badge_mod
@@ -1674,6 +1675,57 @@ def password_reset(
 
 class ForgotRequest(BaseModel):
     email: str = Field(max_length=200)
+
+
+class AccessAsk(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class AccessCheck(BaseModel):
+    secret: str = Field(max_length=200)
+
+
+@app.post("/api/access/ask")
+def access_ask(request: Request, body: AccessAsk, store: Store = Depends(get_store)) -> dict[str, Any]:
+    """An athlete with no working link asks their coach to let them in.
+
+    The reply is the same whether or not the name matched anyone. Nothing is sent to the athlete: the phone keeps the
+    secret returned here and asks /api/access/check until a coach has answered.
+    """
+    try:
+        return access_mod.ask(store.conn, body.name, _client_host(request))
+    except access_mod.AccessError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/access/check")
+def access_check(body: AccessCheck, store: Store = Depends(get_store)) -> dict[str, Any]:
+    """The waiting phone asks whether a coach has said yes. A yes is swapped for a sign-in exactly once."""
+    return access_mod.check(store.conn, body.secret)
+
+
+@app.get("/api/coach/access-requests")
+def access_requests_list(principal: Principal = Depends(_staff), store: Store = Depends(get_store)) -> dict[str, Any]:
+    """Athletes asking to be let in, for the coaches and directors who can already see them."""
+    return {"requests": access_mod.pending(
+        store.conn, principal.org_id, lambda aid: store.staff_can_see_athlete(principal, aid))}
+
+
+@app.post("/api/coach/access-requests/{request_id}/{answer}")
+def access_request_answer(
+    request_id: int, answer: str, principal: Principal = Depends(_staff), store: Store = Depends(get_store)
+) -> dict[str, Any]:
+    """One tap: `approve` signs in the phone that asked, `deny` closes the request."""
+    if answer not in ("approve", "deny"):
+        raise HTTPException(status_code=404, detail="not found")
+    can_see = lambda aid: store.staff_can_see_athlete(principal, aid)  # noqa: E731
+    try:
+        if answer == "approve":
+            return access_mod.approve(store.conn, request_id, principal.org_id, principal.id,
+                                      principal.display_name, can_see)
+        return access_mod.deny(store.conn, request_id, principal.org_id, principal.id, can_see)
+    except access_mod.AccessError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 class TokenRequest(BaseModel):

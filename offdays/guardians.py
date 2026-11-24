@@ -561,6 +561,9 @@ def athlete_signin_link(
             "claim_expires_at = NULL, link_sent_at = ? WHERE id = ?",
             (hash_token(token), _iso(_now()), athlete_id),
         )
+        # A new link is the parent's off switch for every phone, so it also signs out any phone a coach let in.
+        from . import access_requests
+        access_requests.end_sessions(c, athlete_id)
     return {
         "athlete_id": athlete_id,
         "athlete_name": athlete["display_name"],

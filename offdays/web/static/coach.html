@@ -47,6 +47,15 @@
 #home-card .home-kv { display:flex; gap:8px 14px; flex-wrap:nowrap; }
 #home-card .home-kv > div { flex:1 1 0; min-width:0; }
 #home-card .home-kv b { display:block; font-size:1.25rem; font-variant-numeric:tabular-nums; }
+#access-requests { max-width:1100px; margin:10px auto 0; padding:0 16px; box-sizing:border-box; }
+#access-requests .ar-row { display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; padding:12px 14px; margin:0 0 8px;
+  background:var(--surface-2); border:1px solid var(--accent); border-radius:var(--radius-sm); }
+#access-requests .ar-who { flex:1 1 260px; min-width:0; }
+#access-requests .ar-who b { font-size:1.02rem; }
+#access-requests .ar-num { font-weight:800; font-variant-numeric:tabular-nums; color:var(--accent-bright); }
+#access-requests .ar-acts { display:flex; gap:8px; }
+#access-requests .ar-acts .btn { white-space:nowrap; width:auto; }
+#access-requests .ar-done { border-color:var(--border); color:var(--text-muted); }
 </style>
 </head>
 <body>
@@ -63,6 +72,9 @@
   <div class="sponsor-logo"></div>
   <div class="sponsor-text">Sponsored by</div>
 </div>
+
+<!-- Athletes with no working link who asked to be let in. One tap signs in the phone that asked (access_requests.py). -->
+<div id="access-requests" class="hidden" role="region" aria-label="Athletes asking to be let in"></div>
 
 <div class="wrap wrap--grid">
   <div class="tabbar" id="tabbar" role="tablist" aria-label="Dashboard sections">
@@ -4129,6 +4141,52 @@ async function refreshEverything() {
   }
 }
 
+// ---- Athletes asking to be let in. Checked every 20 seconds while the dashboard is in front of the person, so a coach standing
+// next to the athlete sees it almost at once. One tap answers it.
+function arAgo(iso) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  return hours < 24 ? `${hours} hr ago` : `${Math.round(hours / 24)} days ago`;
+}
+const arDone = [];                 // what was just answered, shown for a moment so the tap visibly did something
+async function loadAccessRequests() {
+  let list = [];
+  try { list = (await api('/api/coach/access-requests')).requests || []; } catch (e) { return; }
+  const box = $('access-requests');
+  const rows = list.map((r) => `
+    <div class="ar-row" data-ar="${r.id}">
+      <div class="ar-who"><b>${esc(r.name)}</b>${r.teams.length ? ` <span class="muted">(${esc(r.teams.join(', '))})</span>` : ''}
+        is asking to be let in.
+        <div class="small muted">No working sign-in link. Number on their screen: <span class="ar-num">${esc(r.number)}</span>. Asked ${arAgo(r.asked_at)}.</div></div>
+      <div class="ar-acts">
+        <button type="button" class="btn btn-primary btn-sm" data-ar-yes="${r.id}">Let them in</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-ar-no="${r.id}">No</button>
+      </div>
+    </div>`);
+  const done = arDone.map((t) => `<div class="ar-row ar-done" role="status">${esc(t)}</div>`);
+  box.innerHTML = rows.concat(done).join('');
+  box.classList.toggle('hidden', !rows.length && !done.length);
+}
+$('access-requests').addEventListener('click', async (e) => {
+  const yes = e.target.closest('[data-ar-yes]'); const no = e.target.closest('[data-ar-no]');
+  const btn = yes || no;
+  if (!btn) return;
+  const id = yes ? yes.dataset.arYes : no.dataset.arNo;
+  btn.closest('.ar-row').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  let said;
+  try {
+    const out = await api(`/api/coach/access-requests/${id}/${yes ? 'approve' : 'deny'}`, { method: 'POST' });
+    said = yes ? `${out.name} is in. That phone is signed in now.` : `You said no to ${out.name}. Nothing was changed.`;
+  } catch (ex) { said = ex.message || 'That request is not there any more.'; }
+  arDone.push(said);
+  setTimeout(() => { arDone.splice(arDone.indexOf(said), 1); loadAccessRequests(); }, 8000);
+  loadAccessRequests();
+});
+setInterval(() => { if (!document.hidden && getToken()) loadAccessRequests(); }, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && getToken()) loadAccessRequests(); });
+
 // ------------------------------------------------------- evaluation export
 
 function evQuery() {
@@ -6114,6 +6172,7 @@ $('signout').addEventListener('click', logout);
       $('library-card').classList.add('hidden');
     });
     await loadAll();
+    loadAccessRequests();
     // Last, after every card has rendered: a new director's first visits are the walkthrough.
     await startWizardIfNew(orgs.role === 'director');
     keepFresh(refreshEverything);

@@ -86,7 +86,32 @@
       <button type="submit" id="go" tabindex="-1">Continue</button>
     </form>
 
-    <!-- Printed claim slips    </div>
+    <!-- No working link and no email address: the athlete asks, and a coach lets this one phone in (access_requests.py). -->
+    <div class="card" id="ask-card">
+      <div class="section-header"><span class="section-title">Ask your coach to let you in</span></div>
+      <div id="ask-start">
+        <p class="small muted" style="margin-top:0.25rem;">No link from your parent, or it stopped working? Type your name and your coach gets a request. One tap from your coach and this phone is signed in.</p>
+        <form id="ask-form" novalidate style="margin-top:0.5rem;">
+          <div class="form-group">
+            <label class="form-label" for="ask-name">Your first and last name</label>
+            <input id="ask-name" class="form-input" autocomplete="name" maxlength="120" placeholder="First and last name">
+            <div id="ask-err" class="form-error hidden"></div>
+          </div>
+          <button type="submit" class="btn btn-primary" id="ask-go">Ask my coach</button>
+        </form>
+      </div>
+      <div id="ask-wait" class="hidden" role="status">
+        <p style="margin:0.5rem 0 0;"><b>Your coach has been asked.</b></p>
+        <div id="ask-number" style="font-size:3rem;font-weight:800;line-height:1.1;margin:0.4rem 0;color:var(--accent);font-variant-numeric:tabular-nums;"></div>
+        <p class="small muted" style="margin:0;">That is your number. If your coach asks which number is on your screen, tell them.</p>
+        <p class="small muted" style="margin:0.6rem 0 0;">Keep this page open, or come back to it on this phone later. When your coach says yes, you are in. Nothing happening? Tell your coach you asked, and check you typed your name the way your team has it.</p>
+        <p style="margin:0.7rem 0 0;"><button type="button" class="btn btn-ghost btn-sm" id="ask-over">Start over</button></p>
+      </div>
+      <div id="ask-ended" class="hidden" role="alert">
+        <p id="ask-ended-text" style="margin:0.5rem 0 0.7rem;"></p>
+        <button type="button" class="btn btn-secondary" id="ask-again">Ask again</button>
+      </div>
+    </div>
 
     <!-- Printed claim slips (families with no email on file). Hidden unless a
          slip's ?claim= link brings someone here; the normal athlete path is the
@@ -537,7 +562,7 @@ async function signIn(token, { button, error }) {
   } catch (e) {
     button.disabled = false;
     error.textContent = (window.__linkTapped && /sign-in (expired|ended)/i.test(e.message || ''))
-      ? 'This link does not work any more. Ask your parent to send you a new one.'
+      ? 'This link does not work any more. Ask your coach to let you in below, or ask your parent to send you a new one.'
       : (e.message || 'Sign in failed. Check your code.');
     error.classList.remove('hidden');
   }
@@ -634,6 +659,70 @@ const LOGIN_HOMES = { athlete: 'capture.html', guardian: 'parent.html' };
     }
   }
 })();
+
+// ---- "Ask your coach to let you in". The phone keeps a secret; once a coach has said yes it is swapped, once, for a sign-in.
+const ASK_KEY = 'offdays.ask';
+let askTimer = null;
+function askSaved() { try { return JSON.parse(localStorage.getItem(ASK_KEY) || 'null'); } catch (e) { return null; } }
+function askShow(which) {
+  for (const id of ['ask-start', 'ask-wait', 'ask-ended']) $(id).classList.toggle('hidden', id !== which);
+}
+function askStop(message) {
+  clearInterval(askTimer); askTimer = null;
+  try { localStorage.removeItem(ASK_KEY); } catch (e) {}
+  if (message) { $('ask-ended-text').textContent = message; askShow('ask-ended'); } else askShow('ask-start');
+}
+async function askCheck() {
+  const saved = askSaved();
+  if (!saved || document.hidden) return;
+  let out;
+  try {
+    const res = await fetch('/api/access/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: saved.secret }) });
+    if (!res.ok) return;
+    out = await res.json();
+  } catch (e) { return; }                       // offline: keep waiting
+  if (out.status === 'approved' && out.token) {
+    clearInterval(askTimer);
+    try { localStorage.removeItem(ASK_KEY); } catch (e) {}
+    setToken(out.token);
+    window.location.href = 'capture.html';
+  } else if (out.status === 'denied') {
+    askStop('Your coach did not let this one through. Talk to your coach, or ask your parent to send you a new link.');
+  } else if (out.status === 'expired') {
+    askStop('Nobody answered in time. Ask again, and tell your coach you asked.');
+  } else if (out.status === 'used') {
+    askStop('');
+  }
+}
+function askWait() {
+  const saved = askSaved();
+  if (!saved) return;
+  $('ask-number').textContent = saved.number;
+  askShow('ask-wait');
+  clearInterval(askTimer);
+  askTimer = setInterval(askCheck, 4000);
+  askCheck();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) askCheck(); });
+$('ask-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('ask-err'); err.classList.add('hidden');
+  const name = $('ask-name').value.trim();
+  if (name.split(/\s+/).length < 2) return showFieldError(err, 'Type your first and last name.');
+  const btn = $('ask-go'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/access/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || 'That did not go through. Try again.');
+    localStorage.setItem(ASK_KEY, JSON.stringify({ secret: body.secret, number: body.number }));
+    $('ask-name').value = '';
+    askWait();
+  } catch (ex) { showFieldError(err, ex.message); } finally { btn.disabled = false; }
+});
+$('ask-over').addEventListener('click', () => askStop(''));
+$('ask-again').addEventListener('click', () => askStop(''));
 
 // The link in the "finish creating your login" email: choose a password, and you are signed in.
 let createToken = '';
@@ -962,8 +1051,11 @@ if (parentLink) {
   // the four buttons are the page.
   const hash = window.location.hash.replace('#', '');
   if (ROLES.includes(hash)) showRole(hash, { focus: false });
+  // An athlete who asked a coach to let them in and came back: straight to the waiting number.
+  else if (!hash && askSaved()) showRole('athlete', { focus: false });
   if (hash === 'family') { showRole('parent', { focus: false }); $('family-card').classList.remove('hidden'); }
 }
+askWait();
 </script>
 </body>
 </html>
