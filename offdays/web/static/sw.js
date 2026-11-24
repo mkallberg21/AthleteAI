@@ -7,7 +7,7 @@
  * fetch by showing what they already have.
  */
 
-const CACHE = 'offdays-shell-v37';
+const CACHE = 'offdays-shell-v38';
 
 // Pages where the server enforces rules the page must match (agree to terms at sign-up, the director's dashboard,
 // the parent's consent screens). A saved copy of one of these from before a release shows the old form while the
@@ -40,6 +40,8 @@ const SHELL = [
   'autorefresh.js',
   'mylogin.js',
   'counter.js',
+  // Form cues during a hold; imported by the capture screen, so it has to be here for the screen to load offline.
+  'formcue.js',
   // Wall ball counts by ear. The worklet is only fetched the first time a
   // wall-ball drill opens the microphone, which may well be in a driveway.
   'sound.js',

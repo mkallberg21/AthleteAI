@@ -492,6 +492,7 @@ import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
          sampleColour, MIN_SAMPLE_SHARE }
   from './ballvision.js';
 import { RepCounter, HoldWatch, holdPausedMessage } from './counter.js';
+import { FormCoach } from './formcue.js';
 import { SoundRepCounter, openMicrophone } from './sound.js';
 import { ShotSpeedCounter } from './shotspeed.js';
 import { SetupGate } from './setup.js';
@@ -559,6 +560,17 @@ let stopPitch = null;
 let session = null;
 let running = false;
 let holdWatch = new HoldWatch();   // notices a timed drill's clock standing still
+// Spoken form cues ("bend your knees a little more"). Built and tested against a model skeleton, not yet against real video,
+// so it is off unless the page is opened with ?formcues=1 (remembered on that phone; ?formcues=0 turns it off again).
+const FORM_CUES_ON = (() => {
+  try {
+    const asked = new URLSearchParams(location.search).get('formcues');
+    if (asked === '1') localStorage.setItem('offdays.formcues', 'on');
+    if (asked === '0') localStorage.removeItem('offdays.formcues');
+    return localStorage.getItem('offdays.formcues') === 'on';
+  } catch { return false; }
+})();
+let formCoach = null;
 let rafId = null;
 let startedAt = 0;
 let lastVideoTime = -1;
@@ -1979,8 +1991,15 @@ function renderLoop() {
     // Live framing feedback. Bad framing is the top cause of a session being
     // held for review, and it is trivially fixable *while* recording.
     const conf = counter.meanConfidence;
+    const formCue = formCoach ? formCoach.update({
+      landmarks, value: counter.smoothed, aspect: video.videoWidth / (video.videoHeight || 1), now: performance.now(),
+    }) : null;
     if (conf > 0 && conf < 0.6) {
       setBanner('Move so your whole body is in frame, or reps may be missed.', true);
+    } else if (formCue) {
+      // One instruction at a time, said aloud: nobody reads a phone in the middle of a wall sit.
+      setBanner(formCue.text, formCue.key !== 'good');
+      if (formCue.say) callOut(formCue.text);
     } else if (activeDrill.metric === 'hold' && holdWatch.update(counter.holdMs, performance.now()) === 'paused') {
       // A timed drill whose clock has stopped: say so now, while turning the phone still fixes it.
       setBanner(holdPausedMessage(activeDrill), true);
@@ -2401,6 +2420,7 @@ async function startSession() {
 
   setupGate = null;
   holdWatch = new HoldWatch();
+  formCoach = FORM_CUES_ON && !soundCounter && FormCoach.supports(activeDrill) ? new FormCoach(activeDrill) : null;
   running = true;
   $('startstop').textContent = 'Finish';
   $('startstop').classList.add('danger');
