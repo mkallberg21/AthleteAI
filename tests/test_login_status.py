@@ -74,7 +74,7 @@ class TestTheReason:
     def test_on_file_but_never_chose_a_password(self, w):
         f = why(w)
         assert "never chose a password" in f["why"] and "Joel White" in f["why"]
-        assert "sign-in link" in f["do"]
+        assert "choose one" in f["do"] or "Ask again" in f["do"]
 
     def test_chose_a_password_but_never_confirmed_the_address(self, w):
         set_password(w)

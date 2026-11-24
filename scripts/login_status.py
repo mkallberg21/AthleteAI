@@ -69,8 +69,8 @@ def verdict(f: dict) -> tuple[str, str]:
         if f["people"]:
             who = f["people"][0]
             return (f"{who['display_name']} ({who['role']}) has this address on file but never chose a password, so "
-                    "there is no password to reset. They sign in with their link or code.",
-                    "Send them a new sign-in link from the Coaches list (a director: sign in with the director code).")
+                    "there is no password to reset. \"Forgot your password?\" sends them a link to choose one.",
+                    "Ask again from the sign-in page with this exact address, then check \"Recent email\" above.")
         return ("Nobody has this address. It may be misspelled, or they signed up with a different one.",
                 "Check the spelling, or look the person up by name.")
     if not login["confirmed_at"]:

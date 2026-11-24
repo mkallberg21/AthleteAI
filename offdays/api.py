@@ -1706,6 +1706,9 @@ def forgot_password(
         raise _throttled(exc) from None
     throttle.record_failure(store.conn, attempt)      # every ask counts, answered or not
     staff_mail_mod.send_reset(store.conn, body.email)
+    # Someone the program added who never chose a password has nothing to reset, and used to get silence. They get
+    # the "choose a password" link instead, sent to the address on file. It does nothing when a login already exists.
+    create_login_mod.start(store.conn, body.email)
     return {"ok": True, "message": staff_mail_mod.FORGOT_REPLY, "mail": staff_mail_mod.mail_available()}
 
 
