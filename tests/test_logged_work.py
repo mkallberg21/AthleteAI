@@ -223,7 +223,7 @@ class TestTheScreens:
         assert "logged by athlete" in self.page("coach.html")
 
     def test_the_cache_was_bumped_so_phones_pick_it_up(self):
-        assert "offdays-shell-v36" in self.page("sw.js")
+        assert "offdays-shell-v37" in self.page("sw.js")
 
 
 class TestALongRunOfLoggedDaysDoesNotRaiseALevel:

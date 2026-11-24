@@ -491,7 +491,7 @@ import { BallRepCounter, LANDMARK_INDEX } from './ball.js';
 import { BallVision, PRESETS, calibrate, radiusFromPose, workSize, ScaleMemory,
          sampleColour, MIN_SAMPLE_SHARE }
   from './ballvision.js';
-import { RepCounter } from './counter.js';
+import { RepCounter, HoldWatch, holdPausedMessage } from './counter.js';
 import { SoundRepCounter, openMicrophone } from './sound.js';
 import { ShotSpeedCounter } from './shotspeed.js';
 import { SetupGate } from './setup.js';
@@ -558,6 +558,7 @@ let sceneWatcher = null;
 let stopPitch = null;
 let session = null;
 let running = false;
+let holdWatch = new HoldWatch();   // notices a timed drill's clock standing still
 let rafId = null;
 let startedAt = 0;
 let lastVideoTime = -1;
@@ -1980,6 +1981,9 @@ function renderLoop() {
     const conf = counter.meanConfidence;
     if (conf > 0 && conf < 0.6) {
       setBanner('Move so your whole body is in frame, or reps may be missed.', true);
+    } else if (activeDrill.metric === 'hold' && holdWatch.update(counter.holdMs, performance.now()) === 'paused') {
+      // A timed drill whose clock has stopped: say so now, while turning the phone still fixes it.
+      setBanner(holdPausedMessage(activeDrill), true);
     } else {
       setBanner('');
     }
@@ -2396,6 +2400,7 @@ async function startSession() {
   }
 
   setupGate = null;
+  holdWatch = new HoldWatch();
   running = true;
   $('startstop').textContent = 'Finish';
   $('startstop').classList.add('danger');

@@ -3823,7 +3823,10 @@ function renderFilmLog(f) {
 function ddClock(sec) { return sec >= 60 ? `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s` : `${sec}s`; }
 function sessionWhat(s) {
   if (s.measure === 'moving') return `moving ${ddClock(s.hold_s)} of a ${ddClock(s.duration_s)} recording`;
-  if (s.measure === 'hold') return `held ${ddClock(s.hold_s)}`;
+  // A hold far shorter than the recording is said as both numbers: it usually means the camera could not see the position.
+  if (s.measure === 'hold') return s.duration_s > s.hold_s * 2 + 10
+    ? `held ${ddClock(s.hold_s)} of a ${ddClock(s.duration_s)} recording <span class="muted small">(the phone mostly could not see the position)</span>`
+    : `held ${ddClock(s.hold_s)}`;
   let side = '';
   if (s.sides && s.reps) {
     const unread = Math.max(0, s.reps - s.left - s.right);

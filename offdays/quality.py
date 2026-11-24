@@ -322,7 +322,7 @@ def analyze(
     if drill.metric is Metric.HOLD_SECONDS:
         if drill.signal.kind is SignalKind.FOOTWORK_MOTION:
             return _analyze_moving(hold_ms, duration_ms)
-        return _analyze_hold(hold_ms, duration_ms)
+        return _analyze_hold(hold_ms, duration_ms, drill)
 
     usable = [r for r in reps if r.measurable]
     report = QualityReport(measurable_reps=len(usable))
@@ -403,21 +403,38 @@ def _analyze_moving(hold_ms: int, duration_ms: int) -> QualityReport:
     return report
 
 
-def _analyze_hold(hold_ms: int, duration_ms: int) -> QualityReport:
-    """For a plank, quality is the share of the session actually held in position."""
+#: Below this share of a recording, a hold was not "held badly": the camera almost never saw the position at all,
+#: which is a camera-angle problem far more often than an effort problem. No form score is given for it.
+UNSEEN_SHARE = 0.15
+
+
+def _analyze_hold(hold_ms: int, duration_ms: int, drill: DrillSpec | None = None) -> QualityReport:
+    """For a hold, quality is the share of the session actually held in position."""
     report = QualityReport(measurable_reps=0)
     if duration_ms <= 0:
         report.coaching_note = "No timing data for this hold."
         return report
 
     share = max(0.0, min(1.0, hold_ms / duration_ms))
+    name = drill.name.lower() if drill else "hold"
+    if share < UNSEEN_SHARE and duration_ms >= 20_000:
+        # A wall sit filmed from the front reads as no wall sit at all. Saying "only 1% was real" to an athlete who
+        # held it for two minutes is wrong and unkind; say what the clock needs instead, and give no score.
+        hint = f" {drill.setup_hint}" if drill and drill.setup_hint else ""
+        report.coaching_note = (
+            f"The clock ran for {hold_ms / 1000:.0f}s of a {duration_ms / 1000:.0f}s recording, so the phone could "
+            f"not see your {name} for most of it. That is usually the camera angle, not your effort.{hint}")
+        return report
     score = _ramp(share, 0.92, 0.45)
     if share >= 0.92:
         detail = "You held the line the whole way. That's the hard part."
     elif share >= 0.7:
-        detail = f"You were in position {share:.0%} of the time -- hips are dropping."
+        detail = (f"You were in position {share:.0%} of the time -- hips are dropping." if "plank" in name
+                  else f"You were in position {share:.0%} of the time. Hold the shape the whole way.")
     else:
-        detail = f"Only {share:.0%} of that was a real plank. Shorter and stricter beats longer and sagging."
+        detail = (f"Only {share:.0%} of that was a real plank. Shorter and stricter beats longer and sagging."
+                  if "plank" in name else
+                  f"You were in position for {share:.0%} of that. Shorter and stricter beats longer and loose.")
 
     report.components = [Component("position", "Position held", score, detail)]
     report.weakest = "position"

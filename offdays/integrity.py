@@ -261,7 +261,7 @@ def evaluate(
             moving = drill.signal.kind is SignalKind.FOOTWORK_MOTION
             notes.append(
                 (f"Moving for {claim.hold_ms / 1000:.0f}s of a {claim.duration_ms / 1000:.0f}s recording, below the "
-                 if moving else f"Hold of {claim.hold_ms / 1000:.0f}s is below the ")
+                 if moving else f"Hold of {claim.hold_ms / 1000:.0f}s in a {claim.duration_ms / 1000:.0f}s recording is below the ")
                 + f"{drill.validation.min_duration_ms / 1000:.0f}s minimum."
             )
             score -= 0.40

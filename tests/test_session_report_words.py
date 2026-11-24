@@ -110,7 +110,7 @@ class TestMovementDrillWords:
 
     def test_a_real_plank_keeps_its_own_words(self):
         plank = next(d for d in DRILLS_BY_KEY.values()
-                     if d.metric.name == "HOLD_SECONDS" and d.signal.kind.name != "FOOTWORK_MOTION" and d.quality)
+                     if d.metric.name == "HOLD_SECONDS" and "plank" in d.name.lower() and d.quality)
         assert "plank" in quality.analyze(plank, [], hold_ms=10_000, duration_ms=60_000).coaching_note
 
     def test_the_note_on_a_short_session_says_moving_not_hold(self):

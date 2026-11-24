@@ -395,6 +395,35 @@ export function settleHands(reps, spec) {
 }
 
 /**
+ * Notices when a timed drill's clock has stopped, so the athlete can be told while it can still be fixed.
+ *
+ * A hold is only timed while the camera can see the position (a wall sit: the knee near a right angle, seen from the
+ * side). An athlete facing the phone can hold for two minutes and be credited a second, and the only sign was a number
+ * that did not move. Feed it the clock every frame; it says 'paused' once the clock has stood still for PAUSE_AFTER_MS
+ * while a person is in frame, and 'running' again as soon as it moves.
+ */
+export class HoldWatch {
+  static PAUSE_AFTER_MS = 2500;
+
+  constructor() { this.lastMs = 0; this.movedAt = null; }
+
+  /** `holdMs` is the clock so far, `now` any steadily rising time in ms. Returns 'running' or 'paused'. */
+  update(holdMs, now) {
+    if (this.movedAt === null || holdMs > this.lastMs) { this.movedAt = now; this.lastMs = holdMs; }
+    return now - this.movedAt >= HoldWatch.PAUSE_AFTER_MS ? 'paused' : 'running';
+  }
+}
+
+/** What to tell an athlete whose clock has stopped: what the clock needs, in the drill's own setup words. */
+export function holdPausedMessage(drill) {
+  const moving = !!(drill && drill.signal && drill.signal.kind === 'footwork_motion');
+  const hint = drill && drill.setup_hint ? ` ${drill.setup_hint}` : '';
+  return moving
+    ? `The clock is paused. It runs while you are moving and the phone can see you from head to feet.${hint}`
+    : `The clock is paused because the phone cannot see you in position.${hint}`;
+}
+
+/**
  * Which of the nine cells the hands are in.
  *
  * Reach counts the rep; this recovers the direction the rep went, which on a
