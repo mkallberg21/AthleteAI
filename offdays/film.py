@@ -33,8 +33,11 @@ for the youngest, and when it is spent the app says so and stops.
 from __future__ import annotations
 
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import parse_qs, quote, urlsplit
 
 #: Beats arrive every few seconds. Anything much longer is a tab that was
 #: backgrounded or a connection that dropped, and the gap is not credited.
@@ -103,15 +106,29 @@ def band_for(age: int | None, estimated: bool = False) -> FilmBand:
 # Clips
 # ---------------------------------------------------------------------------
 
-PROVIDERS = ("youtube", "link", "instagram", "upload")
+PROVIDERS = ("youtube", "link", "instagram", "facebook", "upload")
 
-#: Providers whose player reports position, mute and speed, so a watch can be scored. Instagram's embed reports
-#: nothing at all: all that can be known is that the athlete opened it.
+#: Providers whose player reports position, mute and speed, so a watch can be scored. Instagram's and Facebook's embeds
+#: report nothing at all: all that can be known is that the athlete opened it.
 TRACKED = ("youtube", "upload")
+
+#: Clips that play in another company's own embedded player and report nothing back. We never download or keep the
+#: video: what is stored is the kind and the id, and the athlete's browser loads the player from that company.
+EMBEDDED = ("instagram", "facebook")
 
 #: Instagram's own minimum age. A clip from it is never offered to a younger athlete, or to one whose age is unknown
 #: or estimated (guess low, as everywhere else): the embed loads Instagram in that child's browser.
 INSTAGRAM_MIN_AGE = 13
+#: Facebook's own minimum age, for the same reason.
+FACEBOOK_MIN_AGE = 13
+EMBED_MIN_AGE = {"instagram": INSTAGRAM_MIN_AGE, "facebook": FACEBOOK_MIN_AGE}
+PROVIDER_NAMES = {"youtube": "YouTube", "instagram": "Instagram", "facebook": "Facebook"}
+
+
+def embed_too_young(provider: str, age: int | None, estimated: bool = False) -> bool:
+    """True when this athlete must not be shown a clip from this provider's player."""
+    floor = EMBED_MIN_AGE.get(provider)
+    return floor is not None and (age is None or estimated or age < floor)
 
 _INSTAGRAM_URL = re.compile(
     r"(?:^|//|\.)instagram\.com/(?:[A-Za-z0-9_.]{1,30}/)?(p|reel|reels|tv)/([A-Za-z0-9_-]{5,40})(?:[/?#]|$)"
@@ -133,6 +150,137 @@ def parse_instagram(raw: str) -> str | None:
         return None
     kind = "reel" if found.group(1) == "reels" else found.group(1)
     return f"{kind}/{found.group(2)}"
+
+# ---- Facebook
+#
+# A Facebook video is only ever played in Facebook's own embedded player. Nothing is downloaded, converted or kept: that
+# would be re-hosting somebody else's video. What is stored is "reel/<number>" or "video/<number>".
+_FACEBOOK_HOSTS = ("facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "mbasic.facebook.com")
+_FACEBOOK_SHORT_HOSTS = ("fb.watch", "www.fb.watch")
+_FACEBOOK_ID = re.compile(r"^(reel|video)/[0-9]{6,25}$")
+_FB_REEL = re.compile(r"^/reel/([0-9]{6,25})/?$")
+_FB_VIDEOS = re.compile(r"^/[^/]{1,80}/videos/(?:[^/]{1,200}/)?([0-9]{6,25})/?$")
+_FB_SHARE = re.compile(r"^/share/(?:r|v)/[A-Za-z0-9_-]{4,40}/?$")
+_FB_SHORT = re.compile(r"^/[A-Za-z0-9_-]{4,40}/?$")
+
+
+def _facebook_parts(raw: str):
+    """(host, path, query) of a pasted Facebook link, or None when it is not one. The host has to BE Facebook's:
+    a link that merely mentions facebook.com somewhere in it is not a Facebook link."""
+    text = (raw or "").strip()
+    if not text or len(text) > 600 or any(c.isspace() for c in text):
+        return None
+    if "://" not in text:
+        text = "https://" + text
+    try:
+        parts = urlsplit(text)
+        host = (parts.hostname or "").lower()
+        port, user = parts.port, parts.username
+    except ValueError:
+        return None
+    if parts.scheme not in ("http", "https") or user or port not in (None, 80, 443):
+        return None
+    if host not in _FACEBOOK_HOSTS and host not in _FACEBOOK_SHORT_HOSTS:
+        return None
+    return host, parts.path or "/", parts.query
+
+
+def parse_facebook(raw: str) -> str | None:
+    """'reel/<number>' or 'video/<number>' from a Facebook reel or video link, else None.
+
+    Only the kind and the number are kept, never the link as pasted: a share link carries parameters that say who
+    shared it, and what is stored is interpolated into an embed address.
+    """
+    text = (raw or "").strip()
+    if _FACEBOOK_ID.match(text):
+        return text
+    parts = _facebook_parts(text)
+    if parts is None or parts[0] in _FACEBOOK_SHORT_HOSTS:
+        return None
+    _host, path, query = parts
+    found = _FB_REEL.match(path)
+    if found:
+        return f"reel/{found.group(1)}"
+    found = _FB_VIDEOS.match(path)
+    if found:
+        return f"video/{found.group(1)}"
+    if path.rstrip("/") in ("/watch", "/video.php", "/watch/live"):
+        number = (parse_qs(query).get("v") or [""])[0]
+        if re.fullmatch(r"[0-9]{6,25}", number):
+            return f"video/{number}"
+    return None
+
+
+def facebook_share(raw: str) -> str | None:
+    """The clean address of a Facebook SHARE link (facebook.com/share/r/..., fb.watch/...), else None.
+
+    A share link does not say which video it is. Facebook has to be asked (resolve_facebook), and only this cleaned
+    address, with the "who shared it" parameters dropped, is ever sent.
+    """
+    parts = _facebook_parts(raw)
+    if parts is None:
+        return None
+    host, path, _query = parts
+    if host in _FACEBOOK_SHORT_HOSTS:
+        return f"https://fb.watch{path}" if _FB_SHORT.match(path) else None
+    return f"https://www.facebook.com{path}" if _FB_SHARE.match(path) else None
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):          # noqa: D401 - never follow: the Location is the answer
+        return None
+
+
+def _facebook_location(url: str) -> str | None:
+    """Where Facebook says a share link points. One request, the reply's Location header and nothing else: the page
+    is not read and the video is never fetched."""
+    request = urllib.request.Request(url, method="GET", headers={"User-Agent": "0FFDAYS/1.0 (+https://app.0ffdays.com)"})
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(request, timeout=6) as reply:
+            return reply.headers.get("Location")
+    except urllib.error.HTTPError as exc:                # a 301/302 arrives here because it was not followed
+        return exc.headers.get("Location") if exc.code in (301, 302, 303, 307, 308) else None
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def resolve_facebook(raw: str, locate=None) -> str | None:
+    """'reel/<number>' or 'video/<number>' for a Facebook share link, by asking Facebook where it points.
+
+    At most three hops, each of which has to be a Facebook address (so this can never be pointed at anything else),
+    and it stops the moment a hop names a video. None when Facebook will not say.
+    """
+    locate = locate or _facebook_location
+    url = facebook_share(raw)
+    for _hop in range(3):
+        if url is None:
+            return None
+        where = locate(url)
+        if not where:
+            return None
+        parts = _facebook_parts(where)
+        if parts is None:
+            return None
+        found = parse_facebook(where)
+        if found:
+            return found
+        # A sign-in wall that still names the video it would have shown.
+        onward = (parse_qs(parts[2]).get("next") or [""])[0]
+        found = parse_facebook(onward) if onward else None
+        if found:
+            return found
+        url = facebook_share(where)
+    return None
+
+
+def facebook_page_url(video_id: str) -> str:
+    """The video's own page on Facebook, built from the stored kind and number."""
+    if not _FACEBOOK_ID.match(video_id or ""):
+        return ""
+    kind, number = video_id.split("/", 1)
+    return f"https://www.facebook.com/reel/{number}/" if kind == "reel" else f"https://www.facebook.com/video.php?v={number}"
+
 
 #: YouTube ids are a fixed alphabet and length. Validated rather than trusted
 #: because this string is interpolated into an embed URL.
@@ -169,6 +317,10 @@ def embed_url(provider: str, video_id: str, start_s: int, end_s: int | None) -> 
         # Instagram's own embedded player for a public post. It plays without an account when Instagram allows it,
         # which is their decision per post and can change.
         return f"https://www.instagram.com/{video_id}/embed/" if _INSTAGRAM_ID.match(video_id) else ""
+    if provider == "facebook":
+        # Facebook's own embedded player for a public video or reel. No autoplay: with it the player starts muted.
+        page = facebook_page_url(video_id)
+        return f"https://www.facebook.com/plugins/video.php?href={quote(page, safe='')}&show_text=false&width=360" if page else ""
     if provider == "upload":
         # A coach's own file. Its address carries a key made for one person (staff_film.media_url), so it is
         # handed out when a watch starts, never in a list.
@@ -285,7 +437,7 @@ class Clip:
         return max(0, self.end_s - self.start_s)
 
     def suits(self, age: int | None, band: FilmBand, estimated: bool = False) -> bool:
-        if self.provider == "instagram" and (age is None or estimated or age < INSTAGRAM_MIN_AGE):
+        if embed_too_young(self.provider, age, estimated):
             return False
         if self.length_s and self.length_s > band.clip_max_s:
             return False
@@ -311,6 +463,10 @@ class Clip:
             "shelf": self.shelf,
             "credit": self.credit,
             "tracked": self.provider in TRACKED,
+            # The clip's own page on the other company's site, for the "open it there" link when their player will
+            # not show it inside ours.
+            "page_url": (facebook_page_url(self.video_id) if self.provider == "facebook"
+                         else f"https://www.instagram.com/{self.video_id}/" if self.provider == "instagram" else ""),
         }
 
 

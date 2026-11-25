@@ -4683,7 +4683,7 @@ class NewClip(BaseModel):
     video: str = Field(min_length=5, max_length=500)
     title: str = Field(min_length=1, max_length=160)
     focus: str = Field(default="", max_length=400)
-    provider: Literal["youtube", "link", "instagram"] = "youtube"
+    provider: Literal["youtube", "link", "instagram", "facebook"] = "youtube"
     start_s: int = Field(default=0, ge=0, le=86_400)
     end_s: int | None = Field(default=None, ge=1, le=86_400)
     positions: list[str] = Field(default_factory=list, max_length=8)
@@ -5003,6 +5003,7 @@ def list_clips(
             "max_s": max(b.clip_max_s for b in film_mod.BANDS),
         },
         "instagram_min_age": film_mod.INSTAGRAM_MIN_AGE,
+        "embed_min_age": dict(film_mod.EMBED_MIN_AGE),
     }
 
 
@@ -5012,13 +5013,29 @@ def create_clip(
     principal: Principal = Depends(_staff),
     store: Store = Depends(get_store),
 ) -> dict[str, Any]:
-    # A pasted Instagram link is an Instagram clip whichever box it was pasted into.
-    provider = "instagram" if film_mod.parse_instagram(body.video) else body.provider
+    # A pasted Instagram or Facebook link is that kind of clip whichever box it was pasted into.
+    video = body.video
+    if film_mod.parse_instagram(video):
+        provider = "instagram"
+    elif film_mod.parse_facebook(video):
+        provider = "facebook"
+    elif film_mod.facebook_share(video):
+        # A share link (facebook.com/share/r/..., fb.watch/...) does not say which video it is. Facebook is asked
+        # where it points; the video itself is never fetched.
+        found = film_mod.resolve_facebook(video)
+        if found is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Facebook would not say which video that share link is. Open the link, then copy the address "
+                       "from the top of the browser (it has /reel/ or /videos/ and a long number) and paste that.")
+        provider, video = "facebook", found
+    else:
+        provider = body.provider
     # Watching is scored as the share of the clip seen, so a clip with no end has
     # no length and can never be finished: it would sit on the shelf scoring
     # "partial" for every athlete who watched it properly. (Instagram's player
     # reports nothing, so there is no length to give and nothing to score.)
-    if body.end_s is None and provider != "instagram":
+    if body.end_s is None and provider not in film_mod.EMBEDDED:
         raise HTTPException(
             status_code=400,
             detail="Give the clip an end time (in seconds). Without one nobody can "
@@ -5026,7 +5043,7 @@ def create_clip(
         )
     try:
         return store.create_clip(
-            principal.org_id, body.video, body.title,
+            principal.org_id, video, body.title,
             focus=body.focus, provider=provider,
             start_s=body.start_s, end_s=body.end_s, positions=body.positions,
             min_age=body.min_age, max_age=body.max_age,

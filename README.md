@@ -2066,6 +2066,19 @@ code are stored, and it plays in Instagram's own embedded player. Three things f
   estimated ages are treated as younger). The same check is made again when a watch starts. The frame is created only
   when a clip is opened, so nobody else's browser ever contacts Instagram
 
+**Facebook** (`film.parse_facebook`, provider `facebook`) is the same arrangement as Instagram: a public reel or
+video plays in Facebook's own embedded player, a watch is recorded as **opened**, and it is offered only to athletes 13
+and over with a known birth year (`EMBEDDED`, `EMBED_MIN_AGE`). Only `reel/<number>` or `video/<number>` is stored.
+
+- the video is never downloaded, converted or kept. That would be re-hosting somebody else's work; a test fails if any
+  module starts fetching one
+- a share link (`facebook.com/share/r/...`, `fb.watch/...`) does not say which video it is, so the server asks Facebook
+  once where it points (`film.resolve_facebook`): one request, the `Location` header only, never followed, at most three
+  hops, and every hop has to be a Facebook address. If Facebook will not say, the coach is told how to copy the real one
+- on an iPhone Facebook's player may show only a "View Video" button that opens the reel on Facebook. The athlete's
+  screen offers that page as a link for the same reason. Checked playing inline on an Android profile and a desktop
+  browser; not checked on a real iPhone
+
 **A coach's own video** (`staff_film.py`, provider `upload`, `POST /api/coach/clips/file`). This is the one case where
 the file is kept here, and it is deliberately not the same thing as an athlete's training video, which still never
 leaves the phone: only staff can call the route, and the coach confirms it is theirs to share.

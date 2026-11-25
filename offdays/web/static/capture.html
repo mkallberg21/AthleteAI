@@ -408,7 +408,7 @@
       <h1 id="film-title">Clip</h1>
       <p class="small" id="film-focus"></p>
       <p class="small muted" id="film-credit" style="margin:2px 0 8px"></p>
-      <p class="small muted hidden" id="film-untracked" style="margin:0 0 8px">This one plays in Instagram's own player. Your coach can see that you opened it, not how much you watched. <a href="#" id="film-wont-show">Not showing?</a></p>
+      <p class="small muted hidden" id="film-untracked" style="margin:0 0 8px">This one plays in <span id="film-from">Instagram</span>'s own player. Your coach can see that you opened it, not how much you watched. <span id="film-open-there" class="hidden">If you only see a button and no video, <a href="#" id="film-page" target="_blank" rel="noopener noreferrer">open it on Facebook</a>. </span><a href="#" id="film-wont-show">Not showing?</a></p>
       <div class="film-frame" id="film-frame"><div id="film-player"></div></div>
       <div id="film-broken" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--border);border-radius:10px">
         <b>That video will not play on this phone.</b>
@@ -789,9 +789,11 @@ let filmWatch = null;
 let filmBeat = null;
 let filmClip = null;
 
-// What the list says under a clip. Instagram's player gives no length, so it says where it plays instead.
+// Clips that play in another company's own player, which reports nothing back: opened is all that is known.
+const EMBEDDED_FROM = { instagram: 'Instagram', facebook: 'Facebook' };
+// What the list says under a clip. Those players give no length, so it says where it plays instead.
 function clipLength(c) {
-  if (c.provider === 'instagram') return 'From Instagram';
+  if (EMBEDDED_FROM[c.provider]) return `From ${EMBEDDED_FROM[c.provider]}`;
   return `${Math.round(c.length_s)} seconds${c.provider === 'upload' ? ' &middot; from your coach' : ''}`;
 }
 
@@ -820,7 +822,7 @@ async function loadFilm() {
   $('film-again').innerHTML = again.map((c, i) => `
     <button class="drill-btn" data-again="${i}">
       <b>${esc(c.title)}</b>
-      <span class="transfer-inline">${clipLength(c)} &middot; ${c.provider === 'instagram' ? 'open again' : 'watch again'}</span>
+      <span class="transfer-inline">${clipLength(c)} &middot; ${EMBEDDED_FROM[c.provider] ? 'open again' : 'watch again'}</span>
     </button>`).join('');
   $('film-again').dataset.clips = JSON.stringify(again);
 }
@@ -875,14 +877,19 @@ async function openClip(clip) {
   $('film-title').textContent = clip.title;
   $('film-focus').textContent = clip.focus;
   $('film-credit').textContent = clip.provider === 'upload' ? 'From your coach.'
-    : clip.provider === 'instagram' ? ''
+    : EMBEDDED_FROM[clip.provider] ? ''
     : clip.credit ? `From ${clip.credit}. Plays in YouTube's own player.` : '';
   $('film-broken').classList.add('hidden');
   $('film-question').classList.add('hidden');
   $('film-because').textContent = '';
   $('film-progress').style.width = '0%';
-  const tracked = clip.provider !== 'instagram';
+  const tracked = !EMBEDDED_FROM[clip.provider];
   $('film-untracked').classList.toggle('hidden', tracked);
+  $('film-from').textContent = EMBEDDED_FROM[clip.provider] || '';
+  // Facebook's player sometimes shows only a button on a phone. Its own page is the way round that.
+  const there = clip.provider === 'facebook' && /^https:\/\/www\.facebook\.com\//.test(clip.page_url || '');
+  $('film-open-there').classList.toggle('hidden', !there);
+  $('film-page').href = there ? clip.page_url : '#';
   $('film-progress').parentElement.classList.toggle('hidden', !tracked);
   $('film-state').textContent = tracked ? 'Sound on, screen on. That is the whole trick.' : '';
 
@@ -890,9 +897,9 @@ async function openClip(clip) {
     filmWatch = await api(`/api/film/${clip.id}/start`, { method: 'POST' });
   } catch (e) { showError(e.message); show('home'); return; }
 
-  if (clip.provider === 'instagram') {
-    // Instagram's embedded player for a public post. It is loaded only now, so an athlete who
-    // never opens one of these never talks to Instagram at all.
+  if (EMBEDDED_FROM[clip.provider]) {
+    // Instagram's or Facebook's embedded player for a public post. It is loaded only now, so an athlete
+    // who never opens one of these never talks to that company at all. The video is theirs and stays theirs.
     const frame = document.createElement('iframe');
     frame.src = clip.embed_url;
     frame.title = clip.title;

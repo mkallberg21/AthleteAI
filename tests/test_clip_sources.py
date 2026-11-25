@@ -425,7 +425,7 @@ class TestWhatDidNotChange:
 class TestTheScreens:
     def test_the_athlete_page_plays_all_three_kinds(self):
         page = (STATIC / "capture.html").read_text(encoding="utf-8")
-        assert "clip.provider === 'instagram'" in page and "clip.provider === 'upload'" in page
+        assert "EMBEDDED_FROM[clip.provider]" in page and "clip.provider === 'upload'" in page
         assert "filmWatch.media_url" in page and "frame.src = clip.embed_url" in page
         assert "Your coach can see that you opened it, not how much you watched." in page
         assert 'id="film-wont-show"' in page
@@ -437,9 +437,9 @@ class TestTheScreens:
 
     def test_the_coach_page_says_what_an_instagram_clip_cannot_do(self):
         page = (STATIC / "coach.html").read_text(encoding="utf-8")
-        for phrase in ("It must be from a <b>public</b> account", "not how much they watched", "Instagram's own minimum age is 13",
+        for phrase in ("It must be <b>public</b>", "not how much they watched", "'s own minimum age is 13",
                        "This is my video to share, and the people in it are fine with the team seeing it.",
-                       "'/api/coach/clips/file'", "opened (Instagram does not say more)"):
+                       "'/api/coach/clips/file'", "opened (that player does not say more)"):
             assert phrase in page, phrase
         assert "Nothing is uploaded or re-hosted" not in page
 

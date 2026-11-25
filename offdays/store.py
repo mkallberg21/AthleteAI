@@ -771,6 +771,13 @@ class Store:
             # Instagram's player gives no start, end or length, so there is nothing to trim and nothing to time.
             start_s, end_s = 0, None
             min_age = max(int(min_age), film.INSTAGRAM_MIN_AGE)
+        elif provider == "facebook":
+            # Only ever a pointer to Facebook's own player: the kind and the number. The video is not fetched or kept.
+            video_id = film.parse_facebook(raw_video)
+            if video_id is None:
+                raise StoreError("that does not look like a link to a Facebook video or reel")
+            start_s, end_s = 0, None
+            min_age = max(int(min_age), film.FACEBOOK_MIN_AGE)
         elif provider == "upload":
             video_id = (raw_video or "").strip()
             if staff_film.path_for(video_id) is None:
@@ -1105,12 +1112,12 @@ class Store:
         if clip is None:
             raise StoreError("no clip with that id")
         provider = clip["provider"]
-        if provider == "instagram":
+        if provider in film.EMBEDDED:
             # Checked here as well as on the shortlist: the shortlist is only what the screen shows.
             who = self.conn.execute(
                 "SELECT birth_year, birth_year_estimated FROM users WHERE id = ?", (athlete_id,)).fetchone()
             age = day.year - int(who["birth_year"]) if who and who["birth_year"] else None
-            if age is None or (who and who["birth_year_estimated"]) or age < film.INSTAGRAM_MIN_AGE:
+            if film.embed_too_young(provider, age, bool(who and who["birth_year_estimated"])):
                 raise StoreError("no clip with that id")
         if provider == "upload" and not self.in_program(athlete_id, int(clip["org_id"])):
             raise StoreError("no clip with that id")
@@ -1159,7 +1166,7 @@ class Store:
             }
         # An Instagram clip is "opened" from the start and stays that way: its player says nothing about what was
         # played, so it is never called watched and never earns film XP.
-        first = film.Verdict.OPENED if provider == "instagram" else film.Verdict.PARTIAL
+        first = film.Verdict.OPENED if provider in film.EMBEDDED else film.Verdict.PARTIAL
         with transaction(self.conn) as conn:
             cur = conn.execute(
                 "INSERT INTO clip_watches(athlete_id, clip_id, day, started_at, "

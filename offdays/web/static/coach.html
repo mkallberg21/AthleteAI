@@ -781,7 +781,7 @@
   <div class="card" id="film-card">
     <h2>Film study</h2>
     <p class="small muted">
-      Short clips, curated by you. Paste a YouTube or Instagram link and athletes
+      Short clips, curated by you. Paste a YouTube, Instagram or Facebook link and athletes
       watch it in that company's own player, which means their browser talks to
       that company. Or upload a video you made, which plays from 0FFDAYS with nobody
       else involved. Keep clips to the moment that teaches something: they are capped
@@ -790,15 +790,16 @@
     <div id="film-watchers"></div>
     <details style="margin-top:12px">
       <summary class="small muted" style="cursor:pointer">Add a clip</summary>
-      <label for="clip-url">YouTube or Instagram link</label>
-      <input id="clip-url" placeholder="https://youtu.be/...  or  https://www.instagram.com/reel/...">
+      <label for="clip-url">YouTube, Instagram or Facebook link</label>
+      <input id="clip-url" placeholder="https://youtu.be/...  or an Instagram or Facebook reel link">
       <div id="clip-ig-note" class="small hidden" style="margin:6px 0;padding:10px;border:1px solid var(--border);border-radius:8px">
-        <b>An Instagram clip works differently.</b>
+        <b>A clip from <span class="clip-emb-name">Instagram</span> works differently.</b>
         <ul style="margin:6px 0 0;padding-left:18px">
-          <li>It must be from a <b>public</b> account. A private one will not show.</li>
-          <li>It plays in Instagram's own player. Players do not need an account when Instagram allows it, which is Instagram's choice and can change.</li>
-          <li>You will see who <b>opened</b> it, not how much they watched. Instagram does not report that, so it earns no film points.</li>
-          <li>It is shown only to players aged <span id="clip-ig-age">13</span> and over whose birth year you gave. Instagram's own minimum age is 13.</li>
+          <li>It must be <b>public</b>. A private one will not show.</li>
+          <li>It plays in <span class="clip-emb-name">Instagram</span>'s own player. 0FFDAYS does not copy or keep the video; it stays the owner's, on their page. Players do not need an account when <span class="clip-emb-name">Instagram</span> allows it, which is their choice and can change.</li>
+          <li>You will see who <b>opened</b> it, not how much they watched. <span class="clip-emb-name">Instagram</span> does not report that, so it earns no film points.</li>
+          <li>It is shown only to players aged <span id="clip-ig-age">13</span> and over whose birth year you gave. <span class="clip-emb-name">Instagram</span>'s own minimum age is 13.</li>
+          <li id="clip-fb-phone" class="hidden">On an iPhone, Facebook may show a "View Video" button that opens the clip on Facebook, not here.</li>
         </ul>
       </div>
       <div id="clip-own-wrap" style="margin-top:8px">
@@ -3364,7 +3365,7 @@ function renderCoverage(data) {
       <div class="iq-bar"><span style="width:${pct}%"></span></div>
       ${seen ? `<div class="who-row"><span class="who-label">Watched</span>${chips(c.watched, 'done')}</div>` : ''}
       ${c.started.length ? `<div class="who-row"><span class="who-label">${c.tracked === false ? 'Opened' : 'Started'}</span>${chips(c.started, 'part')}</div>` : ''}
-      ${c.tracked === false ? '<div class="small muted" style="margin-top:6px">Instagram does not say how much of a clip was watched, so this shows who opened it.</div>' : ''}
+      ${c.tracked === false ? `<div class="small muted" style="margin-top:6px">${esc(CLIP_FROM[c.provider] || 'That player')} does not say how much of a clip was watched, so this shows who opened it.</div>` : ''}
       ${c.not_yet.length ? `<div class="who-row"><span class="who-label">Not yet</span>${chips(c.not_yet, 'none')}</div>` : ''}
       ${quiz ? `<div style="margin-top:8px">${quiz}</div>` : ''}
     </div>`;
@@ -3409,7 +3410,9 @@ function renderFilmWatchers(data) {
     </div>`).join('')}`;
 }
 
-const CLIP_FROM = { youtube: 'YouTube', instagram: 'Instagram', upload: 'your video', link: 'link' };
+const CLIP_FROM = { youtube: 'YouTube', instagram: 'Instagram', facebook: 'Facebook', upload: 'your video', link: 'link' };
+// Played in the other company's own player: no length, no start or end, and only "opened" is known.
+const CLIP_EMBEDDED = new Set(['instagram', 'facebook']);
 function renderClipList(clips, catalog) {
   const own = catalog && catalog.own_video;
   if (own) {
@@ -3417,14 +3420,14 @@ function renderClipList(clips, catalog) {
     $('clip-max-s').textContent = own.max_s;
     $('clip-own-usage').textContent = own.used_mb ? `Your own videos use ${own.used_mb} of ${own.room_mb} MB.` : '';
   }
-  if (catalog && catalog.instagram_min_age) $('clip-ig-age').textContent = catalog.instagram_min_age;
+  clipMinAges = (catalog && catalog.embed_min_age) || clipMinAges;
   $('clip-list').innerHTML = (clips || []).map((c) => `
     <div class="budget-row" data-clip-row="${c.id}" data-provider="${esc(c.provider)}">
       <span class="budget-label">${esc(c.title)}
-        <span class="small muted">&middot; ${c.provider === 'instagram' ? `ages ${c.min_age}+` : `${c.length_s || '?'}s`}
+        <span class="small muted">&middot; ${CLIP_EMBEDDED.has(c.provider) ? `ages ${c.min_age}+` : `${c.length_s || '?'}s`}
           &middot; ${esc(CLIP_FROM[c.provider] || c.provider)}${c.media_mb ? ` &middot; ${c.media_mb} MB` : ''}</span>
         ${c.media_url ? ` <a class="small" href="${esc(c.media_url)}" target="_blank" rel="noopener">Play</a>` : ''}
-        ${c.provider === 'instagram' ? ` <a class="small" href="https://www.instagram.com/${esc(c.video_id)}/" target="_blank" rel="noopener noreferrer">Open on Instagram</a>` : ''}</span>
+        ${CLIP_EMBEDDED.has(c.provider) && /^https:\/\/www\.(instagram|facebook)\.com\//.test(c.page_url || '') ? ` <a class="small" href="${esc(c.page_url)}" target="_blank" rel="noopener noreferrer">Open on ${esc(CLIP_FROM[c.provider])}</a>` : ''}</span>
       <button class="secondary inline" data-retire="${c.id}">Remove</button>
     </div>`).join('');
 }
@@ -3444,15 +3447,24 @@ $('clip-url').addEventListener('change', () => {
   if (m && !Number($('clip-start').value)) $('clip-start').value = m[1];
 });
 const isInstagramLink = (v) => /(^|\/\/|\.)instagram\.com\/([A-Za-z0-9_.]{1,30}\/)?(p|reel|reels|tv)\/[A-Za-z0-9_-]{5,}/.test(v || '');
-// The form changes with what is being added: an Instagram link has no start or end, and a file has no link.
+// A Facebook reel, video or share link. The host has to be Facebook's own; the server checks again and decides.
+const isFacebookLink = (v) => /^(https?:\/\/)?((www|m|web)\.)?facebook\.com\/(reel\/\d|watch\/?\?|video\.php\?|share\/[rv]\/|[^/?#]+\/videos\/)/i.test((v || '').trim())
+  || /^(https?:\/\/)?(www\.)?fb\.watch\/[A-Za-z0-9_-]{4,}/i.test((v || '').trim());
+let clipMinAges = { instagram: 13, facebook: 13 };
+// The form changes with what is being added: an Instagram or Facebook link has no start or end, and a file has no link.
 function clipFormMode() {
   const file = $('clip-file').files && $('clip-file').files[0];
-  const ig = !file && isInstagramLink($('clip-url').value);
-  $('clip-ig-note').classList.toggle('hidden', !ig);
-  $('clip-times').classList.toggle('hidden', ig || !!file);
+  const from = file ? '' : isInstagramLink($('clip-url').value) ? 'instagram' : isFacebookLink($('clip-url').value) ? 'facebook' : '';
+  $('clip-ig-note').classList.toggle('hidden', !from);
+  if (from) {
+    document.querySelectorAll('#clip-ig-note .clip-emb-name').forEach((el) => { el.textContent = CLIP_FROM[from]; });
+    $('clip-ig-age').textContent = clipMinAges[from] || 13;
+    $('clip-fb-phone').classList.toggle('hidden', from !== 'facebook');
+  }
+  $('clip-times').classList.toggle('hidden', !!from || !!file);
   $('clip-rights-wrap').classList.toggle('hidden', !file);
   $('clip-url').disabled = !!file;
-  return file ? 'upload' : ig ? 'instagram' : 'youtube';
+  return file ? 'upload' : from || 'youtube';
 }
 $('clip-url').addEventListener('input', clipFormMode);
 $('clip-file').addEventListener('change', clipFormMode);
@@ -3521,8 +3533,8 @@ $('clip-save').addEventListener('click', async () => {
         title: $('clip-title').value.trim(),
         focus: $('clip-focus').value.trim(),
         provider: mode,
-        start_s: mode === 'instagram' ? 0 : (Number($('clip-start').value) || 0),
-        end_s: mode === 'instagram' ? null : (Number($('clip-end').value) || null),
+        start_s: CLIP_EMBEDDED.has(mode) ? 0 : (Number($('clip-start').value) || 0),
+        end_s: CLIP_EMBEDDED.has(mode) ? null : (Number($('clip-end').value) || null),
       };
       if (question) body.question = question;
       await api('/api/coach/clips', { method: 'POST', body });
@@ -3806,7 +3818,7 @@ async function openAthlete(id, days = 30) {
 }
 function closeAthlete() { const w = document.getElementById('athlete-dd'); if (w) { w.style.display = 'none'; w.innerHTML = ''; } }
 function ddDay(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
-const FILM_VERDICT = { watched: 'watched it all', partial: 'stopped early', skimmed: 'skimmed', background: 'played, not watched', opened: 'opened (Instagram does not say more)' };
+const FILM_VERDICT = { watched: 'watched it all', partial: 'stopped early', skimmed: 'skimmed', background: 'played, not watched', opened: 'opened (that player does not say more)' };
 function renderFilmLog(f) {
   if (!f) return '';
   const rows = f.clips.length ? f.clips.map((c) => `<tr><td>${esc(c.title)}${c.credit ? `<br><span class="small muted">${esc(c.credit)}</span>` : ''}</td>
